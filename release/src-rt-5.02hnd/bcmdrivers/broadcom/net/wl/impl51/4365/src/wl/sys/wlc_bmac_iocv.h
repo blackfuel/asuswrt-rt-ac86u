@@ -1,0 +1,98 @@
+/*
+ * BMAC iovar table and registration
+ *
+ * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * All Rights Reserved.
+ * 
+ * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
+ * the contents of this file may not be disclosed to third parties, copied
+ * or duplicated in any form, in whole or in part, without the prior
+ * written permission of Broadcom.
+ *
+ * $Id$
+ */
+
+
+#ifndef _wlc_bmac_iocv_h_
+#define _wlc_bmac_iocv_h_
+
+#include <wlc_types.h>
+#include <wlc_iocv_types.h>
+
+enum {
+	IOV_BMAC_DIAG,
+	IOV_BMAC_SBGPIOTIMERVAL,
+	IOV_BMAC_SBGPIOOUT,
+	IOV_BMAC_CCGPIOCTRL,		/* CC GPIOCTRL REG */
+	IOV_BMAC_CCGPIOOUT,		/* CC GPIOOUT REG */
+	IOV_BMAC_CCGPIOOUTEN,	/* CC GPIOOUTEN REG */
+	IOV_BMAC_CCGPIOIN,		/* CC GPIOIN REG */
+	IOV_BMAC_WPSGPIO,		/* WPS push button GPIO pin */
+	IOV_BMAC_OTPDUMP,
+	IOV_BMAC_OTPSTAT,
+	IOV_BMAC_PCIEASPM,		/* obfuscation clkreq/aspm control */
+	IOV_BMAC_PCIEADVCORRMASK,	/* advanced correctable error mask */
+	IOV_BMAC_PCIECLKREQ,        /* PCIE 1.1 clockreq enab support */
+	IOV_BMAC_PCIELCREG,         /* PCIE LCREG */
+	IOV_BMAC_SBGPIOTIMERMASK,
+	IOV_BMAC_RFDISABLEDLY,
+	IOV_BMAC_PCIEREG,		/* PCIE REG */
+	IOV_BMAC_PCICFGREG,		/* PCI Config register */
+	IOV_BMAC_PLLRESET,	/* PLL reset */
+	IOV_BMAC_PCIESERDESREG,	/* PCIE SERDES REG (dev, 0}offset) */
+	IOV_BMAC_PCIEGPIOOUT,	/* PCIEOUT REG */
+	IOV_BMAC_PCIEGPIOOUTEN,	/* PCIEOUTEN REG */
+	IOV_BMAC_PCIECLKREQENCTRL,	/* clkreqenctrl REG (PCIE REV > 6.0 */
+	IOV_BMAC_DMALPBK,
+	IOV_BMAC_CCREG,
+	IOV_BMAC_COREREG,
+	IOV_BMAC_SFLAGS,
+	IOV_BMAC_CFLAGS,
+	IOV_BMAC_JTAGUREG,
+	IOV_BMAC_COMA,
+	IOV_BMAC_SDCIS,
+	IOV_BMAC_SDIO_DRIVE,
+	IOV_BMAC_OTPW,
+	IOV_BMAC_NVOTPW,
+	IOV_BMAC_SROM,
+	IOV_BMAC_SRCRC,
+	IOV_BMAC_DEVPATH,
+	IOV_BMAC_CIS_SOURCE,
+	IOV_BMAC_CISVAR,
+	IOV_BMAC_OTPLOCK,
+	IOV_BMAC_OTP_CHIPID,
+	IOV_BMAC_CUSTOMVAR1,
+	IOV_BMAC_BOARDFLAGS,
+	IOV_BMAC_BOARDFLAGS2,
+	IOV_BMAC_WPSLED,
+	IOV_BMAC_BTCLOCK_TUNE_WAR,
+	IOV_BMAC_NVRAM_SOURCE,
+	IOV_BMAC_OTP_RAW_READ,
+	IOV_BMAC_GENERIC_DLOAD,
+	IOV_BMAC_UCDLOAD_STATUS,
+	IOV_BMAC_UC_CHUNK_LEN,
+	IOV_BMAC_NOISE_METRIC,
+	IOV_BMAC_AVIODCNT,
+	IOV_BMAC_FILT_WAR,
+	IOV_BMAC_SUSPEND_MAC,
+	IOV_BMAC_TIMESTAMP,
+	IOV_BMAC_RCVLAZY,
+	IOV_BMAC_BTSWITCH,
+	IOV_BMAC_PCIESSID,
+	IOV_BMAC_PCIEBAR0,
+	IOV_BMAC_OTP_RAW,
+	IOV_BMAC_4360_PCIE2_WAR,
+	IOV_BMAC_BMC_NBUFS,
+	IOV_BMAC_EDCRS,
+	IOV_BMAC_COREWRAPPERREG,
+	IOV_BMAC_LEDDC,
+	IOV_BMAC_SR_VERIFY,
+	IOV_BMC_NBUFS,
+	IOV_BMAC_BT_REGS_READ,
+	IOV_BMAC_BPIND,
+	IOV_BMAC_LAST
+};
+
+int wlc_bmac_register_iovt(wlc_hw_info_t *hw, wlc_iocv_info_t *ii);
+
+#endif /* _wlc_bmac_iocv_h_ */

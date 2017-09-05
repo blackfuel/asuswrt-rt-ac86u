@@ -1,0 +1,23 @@
+diff -Nur a/programs/_updown.klips/_updown.klips.in openswan-2.6.41/programs/_updown.klips/_updown.klips.in
+--- a/programs/_updown.klips/_updown.klips.in	2015-07-29 12:03:14.290634228 -0700
++++ openswan-2.6.41/programs/_updown.klips/_updown.klips.in	2015-07-29 12:03:33.202634704 -0700
+@@ -615,6 +615,7 @@
+ up-client:)
+ 	# connection to my client subnet coming up
+ 	uprule
++	echo f > /proc/net/nf_conntrack
+ 	# If you are doing a custom version, firewall commands go here.
+ 	;;
+ down-client:)
+diff -Nur a/programs/_updown.netkey/_updown.netkey.in openswan-2.6.41/programs/_updown.netkey/_updown.netkey.in
+--- a/programs/_updown.netkey/_updown.netkey.in	2015-07-29 12:03:14.302634228 -0700
++++ openswan-2.6.41/programs/_updown.netkey/_updown.netkey.in	2015-07-29 12:03:55.174635258 -0700
+@@ -466,6 +466,8 @@
+     up-client)
+ 	# connection to my client subnet coming up
+ 	# If you are doing a custom version, firewall commands go here.
++	sleep 1
++	echo f >/proc/net/nf_conntrack
+ 	;;
+     down-client)
+ 	# connection to my client subnet going down

@@ -1,0 +1,16 @@
+diff -Nur a/linux/net/ipsec/pfkey_v2.c b/linux/net/ipsec/pfkey_v2.c
+--- a/linux/net/ipsec/pfkey_v2.c	2015-02-09 15:43:29.576526823 -0800
++++ b/linux/net/ipsec/pfkey_v2.c	2015-02-09 15:45:42.224530164 -0800
+@@ -1529,9 +1529,9 @@
+ #endif /* CONFIG_KLIPS_IPCOMP */
+ 	error |= supported_remove_all(K_SADB_X_SATYPE_IPIP);
+ #ifdef CONFIG_PROC_FS
+-        remove_proc_subtree("pf_key",            init_net.proc_net);
+-        remove_proc_subtree("pf_key_supported",  init_net.proc_net);
+-        remove_proc_subtree("pf_key_registered", init_net.proc_net);
++	remove_proc_entry("pf_key", PROC_NET);
++        remove_proc_entry("pf_key_supported",  PROC_NET);
++        remove_proc_entry("pf_key_registered", PROC_NET);
+ #endif /* CONFIG_PROC_FS */
+ 	/* other module unloading cleanup happens here */
+ 	return error;
