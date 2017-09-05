@@ -1026,6 +1026,11 @@ function ip_advance_setting_show(obj){
 	if(obj.checked){
 		document.getElementById("ip_advance_setting_option").style.display = "";
 		document.getElementById("wepkey_index_advance_setting_option").style.display = (currPap.encryption == "WEP") ? "" : "none";
+		if(currPap.encryption == "WEP"){
+			document.getElementById("wep_auth_mode_advance_setting_option").style.display = "";
+			document.getElementById("wepkey_index_advance_setting_option").style.display = "";
+		}
+
 		if(document.getElementById("pap_ip_advanced_option").value == "static"){
 			document.getElementById("ip_advance_setting").style.display = "";
 			document.getElementById("pap_ip_advance_setting_ipaddr").disabled = false;
@@ -1044,6 +1049,7 @@ function ip_advance_setting_show(obj){
 		}
 	}
 	else{
+		document.getElementById("wep_auth_mode_advance_setting_option").style.display = "none";
 		document.getElementById("wepkey_index_advance_setting_option").style.display = "none";
 		document.getElementById("ip_advance_setting_option").style.display = "none";	
 		document.getElementById("ip_advance_setting").style.display = "none";
@@ -1059,12 +1065,16 @@ var wl0_checked = "";
 var wl1_checked = "";
 var wl_last_checked = "";
 function pap_connect(){
-	if(!document.getElementById("parentAP_key").disabled && !validator.psk(document.getElementById("parentAP_key"))) return false;
+	if(currPap.encryption != "WEP"){
+		if(!document.getElementById("parentAP_key").disabled && !validator.psk(document.getElementById("parentAP_key"))) return false;
+	}	
+
 	select_band = select_band_temp;
 	if(select_band == "2g"){
 		if(currPap.encryption == "WEP"){
 			document.form.wlc0_wep_key.value = $('#parentAP_key').val();
 			document.form.wlc0_key.value = $('#wepkey_index_advanced_option').val();
+			document.form.wlc0_auth_mode.value = $('#wep_auth_mode_option').val();
 		}
 		else{
 			document.form.wlc0_wpa_psk.value = $('#parentAP_key').val();
@@ -1078,6 +1088,7 @@ function pap_connect(){
 		if(currPap.encryption == "WEP"){
 			document.form.wlc1_wep_key.value = $('#parentAP_key').val();
 			document.form.wlc1_key.value = $('#wepkey_index_advanced_option').val();
+			document.form.wlc1_auth_mode.value = $('#wep_auth_mode_option').val();
 		}
 		else{
 			document.form.wlc1_wpa_psk.value = $('#parentAP_key').val();
@@ -2394,6 +2405,16 @@ function genOptions(){
 			<label style="background:transparent;color:#C5C5C5; border:0;font-size:1.875em;font-weight:normal;font-family:HelveticaNeueW10-45Ligh,Helvetica,Arial;text-align:left;left:-0.3em">
 				<input id="ip_advance_setting_checkbox" type="checkbox" style="width:21px;height:21px;" onclick="ip_advance_setting_show(this);">Advanced Setting
 			</label>	
+		</div>
+
+		<div id="wep_auth_mode_advance_setting_option" style="margin-left:38px;padding-bottom:15px;display:none">
+			<div style="HelveticaNeueW10-45Ligh,Helvetica,Arial;font-size:1.5em;color:#B8D8FF;margin-left:18px;">WEP Authentication Method</div>
+			<div style="margin:20px 55px 20px 18px">
+				<select id="wep_auth_mode_option">
+					<option value="open">Open</option>
+					<option value="shared" selected>Shared Key</option>
+				</select>
+			</div>
 		</div>
 
 		<div id="wepkey_index_advance_setting_option" style="margin-left:38px;padding-bottom:15px;display:none">

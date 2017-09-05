@@ -7,7 +7,7 @@
  * interrupt and dma trigger routines are different for phantom devices.
  * this file manages the routines required to handle interrupt and dma for pahntom devices.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

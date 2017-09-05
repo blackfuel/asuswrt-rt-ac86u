@@ -67,7 +67,7 @@ function parsingAjaxResult(rawData){
 	var code = "";
 	code += "<tr>";
 	code += "<th style='width:20%;text-align:left'>Access Time</th>";
-	code += "<th style='width:30%;text-align:left'>MAC Address / Client's Name</th>";
+	code += "<th style='width:30%;text-align:left'><#PPPConnection_x_MacAddressForISP_itemname#> / <#Client_Name#></th>";
 	code += "<th style='width:50%;text-align:left'>Domain Name</th>";
 	code += "</tr>";
 	for(var i=0; i<data_array.length; i++){	
@@ -194,12 +194,18 @@ function change_page(flag){
 function eula_confirm(){
 	document.form.TM_EULA.value = 1;
 	document.form.bwdpi_wh_enable.value = 1;
-	document.form.action_wait.value = "15";
-	document.form.submit();
+	if(reset_wan_and_nat(document.form, document.form.bwdpi_wh_enable.value)) {
+		document.form.action_wait.value = "15";
+		document.form.submit();
+	}
+	else {
+		cancel();
+	}
 }
 
 function cancel(){
 	curState = 0;
+	document.form.bwdpi_wh_enable.value = 1;
 	$('#iphone_switch').animate({backgroundPosition: -37}, "slow", function() {});
 	$("#agreement_panel").fadeOut(100);
 	document.getElementById("hiddenMask").style.visibility = "hidden";
@@ -342,7 +348,14 @@ function cal_panel_block(obj){
 
 																			document.form.bwdpi_wh_stamp.value = timestamp;
 																			document.form.bwdpi_wh_enable.value = 1;
-																			document.form.submit();
+																			if(reset_wan_and_nat(document.form, document.form.bwdpi_wh_enable.value)) {
+																				document.form.submit();
+																			}
+																			else {
+																				curState = 0;
+																				document.form.bwdpi_wh_enable.value = 0;
+																				$('#bwdpi_wh_enable').find('.iphone_switch').animate({backgroundPosition: -37}, "slow");
+																			}
 																	},
 																	function(){
 																		document.form.bwdpi_wh_enable.value = 0;

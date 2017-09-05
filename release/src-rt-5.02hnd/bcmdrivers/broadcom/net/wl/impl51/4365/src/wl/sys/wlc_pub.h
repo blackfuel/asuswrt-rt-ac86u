@@ -2,7 +2,7 @@
  * Common (OS-independent) definitions for
  * Broadcom 802.11abg Networking Device Driver
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: wlc_pub.h 669890 2016-11-11 14:41:52Z $
+ * $Id: wlc_pub.h 671038 2016-11-18 14:45:14Z $
  */
 
 #ifndef _wlc_pub_h_
@@ -678,7 +678,7 @@ typedef struct wlc_pub {
 	bool		_extsta;		/* EXT_STA flag */
 	bool		_pkt_filter;		/* pkt filter enable bool */
 	bool		phy_11ncapable;		/* the PHY/HW is capable of 802.11N */
-	bool		_fbt;			/* Fast Bss Transition */
+	bool		_fbt;			/* Fast Bss Transition active */
 	/* WLPLT */
 	bool		_plt;			/* PLT module included and enabled */
 
@@ -892,6 +892,7 @@ typedef struct wlc_pub {
 	uint8		max_muclients;		/* Maximum MU clients */
 	bool		_dyn160;		/* DYN160 capability - dynamic 160/80p80 <-> 80 */
 	uint32		_dyn160_active;		/* DYN160 active - dynamic 160/80p80 <-> 80 */
+	bool		_fbt_cap;		/* Fast Bss Transition capable */
 } wlc_pub_t;
 
 /* Shared portion of wlc_pub structure across WLC's in case of RSDB. */
@@ -2103,24 +2104,42 @@ wlc_pkttag_bsscfg_get(void *p)
 	#define BGDFS_ENAB(pub)		(0)
 #endif /* BGDFS */
 
+/* default values for dyn160_active state */
+#define WL_DEFAULT_DYN160_INVALID		(-1) /* invalid; not configured by IOVAR yet */
+#define WL_DEFAULT_DYN160_STA			(1)  /* enable by default on STA (when capable) */
+#define WL_DEFAULT_DYN160_AP			(0)  /* disable by default on AP (when capable) */
+
+/* get default value by cfg; all non-APs are treated the same as STA */
+#define WL_DYN160_DEFAULT(cfg) (((cfg) != NULL && BSSCFG_AP(cfg)) ? \
+		WL_DEFAULT_DYN160_AP : WL_DEFAULT_DYN160_STA)
+
+/* get dyn160_active if valid or return default based on primary cfg */
+#define WL_VALID_DYN160(pub) ((pub)->_dyn160_active == WL_DEFAULT_DYN160_INVALID ? \
+		WL_DYN160_DEFAULT(((wlc_info_t *)(pub)->wlc)->cfg) : (pub)->_dyn160_active)
+
+
 /* DYN160 - dynamic 160/80p80 at half NSS to 80 at full NSS */
 #ifdef DYN160
 	#if defined(WL_ENAB_RUNTIME_CHECK) || !defined(DONGLEBUILD)
+		/* eg. NIC with -dyn160 target or dongle with runtime check */
 		#define DYN160_ENAB(pub)	((pub)->_dyn160)
-		#define DYN160_ACTIVE(pub)	(DYN160_ENAB(pub) ? (pub)->_dyn160_active : 0)
+		#define DYN160_ACTIVE(pub)	(DYN160_ENAB(pub) ? WL_VALID_DYN160(pub) : 0)
 		#define DYN160_ACTIVE_SET(pub, val) ((pub)->_dyn160_active = \
 				(DYN160_ENAB(pub) ? (val) : 0))
 	#elif defined(DYN160_DISABLED)
+		/* dongle with dyn160 target but disabled with -DDYN160_DISABLED */
 		#define DYN160_ENAB(pub)	(0)
 		#define DYN160_ACTIVE(pub)	(0)
 		#define DYN160_ACTIVE_SET(pub, val)	do {} while (0)
 	#else
-		#define DYN160_ENAB(pub)	(1)
-		#define DYN160_ACTIVE(pub)	(DYN160_ENAB(pub) ? (pub)->_dyn160_active : 0)
+		/* eg. dongle without runtime check and without DYN160_DISABLED */
+		#define DYN160_ENAB(pub)	((pub)->_dyn160)
+		#define DYN160_ACTIVE(pub)	(DYN160_ENAB(pub) ? WL_VALID_DYN160(pub) : 0)
 		#define DYN160_ACTIVE_SET(pub, val) ((pub)->_dyn160_active = \
 				(DYN160_ENAB(pub) ? (val) : 0))
-	#endif
+	#endif /* WL_ENAB_RUNTIME_CHECK || !DONGLEBUILD */
 #else
+	/* eg. NIC or dongle without -dyn160 target */
 	#define DYN160_ENAB(pub)		(0)
 	#define DYN160_ACTIVE(pub)		(0)
 	#define DYN160_ACTIVE_SET(pub, val)	do {} while (0)
@@ -2323,13 +2342,17 @@ wlc_pkttag_bsscfg_get(void *p)
 
 #ifdef WLFBT
 	#if defined(WL_ENAB_RUNTIME_CHECK) || !defined(DONGLEBUILD)
+		#define WLFBT_CAP(pub) ((pub)->_fbt_cap)
 		#define WLFBT_ENAB(pub) ((pub)->_fbt)
 	#elif defined(WLFBT_DISABLED)
+		#define WLFBT_CAP(pub) ((void)(pub), 0)
 		#define WLFBT_ENAB(pub) ((void)(pub), 0)
 	#else
-		#define WLFBT_ENAB(pub) ((void)(pub), 1)
+		#define WLFBT_CAP(pub) ((pub)->_fbt_cap)
+		#define WLFBT_ENAB(pub) ((pub)->_fbt)
 	#endif
 #else
+	#define WLFBT_CAP(pub) ((void)(pub), 0)
 	#define WLFBT_ENAB(pub) ((void)(pub), 0)
 #endif /* WLFBT */
 
@@ -2678,6 +2701,13 @@ wlc_pkttag_bsscfg_get(void *p)
 	#else
 		#define AMSDU_TX_SUPPORT(pub)	(1)
 		#define AMSDU_TX_ENAB(pub)	((pub)->_amsdu_tx)
+	#endif
+
+	#ifdef DISABLE_AMSDUTX_FOR_VI
+		#define	AMSDU_TX_AC_ENAB(ami, tid)\
+			(wlc_amsdu_chk_priority_enable((ami), (tid)))
+	#else
+		#define AMSDU_TX_AC_ENAB(ami, tid)	(TRUE)
 	#endif
 #else
 	#define AMSDU_TX_SUPPORT(pub)	(0)
@@ -3501,4 +3531,8 @@ extern void wlc_generate_pme_to_host(wlc_info_t *wlc, bool pme_on);
 #else
 	#define WLTAF_ENAB(pub)			(0)
 #endif /* WLTAF */
+
+/* 160MHz mode is available only for 4365/4366 corerev 0x41 (c0) */
+#define WL_HAS_DYN160(wlc)	D11REV_IS(wlc->pub->corerev, 0x41)
+
 #endif /* _wlc_pub_h_ */

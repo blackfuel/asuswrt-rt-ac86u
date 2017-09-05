@@ -35,7 +35,7 @@
 *	test_stream test_cmd	[should be of same format of ota_tx /ota_rx in cmd_flow file]
 *	test_stream stop	[stops batching mode operation and downloads the file to dongle]
 *$Id: wlc_ota_test.c 598632 2015-11-10 11:29:23Z $
-* Broadcom Proprietary and Confidential. Copyright (C) 2016,
+* Broadcom Proprietary and Confidential. Copyright (C) 2017,
 * All Rights Reserved.
 * 
 * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

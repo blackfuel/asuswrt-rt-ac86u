@@ -36,7 +36,7 @@ CFLAGS  += -I$(TOP)/nt_center/actMail
 CFLAGS  += -I$(TOP)/wlc_nt
 CFLAGS  += -DASUSWRT_SDK
 LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
-LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3 -lpthread -L$(TOP)/nt_center/lib -lnt
+LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3 -lpthread -L$(TOP)/nt_center/lib -lnt -lm
 LDFLAGS += -L$(TOP)/wlc_nt -lwlc_nt_client
 endif
 

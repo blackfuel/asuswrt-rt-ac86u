@@ -1,7 +1,7 @@
 /*
  * Common interface to the 802.11 Station Control Block (scb) structure
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_scb.h 645856 2016-06-27 15:09:55Z $
+ * $Id: wlc_scb.h 664112 2016-10-10 13:27:40Z $
  */
 
 
@@ -677,6 +677,7 @@ int8 wlc_scb_pkt_rssi_chain(struct scb *scb, int chain);
 /* scb association state helpers */
 #define SCB_ASSOCIATED(a)	((a)->state & ASSOCIATED)
 #define SCB_ASSOCIATING(a)	((a)->state & PENDING_ASSOC)
+#define SCB_AUTHENTICATING(a)   ((a)->state & PENDING_AUTH)
 #define SCB_AUTHENTICATED(a)	((a)->state & AUTHENTICATED)
 #define SCB_AUTHORIZED(a)	((a)->state & AUTHORIZED)
 #define SCB_MARKED_FOR_DELETION(a) ((a)->state & MARKED_FOR_DELETION)
@@ -1102,6 +1103,7 @@ void wlc_scb_dump_scb(wlc_info_t *wlc, wlc_bsscfg_t *cfg, struct scb *scb,
 	struct bcmstrbuf *b, int idx);
 #endif
 
+void wlc_scbfind_delete(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg,	struct ether_addr *ea);
 void wlc_scb_pktc_enable(struct scb *scb, const wlc_key_info_t *key_info);
 
 #endif /* _wlc_scb_h_ */

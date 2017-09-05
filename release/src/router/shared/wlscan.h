@@ -159,3 +159,12 @@ typedef struct apinfo apinf_t;
 extern char buf[WLC_IOCTL_MAXLEN];
 
 #endif
+
+#if defined(AMAS) || defined(RTCONFIG_CFGSYNC)
+#define OUI_ASUS	"\xF8\x32\xE4"
+struct tlvbase {
+	uchar type;
+	uchar len;
+	uchar data[1];
+};
+#endif

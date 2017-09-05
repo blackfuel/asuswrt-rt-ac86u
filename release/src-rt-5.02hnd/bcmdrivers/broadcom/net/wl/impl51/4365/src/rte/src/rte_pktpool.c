@@ -1,7 +1,7 @@
 /*
  * RTE support for pktpool
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: rte_pktpool.c 480993 2014-05-28 00:41:30Z $
+ * $Id: rte_pktpool.c 661371 2016-09-25 01:54:17Z $
  */
 
 #include <typedefs.h>
@@ -111,7 +111,35 @@ hnd_print_pooluse(void *arg, int argc, char *argv[])
 		       KB((inuse_size + inuse_overhead) - (tot_overhead)));
 #endif
 	}
+
+#ifdef BCM_DHDHDR
+	if (d3_lfrag_buf_pool->inited) {
+		int n, m;
+		int buflen_lf, overhead_lf;
+
+		/* D3_BUFFER */
+		n = d3_lfrag_buf_pool->len;
+		m = d3_lfrag_buf_pool->avail;
+		buflen_lf = d3_lfrag_buf_pool->buflen * n;
+		overhead_lf = (d3_lfrag_buf_pool->buflen + LFBUFSZ) * n;
+		printf("\tIn use D3_BUF pool %d(%d): %d(%dK), w/oh: %d(%dK)\n",
+			n, m,
+			buflen_lf, KB(buflen_lf),
+			overhead_lf, KB(overhead_lf));
+
+		/* D11_BUFFER */
+		n = d11_lfrag_buf_pool->len;
+		m = d11_lfrag_buf_pool->avail;
+		buflen_lf = d11_lfrag_buf_pool->buflen * n;
+		overhead_lf = (d11_lfrag_buf_pool->buflen + LFBUFSZ) * n;
+		printf("\tIn use D11_BUF pool %d(%d): %d(%dK), w/oh: %d(%dK)\n",
+			n, m,
+			buflen_lf, KB(buflen_lf),
+			overhead_lf, KB(overhead_lf));
+	}
+#endif /* BCM_DHDHDR */
 #endif /* BCMFRAGPOOL */
+
 #ifdef BCMRXFRAGPOOL
 	if (POOL_ENAB(pktpool_shared_rxlfrag)) {
 		int n, m;

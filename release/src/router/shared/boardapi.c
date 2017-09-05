@@ -86,6 +86,8 @@ static const struct led_btn_table_s {
 	{ "led_wps_gpio",	&led_gpio_table[LED_WPS] },
 	{ "led_2g_gpio",	&led_gpio_table[LED_2G] },
 	{ "led_5g_gpio",	&led_gpio_table[LED_5G] },
+	{ "led_5g2_gpio",	&led_gpio_table[LED_5G2] },
+	{ "led_60g_gpio",	&led_gpio_table[LED_60G] },
 #ifdef RTCONFIG_LAN4WAN_LED
 	{ "led_lan1_gpio",	&led_gpio_table[LED_LAN1] },
 	{ "led_lan2_gpio",	&led_gpio_table[LED_LAN2] },
@@ -243,6 +245,12 @@ int init_gpio(void)
 #endif
 	};
 	char *led_list[] = { "led_pwr_gpio", "led_usb_gpio", "led_wps_gpio", "fan_gpio", "have_fan_gpio", "led_lan_gpio", "led_wan_gpio", "led_usb3_gpio", "led_2g_gpio", "led_5g_gpio"
+#if defined(RTCONFIG_HAS_5G_2)
+		, "led_5g2_gpio"
+#endif
+#if defined(RTCONFIG_WIGIG)
+		, "led_60g_gpio"
+#endif
 #ifdef HND_ROUTER
 		, "led_wan_normal_gpio"
 #endif
@@ -346,6 +354,11 @@ int init_gpio(void)
 #ifdef RT4GAC55U
 	void get_gpio_values_once(int);
 	get_gpio_values_once(0);		// for filling data to led_gpio_table[]
+#endif
+
+#ifdef BLUECAVE
+	_dprintf("BLUECAVE: skip init_gpio()\n");
+	return 0;
 #endif
 
 	/* btn input */
@@ -707,7 +720,7 @@ int wanport_status(int wan_unit)
 {
 #if defined(RTCONFIG_RALINK) || defined(RTCONFIG_QCA) || defined(RTCONFIG_REALTEK)
 	return rtkswitch_wanPort_phyStatus(wan_unit);
-#elif defined(RTCONFIG_ALPINE)
+#elif defined(RTCONFIG_ALPINE) || defined(RTCONFIG_LANTIQ)
 	return get_phy_status(wan_unit);
 #else
 	char word[100], *next;

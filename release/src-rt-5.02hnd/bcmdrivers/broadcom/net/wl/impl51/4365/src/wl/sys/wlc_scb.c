@@ -1,7 +1,7 @@
 /*
  * Common interface to the 802.11 Station Control Block (scb) structure
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_scb.c 654084 2016-08-11 03:54:02Z $
+ * $Id: wlc_scb.c 680972 2017-01-24 08:47:27Z $
  */
 
 /**
@@ -98,6 +98,7 @@
 
 #ifdef BCMPCIEDEV
 #include <flring_fc.h>
+#define SCB_BCMC_MIN_LFRAGS	12
 #endif
 
 #define SCB_MAX_CUBBY		(pub->tunables->maxscbcubbies)
@@ -792,7 +793,7 @@ wlc_userscb_alloc(wlc_info_t *wlc, wlc_bsscfg_t *cfg,
 	int bcmerror;
 	struct scb *scb;
 
-	if ((scbstate->nscb < wlc->pub->tunables->maxscb) &&
+	if ((scbstate->nscb <= wlc->pub->tunables->maxscb) &&
 #ifdef DONGLEBUILD
 		/* Make sure free_mem never gets below minimum threshold due to scb_allocs */
 		(OSL_MEM_AVAIL() > wlc->pub->tunables->min_scballoc_mem) &&
@@ -822,7 +823,7 @@ wlc_userscb_alloc(wlc_info_t *wlc, wlc_bsscfg_t *cfg,
 			          wlc->pub->unit, __FUNCTION__));
 			return NULL;
 		}
-		ASSERT(scbstate->nscb < wlc->pub->tunables->maxscb);
+		ASSERT(scbstate->nscb <= wlc->pub->tunables->maxscb);
 #ifdef SCBFREELIST
 		/* If not found on freelist then allocate a new one */
 		if ((scbinfo = wlc_scbget_free(scbstate)) == NULL)
@@ -1127,6 +1128,15 @@ wlc_flow_ring_reset_weight(wlc_info_t *wlc, struct wlc_if *wlcif,
 			op.lfrag_max = (phyrate * 1000) / (ETHER_MAX_DATA * 2);
 			op.lfrag_max /= SCB_FL_TXPKTS_RATIO;
 
+			/* For BCMC flowring, adjust lfrag_max to a bare minimum.
+			 * On 2.4G, the default phyrate will be limited to 1Mbps,
+			 * translating to just 1 lfrag. This affects BCMC flows.
+			 */
+			if (SCB_ISMULTI(scb)) {
+				if (op.lfrag_max < SCB_BCMC_MIN_LFRAGS)
+					op.lfrag_max = SCB_BCMC_MIN_LFRAGS;
+			}
+
 			op.phyrate = phyrate;
 			op.weight = weight_avg;
 			op.mumimo = SCB_MU(scb);
@@ -1168,11 +1178,10 @@ wlc_scb_upd_all_flr_weight(wlc_info_t *wlc, struct scb *scb)
 				}
 
 #if defined(PROP_TXSTATUS) && defined(BCMPCIEDEV) && defined(FFSHCED_SATURATED_MODE)
-			if (BCMPCIEDEV_ENAB()) {
-				avg_weight = (ETHER_MAX_DATA << 17) / phyrate;
-			}
+				if (BCMPCIEDEV_ENAB()) {
+					avg_weight = (ETHER_MAX_DATA << 17) / phyrate;
+				}
 #endif /* PROP_TXSTATUS && BCMPCIEDEV && FFSHCED_SATURATED_MODE */
-
 				/* rate is in kByte. calculate No. of pkts
 				 * in 50ms period (SCB_FL_TXPKTS_RATIO=20), to estimate no. of
 				 * lfrag needed for flow ring
@@ -1401,6 +1410,10 @@ wlc_scbfree(wlc_info_t *wlc, struct scb *scbd)
 	}
 #endif
 
+#if defined(WL_MULTIQUEUE) && defined(NEW_TXQ)
+	wlc_tx_fifo_scb_flush(wlc, scbd);
+#endif /* WL_MULTIQUEUE && NEW_TXQ */
+
 	for (i = 0; i < scbstate->ncubby; i++) {
 		uint j = scbstate->ncubby - 1 - i;
 		cubby_info = &scbstate->cubby_info[j];
@@ -1438,6 +1451,8 @@ wlc_scbfree(wlc_info_t *wlc, struct scb *scbd)
 	}
 	/* free WDS state */
 	if (scbd->wds != NULL) {
+		/* process event queue */
+		wlc_eventq_flush(wlc->eventq);
 		if (scbd->wds->wlif) {
 			wlc_if_event(wlc, WLC_E_IF_DEL, scbd->wds);
 			wl_del_if(wlc->wl, scbd->wds->wlif);
@@ -2409,8 +2424,38 @@ wlc_scb_set_auth(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, struct scb *scb, bool en
 		} else {
 
 			if (wlc->pub->up && (SCB_AUTHENTICATED(scb) || SCB_LEGACY_WDS(scb))) {
-				pkt = wlc_senddeauth(wlc, bsscfg, scb, &scb->ea, &bsscfg->BSSID,
-				                     &bsscfg->cur_etheraddr, (uint16)rc);
+				/* It was observed that if AP is running in DWDS AP mode along with
+				 * another DWDS repeater and both have the same ssid, one of them
+				 * can have the stale entry of client if client was earlier
+				 * connected to either of two and later join to another with wl
+				 * join command.
+				 *
+				 * This stale entry persist at AP/DWDS repeater end. The reason for
+				 * this behaviour is due to ucode level ACK is coming for the Qos
+				 * NUll frame being sent from the AP/DWDS repeater if client's
+				 * idle timeout is over.
+				 *
+				 * Proposed solution:-> Remove client's entry via IOVAR requested
+				 * by Application. This is the task of Application to figure out
+				 * the stale entry of client among the AP/Repeaters.
+				 *
+				 * Mark SCB for Deletion, in case STA already associated/roamed to
+				 * another DWDS interface(or Repeater). No need to send explicit
+				 * deauth for this case.
+				 */
+				if (rc == DOT11_RC_DEAUTH_LEAVING) {
+					/* Clear states and mark the scb for deletion. SCB free
+					 * will happen from the inactivity timeout context in
+					 * wlc_ap_stastimeout()
+					 */
+					wlc_scb_clearstatebit(scb, AUTHENTICATED | ASSOCIATED
+							| AUTHORIZED);
+					wlc_scb_setstatebit(scb, MARKED_FOR_DELETION);
+				} else {
+					pkt = wlc_senddeauth(wlc, bsscfg, scb, &scb->ea,
+						&bsscfg->BSSID,	&bsscfg->cur_etheraddr,
+						(uint16)rc);
+				}
 			}
 			if (pkt != NULL) {
 				wlc_deauth_send_cbargs_t *args;
@@ -2987,6 +3032,29 @@ end:
 }
 #endif /* PROP_TXSTATUS */
 
+void
+wlc_scbfind_delete(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, struct ether_addr *ea)
+{
+	int i;
+#if defined(BCMDBG) || defined(WLMSG_ASSOC)
+	char eabuf[ETHER_ADDR_STR_LEN];
+#endif /* BCMDBG || WLMSG_ASSOC */
+	struct scb *scb;
+
+	for (i = 0; i < (int)NBANDS(wlc); i++) {
+		/* Use band 1 for single band 11a */
+		if (IS_SINGLEBAND_5G(wlc->deviceid))
+			i = BAND_5G_INDEX;
+
+		scb = wlc_scbfindband(wlc, bsscfg, ea, i);
+		if (scb) {
+			WL_ASSOC(("wl%d: %s: scb for the STA-%s"
+				" already exists\n", wlc->pub->unit, __FUNCTION__,
+				bcm_ether_ntoa(ea, eabuf)));
+			wlc_scbfree(wlc, scb);
+		}
+	}
+}
 int
 wlc_txq_scb_init(void *ctx, struct scb *scb)
 {

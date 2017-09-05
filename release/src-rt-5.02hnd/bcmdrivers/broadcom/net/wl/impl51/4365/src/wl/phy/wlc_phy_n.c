@@ -2,7 +2,7 @@
  * PHY and RADIO specific portion of Broadcom BCM43XX 802.11abgn
  * Networking Device Driver.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_phy_n.c 641928 2016-06-06 23:01:21Z $
+ * $Id: wlc_phy_n.c 676345 2016-12-21 15:16:06Z $
  */
 
 

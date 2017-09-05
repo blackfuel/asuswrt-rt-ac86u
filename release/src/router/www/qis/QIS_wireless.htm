@@ -180,7 +180,7 @@ function QKWireless_load_body(){
 			document.getElementById("field_general").style.display = "";
 	}
 
-	if((parent.document.QKform.sw_mode.value == 1) && (is_TW_sku || is_CN_sku)){	
+	if((parent.document.QKform.sw_mode.value == 1) && (is_TW_sku || is_CN_sku) && parent.flag_manual != 1){
 		check_wan_state();
 	}	
 
@@ -316,8 +316,8 @@ function submitForm(){
 				if(!confirm("<#JS_common_passwd#>")){
 					document.form.wl0_wpa_psk.focus();
 					document.form.wl0_wpa_psk.select();
-					return false;   
-				}       
+					return false;
+				}
 			}
 		}else
 		{
@@ -417,8 +417,8 @@ function submitForm(){
 						if(!confirm("<#JS_common_passwd#>")){
 							document.form.wl1_wpa_psk.focus();
 							document.form.wl1_wpa_psk.select();
-							return false;   
-						}       
+							return false;
+						}
 					}
 				}
 				else{
@@ -815,7 +815,7 @@ function submitForm(){
 	}
 
 	document.form.submit();
-	if((document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3") && !parent.pppoe_failed_flag){
+	if((document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3") && !(!parent.flag_manual && parent.pppoe_failed_flag)){
 		setTimeout(function(){
 			location.href = "/qis/QIS_finish.htm";
 		}, 500)

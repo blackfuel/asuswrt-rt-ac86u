@@ -1,7 +1,7 @@
 /*
  * ACPhy Noise module implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -1440,14 +1440,12 @@ wlc_phy_desense_aci_engine_acphy(phy_info_t *pi)
 
 	if (ASSOC_INPROG_PHY(pi) || PUB_NOT_ASSOC(pi)) {
 		new_bphy_desense = 0;
-		new_ofdm_desense = 0;
-	}
-
-	if (pi_ac->limit_desense_on_rssi) {
+		new_ofdm_desense = MIN(ACPHY_ACI_MIN_DESENSE_OFDM_DB, new_ofdm_desense);
+	} else if (pi_ac->limit_desense_on_rssi) {
 		new_bphy_desense = MIN(new_bphy_desense, MAX(0, aci->weakest_rssi + 85));
-		new_ofdm_desense = MIN(new_ofdm_desense, MAX(0, aci->weakest_rssi + 80));
+		new_ofdm_desense = MIN(new_ofdm_desense,
+				MAX(ACPHY_ACI_MIN_DESENSE_OFDM_DB, aci->weakest_rssi + 80));
 	}
-
 
 	PHY_ACI(("aci_mode1, old desense = {%d %d}, new = {%d %d}\n",
 	         desense->bphy_desense,

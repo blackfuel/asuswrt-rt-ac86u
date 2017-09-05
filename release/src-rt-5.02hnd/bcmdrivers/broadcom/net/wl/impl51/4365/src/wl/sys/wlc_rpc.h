@@ -1,7 +1,7 @@
 /*
  * WLC RPC common header file
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_rpc.h 546823 2015-04-06 19:17:45Z $
+ * $Id: wlc_rpc.h 682548 2017-02-02 09:15:49Z $
  */
 
 #ifndef _WLC_RPC_H_
@@ -243,6 +243,7 @@ typedef enum {
 	WLRPC_WLC_BMAC_COPYFROM_OBJMEM32_ID,
 	WLRPC_WLC_ENABLE_MACX_ID,
 	WLRPC_WLC_SUSPEND_MACX_AND_WAIT_ID,
+	WLRPC_WLC_BMAC_TX_FIFO_SYNC_BCMC_RESET_ID,
 	WLRPC_LAST
 } wlc_rpc_id_t;
 
@@ -469,6 +470,7 @@ struct rpc_name_entry {
 	NAME_ENTRY(WLRPC_WLC_BMAC_COPYFROM_OBJMEM32_ID),	\
 	NAME_ENTRY(WLRPC_WLC_ENABLE_MACX_ID),		\
 	NAME_ENTRY(WLRPC_WLC_SUSPEND_MACX_AND_WAIT_ID),	\
+	NAME_ENTRY(WLRPC_WLC_BMAC_TX_FIFO_SYNC_BCMC_RESET_ID),	\
 	{0, NULL} \
 	}
 

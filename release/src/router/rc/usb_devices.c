@@ -3807,7 +3807,8 @@ int asus_sg(const char *device_name, const char *action)
 		if(strcmp(nvram_safe_get("stop_sg_remove"), "1")){
 			usb_dbg("(%s): Running usb_modeswitch...\n", device_name);
 			xstart("usb_modeswitch", "-c", switch_file);
-#ifdef RTCONFIG_SOC_IPQ8064
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_LANTIQ)
+			sleep(2);
 			usb_dbg("(%s): Running usb_modeswitch twice...\n", device_name);
 			xstart("usb_modeswitch", "-c", switch_file);
 #endif
@@ -4536,7 +4537,7 @@ int asus_usb_interface(const char *device_name, const char *action)
 	int turn_on_led = 1;
 	char class_path[PATH_MAX], class[10] = "";
 #ifdef RTCONFIG_USB_MODEM
-	int modem_unit;
+	int modem_unit = 0;
 	char tmp2[100], prefix2[32];
 #endif
 
@@ -4679,11 +4680,15 @@ int asus_usb_interface(const char *device_name, const char *action)
 	// there is no any bounded drivers with Some Sierra dongles in the default state.
 	if(vid == 0x1199 && isStorageInterface(device_name)){
 		if(init_3g_param(port_path, vid, pid)){
-
 			if(strcmp(nvram_safe_get("stop_ui_remove"), "1")){
 				usb_dbg("(%s): Running usb_modeswitch...\n", device_name);
 				snprintf(modem_cmd, sizeof(modem_cmd), "%s.%s", USB_MODESWITCH_CONF, port_path);
 				xstart("usb_modeswitch", "-c", modem_cmd);
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_LANTIQ)
+				sleep(2);
+				usb_dbg("(%s): Running usb_modeswitch twice...\n", device_name);
+				xstart("usb_modeswitch", "-c", modem_cmd);
+#endif
 			}
 
 			file_unlock(isLock);
@@ -4718,6 +4723,10 @@ int asus_usb_interface(const char *device_name, const char *action)
 #endif
 #ifdef RTCONFIG_USB_PRINTER
 	{
+		if (nvram_get_int("usb_printer") && !module_loaded(USBPRINTER_MOD)) {
+			symlink("/dev/usb", "/dev/printers");
+			modprobe(USBPRINTER_MOD);
+		}
 		// Wait if there is the printer interface.
 		retry = 0;
 		while(!hadPrinterModule() && retry < MAX_WAIT_PRINTER_MODULE){

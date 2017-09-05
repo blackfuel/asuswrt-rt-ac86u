@@ -27,7 +27,7 @@
 
 typedef uint32_t __u32;
 
-#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) ||defined(RTAC54U) || defined(RTAC51UP)|| defined(RTAC53) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC1200) || defined(RTN11P_B1) || defined(RPAC87) || defined(RTAC85U)
+#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) ||defined(RTAC54U) || defined(RTAC51UP)|| defined(RTAC53) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC1200) || defined(RTN11P_B1) || defined(RPAC87) || defined(RTAC85U) || defined(RTAC65U)
 const char WIF_5G[]	= "rai0";
 const char WIF_2G[]	= "ra0";
 const char WDSIF_5G[]	= "wdsi";
@@ -181,7 +181,7 @@ void set_radio(int on, int unit, int subunit)
 		doSystem("iwpriv %s set RadioOn=%d", WIF_2G, on);
 	else doSystem("iwpriv %s set RadioOn=%d", WIF_5G, on);
 
-#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) //5G:7612E 2G:7603E
+#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTAC65U) //5G:7612E 2G:7603E
 	led_onoff(unit);
 #endif	
 }
@@ -194,7 +194,9 @@ char *wif_to_vif(char *wif)
 
 	vif[0] = '\0';
 
-	for (unit = 0; unit < 2; unit++)
+	for (unit = 0; unit < MAX_NR_WL_IF; unit++)
+	{
+		SKIP_ABSENT_BAND(unit);
 		for (subunit = 1; subunit < 4; subunit++)
 		{
 			snprintf(prefix, sizeof(prefix), "wl%d.%d", unit, subunit);
@@ -205,6 +207,7 @@ char *wif_to_vif(char *wif)
 				goto RETURN_VIF;
 			}
 		}
+	}
 
 RETURN_VIF:
 	return vif;
@@ -661,16 +664,16 @@ int get_channel_list_via_country(int unit, const char *country_code, char *buffe
 }
 
 
-#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U)
+#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTAC65U)
 void led_onoff(int unit)
 {   
 #if defined(RTAC1200HP)
 	if(unit==1)
 #endif		
 		if(get_radio(unit, 0))
-			led_control(unit?LED_5G:LED_2G, LED_ON);	
+			led_control(get_wl_led_id(unit), LED_ON);
 		else
-			led_control(unit?LED_5G:LED_2G, LED_OFF);	
+			led_control(get_wl_led_id(unit), LED_OFF);
 }
 #endif
 
@@ -721,10 +724,10 @@ char *__get_wlifname(int band, int subunit, char *buf)
 	if (!buf)
 		return buf;
 
-	if (!subunit)
-		strcpy(buf, (!band)? WIF_2G:WIF_5G);
-	else
-		sprintf(buf, "%s%02d", (!band)? WIF_2G:WIF_5G, subunit);
+	strcpy(buf, (!band)? WIF_2G:WIF_5G);
+	if (subunit) {
+		sprintf(buf + strlen(buf) - 1, "%d", subunit);
+	}
 
 	return buf;
 }
@@ -734,13 +737,17 @@ char *get_wlifname(int unit, int subunit, int subunit_x, char *buf)
 	char wifbuf[32];
 	char prefix[]="wlXXXXXX_", tmp[100];
 #if defined(RTCONFIG_WIRELESSREPEATER)
-	if (sw_mode() == SW_MODE_REPEATER  && nvram_get_int("wlc_band") == unit && subunit==1)
+	if (sw_mode() == SW_MODE_REPEATER
+#if !defined(RTCONFIG_CONCURRENTREPEATER)
+	 && nvram_get_int("wlc_band") == unit
+#endif
+	 && subunit==1)
 	{
 		if(unit == 1)
 			sprintf(buf, "%s", APCLI_5G);
 		else
 			sprintf(buf, "%s", APCLI_2G);
-	}
+	}	
 	else
 #endif /* RTCONFIG_WIRELESSREPEATER */
 	{
@@ -756,7 +763,7 @@ char *get_wlifname(int unit, int subunit, int subunit_x, char *buf)
 			sprintf(buf, "%s%d", wifbuf, subunit_x);
 		else
 			sprintf(buf, "%s", "");
-	}
+	}	
 	return buf;
 }
 

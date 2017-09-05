@@ -315,7 +315,7 @@ function gen_exception_list_table() {
 				"width" : "30%"
 			},
 			{
-				"title" : "Activate", /*untranslated*/
+				"title" : "<#CTL_Activate#>",
 				"width" : "10%"
 			}
 		],
@@ -1588,6 +1588,7 @@ function initialIPSecProfile() {
 	switchSettingsMode("1");
 	document.ipsec_form.ipsec_profilename.value = "";
 	settingRadioItemCheck(document.ipsec_form.ipsec_remote_gateway_method, "0");
+	changeRemoteGatewayMethod();
 	document.ipsec_form.ipsec_remote_gateway.value = "";
 	document.ipsec_form.ipsec_local_public_interface.value = "wan";
 	document.ipsec_form.ipsec_preshared_key.value = "";
@@ -1717,6 +1718,7 @@ function UpdatePSecProfile(array) {
 	switchSettingsMode("1");
 	document.ipsec_form.ipsec_profilename.value = array[2];
 	settingRadioItemCheck(document.ipsec_form.ipsec_remote_gateway_method, array[3]);
+	changeRemoteGatewayMethod();
 	document.ipsec_form.ipsec_remote_gateway.value = array[4];
 	document.ipsec_form.ipsec_local_public_interface.value = array[5];
 	document.ipsec_form.ipsec_preshared_key.value = array[8];
@@ -1840,6 +1842,21 @@ function save_ipsec_profile_panel() {
 			return false;
 		if(!Block_chars(document.ipsec_form.ipsec_remote_gateway, [">", "<"]))
 			return false;
+
+		if(getRadioItemCheck(document.ipsec_form.ipsec_remote_gateway_method) == "0") {
+			if(!validator.ipv4_addr(document.ipsec_form.ipsec_remote_gateway.value)) {
+				document.ipsec_form.ipsec_remote_gateway.focus();
+				alert(document.ipsec_form.ipsec_remote_gateway.value + " <#JS_validip#>");
+				return false;
+			}
+		}
+		else if(getRadioItemCheck(document.ipsec_form.ipsec_remote_gateway_method) == "1") {
+			if(!validator.domainName(document.ipsec_form.ipsec_remote_gateway.value)) {
+				document.ipsec_form.ipsec_remote_gateway.focus();
+				alert(document.ipsec_form.ipsec_remote_gateway.value + " is invalid Domain Name");/*untranslated*/
+				return false;
+			}
+		}
 
 		if(!validator.isEmpty(document.ipsec_form.ipsec_preshared_key))
 			return false;
@@ -2185,6 +2202,20 @@ function parseArrayToStr_vpnc_pptp_options_x_list() {
 		}
 	}
 	return vpnc_pptp_options_x_list_str;
+}
+function changeRemoteGatewayMethod() {
+	$("#ipsec_remote_gateway").removeAttr("maxlength");
+	$('#ipsec_remote_gateway').unbind("keypress");
+	var clickItem = getRadioItemCheck(document.ipsec_form.ipsec_remote_gateway_method);
+	if(clickItem == "0") {
+		$("#ipsec_remote_gateway").keypress(function() {
+			return validator.isIPAddr(this,event);
+		});
+		$("#ipsec_remote_gateway").attr("maxlength", "15");
+	}
+	else if(clickItem == "1") {
+		$("#ipsec_remote_gateway").attr("maxlength", "64");
+	}
 }
 function parseArrayToStr_vpnc_dev_policy_list(_array) {
 	var vpnc_dev_policy_list = "";
@@ -2640,17 +2671,19 @@ function applyExceptionList() {
 							<input type="text" class="input_25_table" name="ipsec_profilename">
 						</td>
 					</tr>
-					<tr id="tr_remote_gateway_method" style="display:none;">
+					<tr id="tr_remote_gateway_method">
 						<th>Remote Gateway Method<!--untranslated--></th>
 						<td>
-							<input type="radio" name="ipsec_remote_gateway_method" class="input" value="0" checked>Static IP Address<!--untranslated-->
-							<input type="radio" name="ipsec_remote_gateway_method" class="input" value="1"><#LANHostConfig_x_LDNSServer1_itemname#>
+							<input type="radio" name="ipsec_remote_gateway_method" id="ipsec_remote_gateway_ip" class="input" value="0" onchange="changeRemoteGatewayMethod()" checked>
+							<label for='ipsec_remote_gateway_ip' id="ipsec_remote_gateway_ip_label">Static IP Address<!--untranslated--></label>
+							<input type="radio" name="ipsec_remote_gateway_method" id="ipsec_remote_gateway_ddns" class="input" value="1" onchange="changeRemoteGatewayMethod()">
+							<label for='ipsec_remote_gateway_ddns' id="ipsec_remote_gateway_ddns_label"><#LANHostConfig_x_LDNSServer1_itemname#></label>
 						</td>
 					</tr>
 					<tr id="tr_remote_gateway">
 						<th>Remote Gateway<!--untranslated--></th>
 						<td>
-							<input type="text" class="input_25_table" name="ipsec_remote_gateway">
+							<input type="text" class="input_25_table" name="ipsec_remote_gateway" id="ipsec_remote_gateway" autocorrect="off" autocapitalize="off">
 						</td>
 					</tr>
 					<tr>

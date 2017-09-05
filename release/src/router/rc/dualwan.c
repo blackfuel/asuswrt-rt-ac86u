@@ -109,6 +109,10 @@ int init_dualwan(int argc, char *argv[])
 #ifdef RTCONFIG_USB_MODEM
 			else if (if_id == WANS_DUALWAN_IF_USB)
 				add_wan_phy(WANIF_USB);
+#ifdef RTCONFIG_USB_MULTIMODEM
+			else if (if_id == WANS_DUALWAN_IF_USB2)
+				add_wan_phy(WANIF_USB2);
+#endif
 #endif
 #ifdef RTCONFIG_USB_MULTIMODEM
 			else if (if_id == WANS_DUALWAN_IF_USB2)

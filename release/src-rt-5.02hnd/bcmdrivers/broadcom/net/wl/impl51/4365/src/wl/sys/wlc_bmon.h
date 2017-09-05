@@ -8,7 +8,7 @@
  * This driver code adds support for users to configure the BSSID(s) and
  * to register the callbacks to be invoked when a matching packet comes.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

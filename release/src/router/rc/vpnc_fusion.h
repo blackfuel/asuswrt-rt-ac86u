@@ -89,4 +89,7 @@ typedef enum{
 #define VPNC_PROFILE_VER_OLD	0
 #define VPNC_PROFILE_VER1		1
 
+#define VPNC_RULE_PRIORITY	"100"
+#define VPNC_RULE_PRIORITY_DEFAULT		"10000"
+
 #endif

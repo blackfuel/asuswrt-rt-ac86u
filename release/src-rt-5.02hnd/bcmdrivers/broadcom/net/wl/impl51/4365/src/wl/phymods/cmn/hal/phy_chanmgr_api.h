@@ -14,7 +14,7 @@
  * whose associated chanspec is used as the current radio chanspec, and
  * whose s/w properties are applied to the corresponding h/w if any.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

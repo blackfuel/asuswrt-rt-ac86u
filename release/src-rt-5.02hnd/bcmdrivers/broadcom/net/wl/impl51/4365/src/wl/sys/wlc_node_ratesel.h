@@ -2,7 +2,7 @@
  * Net80211 rate selection algorithm wrapper of Broadcom
  * algorithm of Broadcom 802.11b DCF-only Networking Adapter.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

@@ -94,8 +94,10 @@ void rast_init_bssinfo(void)
 		if (idx >= MAX_NR_WL_IF) {
 			break;
 		}
+		SKIP_ABSENT_BAND_AND_INC_UNIT(idx);
+
 #if defined(RTCONFIG_REALTEK)
-		else if (repeater_mode() && nvram_get_int("wlc_express") != 0) {
+		if (repeater_mode() && nvram_get_int("wlc_express") != 0) {
 			if (nvram_get_int("wlc_express") -1 == idx) // wlc interface
 				bssinfo[idx].user_low_rssi = 0;
 			else {
@@ -103,8 +105,9 @@ void rast_init_bssinfo(void)
 				bssinfo[idx].user_low_rssi = nvram_get_int(strcat_r(bssinfo[idx].prefix, "user_rssi", usr_rssi));
 			}
 		}
+		else
 #endif
-		else {
+		{
 			snprintf(bssinfo[idx].prefix, sizeof(bssinfo[idx].prefix), "wl%d_", idx);
 			bssinfo[idx].user_low_rssi = nvram_get_int(strcat_r(bssinfo[idx].prefix, "user_rssi", usr_rssi));
 		}
@@ -121,6 +124,21 @@ void rast_init_bssinfo(void)
 			bssinfo[idx].user_low_rssi = nvram_get_int(strcat_r(bssinfo[idx].prefix, "user_rssi", usr_rssi));
 		}
 #endif
+
+		if (nvram_get_int("sw_mode") == SW_MODE_REPEATER && idx == nvram_get_int("wlc_band"))
+			bssinfo[idx].upstream_if = 1;
+#if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
+		else if (is_psta(idx) || is_psr(idx))
+			bssinfo[idx].upstream_if = 1;
+#endif
+#ifdef RTCONFIG_DPSTA
+		else if ((dpsta_mode() && find_in_list(nvram_safe_get("dpsta_ifnames"), bssinfo[idx].wlif_name)) ||
+			(dpsr_mode() && find_in_list(nvram_safe_get("sta_ifnames"), bssinfo[idx].wlif_name)))
+			bssinfo[idx].upstream_if = 1;
+#endif
+		else
+			bssinfo[idx].upstream_if = 0;
+
 		idx++;
 	}
 	wlif_count = idx;
@@ -638,10 +656,6 @@ static void rast_watchdog(int sig)
 		int val;
 
 		if(!bssinfo[idx].user_low_rssi) continue;
-#ifdef RTCONFIG_PROXYSTA
-		if(psta_exist_except(idx) || psr_exist_except(idx)) continue;
-		else if(is_psta(idx) || is_psr(idx))	continue;
-#endif
 
 		wl_ioctl(bssinfo[idx].wlif_name, WLC_GET_RADIO, &val, sizeof(val));
 		val &= WL_RADIO_SW_DISABLE | WL_RADIO_HW_DISABLE;
@@ -665,6 +679,10 @@ static void rast_watchdog(int sig)
 #endif
 
 		for(vidx = 0; vidx < MAX_SUBIF_NUM; vidx++) {
+
+			//skip upstream interface
+			if (vidx==0 && bssinfo[idx].upstream_if)
+				continue;
 
 			if(vidx > 0) {
 				sprintf(prefix, "wl%d.%d", idx, vidx);

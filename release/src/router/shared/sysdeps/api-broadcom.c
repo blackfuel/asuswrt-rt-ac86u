@@ -1278,5 +1278,13 @@ char *get_wlifname(int unit, int subunit, int subunit_x, char *buf)
  */
 char *get_wlxy_ifname(int x, int y, char *buf)
 {
+#ifdef RTAC87U
+	if (get_model() == MODEL_RTAC87U && (x == 1)) {
+		if(y == 1) strcpy(buf, "vlan4000");
+		if(y == 2) strcpy(buf, "vlan4001");
+		if(y == 3) strcpy(buf, "vlan4002");
+		return buf;
+	}
+#endif
 	return get_wlifname(x, y, y, buf);
 }

@@ -1,6 +1,6 @@
 # Makefile for hndrte based 43602a1 full ram Image
 #
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
+# Broadcom Proprietary and Confidential. Copyright (C) 2017,
 # All Rights Reserved.
 # 
 # This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

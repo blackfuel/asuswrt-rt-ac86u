@@ -49,6 +49,9 @@ void write_chap_secret(char *file)
 	char *nv, *nvp, *b;
 	char *username, *passwd;
 	char namebuf[256], passwdbuf[256];
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+	char dec_passwd[256];
+#endif
 
 	fp = fopen(file, "w");
 	if (fp == NULL)
@@ -61,6 +64,11 @@ void write_chap_secret(char *file)
 				continue;
 			if (*username =='\0' /*|| *passwd == '\0'*/)
 				continue;
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+			memset(dec_passwd, 0, sizeof(dec_passwd));
+			pw_dec(passwd, dec_passwd);
+			passwd = dec_passwd;
+#endif
 			fprintf(fp, "'%s' * '%s' *\n",
 				ppp_safe_escape(username, namebuf, sizeof(namebuf)),
 				ppp_safe_escape(passwd, passwdbuf, sizeof(passwdbuf)));

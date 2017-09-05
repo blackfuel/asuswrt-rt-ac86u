@@ -200,6 +200,8 @@ window.onresize = function() {
 var wl0_radio = '<% nvram_get("wl0_radio"); %>';
 var wl1_radio = '<% nvram_get("wl1_radio"); %>';
 var wl2_radio = '<% nvram_get("wl2_radio"); %>';
+
+var orig_NM_container_height;
 function initial(){
 	var autodet_state = '<% nvram_get("autodet_state"); %>';
 	var autodet_auxstate = '<% nvram_get("autodet_auxstate"); %>';	
@@ -221,7 +223,7 @@ function initial(){
 		document.getElementById("second_wan_title").style.display = "none";
 		document.getElementById("secondary_pap_concurrent").style.display = "";		
 	}
-	
+
 	if(sw_mode == 4){
 		var wlc_auth_mode = '<% nvram_get("wlc_auth_mode"); %>';
 		if(wlc_auth_mode == "") wlc_auth_mode = '<% nvram_get("wlc0_auth_mode"); %>';
@@ -407,6 +409,8 @@ function initial(){
 			notification.notiClick();
 		}
 	}
+
+	orig_NM_container_height = parseInt($(".NM_radius_bottom_container").css("height"));
 }
 
 function show_smart_connect_status(){
@@ -599,7 +603,10 @@ function disk_html(device){
 	if(device.usbPath == "3")
 		usb_css = "iconM2";
 	icon_html_code += '<a target="statusframe">\n';
-	icon_html_code += '<div id="ring_USBdisk_'+device.usbPath+'" class=' + usb_css + ' style="display:none;z-index:1;">\n';
+	if(based_modelid == "GT-AC5300" || based_modelid == "GT-AC9600")
+		icon_html_code += '<div id="ring_USBdisk_'+device.usbPath+'" style="display:none;z-index:1;">\n';
+	else
+		icon_html_code += '<div id="ring_USBdisk_'+device.usbPath+'" class=' + usb_css + ' style="display:none;z-index:1;">\n';
 	icon_html_code += '<div id="iconUSBdisk_'+device.usbPath+'" class=' + usb_css + ' onclick="setSelectedDiskOrder(this.id);clickEvent(this);"></div>\n';
 	icon_html_code += '</div>\n';
 	icon_html_code += '</a>\n';
@@ -815,7 +822,7 @@ function clickEvent(obj){
 		obj.style.backgroundPosition = '0% 100%';
 	}
 	else if(obj.id.indexOf("iconRouter") >= 0){
-		obj.style.backgroundPosition = '65% 95%';
+		obj.style.backgroundPosition = '65% 100%';
 	}
 	else{
 		obj.style.backgroundPosition = '0% 100%';
@@ -880,7 +887,8 @@ function check_status(_device){
 	document.getElementById('iconUSBdisk_'+diskOrder).style.backgroundPosition = '1px -4px';
 	document.getElementById('iconUSBdisk_'+diskOrder).style.backgroundSize = "100%";
 
-	document.getElementById('ring_USBdisk_'+diskOrder).style.backgroundImage = "url(/images/New_ui/networkmap/white_04.gif)";	
+	if(based_modelid != "GT-AC5300" && based_modelid != "GT-AC9600")
+		document.getElementById('ring_USBdisk_'+diskOrder).style.backgroundImage = "url(/images/New_ui/networkmap/white_04.gif)";
 	document.getElementById('ring_USBdisk_'+diskOrder).style.display = "";
 
 	if(!diskUtility_support)
@@ -2373,11 +2381,11 @@ function check_wireless(){
 		<div id="NM_shift" style="margin-top:-140px;"></div>
 		<div id="NM_table" class="NM_table" >
 		<div id="NM_table_div">
-			<table id="_NM_table" style="background:url('images/New_ui/networkmap/networkmap_bg.png') no-repeat rgba(0,0,0,.5);background-position-x: 15px; " border="0" cellpadding="0" cellspacing="0" height="720" style="opacity:.95;" >
+			<table id="_NM_table" style="background:url('images/New_ui/networkmap/networkmap_bg.png') no-repeat rgba(0,0,0,.5);background-position-x: 15px; height:805px;" border="0" cellpadding="0" cellspacing="0" style="opacity:.95;" >
 				<tr>
 					<td width="40px" rowspan="11" valign="center"></td>
 					<!--== Dual WAN ==-->
-					<td id="primary_wan_icon" width="160px;" align="center" class="NM_radius" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet_primary');" style="display:none;height:180px">
+					<td id="primary_wan_icon" width="160px;" align="center" class="NM_radius" onclick="showstausframe('Internet_primary');" style="display:none;height:180px">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet_primary" onclick="clickEvent(this);"></div></a>
 						<div id="first_wan_title"><#dualwan_primary#>:</div>
 						<div id="primary_pap_concurrent" style="display:none">
@@ -2388,7 +2396,7 @@ function check_wireless(){
 					</td>
 					<td id="dual_wan_gap" width="40px" style="display:none">
 					</td>
-					<td id="secondary_wan_icon" width="160px;" align="center" class="NM_radius" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet_secondary');" style="display:none;height:180px">
+					<td id="secondary_wan_icon" width="160px;" align="center" class="NM_radius" onclick="showstausframe('Internet_secondary');" style="display:none;height:180px">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet_secondary" onclick="clickEvent(this);"></div></a>
 						<div id="second_wan_title"><#dualwan_secondary#>:</div>
 						<div id="secondary_pap_concurrent" style="display:none">
@@ -2398,10 +2406,10 @@ function check_wireless(){
 						<div style="padding:5px"><strong id="secondary_status"></strong></div>
 					</td>
 					<!--== single WAN ==-->
-					<td id="single_wan_icon" align="right" class="NM_radius_left" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet');">
+					<td id="single_wan_icon" align="right" class="NM_radius_left" style="display:none;height:180px" onclick="showstausframe('Internet');">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet" onclick="clickEvent(this);"></div></a>
 					</td>
-					<td id="single_wan_status" colspan="2" valign="middle" bgcolor="#444f53" class="NM_radius_right" onclick="" style="padding:5px;cursor:auto;width:180px;height:130px">
+					<td id="single_wan_status" colspan="2" class="NM_radius_right" onclick="" style="padding:5px;cursor:auto;width:180px;height:130px">
 						<div>
 							<span id="NM_connect_title" style="font-size:12px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#statusTitle_Internet#>:</span>
 							<br>
@@ -2434,7 +2442,7 @@ function check_wireless(){
 							<div id="helpname" style="padding-top:10px;font-size:16px;"></div>
 						</div>							
 						<div class="NM_radius_bottom_container">
-							<iframe id="statusframe" class="NM_radius_bottom" style="display:none;margin-left:0px\9" name="statusframe" width="320px" height="735px" frameborder="0"></iframe>
+							<iframe id="statusframe" class="NM_radius_bottom" style="display:none;margin-left:0px;height:760px;width:320px;\9" name="statusframe" frameborder="0"></iframe>
 						</div>
 				
 						<script>
@@ -2470,16 +2478,18 @@ function check_wireless(){
 				</tr>			
 				<tr>
 					<td style="height:150px;" colspan="3">
-					<div style="">
-						<div style="display:table-cell;width:90px;">
-							<div style="margin-top:70px">
+					<div style="width:350px;">
+						<div style="display:table-cell;width:100px;text-align: center;">
+							<div>
 								<div style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;margin: 15px 0"><#menu5_1#>: </div>
+								<div style="margin-top:10px;">
 								<div id="wl0_icon" class="wl_icon wl0_icon_on"></div>
 								<div id="wl1_icon" class="wl_icon wl1_icon_on"></div>
 								<div id="wl2_icon" class="wl_icon wl2_icon_on"></div>
+								</div>
 							</div>
 						</div>
-						<div style="display:table-cell;vertical-align: middle;padding-top:50px">
+						<div style="display:table-cell;vertical-align: middle;">
 							<div id="iconRouter" onclick="clickEvent(this);" ></div>
 						</div>
 						<div style="display:table-cell">
@@ -2491,11 +2501,11 @@ function check_wireless(){
 							Advanced_Wireless_Content.asp">On</a></strong>
 							</div>
 
-							<div id="wlSecurityContext">
+							<div id="wlSecurityContext" style="text-align: center;">
 								<div style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;;margin: 15px 0"><#Security_Level#>: </div>
 				
-								<strong id="wl_securitylevel_span" class="index_status"></strong>
-								<img id="iflock">
+								<div style="margin-top:10px;"><strong id="wl_securitylevel_span" class="index_status"></strong>
+								<img id="iflock"></div>
 							</div>
 
 							<div id="mbModeContext" style="display:none">
@@ -2507,33 +2517,6 @@ function check_wireless(){
 						</div>
 					</div>
 					</td>
-					<!--td align="right" bgcolor="#444f53" class="NM_radius_left" onclick="showstausframe('Router');" style="height:150px">
-						<a href="device-map/router.asp" target="statusframe"><div id="iconRouter" onclick="clickEvent(this);"></div></a>
-					</td>
-					<td colspan="2" valign="middle" bgcolor="#444f53" class="NM_radius_right" onclick="showstausframe('Router');">
-						<div>
-						<span id="SmartConnectName" style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif; display:none">Smart Connect Status: </span>
-						</div>
-						<div>
-						<strong id="SmartConnectStatus" class="index_status" style="font-size:14px; display:none"><a style="color:#FFF;text-decoration:underline;" href="/
-						Advanced_Wireless_Content.asp">On</a></strong>
-						</div>
-
-						<div id="wlSecurityContext">
-							<span style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#Security_Level#>: </span>
-							<br/>  
-							<strong id="wl_securitylevel_span" class="index_status"></strong>
-							<img id="iflock">
-						</div>
-
-						<div id="mbModeContext" style="display:none">
-							<span style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#menu5_6_1#>: </span>
-							<br/>
-							<br/>
-							<strong class="index_status"><#OP_MB_item#></strong>
-						</div>
-					</td-->
-
 				</tr>			
 				<tr>
 					<td id="line3_td" colspan="3" align="center" height="35px" style="visibility: hidden">
@@ -2568,14 +2551,6 @@ function check_wireless(){
 								</script>			
 							</div>
 						</div>
-
-						<!--div id="" onclick="">
-							<img style="margin-top:15px;width:150px;height:2px" src="/images/New_ui/networkmap/linetwo2.png">
-							<a id="" href="device-map/clients.asp" target="statusframe">
-							<div id="iconClient" style="margin-top:20px;" onclick=""></div>
-							</a>
-							<div class="clients" id="" style="cursor:pointer;">Wireless Clients:</div>
-						</div-->
 					</td>
 
 					<td width="36" rowspan="6" id="clientspace_td"></td>

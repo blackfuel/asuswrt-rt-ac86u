@@ -304,7 +304,7 @@ define(function(){
 					retArray.push("menu_VLAN");
 					retArray.push("menu_Firewall");
 
-					if(!userRSSI_support){
+					if(!concurrep_support){
 						retArray.push("menu_Wireless");
 					}
 				}
@@ -350,7 +350,7 @@ define(function(){
 					retArray.push("menu_VLAN");
 					retArray.push("menu_Firewall");
 
-					if(!userRSSI_support){
+					if(!concurrep_support){
 						retArray.push("menu_Wireless");
 					}
 				}
@@ -562,16 +562,18 @@ define(function(){
 					retArray.push("Main_IPTStatus_Content.asp");
 					retArray.push("Main_ConnStatus_Content.asp");
 
-					if(userRSSI_support){
-						if(!concurrep_support){
-							retArray.push("Advanced_Wireless_Content.asp");
-							retArray.push("Advanced_ACL_Content.asp");
-						}
-
-						retArray.push("Advanced_WWPS_Content.asp");
-						retArray.push("Advanced_WMode_Content.asp");
-						retArray.push("Advanced_WSecurity_Content.asp");
+					if(!concurrep_support){
+						retArray.push("Advanced_Wireless_Content.asp");
+						retArray.push("Advanced_ACL_Content.asp");				
 					}
+
+					if(!userRSSI_support && !location_list_support){
+						retArray.push("Advanced_WAdvanced_Content.asp");
+					}
+
+					retArray.push("Advanced_WWPS_Content.asp");
+					retArray.push("Advanced_WMode_Content.asp");
+					retArray.push("Advanced_WSecurity_Content.asp");
 				}
 				else if(isSwMode("ap")){
 					retArray.push("GameBoost.asp");

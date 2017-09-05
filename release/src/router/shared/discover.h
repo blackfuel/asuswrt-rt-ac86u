@@ -163,7 +163,7 @@ struct client_config_t {
 
 static struct client_config_t client_config;
 
-#define OPTIONS_SIZE 60	//308?
+#define OPTIONS_SIZE 308
 
 struct dhcpMessage {
         u_int8_t op;

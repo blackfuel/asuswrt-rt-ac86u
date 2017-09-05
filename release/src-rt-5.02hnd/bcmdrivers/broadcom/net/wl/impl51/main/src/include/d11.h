@@ -2,7 +2,7 @@
  * Chip-specific hardware definitions for
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: d11.h 632469 2016-04-19 11:39:53Z $
+ * $Id: d11.h 662404 2016-09-29 10:40:24Z $
  */
 
 #ifndef	_D11_H
@@ -2381,7 +2381,7 @@ BWL_PRE_PACKED_STRUCT struct shm_acparams {
 #define MHF3_PAPD_OFF_OFDM	0x8000		/* Disable PAPD comp for OFDM frames */
 
 /* Flags in M_HOST_FLAGS4 */
-#define MHF4_CISCOTKIP_WAR	0x0001		/* Change WME timings under certain conditions */
+#define MHF4_RTS_INFB		0x0001		/* Enable RTS in frameburst */
 #define	MHF4_RCMTA_BSSID_EN	0x0002		/* BTAMP: multiSta BSSIDs matching in RCMTA area */
 #define	MHF4_BCN_ROT_RR		0x0004		/* MBSSID: beacon rotate in round-robin fashion */
 #define	MHF4_OPT_SLEEP		0x0008		/* enable opportunistic sleep */

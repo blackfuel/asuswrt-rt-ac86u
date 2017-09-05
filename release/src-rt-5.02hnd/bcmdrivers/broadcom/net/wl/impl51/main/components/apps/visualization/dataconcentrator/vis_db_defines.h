@@ -1,7 +1,7 @@
 /*
  * Visualization system data concentrator database defines header
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_db_defines.h 603469 2015-12-02 07:52:28Z $
+ * $Id: vis_db_defines.h 672659 2016-11-29 10:24:01Z $
  */
 #ifndef _VIS_DB_DEFINES_H_
 #define _VIS_DB_DEFINES_H_
@@ -68,6 +68,7 @@
 #define COL_DUT_UCASTRSN		"UCastRSN"
 #define COL_DUT_AKMRSN			"AKMRSN"
 #define COL_DUT_ISENABLED		"enabled"
+#define COL_DUT_ERRINFO			"errinfo"
 /* DUT Details table defines ends */
 
 /* SCAN Details table defines */

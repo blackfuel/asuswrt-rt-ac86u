@@ -3,6 +3,7 @@ include ../common.mak
 CFLAGS += -Os -Wall $(EXTRACFLAGS)
 CFLAGS += $(PRIVATE_EXTRACFLAGS)
 CFLAGS += -I$(SRCBASE) -I. -I$(SRCBASE)/include -I$(TOP)/shared -I$(TOP)/zlib -I$(TOP)/networkmap
+CFLAGS += -I$(TOP)/push_log
 CFLAGS += -DASUS_DDNS -DTRANSLATE_ON_FLY -DFLASH_EMULATOR -DLinux -DWSC 
 
 ifeq ($(RTCONFIG_NETOOL),y)
@@ -208,6 +209,18 @@ LIBS += -L$(TOP)/sqlite/.libs -lsqlite3
 LIBS += -lpthread #Depend on sqlite
 endif
 
+ifeq ($(RTCONFIG_LETSENCRYPT),y)
+CFLAGS  += -I$(TOP)/libletsencrypt
+LIBS += -L$(TOP)/libletsencrypt -lletsencrypt
+endif
+
+ifeq ($(RTCONFIG_PERMISSION_MANAGEMENT),y)
+CFLAGS  += -I$(TOP)/sqlCipher
+CFLAGS  += -I$(TOP)/PMS_DBapis
+LIBS += -L$(TOP)/PMS_DBapis -lpms_sql
+LIBS += -L $(TOP)/sqlCipher/.libs -lsqlcipher
+endif
+
 ifeq ($(RTCONFIG_CFGSYNC),y)
 CFLAGS += -I$(TOP)/cfg_mnt
 LIBS += -L$(TOP)/cfg_mnt -lcfgmnt
@@ -222,7 +235,7 @@ CFLAGS += -I$(TOP)/libpasswd
 LIBS += -L$(TOP)/libpasswd -lpasswd
 
 ifeq ($(RTCONFIG_LANTIQ),y)
-LIBS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi
+LIBS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi -L$(TOP)/wireless_tools/ -liw
 endif
 
 all: httpd #test_apps

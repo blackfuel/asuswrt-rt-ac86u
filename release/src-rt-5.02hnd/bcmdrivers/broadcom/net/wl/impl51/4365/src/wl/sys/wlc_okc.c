@@ -4,14 +4,14 @@
  * Exposed interfaces of wlc_okc.c (Opportunistic Key Caching).
  * This code is for external supplicant to handle fast-roaming properly.
  * Currently what is implemented is OKC(WL_OKC) and RCC(WLRCC).
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
  * the contents of this file may not be disclosed to third parties, copied
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
- * $Id: wlc_okc.c 485563 2014-06-16 12:26:46Z $
+ * $Id: wlc_okc.c 677737 2017-01-04 16:01:52Z $
  *
  */
 
@@ -230,36 +230,25 @@ wlc_okc_rcc_doiovar(void *context, const bcm_iovar_t *vi, uint32 actionid, const
 #ifdef WL_OKC
 int wlc_calc_pmkid_for_okc(wlc_info_t *wlc, wlc_bsscfg_t *cfg, struct ether_addr *BSSID, int *index)
 {
-	uint8 *data, *digest;
 #define WPA_KEY_DATA_LEN_128	128	/* allocation size of 128 for temp data pointer. */
+	uint8 data[WPA_KEY_DATA_LEN_128];
+	uint8 digest[PRF_OUTBUF_LEN];
+
 	if (ETHER_ISNULLADDR(BSSID)) {
 		WL_WSEC(("wlc_calc_pmkid_for_okc: can't calculate PMKID - NULL BSSID\n"));
 		*index = -1;
 		return -1;
 	}
-	if (!(data = MALLOC(wlc->pub->osh, WPA_KEY_DATA_LEN_128))) {
-		WL_ERROR(("%s: out of memory, malloced %d bytes\n",
-		__FUNCTION__, MALLOCED(wlc->osh)));
-		*index = -1;
-		return -1;
-	}
-	if (!(digest = MALLOC(wlc->pub->osh, PRF_OUTBUF_LEN))) {
-		WL_ERROR(("%s: out of memory, malloced %d bytes\n",
-		__FUNCTION__, MALLOCED(wlc->osh)));
-		MFREE(wlc->pub->osh, data, WPA_KEY_DATA_LEN_128);
-		*index = -1;
-		return -1;
-	}
+
 	if (WLC_OKC_INFO(wlc)->pmk_len == 0) {
 		WL_ERROR(("%s: pmk is not valid\n", __FUNCTION__));
 		*index = -1;
 		return -1;
 	}
+
 	wpa_calc_pmkid_for_okc(wlc->pmkid_info, cfg, BSSID, &cfg->cur_etheraddr,
 		WLC_OKC_INFO(wlc)->pmk, (uint)WLC_OKC_INFO(wlc)->pmk_len, data, digest, index);
 
-	MFREE(wlc->osh, data, WPA_KEY_DATA_LEN_128);
-	MFREE(wlc->osh, digest, PRF_OUTBUF_LEN);
 	return 0;
 }
 #endif /* WL_OKC */

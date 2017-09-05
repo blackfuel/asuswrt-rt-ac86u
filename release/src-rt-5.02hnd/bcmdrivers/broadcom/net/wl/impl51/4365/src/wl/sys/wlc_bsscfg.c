@@ -2,7 +2,7 @@
  * BSS Configuration routines for
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_bsscfg.c 669399 2016-11-09 10:44:49Z $
+ * $Id: wlc_bsscfg.c 682548 2017-02-02 09:15:49Z $
  */
 
 #include <wlc_cfg.h>
@@ -1340,6 +1340,9 @@ wlc_pilot_timer(void *arg)
 	unsigned int len;
 	const char *country_str;
 
+	if (wlc_quiet_chanspec(wlc->cmi, wlc->chanspec))
+		return;
+
 	len = DOT11_ACTION_FRMHDR_LEN + DOT11_MPREP_LEN;
 	p = wlc_frame_get_mgmt(wlc, FC_ACTION, &ether_bcast,
 		&cfg->cur_etheraddr, &cfg->BSSID, len, &pbody);
@@ -1391,8 +1394,9 @@ wlc_bsscfg_ap_init(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg)
 	bsscfg->maxassoc = wlc->pub->tunables->maxscb;
 #endif /* MBSS || WLP2P */
 #if defined(MBSS)
-	bsscfg->bcmc_fid = INVALIDFID;
-	bsscfg->bcmc_fid_shm = INVALIDFID;
+	if (MBSS_ENAB(wlc->pub)) {
+		wlc_mbss_bcmc_reset(wlc, bsscfg);
+	}
 #endif
 
 	bsscfg->_ap = TRUE;
@@ -1894,10 +1898,6 @@ wlc_bsscfg_malloc(wlc_info_t *wlc)
 			goto fail;
 	}
 
-	if ((cfg->mutx = (wlc_mutx_policy_t *)
-		MALLOCZ(osh, sizeof(wlc_mutx_policy_t))) == NULL)
-		goto fail;
-
 	return cfg;
 
 fail:
@@ -2011,11 +2011,6 @@ wlc_bsscfg_mfree(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
 			MFREE(osh, cfg->bssload, sizeof(wlc_bssload_t));
 			cfg->bssload = NULL;
 		}
-	}
-
-	if (cfg->mutx != NULL) {
-		MFREE(osh, cfg->mutx, sizeof(wlc_mutx_policy_t));
-		cfg->mutx = NULL;
 	}
 
 	MFREE(osh, cfg, bcmh->totsize);

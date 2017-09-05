@@ -4,7 +4,7 @@
  * No caching,
  * Just a thin packet buffering data structure layer atop malloc/free .
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: hnd_lbuf.c 626003 2016-03-18 11:29:07Z $
+ * $Id: hnd_lbuf.c 661371 2016-09-25 01:54:17Z $
  */
 
 #include <typedefs.h>
@@ -86,6 +86,56 @@ static uint lbuf_allocfail = 0;
 #ifdef BCMPCIEDEV
 static lbuf_free_global_cb_t lbuf_free_cb = NULL;
 #endif
+
+#ifdef BCM_DHDHDR
+struct lbuf_dhdhdr_memory {
+	uint32 ext_buf_size; /* Size of each extension buffer */
+	uint32 ext_num_bufs; /* Number of extension buffers */
+	dma64addr_t ext_base_addr; /* Base address of all extension buffers */
+} lbuf_dhdhdr_memory = {0U, 0U, {0U, 0U}};
+
+
+/** Register the host memory region configuration */
+void
+lbuf_dhdhdr_memory_register(uint32 ext_buf_size, uint32 ext_num_bufs,
+	void *mem_base_addr)
+{
+	dma64addr_t *ext_base_addr;
+	ASSERT(ext_num_bufs >= PKT_MAXIMUM_ID);
+
+	ext_base_addr = (dma64addr_t *)mem_base_addr;
+
+	lbuf_dhdhdr_memory.ext_buf_size = ext_buf_size;
+	lbuf_dhdhdr_memory.ext_num_bufs = ext_num_bufs;
+	lbuf_dhdhdr_memory.ext_base_addr.loaddr = ext_base_addr->loaddr;
+	lbuf_dhdhdr_memory.ext_base_addr.hiaddr = ext_base_addr->hiaddr;
+}
+
+/** Return the host memory extension region's addr corresponding to an lbuf */
+void
+lbuf_dhdhdr_memory_extension(struct lbuf *lb, void *rtn_buf_base_addr)
+{
+	dma64addr_t *buf_base_addr = (dma64addr_t *)rtn_buf_base_addr;
+	uint16 pktid;
+
+	ASSERT(lb != NULL);
+
+	pktid = PKTID(lb);
+	ASSERT(pktid <= lbuf_dhdhdr_memory.ext_num_bufs);
+
+	buf_base_addr->loaddr = lbuf_dhdhdr_memory.ext_base_addr.loaddr +
+		(lbuf_dhdhdr_memory.ext_buf_size * pktid);
+	buf_base_addr->hiaddr = lbuf_dhdhdr_memory.ext_base_addr.hiaddr;
+}
+
+void
+lb_set_buf(struct lbuf *lb, void *buf, uint size)
+{
+	lb->head = lb->data = (uchar *)buf;
+	lb->end = lb->head + size;
+	lb->len = size;
+}
+#endif /* BCM_DHDHDR */
 
 void
 lb_init()

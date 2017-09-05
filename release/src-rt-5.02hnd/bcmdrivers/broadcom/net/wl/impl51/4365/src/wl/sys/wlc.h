@@ -3,7 +3,7 @@
  * Common (OS-independent) definitions for
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -11,7 +11,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc.h 654669 2016-08-16 03:39:02Z $
+ * $Id: wlc.h 668862 2016-11-07 06:20:38Z $
  */
 
 #ifndef _wlc_h_
@@ -98,6 +98,7 @@
 #define SYNCFIFO						(0)
 #define FLUSHFIFO						(1)
 #define FLUSHFIFO_FLUSHID					(2)
+#define FLUSHFIFO_FLUSHSCB					(3)
 
 /* Bitmaps */
 /* 0x01=BK, 0x02=BE, 0x04=VI, 0x08=VO, 0x10=B/MCAST, 0x20=ATIM */
@@ -1665,6 +1666,16 @@ typedef struct wlc_excess_pm_wake_info {
 	uint32	last_cal_dur;		/* calibration time when period started */
 } wlc_excess_pm_wake_info_t;
 
+/* MU-MIMO Transmit Policy */
+/* MU TX Policy is accessed outside of MUTX module notably TxBF
+	Probably it should move to wlc_mutx.c file and have API to access it.
+*/
+typedef struct mutx_policy {
+	uint32	bw_policy;	/* NONE, 20MHZ, 40MHZ, or 80MHZ */
+	uint32	ac_policy;	/* NONE, BE/BK, VI, or VO */
+	uint32	effective_ac;	/* Nonzero AC to avoid frequent link changes: BE/BK, VI, or VO */
+} wlc_mutx_policy_t;
+
 /*
  * Principal common (os-independent) software data structure.
  */
@@ -2458,6 +2469,8 @@ struct wlc_info {
 	bool        is_bmac_suspend_timer_active;
 	struct      wl_timer* bmac_suspend_timer;
 #endif 
+	wlc_mutx_policy_t *mutx_policy; /* MU TX policy - AC and BW - different from mu_policy_t */
+	void *fifoflush_scb;	/* the scb pointer for flushing fifos */
 };
 
 #define DMA_CT_PRECONFIGURED		(1 << 0)
@@ -3688,4 +3701,5 @@ extern void wlc_assoc_dc_dispatch(wlc_info_t *wlc,
 extern int wlc_assoc_dc_handle_deregisiter(wlc_pub_t *pub,
 	const wlc_dc_handle_t *dc_handle, int size);
 #endif
+extern uint8 wlc_template_plcp_offset(wlc_info_t *wlc, ratespec_t rspec);
 #endif	/* _wlc_h_ */

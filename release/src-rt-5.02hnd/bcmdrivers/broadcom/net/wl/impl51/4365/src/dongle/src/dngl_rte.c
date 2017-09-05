@@ -2,7 +2,7 @@
  *
  * RTE dongle core support file
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: dngl_rte.c 625630 2016-03-17 05:49:09Z $
+ * $Id: dngl_rte.c 661371 2016-09-25 01:54:17Z $
  */
 
 #include <typedefs.h>
@@ -364,6 +364,61 @@ dngl_sendctl(struct dngl *dngl, void *src, void *p)
  * it for later transmission to the enslaved device
  */
 #ifdef PKTC_TX_DONGLE
+#ifdef BCMMSGBUF
+/*
+ * PCIe IPC BCMMSGBUF: All packets in packet chain
+ * - are to the same interface,
+ * - do not include a protocol header, and
+ * - are from Tx Lfrag pool and PKTNEXT() is NULL, so no PKTTONATIVE()
+ */
+void
+dngl_sendup(struct dngl *dngl, void *p, uint32 pktcnt)
+{
+	void *n;
+
+#ifndef DNGL_LB
+	int p_ifindex;
+	hnd_dev_t *slave;
+
+	p_ifindex = PKTIFINDEX(dngl->osh, p);
+
+	slave = dngl_finddev(dngl, p_ifindex);
+	if (slave == NULL) {
+		goto drop_pkt_chain;
+	}
+	ASSERT(slave->ops != NULL);
+
+	dngl->stats.rx_packets += pktcnt;
+
+	/* All packets are from Tx Lfrag pool, so no need to PKTTONATIVE */
+	if (slave->ops->xmit(dngl->rtedev, slave, (struct lbuf *)p) != 0) {
+		dngl->stats.rx_dropped += pktcnt;
+		err("dropped pktc 0x%p pktcnt %u for %s", p, pktcnt, slave->name);
+	}
+
+	return;
+
+drop_pkt_chain:
+	/* Traverse packet chain list, dropping each packet */
+	while (p != NULL) {
+		n = PKTLINK(p);
+		PKTSETLINK(p, NULL);
+		PKTFREE(dngl->osh, p, FALSE);
+		p = n;
+	}
+
+	dngl->stats.rx_dropped += pktcnt;
+#else /* DNGL_LB */
+	while (p != NULL) {
+		n = PKTLINK(p);
+		bus_ops->tx(dngl->bus, p); /* bus loopback: from rx path to tx path */
+		p = n;
+	}
+#endif /* DNGL_LB */
+}
+
+#else /* !BCMMSGBUF */
+
 void
 dngl_sendup(struct dngl *dngl, void *p)
 {
@@ -461,7 +516,10 @@ dngl_sendup(struct dngl *dngl, void *p)
 	}
 #endif /* DNGL_LB */
 }
+#endif /* !BCMMSGBUF */
+
 #else /* PKTC_TX_DONGLE */
+
 void
 dngl_sendup(struct dngl *dngl, void *p)
 {

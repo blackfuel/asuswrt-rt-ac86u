@@ -5,7 +5,11 @@
 #include <shutils.h>
 #include "rc.h"
 
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+#include <PMS_DBAPIs.h>
+#endif
 
+//#define BLOCKLOCAL
 char *datestr[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 #if 0
@@ -219,6 +223,59 @@ void free_pc_list(pc_s **target_list){
 	return;
 }
 
+pc_s *cp_pc(pc_s **dest, const pc_s *src){
+	pc_event_s *follow_e, **follow_e_list;
+
+	if(initial_pc(dest) == NULL){
+		_dprintf("No memory!!(dest)\n");
+		return NULL;
+	}
+
+	(*dest)->enabled = src->enabled;
+	strlcpy((*dest)->device, src->device, sizeof((*dest)->device));
+	strlcpy((*dest)->mac, src->mac, sizeof((*dest)->mac));
+
+	follow_e_list = &((*dest)->events);
+	for(follow_e = src->events; follow_e != NULL; follow_e = follow_e->next){
+		cp_event(follow_e_list, follow_e);
+
+		while(*follow_e_list != NULL)
+			follow_e_list = &((*follow_e_list)->next);
+	}
+
+	return *dest;
+}
+
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+/*
+	permission management copy the origin rule into separate mac
+	dev group use "src->device" and strip '@'
+*/
+static
+pc_s *dup_pc_with_mac(pc_s **dest, const pc_s *src, const char *mac){
+	pc_event_s *follow_e, **follow_e_list;
+
+	if(initial_pc(dest) == NULL){
+		_dprintf("No memory!!(dest)\n");
+		return NULL;
+	}
+
+	(*dest)->enabled = src->enabled;
+	strcpy((*dest)->device, src->device+1);   // strip '@'
+	strcpy((*dest)->mac, mac);                // new mac from permission group
+
+	follow_e_list = &((*dest)->events);
+	for(follow_e = src->events; follow_e != NULL; follow_e = follow_e->next){
+		cp_event(follow_e_list, follow_e);
+
+		while(*follow_e_list != NULL)
+			follow_e_list = &((*follow_e_list)->next);
+	}
+
+	return *dest;
+}
+#endif
+
 pc_s *get_all_pc_list(pc_s **pc_list){
 	char word[4096], *next_word;
 	pc_s *follow_pc, **follow_pc_list;
@@ -283,30 +340,47 @@ pc_s *get_all_pc_list(pc_s **pc_list){
 		follow_pc = follow_pc->next;
 	}
 
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+	follow_pc = *pc_list;
+	i = 0;
+	while (follow_pc != NULL)
+	{
+		i++;
+		//printf("[PC][%d] %s, %s, %s\n", i, follow_pc->device, follow_pc->mac, follow_pc->device+1);
+		if (follow_pc->device[0] == '@') {
+			int dev_num, group_num;
+			PMS_DEVICE_INFO_T *dev_list = NULL;
+			PMS_DEVICE_GROUP_INFO_T *group_list = NULL, *follow_group = NULL;
+
+			/* Get account / group list */
+			if (PMS_GetDeviceInfo(PMS_ACTION_GET_FULL, &dev_list, &group_list, &dev_num, &group_num) < 0) {
+				_dprintf("Can't read dev / group list\n");
+				break;
+			}
+
+			/* Get the mac list of certain group */
+			for (follow_group = group_list; follow_group != NULL; follow_group = follow_group->next) {
+				if (!strcmp(follow_group->name, (follow_pc->device)+1)) {
+					PMS_OWNED_INFO_T *owned_dev = follow_group->owned_device;
+					while (owned_dev != NULL) {
+						PMS_DEVICE_INFO_T *dev_owned = (PMS_DEVICE_INFO_T *) owned_dev->member;
+						//printf("[PC][%s] %s\n", follow_group->name, dev_owned->mac);
+						owned_dev = owned_dev->next;
+						dup_pc_with_mac(follow_pc_list, follow_pc, dev_owned->mac);
+						while (*follow_pc_list != NULL)
+							follow_pc_list = &((*follow_pc_list)->next);
+					}
+				}
+			}
+
+			/* Free device and group list*/
+			PMS_FreeDevInfo(&dev_list, &group_list);
+		}
+		follow_pc = follow_pc->next;
+	}
+#endif
+
 	return *pc_list;
-}
-
-pc_s *cp_pc(pc_s **dest, const pc_s *src){
-	pc_event_s *follow_e, **follow_e_list;
-
-	if(initial_pc(dest) == NULL){
-		_dprintf("No memory!!(dest)\n");
-		return NULL;
-	}
-
-	(*dest)->enabled = src->enabled;
-	strlcpy((*dest)->device, src->device, sizeof((*dest)->device));
-	strlcpy((*dest)->mac, src->mac, sizeof((*dest)->mac));
-
-	follow_e_list = &((*dest)->events);
-	for(follow_e = src->events; follow_e != NULL; follow_e = follow_e->next){
-		cp_event(follow_e_list, follow_e);
-
-		while(*follow_e_list != NULL)
-			follow_e_list = &((*follow_e_list)->next);
-	}
-
-	return *dest;
 }
 
 void print_pc_list(pc_s *pc_list){
@@ -444,6 +518,10 @@ void config_daytime_string(pc_s *pc_list, FILE *fp, char *logaccept, char *logdr
 		if(!follow_pc->mac[0])
 			chk_mac = "";
 
+//_dprintf("[PC] mac=%s\n", follow_pc->mac);
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+		if (!strcmp(follow_pc->mac, "")) continue;
+#endif
 		for(follow_e = follow_pc->events; follow_e != NULL; follow_e = follow_e->next){
 			if(follow_e->start_day != follow_e->end_day && follow_e->end_day == 0)
 				follow_e->end_day = 7;

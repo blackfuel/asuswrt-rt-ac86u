@@ -1,7 +1,7 @@
 /*
  * PHY and RADIO specific portion of Broadcom BCM43XX 802.11 Networking Device Driver.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_phy_cmn.c 654372 2016-08-12 09:04:00Z $
+ * $Id: wlc_phy_cmn.c 680493 2017-01-20 05:44:09Z $
  */
 
 
@@ -2251,8 +2251,9 @@ void wlc_phy_offload_ppr_to_svmp(phy_info_t *pi, ppr_t* tx_power_offset, int16 f
 		WL_TX_MODE_TXBF, WL_TX_MODE_NONE};
 	wl_tx_nss_t nss[5] = {WL_TX_NSS_1, WL_TX_NSS_2, WL_TX_NSS_3, WL_TX_NSS_4, WL_TX_NSS_4};
 #if defined(WL_PSMX)
-	uint16 ndp_pwroffs = 0, bfi_blk_addr = 0;
-	uint16 mx_mubf_rate = 0, mx_mubf_rate_addr = 0;
+	int8 ndp_pwroffs[D11_MU_NDPPWR_MAXMCS+1] = {0};
+	int ndppwr_num = D11_MU_NDPPWR_MAXMCS+1;
+	uint16 ndp_pwr_tbl;
 #endif /* WL_PSMX */
 	uint16 txchain_cnt;
 	uint8 txchain, rxchain;
@@ -2346,12 +2347,10 @@ void wlc_phy_offload_ppr_to_svmp(phy_info_t *pi, ppr_t* tx_power_offset, int16 f
 					svmp_addr, 32, &txbf_ppr_buff[0]);
 			svmp_addr += 8;
 #if defined(WL_PSMX)
-			/* MU NDP pwroffs follows c5s4 */
+			/* Save the MU NDP pwroffs table */
+			ndppwr_num = MIN(D11_MU_NDPPWR_MAXMCS+1, WL_RATESET_SZ_VHT_MCS);
 			if (bwtype <= 2 && n == 4) {
-				pwr0 = (pwr_backoff.pwr[5] < min_boff) ? min_boff:
-					pwr_backoff.pwr[5];
-				pwr0 += (pwr0 >= 0)? 0: 256;
-				ndp_pwroffs = (pwr0 >> 1) & 0x7f;
+				memcpy((uint8 *)ndp_pwroffs, (uint8 *)pwr_backoff.pwr, ndppwr_num);
 			}
 #endif /* WL_PSMX */
 		}
@@ -2359,12 +2358,16 @@ void wlc_phy_offload_ppr_to_svmp(phy_info_t *pi, ppr_t* tx_power_offset, int16 f
 
 #if defined(WL_PSMX)
 	if (D11REV_GE(pi->sh->corerev, 64)) {
-		/* write proper pwroffset for the MU NDP frames into shmx */
-		bfi_blk_addr = wlapi_bmac_read_shmx(pi->sh->physhim, MX_BFI_BLK_PTR);
-		mx_mubf_rate_addr = shm_addr(bfi_blk_addr, C_MUBF_NDPPWR_POS);
-		mx_mubf_rate = wlapi_bmac_read_shmx(pi->sh->physhim, mx_mubf_rate_addr);
-		mx_mubf_rate = (mx_mubf_rate & 0xff) | (ndp_pwroffs << 8);
-		wlapi_bmac_write_shmx(pi->sh->physhim, mx_mubf_rate_addr, mx_mubf_rate);
+		ndp_pwr_tbl = wlapi_bmac_read_shmx(pi->sh->physhim, MX_NDPPWR_PTR);
+		for (m = 0; m < ndppwr_num; m += 2) {
+			/* lower byte for even mcs , higher byte for odd mcs */
+			pwr0 = ndp_pwroffs[m] >= 0 ? ndp_pwroffs[m]: ndp_pwroffs[m] + 256;
+			pwr1 = ndp_pwroffs[m+1] >= 0 ? ndp_pwroffs[m+1]: ndp_pwroffs[m+1] + 256;
+			pwr0 = (pwr0 >> 1) & 0x7F;
+			pwr1 = (pwr1 >> 1) & 0x7F;
+			wlapi_bmac_write_shmx(pi->sh->physhim, 2 * ndp_pwr_tbl + m,
+					pwr0 | (pwr1 << 8));
+		}
 	}
 #endif /* WL_PSMX */
 
@@ -7674,23 +7677,25 @@ wlc_phy_iovar_get_dssf(phy_info_t *pi, int32 *ret_val)
 static int
 wlc_phy_iovar_set_lesi(phy_info_t *pi, int32 set_val)
 {
-	if (ISACPHY(pi)) {
-		MOD_PHYREG(pi, lesi_control, lesiFstrEn, (uint16) set_val);
-		MOD_PHYREG(pi, lesi_control, lesiCrsEn, (uint16) set_val);
 
-		/* chippkg bit-2: LESI supported, 0: TRUE ; 1: FALSE */
-		if (ACMAJORREV_33(pi->pubpi.phy_rev) && (pi->sh->chippkg & 0x4) == 0) {
-			pi->u.pi_acphy->lesi = (int8) set_val;
-		}
+	if (!pi->lesi_mode) {
+		if (ISACPHY(pi)) {
+			MOD_PHYREG(pi, lesi_control, lesiFstrEn, (uint16) set_val);
+			MOD_PHYREG(pi, lesi_control, lesiCrsEn, (uint16) set_val);
 
-		if (set_val > 0) {
-		  wlc_phy_lesi_acphy(pi, TRUE);
-		} else {
-		  wlc_phy_lesi_acphy(pi, FALSE);
+			/* chippkg bit-2: LESI supported, 0: TRUE ; 1: FALSE */
+			if (ACMAJORREV_33(pi->pubpi.phy_rev) && (pi->sh->chippkg & 0x4) == 0) {
+				pi->u.pi_acphy->lesi = (int8) set_val;
+			}
+
+			if (set_val > 0) {
+				wlc_phy_lesi_acphy(pi, TRUE);
+			} else {
+				wlc_phy_lesi_acphy(pi, FALSE);
+			}
+			return BCME_OK;
 		}
-		return BCME_OK;
 	}
-
 	return BCME_UNSUPPORTED;
 }
 

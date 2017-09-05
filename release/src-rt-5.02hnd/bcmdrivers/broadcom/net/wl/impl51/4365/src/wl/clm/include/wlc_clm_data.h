@@ -1,6 +1,6 @@
 /*
  * CLM Data structure definitions
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -1126,9 +1126,9 @@ typedef struct clm_data_header {
 } clm_data_header_t;
 
 typedef struct clm_data_version {
-        short major_version;
-        short minor_version;
-        char productid[20];
+	short major_version;
+	short minor_version;
+	char productid[20];
 } clm_version_t;
 
 #endif /* _WLC_CLM_DATA_H_ */

@@ -2,7 +2,7 @@
  * BSS Config related declarations and exported functions for
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_bsscfg.h 641496 2016-06-03 02:20:50Z $
+ * $Id: wlc_bsscfg.h 668704 2016-11-04 14:59:35Z $
  */
 #ifndef _WLC_BSSCFG_H_
 #define _WLC_BSSCFG_H_
@@ -648,12 +648,6 @@ typedef struct wlc_bssload {
 	uint8	event_util_level;	/* last sent event's utilization level */
 } wlc_bssload_t;
 
-typedef struct mutx_policy {
-	uint32	bw_policy;	/* NONE, 20MHZ, 40MHZ, or 80MHZ */
-	uint32	ac_policy;	/* NONE, BE/BK, VI, or VO */
-	uint32	effective_ac;	/* Nonzero AC to avoid frequent link changes: BE/BK, VI, or VO */
-} wlc_mutx_policy_t;
-
 /**
  * Stores information about the relation between the local entity and a BSS. Information about the
  * BSS that is not specific for this local entity is stored in struct wlc_bss_info instead.
@@ -847,7 +841,6 @@ struct wlc_bsscfg {
 #ifdef ACKSUPR_MAC_FILTER
 	bool acksupr_mac_filter; /* enable or disable acksupr */
 #endif /* ACKSUPR_MAC_FILTER */
-	wlc_mutx_policy_t *mutx;
 	struct wl_timer *pilot_timer;     /* Measurement Piolt timer */
 	uint8 mp_period;
 	uint8 custom_oui[DOT11_OUI_LEN];
@@ -901,11 +894,8 @@ struct wlc_bsscfg {
 #define WLC_BSSCFG_FL2_DWDS_BRCM_IE_DISABLE	0x100	/* The BSS do NOT use DWDS cap in BRCM IE */
 #define WLC_BSSCFG_FL2_SPILT_ASSOC_REQ	0x200	/* The BSS split assoc req into two parts */
 #define WLC_BSSCFG_FL2_SPLIT_ASSOC_RESP	0x400	/* The BSS split assoc resp into two parts */
-#define WLC_BSSCFG_FL2_MU	        0x800	/* MU BSS */
-
-#define BSSCFG_IS_MU(cfg)     (((cfg)->flags2 & WLC_BSSCFG_FL2_MU) != 0)
-#define BSSCFG_CLR_MU(cfg)    ((cfg)->flags2 &= ~WLC_BSSCFG_FL2_MU)
-#define BSSCFG_SET_MU(cfg)    ((cfg)->flags2 |= WLC_BSSCFG_FL2_MU)
+#define WLC_BSSCFG_FL2_FBT_1X		0x1000	/* The BSS is for FBT 802.1X */
+#define WLC_BSSCFG_FL2_FBT_PSK		0x2000  /* The BSS is for FBT PSK */
 
 #if defined(WLRSDB) /* ensure BSS_MATCH() for RSDB */
 #define WLC_BSSCFG(wlc, idx) \
@@ -942,6 +932,17 @@ struct wlc_bsscfg {
 #else
 #define BSSCFG_IS_MFP_CAPABLE(cfg)	FALSE
 #define BSSCFG_IS_MFP_REQUIRED(cfg)	FALSE
+#endif
+
+#ifdef WLFBT
+#define WLC_BSSCFG_FL2_FBT_MASK	(WLC_BSSCFG_FL2_FBT_1X | WLC_BSSCFG_FL2_FBT_PSK)
+#define BSSCFG_IS_FBT(cfg)	(((cfg)->flags2 & WLC_BSSCFG_FL2_FBT_MASK) != 0)
+#define BSSCFG_IS_FBT_1X(cfg)	(((cfg)->flags2 & WLC_BSSCFG_FL2_FBT_1X) != 0)
+#define BSSCFG_IS_FBT_PSK(cfg)	(((cfg)->flags2 & WLC_BSSCFG_FL2_FBT_PSK) != 0)
+#else
+#define BSSCFG_IS_FBT(cfg)	FALSE
+#define BSSCFG_IS_FBT_1X(cfg)	FALSE
+#define BSSCFG_IS_FBT_PSK(cfg)	FALSE
 #endif
 
 #ifdef WL11ULB

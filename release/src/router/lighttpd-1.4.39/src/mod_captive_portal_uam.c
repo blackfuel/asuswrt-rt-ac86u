@@ -240,9 +240,8 @@ URIHANDLER_FUNC(mod_captive_portal_uam_physical_handler){
 			memset(temp,'\0', len);				
 			strncpy(temp, pch+9, len);
 			temp[len]='\0';
-
 			buffer_copy_string(url_opt_password, temp );
-			buffer_urldecode_path(url_opt_password);	
+			buffer_urldecode_query(url_opt_password);	
 			free(temp);
 		}
 		else if(strncmp(pch, "userurl=", 8)==0){
@@ -265,6 +264,13 @@ URIHANDLER_FUNC(mod_captive_portal_uam_physical_handler){
 		unsigned char user_password[MD5_DIGEST_LENGTH + 1];
 		unsigned char in_challenge[MD5_DIGEST_LENGTH];
 		char *uam_secret = nvram_get_uamsecret(url_opt_uamip->ptr);
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+		int declen = pw_dec_len(uam_secret);
+		char dec_passwd[declen];
+		memset(dec_passwd, 0, sizeof(dec_passwd));
+		pw_dec(uam_secret, dec_passwd);
+		uam_secret = dec_passwd;
+#endif
 		unsigned char in_password[64];
 		char out_password[MD5_DIGEST_LENGTH * 2 + 1];
 		MD5_CTX context;

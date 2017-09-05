@@ -320,6 +320,7 @@ static int del_proc_files(void);
 static ssize_t proc_get_param(char *page, char **start, off_t off, int cnt, int *eof, void *data);
 static ssize_t proc_get_param_string(char *page, char **start, off_t off, int cnt, int *eof, void *data);
 static ssize_t proc_set_param(struct file *f, const char *buf, unsigned long cnt, void *data);
+static ssize_t proc_set_param2(struct file *, const char *, size_t, loff_t *);
 static ssize_t proc_set_led(struct file *f, const char *buf, unsigned long cnt, void *data);
 #else
 static ssize_t proc_get_param(struct file *, char *, size_t, loff_t *);
@@ -3439,15 +3440,15 @@ static int board_ioctl( struct inode *inode, struct file *flip,
         break;
 
     case BOARD_IOCTL_GET_GPIO:
-	if (copy_from_user((void*)&ctrlParms, (void*)arg, sizeof(ctrlParms)) == 0) {
-	    ctrlParms.offset = kerSysGetGpioValue(ctrlParms.strLen);
-            __copy_to_user((BOARD_IOCTL_PARMS*)arg, &ctrlParms, sizeof(BOARD_IOCTL_PARMS));
-            ret = 0;
-	}
-	else {
-            ret = -EFAULT;
-	}
-	break;
+        if (copy_from_user((void*)&ctrlParms, (void*)arg, sizeof(ctrlParms)) == 0) {
+            ctrlParms.offset = kerSysGetGpioValue(ctrlParms.strLen);
+             __copy_to_user((BOARD_IOCTL_PARMS*)arg, &ctrlParms, sizeof(BOARD_IOCTL_PARMS));
+             ret = 0;
+        }
+        else {
+             ret = -EFAULT;
+        }
+        break;
 
 #if defined(CONFIG_BCM_CPLD1)
     case BOARD_IOCTL_SET_SHUTDOWN_MODE:
@@ -5815,7 +5816,6 @@ static ssize_t __proc_set_param2(struct file *f, const char *buf, unsigned long 
     input[i] = 0;
 
     c = simple_strtoul(input, NULL, 16);
-
     mutex_lock(&flashImageMutex);
 
     if (NULL != (pNvramData = readNvramData()))
@@ -5857,6 +5857,11 @@ static ssize_t proc_set_param(struct file *f, const char *buf, unsigned long cnt
     return __proc_set_param(f,buf,cnt,data);
 }
 
+static ssize_t proc_set_param2(struct file *file, const char *buff, size_t len, loff_t *offset)
+{
+    return __proc_set_param2(file,buff,len,PDE_DATA(file_inode(file)));
+}
+
 /*
  * This function expect input in the form of:
  * echo "xxyy" > /proc/led
@@ -5895,14 +5900,17 @@ static ssize_t proc_get_param_string(struct file * file, char * buff, size_t len
     }
     return ret;
 }
+
 static ssize_t proc_set_param(struct file *file, const char *buff, size_t len, loff_t *offset)
 {
     return __proc_set_param(file,buff,len,PDE_DATA(file_inode(file)));
 }
+
 static ssize_t proc_set_param2(struct file *file, const char *buff, size_t len, loff_t *offset)
 {
     return __proc_set_param2(file,buff,len,PDE_DATA(file_inode(file)));
 }
+
 static ssize_t proc_set_led(struct file *file, const char *buff, size_t len, loff_t *offset)
 {
     int ret=-1;

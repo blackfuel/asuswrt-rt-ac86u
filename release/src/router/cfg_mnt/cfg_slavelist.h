@@ -12,6 +12,7 @@
 #define IP_LEN				4
 #define MAC_LEN				6
 #define FWVER_LEN			33
+#define MODEL_NAME_LEN		33
 typedef struct _CM_CLIENT_TABLE {
 	char alias[CFG_CLIENT_NUM][ALIAS_LEN];
 	unsigned char ipAddr[CFG_CLIENT_NUM][IP_LEN];
@@ -29,6 +30,7 @@ typedef struct _CM_CLIENT_TABLE {
 	unsigned char ap5g1[CFG_CLIENT_NUM][MAC_LEN];
 	int level[CFG_CLIENT_NUM];
 	char fwVer[CFG_CLIENT_NUM][FWVER_LEN];
+	char modelName[CFG_CLIENT_NUM][MODEL_NAME_LEN];
 	int maxLevel;
 	int count;
 } CM_CLIENT_TABLE, *P_CM_CLIENT_TABLE;

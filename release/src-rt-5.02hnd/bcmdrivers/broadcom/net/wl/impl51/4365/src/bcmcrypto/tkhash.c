@@ -3,7 +3,7 @@
  * Trimmed version of reference code from "Simple Security Network (SSN) for
  * IEEE 802.11", v0.20, plus test routine.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

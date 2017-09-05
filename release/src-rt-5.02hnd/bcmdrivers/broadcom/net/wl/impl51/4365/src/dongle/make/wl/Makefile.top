@@ -1,6 +1,6 @@
 # Back-end subdir level makefile for hndrte based standalone programs
 #
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
+# Broadcom Proprietary and Confidential. Copyright (C) 2017,
 # All Rights Reserved.
 # 
 # This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -8,7 +8,7 @@
 # or duplicated in any form, in whole or in part, without the prior
 # written permission of Broadcom.
 #
-# $Id: Makefile.top 669851 2016-11-11 10:50:45Z $
+# $Id: Makefile.top 669846 2016-11-11 10:24:12Z $
 #
 # Usage:
 # 	gmake SUBDIR=<subdir> [<brand> | <brand>/{usb|sdio}-{g|ag}-{cdc|rndis}...]
@@ -1882,6 +1882,16 @@ endif
 # a host address to wakeup a thread for D2H PCIE FD rings
 ifeq ($(call opt,ringer),1)
 	BCMHOSTRINGER := 1
+endif
+
+# BCM_DHDHDR 
+# Advertize to DHD to support SubFrame Header insertion, and,
+# Request DHD to allocate storage for TxHeader buffer to be offloaded to host.
+#
+ifeq ($(call opt,dhdhdr),1)
+	EXTRA_DFLAGS += -DBCM_DHDHDR
+	EXTRA_DFLAGS += -DD3_BUFFER_LEN=$(FRAG_D3_BUFFER_LEN)
+	EXTRA_DFLAGS += -DD11_BUFFER_LEN=$(FRAG_D11_BUFFER_LEN)
 endif
 
 # Use the minimum set of ucode regs to dump

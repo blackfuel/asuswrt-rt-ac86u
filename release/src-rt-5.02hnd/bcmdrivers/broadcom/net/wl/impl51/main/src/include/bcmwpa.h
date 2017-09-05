@@ -1,7 +1,7 @@
 /*
  * bcmwpa.h - interface definitions of shared WPA-related functions
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: bcmwpa.h 615032 2016-01-26 01:45:53Z $
+ * $Id: bcmwpa.h 663427 2016-10-05 09:46:29Z $
  */
 
 #ifndef _BCMWPA_H_
@@ -198,6 +198,22 @@ extern bool BCMROMFN(wpa_check_mic)(eapol_header_t *eapol, uint key_desc, uint8 
 extern void BCMROMFN(wpa_calc_pmkid)(struct ether_addr *auth_ea, struct ether_addr *sta_ea,
 	uint8 *pmk, uint pmk_len, uint8 *pmkid, uint8 *data, uint8 *digest);
 
+
+/* Encrypt key data for a WPA key message */
+extern bool wpa_encr_key_data(eapol_wpa_key_header_t *body, uint16 key_info,
+	uint8 *ekey, uint8 *gtk, uint8 *data, uint8 *encrkey, rc4_ks_t *rc4key);
+
+/* Decrypt key data from a WPA key message */
+extern bool BCMROMFN(wpa_decr_key_data)(eapol_wpa_key_header_t *body, uint16 key_info,
+	uint8 *ekey, uint8 *gtk, uint8 *data, uint8 *encrkey, rc4_ks_t *rc4key);
+
+/* Decrypt a group transient key from a WPA key message */
+extern bool BCMROMFN(wpa_decr_gtk)(eapol_wpa_key_header_t *body, uint16 key_info,
+	uint8 *ekey, uint8 *gtk, uint8 *data, uint8 *encrkey, rc4_ks_t *rc4key);
+#endif	/* BCMSUP_PSK || WLFBT || BCMAUTH_PSK || BCM_OL_DEV */
+
+#if defined(BCMSUP_PSK) || defined(WLFBT) || defined(BCMAUTH_PSK)|| defined(BCM_OL_DEV) \
+	|| defined(WL_OKC) || defined(WLHOSTFBT)
 /* Calculate PMKR0 for FT association */
 extern void wpa_calc_pmkR0(uchar *ssid, int ssid_len, uint16 mdid, uint8 *r0kh,
 	uint r0kh_len, struct ether_addr *sta_ea,
@@ -212,18 +228,9 @@ extern void wpa_calc_ft_ptk(struct ether_addr *bssid, struct ether_addr *sta_ea,
 	uint8 *anonce, uint8* snonce, uint8 *pmk, uint pmk_len,
 	uint8 *ptk, uint ptk_len);
 
-/* Encrypt key data for a WPA key message */
-extern bool wpa_encr_key_data(eapol_wpa_key_header_t *body, uint16 key_info,
-	uint8 *ekey, uint8 *gtk, uint8 *data, uint8 *encrkey, rc4_ks_t *rc4key);
-
-/* Decrypt key data from a WPA key message */
-extern bool BCMROMFN(wpa_decr_key_data)(eapol_wpa_key_header_t *body, uint16 key_info,
-	uint8 *ekey, uint8 *gtk, uint8 *data, uint8 *encrkey, rc4_ks_t *rc4key);
-
-/* Decrypt a group transient key from a WPA key message */
-extern bool BCMROMFN(wpa_decr_gtk)(eapol_wpa_key_header_t *body, uint16 key_info,
-	uint8 *ekey, uint8 *gtk, uint8 *data, uint8 *encrkey, rc4_ks_t *rc4key);
-#endif	/* BCMSUP_PSK || WLFBT || BCMAUTH_PSK || BCM_OL_DEV */
+extern void wpa_derive_pmkR1_name(struct ether_addr *r1kh, struct ether_addr *sta_ea,
+	uint8 *pmkr0name, uint8 *pmkr1name);
+#endif	/* BCMSUP_PSK || WLFBT || BCMAUTH_PSK || BCM_OL_DEV || WL_OKC || WLHOSTFBT */
 
 extern bool BCMROMFN(bcmwpa_akm2WPAauth)(uint8 *akm, uint32 *auth, bool sta_iswpa);
 

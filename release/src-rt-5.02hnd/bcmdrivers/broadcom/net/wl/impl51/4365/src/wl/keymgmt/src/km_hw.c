@@ -1,7 +1,7 @@
 /*
  * Key Management Module km_hw Implementation
  * Copyright (c) 2012-2013 Broadcom Corporation, All rights reserved.
- * $Id: km_hw.c 625998 2016-03-18 11:17:23Z $
+ * $Id: km_hw.c 672672 2016-11-29 10:58:39Z $
  */
 
 /* This file implements the wlc keymgmt functionality. It provides
@@ -265,7 +265,11 @@ km_hw_reset(km_hw_t *hw)
 
 #ifdef PSTA
 	if (PSTA_ENAB(KM_HW_PUB(hw))) {
-		km_hw_amt_reserve(hw, PSTA_TA_STRT_INDX, PSTA_RA_PRIM_INDX, TRUE);
+		/* Don't reserve in repeater mode then real-MAC bsscfg can use 0-24
+		 * for amt_idx.
+		 */
+		if (!PSTA_IS_REPEATER(KM_HW_WLC(hw)))
+			km_hw_amt_reserve(hw, PSTA_TA_STRT_INDX, PSTA_RA_PRIM_INDX, TRUE);
 		km_hw_amt_reserve(hw, PSTA_RA_PRIM_INDX, 1, TRUE);
 	}
 #endif

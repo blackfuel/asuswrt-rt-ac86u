@@ -58,10 +58,10 @@ define(function(){
 				index: "menu_AiProtection", 
 				tab: [
 					{url: "AiProtection_HomeSecurity.asp", tabName: "__HIDE__"},
-					{url: "AiProtection_MaliciousSitesBlocking.asp", tabName: "__INHERIT__"},
-					{url: "AiProtection_IntrusionPreventionSystem.asp", tabName: "__INHERIT__"},
-					{url: "AiProtection_InfectedDevicePreventBlock.asp", tabName: "__INHERIT__"},
 					{url: "AiProtection_HomeProtection.asp", tabName: "<#AiProtection_Home#>"},
+					{url: "AiProtection_MaliciousSitesBlocking.asp", tabName: "<#AiProtection_sites_blocking#>"},
+					{url: "AiProtection_IntrusionPreventionSystem.asp", tabName: "<#AiProtection_two-way_IPS#>"},
+					{url: "AiProtection_InfectedDevicePreventBlock.asp", tabName: "<#AiProtection_detection_blocking#>"},
 					{url: "AiProtection_WebProtector.asp", tabName: "<#Parental_Control#>"},
 					{url: "ParentalControl.asp", tabName: "__INHERIT__"},
 					{url: "AiProtection_AdBlock.asp", tabName: "Ad Blocking"},
@@ -70,18 +70,18 @@ define(function(){
 				] 
 			},			
 			{
-				menuName: "<#Menu_TrafficManager#>",
-				index: "menu_QoS", 
+				menuName: "<#Adaptive_QoS#>",
+				index: "menu_BandwidthMonitor", 
 				tab: [
+					{url: "AdaptiveQoS_Bandwidth_Monitor.asp", tabName: "<#Bandwidth_monitor#>"},
 					{url: "QoS_EZQoS.asp", tabName: "<#menu5_3_2#>"},
-					{url: "Main_TrafficMonitor_realtime.asp", tabName: "<#traffic_monitor#>"},
-					{url: "Main_TrafficMonitor_last24.asp", tabName: "__INHERIT__"},
-					{url: "Main_TrafficMonitor_daily.asp", tabName: "__INHERIT__"},
+					{url: "AdaptiveQoS_WebHistory.asp", tabName: "<#Adaptive_History#>"},
 					{url: "AdaptiveQoS_ROG.asp", tabName: "<table style='margin-top:-7px;'><tr><td><img src='/images/ROG_Logo.png' style='border:0px;width:32px;'></td><td>ROG First</td></tr></table>"}, 
 					{url: "Main_Spectrum_Content.asp", tabName: "Spectrum"},
-					{url: "AdaptiveQoS_TrafficLimiter.asp", tabName: "Traffic Limiter"},
 					{url: "Advanced_QOSUserPrio_Content.asp", tabName: "__INHERIT__"},
 					{url: "Advanced_QOSUserRules_Content.asp", tabName: "__INHERIT__"},
+					{url: "AdaptiveQoS_Adaptive.asp", tabName: "__INHERIT__"},
+					{url: "NULL", tabName: "__INHERIT__"}
 				] 
 			},
 			{
@@ -89,6 +89,10 @@ define(function(){
 				index: "menu_TrafficAnalyzer", 
 				tab: [
 					{url: "TrafficAnalyzer_Statistic.asp", tabName: "<#Statistic#>"},
+					{url: "Main_TrafficMonitor_realtime.asp", tabName: "<#traffic_monitor#>"},
+					{url: "Main_TrafficMonitor_last24.asp", tabName: "__INHERIT__"},
+					{url: "Main_TrafficMonitor_daily.asp", tabName: "__INHERIT__"},
+					{url: "AdaptiveQoS_TrafficLimiter.asp", tabName: "Traffic Limiter"},
 					{url: "NULL", tabName: "__INHERIT__"}
 				] 
 			},
@@ -521,7 +525,7 @@ define(function(){
 				else
 					retArray.push("Advanced_DHCP_Content.asp");
 
-				if(!wifiproxy_support || !concurrep_support || !isSwMode("re")){
+				if((!Rawifi_support && !Rtkwifi_support) || !concurrep_support || !isSwMode("re")){
 					retArray.push("Advanced_WProxy_Content.asp");
 				}
 				

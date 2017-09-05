@@ -91,6 +91,13 @@ else{
 }
 var modem_android_orig = '<% nvram_get("modem_android"); %>';
 
+function change_usb_unit(){
+	document.form.wan_unit.value = usb_index;
+	FormActions("apply.cgi", "change_wan_unit", "", "");
+	document.form.target = "";
+	document.form.submit();
+	location.herf = document.form.current_page.value;
+}
 
 function genWANSoption(){
 	for(i=0; i<wans_dualwan.split(" ").length; i++){
@@ -112,6 +119,11 @@ function initial(){
 
 	if(dualWAN_support && '<% nvram_get("wans_dualwan"); %>'.search("none") < 0){
 		genWANSoption();
+		if(document.form.wan_unit.value != usb_index && usb_index != -1)
+			change_usb_unit();
+		else if(usb_index == -1){
+			document.getElementById("WANscap").style.display = "none";
+		}
 	}
 	else{
 		document.form.wan_unit.disabled = true;
@@ -185,6 +197,10 @@ function initial(){
 
 	check_dongle_status();
 
+	//short term solution for brt-ac828
+	if(based_modelid == "BRT-AC828") {
+		document.getElementById("back_app_installation").style.display = "none";
+	}
 }
 
 function reloadProfile(){
@@ -495,6 +511,13 @@ function applyRule(){
 		document.form.modem_isp.options[0] = new Option(valueStr, valueStr, false, true);
 	}
 
+	wans_dualwan_array = document.form.wans_dualwan.value.split(" "); //update wans_dualwan_array
+	if(wans_dualwan_array.indexOf("usb") == 0 && document.form.wan0_enable.value == "0")
+		document.form.wan0_enable.value = "1";
+
+	if(wans_dualwan_array.indexOf("usb") == 1 && document.form.wan1_enable.value == "0")
+		document.form.wan1_enable.value = "1";
+
 	showLoading(); 
 	document.form.submit();
 }
@@ -716,6 +739,8 @@ function change_apn_mode(){
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
 <input type="hidden" name="modem_enable" value="<% nvram_get("modem_enable"); %>">
 <input type="hidden" name="wans_dualwan" value="<% nvram_get("wans_dualwan"); %>">
+<input type="hidden" name="wan0_enable" value="<% nvram_get("wan0_enable"); %>">
+<input type="hidden" name="wan1_enable" value="<% nvram_get("wan1_enable"); %>">
 
 <table class="content" align="center" cellpadding="0" cellspacing="0">
   <tr>
@@ -745,7 +770,7 @@ function change_apn_mode(){
 								<span class="formfonttitle"><#menu5_4_4#> / <#usb_tethering#></span>
 							</td>
 							<td align="right">
-								<img onclick="go_setting('/APP_Installation.asp')" align="right" style="cursor:pointer;position:absolute;margin-left:-20px;margin-top:-30px;" title="<#Menu_usb_application#>" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'">
+								<img id='back_app_installation' onclick="go_setting('/APP_Installation.asp')" align="right" style="cursor:pointer;position:absolute;margin-left:-20px;margin-top:-30px;" title="<#Menu_usb_application#>" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'">
 							</td>
 						</tr>
 					</table>
@@ -844,7 +869,7 @@ function change_apn_mode(){
 					</tr>
 
           			<tr id="modem_enable_div_tr" style="display:none;">
-						<th>Telecommunications Standards</th>
+						<th><#Tele_Standards#></th>
 	            		<td>
 							<div id="modem_enable_div" style="color:#FFFFFF; margin-left:1px;"></div>
 						</td>

@@ -128,8 +128,27 @@ function applyRule(){
 		document.form.action_wait.value = "35";
 	}
 	
-	showLoading();
-	document.form.submit();	
+	if(valid_form()) {
+		showLoading();
+		document.form.submit();
+	}
+}
+
+function valid_form(){
+	var nat_acceleration_orig = '<% nvram_get("ctf_disable"); %>';
+	if(document.form.ctf_disable_force.value == "0") {
+		if(nat_acceleration_orig != "0" && check_bwdpi_engine_status()) {
+			var confirm_flag = confirm("If you turn on the NAT Acceleration option, AiProtection function will be disable. Are you sure to process?");/*untranslated*/
+			if(confirm_flag) {
+				document.form.action_script.value = "dpi_disable;reboot;";
+			}
+			else {
+				return false;
+			}
+		}
+	}
+	
+	return true;	
 }
 
 function check_bonding_policy(obj){

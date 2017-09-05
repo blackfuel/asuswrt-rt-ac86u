@@ -1,7 +1,7 @@
 /*
  * 802.11e CAC protocol implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_cac.c 641339 2016-06-02 08:16:39Z $
+ * $Id: wlc_cac.c 664112 2016-10-10 13:27:40Z $
  */
 
 /**
@@ -67,8 +67,9 @@
 #include <wlc_ie_mgmt_ft.h>
 #include <wlc_ie_mgmt_vs.h>
 #include <wlc_ie_reg.h>
-
 #include <wlc_tx.h>
+#include <wlc_nar.h>
+#include <wlc_scb_ratesel.h>
 
 #define DOT11E_TSPEC_IE	(WME_OUI"\x02\x02\x01")	/* oui, type, subtype, ver */
 #define DOT11E_TSPEC_OUI_TYPE_LEN (DOT11_OUI_LEN + 3) /* include oui, type, subtype, ver */
@@ -130,11 +131,23 @@ typedef struct tsentry {
 #define USEC32_TO_USEC(x)	((x) << 5)
 #define USEC_TO_USEC32(x)	((x) >> 5)
 
+/* Set of duration and the lenght of pakcet cache in CAC module */
+typedef struct wlc_cac_dur_len_map {
+	uint dur;
+	uint pktlen;
+} wlc_cac_dur_len_map_t;
+
+/* internal parameters for each AC */
+typedef struct wlc_cac_dur_cache {
+	wlc_cac_dur_len_map_t dur_latest[NUMPRIO];	/* Duration of last pkt, for each prio */
+	wlc_cac_dur_len_map_t cached_dur[NUMPRIO];	/* cached duration, for each prio */
+} wlc_cac_dur_cache_t;
+
 /* internal parameters for each AC */
 typedef struct wlc_cac_ac {
 	uint tot_medium_time;		/* total medium time AP granted pre AC (us) */
-	uint used_time;			/* amount medium time STA used (us) */
-	uint cached_dur;		/* cached duration */
+	uint used_time;				/* amount medium time STA used (us) */
+	wlc_cac_dur_cache_t *dur_cache;	/* For ROM invalidation */
 	uint8 nom_phy_rate;		/* negotiated nominal phy rate */
 	bool admitted;			/* Admission state */
 	uint inactivity_interval;	/* Denotes inactivity interval in seconds */
@@ -209,6 +222,7 @@ static const bcm_iovar_t cac_iovars[] = {
 	{NULL, 0, 0, 0, 0}
 };
 
+static uint wlc_cac_calc_pkt_dur(wlc_cac_t *cac, struct scb *scb,  uint pktlen);
 static int wlc_cac_iovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *name,
 	void *p, uint plen, void *a, int alen, int vsize, struct wlc_if *wlcif);
 static int wlc_cac_down(void *hdl);
@@ -1876,7 +1890,8 @@ wlc_cac_ac_param_reset(wlc_cac_t *cac, uint8 ac, struct cac_scb_acinfo *scb_acin
 
 	cac_ac->tot_medium_time = 0;
 	cac_ac->used_time = 0;
-	cac_ac->cached_dur = 0;
+	bzero(cac_ac->dur_cache, sizeof(*cac_ac->dur_cache));
+
 #ifdef BCMCCX
 	if (CCX_ENAB(cac->wlc->pub))
 		bzero(&cac_ac->ccx_tsm, sizeof(struct ccx_ts_metrics));
@@ -2042,13 +2057,113 @@ wlc_cac_watchdog(void *hdl)
 #endif	/* AP */
 }
 
-/* function to update used time. return TRUE if run out of time */
+/* Update or prepare cache duration data, to use it later from fast path */
+void
+wlc_cac_update_dur_cache(wlc_cac_t *cac, int ac, int prio,
+	struct scb *scb, uint dur, uint pktlen, uint actionid)
+{
+	wlc_cac_ac_t *cac_ac;
+	struct cac_scb_acinfo *scb_acinfo;
+	wlc_bsscfg_t *cfg;
+	wlc_cac_dur_cache_t *dur_cache;
+
+	cfg = SCB_BSSCFG(scb);
+
+	/* Check for admission control */
+	if (!AC_BITMAP_TST(cfg->wme->wme_admctl, ac))
+		return;
+
+	scb_acinfo = SCB_ACINFO(cac, scb);
+	cac_ac = &scb_acinfo->cac_ac[ac];
+	dur_cache = cac_ac->dur_cache;
+
+	switch (actionid) {
+		case WLC_CAC_DUR_CACHE_PREP:
+			dur_cache->dur_latest[prio].dur = dur;
+			dur_cache->dur_latest[prio].pktlen = pktlen;
+			WL_NONE(("%s: ac:%d, prio:%d, dur:%d, pktlen:%d, actionid:%d\n",
+				__FUNCTION__, ac, prio, dur, pktlen, actionid));
+			break;
+		case WLC_CAC_DUR_CACHE_REFRESH:
+			dur_cache->cached_dur[prio].dur = dur_cache->dur_latest[prio].dur;
+			dur_cache->cached_dur[prio].pktlen = dur_cache->dur_latest[prio].pktlen;
+			WL_NONE(("wl%d: For prio:%d, cached_dur(%d) updated to %d\n",
+				cac->wlc->pub->unit, prio, dur_cache->cached_dur[prio].dur,
+				dur_cache->dur_latest[prio].dur));
+			break;
+		default:
+			ASSERT(0);
+			break;
+	}
+}
+
+/* Calculate approx time to transmit a pkt, based on current txrate */
+static uint
+wlc_cac_calc_pkt_dur(wlc_cac_t *cac, struct scb *scb,  uint pktlen)
+{
+	ratespec_t ratespec;
+	uint phyrate;
+	uint usec = 0;
+
+	ratespec = wlc_scb_ratesel_get_primary(cac->wlc, scb, NULL);
+	phyrate = RSPEC2KBPS(ratespec); /* Return phyrate in kbit/s */
+
+	/* Calculation for time(in microsec) taken to transmit pktlen bytes:
+
+	              8 bits      sec      Kbits        1,000,000 us   Bytes x 8 x 1000
+	usec = Bytes x--------- x ------x-----------x------------- = ---------------------
+	              byte       Kbits    1000 bits       sec            Kbps
+	 */
+
+	usec = (pktlen * 8 * 1000) / phyrate;
+
+	WL_NONE(("wl%d: pktlen:%d, phyrate:%d, usec:%d\n", cac->wlc->pub->unit,
+		pktlen, phyrate, usec));
+	return usec;
+}
+
+/* Set the use of duration cache in the next call of wlc_cac_update_used_time.
+ *  It should be called everytime if duration cache should be used(wlc_txfast)
+ *  Fast path gives D11 header cache hit even if packet duration is different,
+ *  so recalculate the approx duration.
+ */
+bool
+wlc_cac_use_dur_cache(wlc_cac_t *cac, int ac, int prio,
+	struct scb *scb, uint pktlen)
+{
+	wlc_cac_ac_t *cac_ac;
+	struct cac_scb_acinfo *scb_acinfo;
+	wlc_bsscfg_t *cfg;
+	uint dur;
+
+	cfg = SCB_BSSCFG(scb);
+	scb_acinfo = SCB_ACINFO(cac, scb);
+	cac_ac = &scb_acinfo->cac_ac[ac];
+
+	/* Check for admission control */
+	if (!AC_BITMAP_TST(cfg->wme->wme_admctl, ac))
+		return FALSE;
+
+	if (cac_ac->dur_cache->cached_dur[prio].pktlen == pktlen) {
+		dur = cac_ac->dur_cache->cached_dur[prio].dur;
+	}
+	else {
+		dur = wlc_cac_calc_pkt_dur(cac, scb, pktlen);
+		/* Should we update the cache also? The calculation may be an approximate one */
+	}
+
+	return (wlc_cac_update_used_time(cac, ac, dur, scb));
+}
+
+/* Function to update used time. return TRUE if run out of time */
 bool
 wlc_cac_update_used_time(wlc_cac_t *cac, int ac, int dur, struct scb *scb)
 {
 	wlc_cac_ac_t *cac_ac;
 	struct cac_scb_acinfo *scb_acinfo;
 	wlc_bsscfg_t *cfg;
+	struct pktq *q = NULL;
+	uint16 prec_map = 0;
 
 	ASSERT(scb != NULL);
 
@@ -2062,16 +2177,8 @@ wlc_cac_update_used_time(wlc_cac_t *cac, int ac, int dur, struct scb *scb)
 	scb_acinfo = SCB_ACINFO(cac, scb);
 	cac_ac = &scb_acinfo->cac_ac[ac];
 
-	/* use cached duration if dur is -1 */
-	if (dur == -1)
-		dur = cac_ac->cached_dur;
-	else
-		/* cache duration */
-		cac_ac->cached_dur = dur;
-
 	/* update used time */
 	cac_ac->used_time += dur;
-
 
 #ifdef BCMCCX
 	/* only collect traffic stream metrics data when enabled */
@@ -2084,6 +2191,20 @@ wlc_cac_update_used_time(wlc_cac_t *cac, int ac, int dur, struct scb *scb)
 			cac->wlc->pub->unit, cac_ac->used_time,
 			cac_ac->tot_medium_time));
 
+		/* Admitted time for this AC is over, no new packet will be accepted now in.
+		 * (wlc_sendpkt), but there are packets lying in Qs of various TXMODs, may pool
+		 * up and cause CAC accounting problems. Trigger scrub of all TXMOD pkts for this
+		 * scb+AC(all precedences).
+		 * TODO: Make a generic function to flush all registered TXMODs holding relevant
+		 *  pkts.
+		 */
+		q = WLC_GET_TXQ(cac->wlc->active_queue);
+		prec_map = cac->wlc->fifo2prec_map[ac];
+
+		wlc_txq_pktq_scb_filter(cac->wlc, prec_map, q, scb);
+#if defined WLNAR
+		wlc_nar_flush_scb_pqueues(cac->wlc, prec_map, NULL, scb);
+#endif /* WLNAR */
 		return TRUE;
 	}
 
@@ -2379,6 +2500,7 @@ wlc_cac_scb_acinfo_init(void *context, struct scb *scb)
 	wlc_info_t *wlc = (wlc_info_t *)context;
 	struct cac_scb_acinfo *scb_acinfo;
 	uint32 i = 0;
+	uint ret = BCME_OK;
 
 	WL_CAC(("%s: Entering\n", __FUNCTION__));
 
@@ -2388,6 +2510,16 @@ wlc_cac_scb_acinfo_init(void *context, struct scb *scb)
 	if (CAC_ENAB(wlc->pub) && !SCB_ISMULTI(scb) && !SCB_ISPERMANENT(scb) &&
 		!ETHER_ISNULLADDR(scb->ea.octet)) {
 		for (i = 0; i < AC_COUNT; i++) {
+
+			/* Init cache duration pointers */
+			if (!(scb_acinfo->cac_ac[i].dur_cache =
+					(wlc_cac_dur_cache_t *)MALLOCZ(wlc->osh,
+					sizeof(wlc_cac_dur_cache_t)))) {
+				WL_ERROR(("wl%d: %s: out of mem, malloced %d bytes\n",
+					wlc->pub->unit, __FUNCTION__, MALLOCED(wlc->osh)));
+				ret = BCME_ERROR;
+				ASSERT(0);
+			}
 			scb_acinfo->cac_ac[i].admitted = FALSE;
 			if ((wlc->band->bandtype == WLC_BAND_2G) &&
 				(wlc->band->gmode == GMODE_LEGACY_B))
@@ -2396,7 +2528,7 @@ wlc_cac_scb_acinfo_init(void *context, struct scb *scb)
 				scb_acinfo->cac_ac[i].nom_phy_rate = WLC_RATE_24M;
 		}
 	}
-	return 0;
+	return ret;
 }
 
 static void
@@ -2407,11 +2539,20 @@ wlc_cac_scb_acinfo_deinit(void *context, struct scb *scb)
 	tsentry_t *ts;
 #endif
 	struct cac_scb_acinfo *scb_acinfo;
+	uint ac;
 
 	WL_CAC(("%s: Entering\n", __FUNCTION__));
 
 	if (!(scb_acinfo = SCB_ACINFO(wlc->cac, scb)))
 		return;
+
+	for (ac = 0; ac < AC_COUNT; ac++) {
+		/* Init cache duration pointers */
+		if (scb_acinfo->cac_ac[ac].dur_cache) {
+			MFREE(wlc->osh, scb_acinfo->cac_ac[ac].dur_cache,
+				sizeof(wlc_cac_dur_cache_t));
+		}
+	}
 
 #ifdef	AP
 	/* free the tsentryq if present */
@@ -2438,10 +2579,10 @@ wlc_cac_scb_acinfo_dump(void *context, struct scb *scb, struct bcmstrbuf *b)
 		ac = &scb_acinfo->cac_ac[i];
 		if (ac->admitted) {
 			bcm_bprintf(b, "%s: admt time 0x%x :used time 0x%x "
-					":cached time 0x%x :nom phy rate 0x%x ac %d\n",
+					":nom phy rate 0x%x ac %d\n",
 					aci_names[i],
 					ac->tot_medium_time, ac->used_time,
-					ac->cached_dur, ac->nom_phy_rate, i);
+					ac->nom_phy_rate, i);
 		}
 	}
 }
@@ -3460,4 +3601,160 @@ void wlc_cac_copy_state(wlc_cac_t *cac, struct scb *prev_scb, struct scb *scb)
 		bzero(prev_scb_acinfo, sizeof(*prev_scb_acinfo));
 	}
 }
+
+#ifdef AP
+uint
+wlc_cac_ap_write_ricdata(wlc_info_t *wlc, wlc_bsscfg_t *cfg,
+	struct scb *scb, uint8 *tlvs, uint tlvs_len,
+	wlc_iem_ft_cbparm_t *ftcbparm)
+{
+	wlc_cac_t *cac;
+	tspec_t *ts = NULL;
+	uint8 *ptr = NULL;
+	struct cac_scb_acinfo *scb_acinfo;
+	uint8 tid, ac;
+	uint32	status = WME_ADMISSION_REFUSED;
+	uint16 tspec_medium_time = 0;
+	tspec_t ts_param;
+
+	if (!CAC_ENAB(wlc->pub))
+		return FALSE;
+
+	cac = wlc->cac;
+	scb_acinfo = SCB_ACINFO(cac, scb);
+	ASSERT(scb_acinfo);
+
+	ptr = tlvs;
+
+	if (tlvs_len > 0 && ptr) {
+		ptr = wlc_cac_ie_find(ptr, &tlvs_len, DOT11_MNG_PROPR_ID, WME_TSPEC_LEN,
+		(const int8 *)DOT11E_TSPEC_IE, DOT11E_TSPEC_OUI_TYPE_LEN);
+
+		if (ptr == NULL) {
+			return WME_INVALID_PARAMETERS;
+		}
+
+		/* extract the tspec and related info */
+		ts = (tspec_t *)&ptr[TLV_BODY_OFF];
+		tid = WLC_CAC_GET_TID(ts->tsinfo);
+		ac = WME_PRIO2AC(WLC_CAC_GET_USER_PRIO(ts->tsinfo));
+
+		scb_acinfo = SCB_ACINFO(cac, scb);
+
+		/* copy the received tspec to local tspec */
+		bcopy(ts, &ts_param, sizeof(tspec_t));
+
+		/* Check tspec params for validity */
+		if (wlc_cac_is_tsparam_valid(cac, ts, ac, scb) == FALSE) {
+			return  WME_INVALID_PARAMETERS;
+		}
+
+		ASSERT(cfg != NULL);
+
+		/* Is admission enabled on given ac ? */
+		if (!AC_BITMAP_TST(cfg->wme->wme_admctl, ac)) {
+			tspec_medium_time = 0;
+			return  WME_INVALID_PARAMETERS;
+		} else {
+			/* calculate the required medium time for this tspec */
+			tspec_medium_time = wlc_cac_generate_medium_time(cac, ts, scb);
+
+			/* Refer WMM SPEC V1.2.0 Section 3.5.2
+			 * An AP shall return a Medium Time equal to zero when accepting a
+			 * unidirectional, downlink TS request
+			*/
+			if (WLC_CAC_GET_DIR(ts->tsinfo) ==
+				(TS_INFO_DOWNLINK >> TS_INFO_DIRECTION_SHIFT))
+				tspec_medium_time = 0;
+			/* check if new tspec can be allowed ? */
+			status = wlc_cac_check_tspec_for_admission(cac, ts, tspec_medium_time, scb);
+		}
+
+		if (status == WME_ADMISSION_ACCEPTED) {
+			tsentry_t *new_ts_entry;
+
+			/* mark the admitted status */
+			scb_acinfo->cac_ac[ac].admitted = TRUE;
+
+			/* check if TSPEC already exists for given tid */
+			if (!(new_ts_entry = wlc_cac_tsentry_find(scb_acinfo->tsentryq, tid))) {
+				if (!(new_ts_entry =
+					(tsentry_t *)MALLOC(wlc->osh, sizeof(tsentry_t)))) {
+					WL_ERROR(("wl%d: %s: out of memory %d bytes\n",
+						wlc->pub->unit, __FUNCTION__, MALLOCED(wlc->osh)));
+					return WME_ADMISSION_REFUSED;
+				}
+
+				/* change the TSPEC state */
+				bcopy(ts, &new_ts_entry->tspec, sizeof(tspec_t));
+				new_ts_entry->ts_state = CAC_STATE_TSPEC_ACCEPTED;
+				wlc_cac_tsentry_append(cac, new_ts_entry, &scb_acinfo->tsentryq);
+			} else {
+				/* update the old entry */
+				bcopy(ts, &new_ts_entry->tspec, sizeof(tspec_t));
+				new_ts_entry->ts_state = CAC_STATE_TSPEC_ACCEPTED;
+				/* restore the available medium time */
+				cac->available_medium_time +=
+				USEC_TO_USEC32((uint16)scb_acinfo->cac_ac[ac].tot_medium_time);
+			}
+
+			/* update the medium time for the tspec */
+			new_ts_entry->tspec.medium_time = tspec_medium_time;
+			ts_param.medium_time = new_ts_entry->tspec.medium_time;
+
+			/* get the direction of traffic stream */
+			if (WLC_CAC_GET_DIR(ts->tsinfo) ==
+				(TS_INFO_DOWNLINK >> TS_INFO_DIRECTION_SHIFT))
+				ts_param.medium_time = 0;
+
+			/* update the remote station cac information */
+			scb_acinfo->cac_ac[ac].inactivity_limit =
+			WLC_CAC_GET_INACTIVITY_INTERVAL(ts);
+			scb_acinfo->cac_ac[ac].inactivity_tid = WLC_CAC_GET_TID(ts->tsinfo);
+			scb_acinfo->cac_ac[ac].tot_medium_time =
+			USEC32_TO_USEC(ts_param.medium_time);
+
+			/* decrease the global medium time */
+			cac->available_medium_time -= ts_param.medium_time;
+
+			/* update the power save behavior */
+			if (WLC_CAC_GET_PSB(ts->tsinfo) && cfg->wme->wme_apsd) {
+				switch (WLC_CAC_GET_DIR(ts->tsinfo)) {
+					case (TS_INFO_UPLINK >> TS_INFO_DIRECTION_SHIFT):
+						WL_CAC(("AC trigger enabled\n"));
+						AC_BITMAP_SET(scb->apsd.ac_trig, ac);
+						AC_BITMAP_RESET(scb->apsd.ac_delv, ac);
+						break;
+
+					case (TS_INFO_DOWNLINK >> TS_INFO_DIRECTION_SHIFT):
+						WL_CAC(("AC delivery enabled\n"));
+						AC_BITMAP_SET(scb->apsd.ac_delv, ac);
+						AC_BITMAP_RESET(scb->apsd.ac_trig, ac);
+						break;
+
+					case (TS_INFO_BIDIRECTIONAL >> TS_INFO_DIRECTION_SHIFT):
+						WL_CAC(("AC trigger and delivery enabled\n"));
+						AC_BITMAP_SET(scb->apsd.ac_trig, ac);
+						AC_BITMAP_SET(scb->apsd.ac_delv, ac);
+						break;
+					}
+			}
+
+			WL_CAC(("Inactivity interval %d\n",
+				scb_acinfo->cac_ac[ac].inactivity_limit));
+			WL_CAC(("Total medium time %d\n", scb_acinfo->cac_ac[ac].tot_medium_time));
+			WL_CAC(("Available medium time %d\n", cac->available_medium_time));
+			WL_CAC(("Tspec medium time %d\n", ts_param.medium_time));
+		}
+
+
+		ts->medium_time = tspec_medium_time;
+		if (status == WME_ADMISSION_ACCEPTED) {
+			ftcbparm->fbtric.ts_count += 1;
+			ftcbparm->fbtric.ts = tlvs;
+		}
+	}
+	return status;
+}
+#endif /* AP */
 #endif /* WLFBT */

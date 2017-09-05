@@ -153,7 +153,12 @@ typedef struct client
 	char im_dest_deviceid[128];   /* The device_id of destination for sending message. */
 	void *im_user_data;
 	int im_timeout_sec;			  /* The timeout value in second unit for sending message. */
+	char *im_req_buf;
+	char *im_res_buf;
+	int im_res_len;
 	struct timeval      im_request_timeout;     // for check timeout.
+
+	int sleep_while_data_sent;
 } client_t;
 
 /* Call specific data */
@@ -164,7 +169,6 @@ typedef struct call_data
 	fd_set              client_fds;
 	int					nfds;
 	list_t             *clients;
-	list_t             *client_locks;
 
     /* for UDP_CLIENT */
     list_t             *conn_clients;
@@ -213,6 +217,7 @@ int client_recv_udp_msg(client_t *client, char *data, int data_len,
 #endif
 
 int client_send_lo_data(client_t *c);
+int client_send_lo_im_data(client_t *c);
 int client_recv_lo_data(client_t *c, struct call_data *cd);
 int client_recv_lo_whole_data(client_t *c, struct call_data *cd);
 int client_send_tnl_data(client_t *c);

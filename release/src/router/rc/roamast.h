@@ -1,5 +1,5 @@
-#define RAST_COUNT_IDLE 20
-#define RAST_COUNT_RSSI 6
+#define RAST_COUNT_IDLE 15
+#define RAST_COUNT_RSSI 3
 #define RAST_POLL_INTV_NORMAL 5
 #if defined(RTCONFIG_RALINK)  /* Remove dead STA from assoclist */
 #define RAST_TIMEOUT_STA 10
@@ -7,7 +7,7 @@
 #else
 #define RAST_TIMEOUT_STA 10
 #endif
-#define RAST_DFT_IDLE_RATE 	2 	/* Kbps */
+#define RAST_DFT_IDLE_RATE 	20 	/* Kbps */
 #define	MAX_IF_NUM 3
 #define MAX_SUBIF_NUM 4
 #define MAX_STA_COUNT 128
@@ -107,6 +107,7 @@ typedef struct rast_bss_info {
 	int user_low_rssi;
 	int32 idle_rate;
 	rast_sta_info_t *assoclist[MAX_SUBIF_NUM];
+	int upstream_if;
 }rast_bss_info_t;
 
 rast_bss_info_t bssinfo[3];

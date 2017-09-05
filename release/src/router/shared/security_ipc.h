@@ -1,7 +1,7 @@
 /*
  * Broadcom security module ipc ports file
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: security_ipc.h 633598 2016-04-23 13:56:45Z $
+ * $Id: security_ipc.h 659383 2016-09-14 01:11:59Z $
  */
 
 #ifndef __SECURITY_IPC_H__

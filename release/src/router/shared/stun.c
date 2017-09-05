@@ -55,9 +55,7 @@ static int stun_msg_vencode(char *buf, uint16_t method, uint8_t class,
                      const uint8_t *tid, uint8_t padding )
 {
     struct stun_hdr hdr;
-    int start;
     int err = 0;
-    uint32_t i;
 
     if ( !buf || !tid )
         return -1;
@@ -124,7 +122,7 @@ static int hdr_and_attr_check(uint8_t *buf,int size,uint8_t *tid,uint32_t *ipadd
         printf("It should be         [0x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x]\n",tid[0],tid[1]
                                                 ,tid[2],tid[3],tid[4],tid[5],tid[6],tid[7]
                                                 ,tid[8],tid[9],tid[10],tid[11]);
-        return -1;        
+        return -1;
     }
     buf_pos+=STUN_TID_SIZE;
 
@@ -150,7 +148,7 @@ static int hdr_and_attr_check(uint8_t *buf,int size,uint8_t *tid,uint32_t *ipadd
             success = 1;
 
             memcpy(ipaddr,buf+buf_pos+4,4);
-            break;    
+            break;
         } else if ( attr_type == STUN_XORMAPPEDADDRESS ) {
             if( buf_pos + STUN_ATTRLEN_SIZE > size )
                 break;
@@ -166,7 +164,7 @@ static int hdr_and_attr_check(uint8_t *buf,int size,uint8_t *tid,uint32_t *ipadd
             *ipaddr = htonl(*ipaddr);
             *ipaddr ^= STUN_MAGIC_COOKIE;
             *ipaddr = ntohl(*ipaddr);
-            break; 
+            break;
         } else {
             if( buf_pos + STUN_ATTRLEN_SIZE > size )
                 break;
@@ -175,7 +173,7 @@ static int hdr_and_attr_check(uint8_t *buf,int size,uint8_t *tid,uint32_t *ipadd
             attr_len = ntohs(attr_len);
             printf("attr_len %d\n",attr_len);
 
-            buf_pos+=attr_len;        
+            buf_pos+=attr_len;
         }
     }
 
@@ -189,22 +187,22 @@ int send_binding_request(unsigned int stun_ip,unsigned short stun_port,unsigned 
 {
     uint8_t tid[STUN_TID_SIZE];
     int sockfd=0,n=0,maxfd=0;
-    struct sockaddr_in servaddr,cliaddr;
+    struct sockaddr_in servaddr;
     uint8_t sendline[32] = {0};
     uint8_t recvline[256] = {0};
     int i=0,err=0,ret=0,success=0,retry_times=0;
-    struct timeval timeout; 
-    fd_set fds; 
+    struct timeval timeout;
+    fd_set fds;
 
     *dieve_public_ip = 0;
 
     for (i=0; i<STUN_TID_SIZE; i++)
         tid[i] = rand_u32(i);
 
-    err = stun_msg_vencode( sendline, 
-                            STUN_METHOD_BINDING, 
+    err = stun_msg_vencode( (char *) sendline,
+                            STUN_METHOD_BINDING,
                             STUN_CLASS_REQUEST,
-                            tid, 
+                            tid,
                             0x00);
     if(err)
         goto error_out;
@@ -225,8 +223,8 @@ int send_binding_request(unsigned int stun_ip,unsigned short stun_port,unsigned 
     while(1)
     {
         retry_times++;
-        timeout.tv_sec = 5; 
-        timeout.tv_usec = 0;  
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
         FD_ZERO(&fds);
         FD_SET(sockfd,&fds);
         maxfd=sockfd+1;
@@ -259,7 +257,7 @@ int send_binding_request(unsigned int stun_ip,unsigned short stun_port,unsigned 
                         if(!ret)
                            success = 1;
                     }
-                }    
+                }
         }
 
         if(success)

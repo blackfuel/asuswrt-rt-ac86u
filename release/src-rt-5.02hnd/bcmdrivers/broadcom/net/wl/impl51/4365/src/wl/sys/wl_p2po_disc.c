@@ -5,7 +5,7 @@
  * for the P2P ofload (p2po).
  * See bcm_p2p_disc.c and wlc_p2po for the APIs.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

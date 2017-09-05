@@ -272,7 +272,7 @@ function switchPage(page){
 							<div id="ctfLevelDesc" style="display:none" class="formfontcontent">
 								<p class="formfontcontent">
 									<b><#ADSL_FW_note#></b> <#traffic_monitor_desc3#>
-									Click <a style="text-decoration:underline" href="Advanced_SwitchCtrl_Content.asp?af=ctf_disable_force">HERE</a> to disable NAT Acceleration.  
+									<#ctfLevelDesc#>  
 								</p>
 							</div>
 

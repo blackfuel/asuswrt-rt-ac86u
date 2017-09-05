@@ -358,3 +358,13 @@
 	text-align: right;
 	margin-top: 10px;
 }
+.splash_template_passcode {
+	background-color: rgba(74, 144, 226, 0.5);
+	border-radius: 4px;
+	width: 90%;
+	border: 0px;
+	color: #757575;
+	padding-left: 2%;
+	font-size: 12px;
+	height: 20px;
+}

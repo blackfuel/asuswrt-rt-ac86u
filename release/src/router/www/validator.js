@@ -75,6 +75,25 @@ var validator = {
 			return "";
 	},
 
+	bandwidth_code: function(o,event) {
+		var keyPressed = event.keyCode ? event.keyCode : event.which;
+		var target = o.value.split(".");
+		
+		if (validator.isFunctionButton(event))
+			return true;
+			
+		if((keyPressed == 46) && (target.length > 1))
+			return false;
+
+		if((target.length > 1) && (target[1].length > 0))
+			return false;
+			
+		if ((keyPressed == 46) || (keyPressed > 47 && keyPressed < 58))
+			return true;
+		else
+			return false;
+	},
+
 	checkIP: function(o,e){
 		var nextInputBlock = o.nextSibling.nextSibling; //find the next input (sibling include ".")
 		var nc = window.event ? e.keyCode : e.which;
@@ -303,7 +322,7 @@ var validator = {
 	},
 
 	domainName: function (obj) { //support a-z, 0-9, "-", "_" , "."", The first character cannot be dash "-" or under line "_"
-		var re = new RegExp(/^(?:[a-z0-9](?:[a-z0-9-_]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-_]{0,61}[a-z0-9]$/);
+		var re = new RegExp(/^(?:[a-z0-9](?:[a-z0-9-_]{0,61}[a-z0-9])?\.)*[a-z0-9][a-z0-9-_]{0,61}[a-z0-9]$/);
 		if(re.test(obj.value)){
 			return "";
 		}
@@ -397,6 +416,10 @@ var validator = {
 		else if(keyPressed == 58 || keyPressed == 13){	//symbol ':' & 'ENTER'
 			return true;
 		}
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
+		}
 		else{
 			return false;
 		}
@@ -411,6 +434,10 @@ var validator = {
 
 		if ((keyPressed == 46) || (keyPressed>47 && keyPressed<58))
 			return true;
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
+		}
 		else
 			return false;
 	},
@@ -424,6 +451,10 @@ var validator = {
 
 		if ((keyPressed == 45) || (keyPressed>47 && keyPressed<58))
 			return true;
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
+		}
 		else
 			return false;
 	},
@@ -441,6 +472,10 @@ var validator = {
 			}*/
 			return true;
 		}
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
+		}		
 		else{
 			return false;
 		}
@@ -499,6 +534,10 @@ var validator = {
 			return true;
 		}else if(keyPressed == 13){	// 'ENTER'
 			return true;
+		}
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
 		}
 
 		return false;
@@ -862,6 +901,10 @@ var validator = {
 			else
 				return false;
 		}
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
+		}		
 
 		return false;
 	},
@@ -876,6 +919,10 @@ var validator = {
 			
 		if ((keyPressed>47 && keyPressed<58) || keyPressed == 32){
 			return true;
+		}
+		else if(event.metaKey && (keyPressed == 65 || keyPressed == 67 || keyPressed == 86 || keyPressed == 88 
+			                   || keyPressed == 97 || keyPressed == 99 || keyPressed == 118 || keyPressed == 120)){		//for Mac + Safari, let 'Command + A'(C, V, X) can work
+			return true
 		}
 		else{
 			return false;
@@ -1695,16 +1742,15 @@ var validator = {
 	},
 
 	rangeFloat: function(o, _min, _max, def){
-
-                if(isNaN(o.value) || o.value <= _min || o.value > _max) {
-                        alert('<#JS_validrange#> ' + min + ' <#JS_validrange_to#> ' + max + '.');
+        if(isNaN(o.value) || o.value <= _min || o.value > _max) {
+            alert('<#JS_validrange#> ' + min + ' <#JS_validrange_to#> ' + max + '.');
 			o.value = def;
 			o.focus();
 			o.select();
 			return false;
 		}
 
-                return true;
+        return true;
 	},
 
 	ssidChar: function(ch){
@@ -1747,7 +1793,6 @@ var validator = {
 	},
 	
 	string_KR: function(string_obj, flag){		//Alphabets, numbers, specialcharacters mixed
-
 		var string_length = string_obj.value.length;
 		if(!/[A-Za-z]/.test(string_obj.value) || !/[0-9]/.test(string_obj.value) || string_length < 8
 				|| !/[\!\"\#\$\%\&\'\(\)\*\+\,\-\.\/\:\;\<\=\>\?\@\[\\\]\^\_\`\{\|\}\~]/.test(string_obj.value)){
@@ -1766,8 +1811,10 @@ var validator = {
 		}
 
 		if(invalid_char != ""){
-			if(flag != "noalert")
+			if(flag != "noalert"){
 				alert("<#JS_validstr2#> '"+invalid_char+"' !");
+			}
+
 			string_obj.value = "";
 			string_obj.focus();
 			return false;
@@ -1795,6 +1842,7 @@ var validator = {
 				return false;
 			}
 		}
+
 		return true;
 	},
 
@@ -2021,7 +2069,6 @@ var validator = {
 		
 		if(iscurrect == false){
 			alert(str);
-			
 			key_obj.focus();
 			key_obj.select();
 		}
@@ -2037,6 +2084,57 @@ var validator = {
 		}
 		
 		return true;
-	}
+	},
 
+	mac_addr: function(_value) {
+		var hwaddr = new RegExp("(([a-fA-F0-9]{2}(\:|$)){6})", "gi");
+		if(hwaddr.test(_value))
+			return true;
+		else
+			return false;
+	},
+
+	ipv4_addr: function(_value) {
+		//ip address accept is 0.0.0.0~255.255.255.255
+		var ipformat  = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+		if((ipformat.test(_value)))
+			return true;
+		else
+			return false;
+	},
+
+	ipv4_addr_range: function(_value) {
+		//ip address accept is 0.0.0.0~255.255.255.255
+		//format: 192.168.1.*, 192.168.1.2-100, 192.168.1.0/24
+		var ipformatSubnet = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(\*)$/;
+		if((ipformatSubnet.test(_value)))	//192.168.1.*
+			return true;
+		else {
+			var ipformatRange = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)-(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))$/;
+			if((ipformatRange.test(_value))) {	//192.168.1.0-255
+				var part = _value.split(".");
+				var range = part[3].split("-");
+				if(parseInt(range[0]) < parseInt(range[1]))
+					return true;
+				else
+					return false;
+			}
+			else {
+				var ipformatMask = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/(3[0-2]|2[0-9]|1[0-9]|[1-9])$/;
+				if((ipformatMask.test(_value)))	//192.168.1.0/24
+					return true;
+				else
+					return false;
+			}
+		}
+	},
+
+	domainName: function(_value) {
+		//domin name
+		var domainNameFormat = /^((?:(?:(?:\w[\.\-\+]?)*)\w)+)((?:(?:(?:\w[\.\-\+]?){0,62})\w)+)\.(\w{2,6})$/; 
+		if(domainNameFormat.test(_value))
+			return true;
+		else
+			return false;
+	}
 };

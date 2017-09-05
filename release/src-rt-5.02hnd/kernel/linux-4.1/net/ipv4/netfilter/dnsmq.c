@@ -32,6 +32,7 @@
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include <linux/proc_fs.h>
 #include <linux/inet.h>
+#include <linux/blog_net.h>
 
 #define DEBUGP(format, args...)
 
@@ -41,11 +42,18 @@ char dnsmq_name[32];
 char dnsmq_name_ipv6[32];
 unsigned char dnsmq_mac[ETH_ALEN] = { 0x00, 0xe0, 0x11, 0x22, 0x33, 0x44 };
 typedef int (*dnsmqHitHook)(struct sk_buff *skb);
+typedef int (*dnsmqEthHitHook)(u8 *buf);
 dnsmqHitHook dnsmq_hit_hook = NULL;
+dnsmqEthHitHook dnsmq_eth_hit_hook = NULL;
 
 static inline void dnsmq_hit_hook_func(dnsmqHitHook hook_func)
 {
 	dnsmq_hit_hook = hook_func;
+}
+
+static inline void dnsmq_eth_hit_hook_func(dnsmqEthHitHook hook_func)
+{
+	dnsmq_eth_hit_hook = hook_func;
 }
 
 void dump_packet(struct sk_buff *skb, char *title)
@@ -222,6 +230,90 @@ static inline int dnsmq_func(struct sk_buff *skb)
 	return 0;
 }
 
+static inline int dnsmq_eth_func(u8 *buf)
+{
+	struct ethhdr *ethh = (struct ethhdr *)buf;
+	struct vlan_ethhdr *vethh;
+	struct iphdr *iph;
+	struct ipv6hdr *ip6h;
+	struct udphdr *udph;
+	struct tcphdr *tcph;
+	u32 hlen;
+	u16 proto;
+
+	if (dnsmq_ip == 0) return 0;
+
+	if (!buf) return 0;
+
+	if (ntohs(ethh->h_proto) != BLOG_ETH_P_BRCM4TAG) return 0;
+
+	proto = (buf[16] << 8) | buf[17];
+
+	if (proto == ETH_P_IP || proto == ETH_P_IPV6) hlen = ETH_HLEN + 4;
+	else if (proto == ETH_P_8021Q) {
+		vethh = (struct vlan_ethhdr *)(buf + 4);
+		if (vethh->h_vlan_encapsulated_proto == htons(ETH_P_IP) ||
+			vethh->h_vlan_encapsulated_proto == htons(ETH_P_IPV6)) {
+			hlen = VLAN_ETH_HLEN + 4;
+			if (vethh->h_vlan_encapsulated_proto == htons(ETH_P_IPV6))
+				proto = ETH_P_IPV6;
+			else
+				proto = ETH_P_IP;
+		} else return 0;
+	}
+	else return 0;
+
+	if (proto == ETH_P_IPV6) {
+		ip6h = (struct ipv6hdr *)(buf + hlen);
+
+		// IP & DNS & Looking for my host name
+		if (ip6h->nexthdr == IPPROTO_UDP) {
+			udph = (struct udphdr *)(buf + hlen + sizeof(struct ipv6hdr));
+			if (ntohs(udph->dest) == 53) {
+				if (dnsmq_hit(udph)) {
+					memcpy(ethh->h_dest, dnsmq_mac, ETH_ALEN);
+					//dump_packet(buf, "ipv6 dnshit");
+					return 1;
+				}
+			}
+		}
+		// IP & HTTP & Original Locol IP & Looking for my host name
+		else if (ip6h->nexthdr == IPPROTO_TCP) {
+			tcph = (struct tcphdr *)(buf + hlen + sizeof(struct ipv6hdr));
+			if (ipv6_addr_equal(&ip6h->daddr, &dnsmq_ipv6) && ntohs(tcph->dest) == 80) {
+				memcpy(ethh->h_dest, dnsmq_mac, ETH_ALEN);
+				//dump_packet(buf, "ipv6 httphit");
+				return 1;
+			}
+		}
+	} else {
+		iph = (struct iphdr *)(buf + hlen);
+
+		// IP & DNS & Looking for my host name
+		if (iph->protocol == IPPROTO_UDP) {
+			udph = (struct udphdr *)(buf + hlen + (iph->ihl<<2));
+			if (ntohs(udph->dest) == 53) {
+				if (dnsmq_hit(udph)) {
+					memcpy(ethh->h_dest, dnsmq_mac, ETH_ALEN);
+					//dump_packet(buf, "dnshit");
+					return 1;
+				}
+			}
+		}
+		// IP & HTTP & Original Locol IP & Looking for my host name
+		else if (iph->protocol == IPPROTO_TCP) {
+			tcph = (struct tcphdr *)(buf + hlen + (iph->ihl<<2));
+			if (iph->daddr == dnsmq_ip && ntohs(tcph->dest) == 80) {
+				memcpy(ethh->h_dest, dnsmq_mac, ETH_ALEN);
+				//dump_packet(buf, "httphit");
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3,10,13)
 static ssize_t dnsmq_ctrl(struct file *file, const char __user *buffer, size_t length, loff_t *data)
 #else
@@ -264,8 +356,13 @@ static int dnsmq_ctrl(struct file *file, const char *buffer, unsigned long lengt
 
 	printk(KERN_DEBUG "dnsmq ctrl: %x %s\n", dnsmq_ip, dnsmq_name);
 
-	if (dnsmq_ip == 0) dnsmq_hit_hook_func (NULL);
-	else dnsmq_hit_hook_func(dnsmq_func);
+	if (dnsmq_ip == 0) {
+		dnsmq_hit_hook_func (NULL);
+		dnsmq_eth_hit_hook_func (NULL);
+	} else {
+		dnsmq_hit_hook_func(dnsmq_func);
+		dnsmq_eth_hit_hook_func(dnsmq_eth_func);
+	}
 
 	return length;
 }
@@ -312,8 +409,13 @@ static int dnsmq_ctrl_ipv6(struct file *file, const char *buffer, unsigned long 
 
 	printk(KERN_DEBUG "dnsmq ctrl ipv6: %pI6 %s\n", &dnsmq_ipv6, dnsmq_name_ipv6);
 
-	if (ipv6_addr_equal(&dnsmq_ipv6, &in6addr_any)) dnsmq_hit_hook_func (NULL);
-	else dnsmq_hit_hook_func(dnsmq_func);
+	if (ipv6_addr_equal(&dnsmq_ipv6, &in6addr_any)) {
+		dnsmq_hit_hook_func (NULL);
+		dnsmq_eth_hit_hook_func (NULL);
+	} else {
+		dnsmq_hit_hook_func(dnsmq_func);
+		dnsmq_eth_hit_hook_func(dnsmq_eth_func);
+	}
 
 	return length;
 }
@@ -355,15 +457,18 @@ static int __init init(void)
 #endif
 	// it will be enabled later
 	dnsmq_hit_hook_func (NULL);
+	dnsmq_eth_hit_hook_func (NULL);
 	return 0;
 }
 
 static void __exit fini(void)
 {
 	dnsmq_hit_hook_func (NULL);
+	dnsmq_eth_hit_hook_func (NULL);
 }
 
 EXPORT_SYMBOL(dnsmq_hit_hook);
+EXPORT_SYMBOL(dnsmq_eth_hit_hook);
 
 module_init(init);
 module_exit(fini);

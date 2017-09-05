@@ -3,7 +3,7 @@
  * asynchronously. Not to be confused with wlc_eventq, which is used by the common code
  * to send events to the host.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

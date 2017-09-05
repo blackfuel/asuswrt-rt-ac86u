@@ -265,7 +265,9 @@ var category_info = [["Parental Controls", "1", "<#AiProtection_filter_Adult#>",
 				     ["Home Protection", "85", "Malicious site blocked", "", "Sites that provide tools for remotely monitoring and controlling computers."],
 				     ["Home Protection", "86", "Malicious site blocked", "", "Sites that use scraped or copied content to pollute search engines with redundant and generally unwanted results."],
 				     ["Home Protection", "88", "Malicious site blocked", "", "Sites dedicated to displaying advertisements, including sites used to display banner or popup advertisement."],
-				     ["Home Protection", "92", "Malicious site blocked", "", "Malicious Domain or website, Domains that host malicious payloads."]
+				     ["Home Protection", "92", "Malicious site blocked", "", "Malicious Domain or website, Domains that host malicious payloads."],
+				     ["Home Protection", "94", "Malicious site blocked", "", "Sites that attempt to defraud a person or group after first gaining their confidence, used in the classical sense of trust. "],
+				     ["Home Protection", "95", "Malicious site blocked", "", "Sites that directly or indirectly facilitate the distribution of ransomware."]
 	];
 	
 var target_info = {

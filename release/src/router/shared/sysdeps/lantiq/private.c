@@ -91,8 +91,11 @@ int update_trx(char *imagefile)
 	_dprintf("fullimage_offset:[%08X][%d]\n", fullimage_offset, fullimage_offset);
 	_dprintf("fullimage_size:[%08X][%d]\n", fullimage_size, fullimage_size);
 #endif
+	system("rm -rf /tmp/wireless/lantiq");
 	get_fullimage(imagefile, fullimage_offset, fullimage_size);
 
+	system("rm -f /tmp/linux.trx");
+	system("echo 1 > /proc/sys/vm/drop_caches");
 	system("/usr/sbin/upgrade /tmp/fullimage.img fullimage 0 1");
 
 update_trx_fail:

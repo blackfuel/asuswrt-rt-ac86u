@@ -1,7 +1,7 @@
 /*
  * Linux Visualization Data Concentrator XML utility implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_xmlutility.c 606349 2015-12-15 07:15:11Z $
+ * $Id: vis_xmlutility.c 672659 2016-11-29 10:24:01Z $
  */
 
 #include <string.h>
@@ -103,6 +103,9 @@ get_individual_dut(xmlDocPtr doc, xmlNodePtr nodechild, dut_info_t *dutinfo)
 			get_string_element(doc, nodechild, dutinfo->ucastrsntype, MAX_UNICAST_RSN);
 		else if (strcmp((const char*)nodechild->name, TAG_AKM) == 0)
 			get_string_element(doc, nodechild, dutinfo->akmrsntype, MAX_AKM_TYPE);
+		else if (strcmp((const char*)nodechild->name, TAG_ERR_INFO) == 0)
+			get_int_element(doc, nodechild, (int*)&dutinfo->errinfo);
+
 		nodechild = nodechild->next;
 	}
 

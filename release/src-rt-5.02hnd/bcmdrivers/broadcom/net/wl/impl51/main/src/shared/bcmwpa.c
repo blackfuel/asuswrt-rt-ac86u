@@ -1,7 +1,7 @@
 /*
  *   bcmwpa.c - shared WPA-related functions
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: bcmwpa.c 615032 2016-01-26 01:45:53Z $
+ * $Id: bcmwpa.c 663427 2016-10-05 09:46:29Z $
  */
 
 #include <bcm_cfg.h>
@@ -44,16 +44,18 @@ extern void bzero(void *b, uint len);
 #include <bcmwpa.h>
 
 #if defined(BCMSUP_PSK) || defined(WLFBT) || defined(BCMAUTH_PSK) || \
-	defined(BCM_OL_DEV) || defined(WL_OKC)
-
+	defined(BCM_OL_DEV) || defined(WL_OKC) || defined(WLHOSTFBT)
+#ifdef WLHOSTFBT
+#include <string.h>
+#endif
 #include <bcmcrypto/prf.h>
 #include <bcmcrypto/hmac_sha256.h>
-#endif
+#endif /* WLHOSTFBT */
 
 #ifdef WLTDLS
 #include <bcmcrypto/sha256.h>
 #endif
-#if defined(BCMSUP_PSK) || defined(WLFBT) || defined(WL_OKC)
+#if defined(BCMSUP_PSK) || defined(WLFBT) || defined(WL_OKC) || defined(WLHOSTFBT)
 #include <bcmcrypto/rc4.h>
 
 void
@@ -100,7 +102,7 @@ kdf_calc_pmkid(struct ether_addr *auth_ea, struct ether_addr *sta_ea,
 }
 #endif /* MFP */
 
-#ifdef WLFBT
+#if defined(WLFBT) || defined(WLHOSTFBT)
 void
 wpa_calc_pmkR0(uchar *ssid, int ssid_len, uint16 mdid, uint8 *r0kh,
 	uint r0kh_len, struct ether_addr *sta_ea,
@@ -193,7 +195,28 @@ wpa_calc_ft_ptk(struct ether_addr *bssid, struct ether_addr *sta_ea,
 	hmac_sha256_n(pmk, pmk_len, data, data_len, prf_buff, ptk_len);
 	bcopy(prf_buff, (char*)ptk, ptk_len);
 }
-#endif /* WLFBT */
+
+void
+wpa_derive_pmkR1_name(struct ether_addr *r1kh, struct ether_addr *sta_ea,
+	uint8 *pmkr0name, uint8 *pmkr1name)
+{
+	uint8 data[128], digest[PRF_OUTBUF_LEN];
+	const char prefix1[] = "FT-R1N";
+	int data_len = 0;
+
+	/* calc and return PMKR1Name */
+	bcopy(prefix1, data, strlen(prefix1));
+	data_len = strlen(prefix1);
+	bcopy(pmkr0name, &data[data_len], WPA2_PMKID_LEN);
+	data_len += WPA2_PMKID_LEN;
+	bcopy(r1kh, &data[data_len], ETHER_ADDR_LEN);
+	data_len += ETHER_ADDR_LEN;
+	bcopy(sta_ea, &data[data_len], ETHER_ADDR_LEN);
+	data_len += ETHER_ADDR_LEN;
+	sha256(data, data_len, digest, 0);
+	bcopy(digest, pmkr1name, WPA2_PMKID_LEN);
+}
+#endif /* WLFBT || WLHOSTFBT */
 #endif /* BCMSUP_PSK || WLFBT || WL_OKC */
 
 #if defined(BCMSUP_PSK) || defined(BCM_OL_DEV)

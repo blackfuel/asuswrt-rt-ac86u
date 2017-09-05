@@ -59,9 +59,9 @@ define(function(){
 				tab: [
 					{url: "AiProtection_HomeSecurity.asp", tabName: "__HIDE__"},
 					{url: "AiProtection_HomeProtection.asp", tabName: "<#AiProtection_Home#>"},
-					{url: "AiProtection_MaliciousSitesBlocking.asp", tabName: "__INHERIT__"},
-					{url: "AiProtection_IntrusionPreventionSystem.asp", tabName: "__INHERIT__"},
-					{url: "AiProtection_InfectedDevicePreventBlock.asp", tabName: "__INHERIT__"},
+					{url: "AiProtection_MaliciousSitesBlocking.asp", tabName: "<#AiProtection_sites_blocking#>"},
+					{url: "AiProtection_IntrusionPreventionSystem.asp", tabName: "<#AiProtection_two-way_IPS#>"},
+					{url: "AiProtection_InfectedDevicePreventBlock.asp", tabName: "<#AiProtection_detection_blocking#>"},
 					{url: "AiProtection_WebProtector.asp", tabName: "<#Parental_Control#>"},
 					{url: "ParentalControl.asp", tabName: "__INHERIT__"},
 					{url: "AiProtection_AdBlock.asp", tabName: "Ad Blocking"},
@@ -185,11 +185,11 @@ define(function(){
 				]
 			},
 			{
-				menuName: "Smart Control",
-				index: "smart_control",
+				menuName: "Alexa & IFTTT",
+				index: "menu_Alexa_IFTTT",
 				tab: [
-					{url: "Advanced_Smart_Control_Alexa.asp", tabName: "__INHERIT__"},
-					{url: "Advanced_Smart_Control_IFTTT.asp", tabName: "__INHERIT__"},
+					{url: "Advanced_Smart_Home_Alexa.asp", tabName: "__INHERIT__"},
+					{url: "Advanced_Smart_Home_IFTTT.asp", tabName: "__INHERIT__"},
 					{url: "NULL", tabName: "__INHERIT__"}
 				]
 			},
@@ -298,6 +298,10 @@ define(function(){
 					retArray.push("menu_AiCloud");
 				}
 
+				if(!ifttt_support && !alexa_support){
+					retArray.push("menu_Alexa_IFTTT");
+				}
+
 				if(!IPv6_support){
 					retArray.push("menu_IPv6");
 				}
@@ -317,9 +321,6 @@ define(function(){
 				if(!wtfast_support) {
 					retArray.push("menu_GameBoost");
 				}
-
-				if(!smart_control_support)
-					retArray.push("smart_control");
 
 				/* Operation Mode */
 				if(isSwMode("re")){
@@ -525,9 +526,12 @@ define(function(){
 					retArray.push("GameBoost.asp");
 				}
 
-				if(!smart_control_support){
-					retArray.push("Advanced_Smart_Control_Alexa.asp");
-					retArray.push("Advanced_Smart_Control_IFTTT.asp");
+				if(!alexa_support){
+					retArray.push("Advanced_Smart_Home_Alexa.asp");
+				}
+
+				if(!ifttt_support){
+					retArray.push("Advanced_Smart_Home_IFTTT.asp");
 				}
 
 				if(!IPv6_support){

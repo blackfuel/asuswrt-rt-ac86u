@@ -16,7 +16,7 @@ CFLAGS += -DCONFIG_LINUX3X_OR_4X
 endif
 
 LDFLAGS = -L$(TOP)/nt_center/lib/ -lnt
-LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3
+LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3 -lm
 LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
 
 LIBS = -lpthread -lgcc_s
@@ -37,13 +37,13 @@ MDIRS = lib actMail
 
 ifeq ($(wildcard $(SRCBASE)/router/nt_center/*.c),)
 all:
-	-cp -f prebuilt/Notify_Event2NC Notify_Event2NC
-	-cp -f prebuilt/nt_center nt_center
-	-cp -f actMail/prebuilt/nt_actMail actMail
-	-cp -f prebuilt/nt_monitor nt_monitor
-	-cp -f lib/prebuilt/libnt.so lib
-	-cp -f lib/prebuilt/nt_db lib
-	-cp -f lib/prebuilt/*.h lib
+	-cp -f prebuild/Notify_Event2NC Notify_Event2NC
+	-cp -f prebuild/nt_center nt_center
+	-cp -f actMail/prebuild/nt_actMail actMail
+	-cp -f prebuild/nt_monitor nt_monitor
+	-cp -f lib/prebuild/libnt.so lib
+	-cp -f lib/prebuild/nt_db lib
+	-cp -f lib/prebuild/*.h lib
 
 else
 all: ntdir nt_center Notify_Event2NC  nt_monitor

@@ -1,7 +1,7 @@
 /**
  * AP Powersave state related code
  * This file aims to encapsulating the Power save state of sbc,wlc structure.
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_apps.h 635214 2016-05-03 06:44:43Z $
+ * $Id: wlc_apps.h 662367 2016-09-29 08:25:24Z $
 */
 
 
@@ -39,6 +39,7 @@
 
 #define AUXPMQ_INVALID_IDX	0xFFFF
 
+extern void wlc_apps_ps_flush(wlc_info_t *wlc, struct scb *scb);
 extern int wlc_apps_process_ps_switch(wlc_info_t *wlc, struct ether_addr *ea, int8 ps_on);
 extern void wlc_apps_scb_ps_on(wlc_info_t *wlc, struct scb *scb);
 extern void wlc_apps_scb_ps_off(wlc_info_t *wlc, struct scb *scb, bool discard);

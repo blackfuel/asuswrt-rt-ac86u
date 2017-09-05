@@ -166,7 +166,7 @@ function showTab(name)
 		max = scaleMode ? MAX(h.rx_max, h.tx_max) : xx_max
 		if (max > 12500) max = Math.round((max + 12499) / 12500) * 12500;
 			else max += 100;
-		if(ifname == "WIRED" || ifname == "WIRELESS0" || ifname == "WIRELESS1"){
+		if(ifname == "WIRED" || ifname == "WIRELESS0" || ifname == "WIRELESS1" || ifname == "WIRELESS2" || ifname == "WIRELESS3"){
 			updateSVG(h.rx, h.tx, max, drawMode, colorTX[drawColorTX], colorRX[drawColorRX], updateInt, updateMaxL, updateDiv, avgMode, clock);
 			document.getElementById("rx-current").className = "blue_line";
 			document.getElementById("tx-current").className = "orange_line";
@@ -236,6 +236,8 @@ function loadData()
 				t = "<#tm_wireless#> (2.4GHz)";
 			else if (i == "WIRELESS2")
 				t = "<#tm_wireless#> (5GHz-2)";
+			else if (i == "WIRELESS3")
+				t = "<#tm_wireless#> (60GHz)";
 			else if (i == "WIRED")
 				t = "<#tm_wired#>";
 			else if (i == "BRIDGE")				
@@ -303,7 +305,7 @@ function loadData()
 		}
 		
 		//Sort tab by Viz 2014.06
-		var tabsort = ["speed-tab-INTERNET,<#Internet#>", "speed-tab-INTERNET,<#dualwan_primary#>","speed-tab-INTERNET1,<#dualwan_secondary#>","speed-tab-INTERNET,DSL WAN","speed-tab-INTERNET,<#Ethernet_wan#> (WAN)","speed-tab-INTERNET,<#Ethernet_wan#> (LAN)","speed-tab-INTERNET,USB Modem","speed-tab-INTERNET,<#Mobile_title#>","speed-tab-INTERNET1,<#Ethernet_wan#> (WAN)","speed-tab-INTERNET1,<#Ethernet_wan#> (LAN)","speed-tab-INTERNET1,<#Mobile_title#>","speed-tab-INTERNET1,USB Modem","speed-tab-WIRED,<#tm_wired#>", "speed-tab-LACP1,Bonding (LAN1)", "speed-tab-LACP2,Bonding (LAN2)", "speed-tab-WIRELESS0,<#tm_wireless#> (2.4GHz)","speed-tab-WIRELESS1,<#tm_wireless#> (5GHz)", "speed-tab-WIRELESS1,<#tm_wireless#> (5GHz-1)", "speed-tab-WIRELESS2,<#tm_wireless#> (5GHz-2)", "speed-tab-BRIDGE,LAN"];
+		var tabsort = ["speed-tab-INTERNET,<#Internet#>", "speed-tab-INTERNET,<#dualwan_primary#>","speed-tab-INTERNET1,<#dualwan_secondary#>","speed-tab-INTERNET,DSL WAN","speed-tab-INTERNET,<#Ethernet_wan#> (WAN)","speed-tab-INTERNET,<#Ethernet_wan#> (LAN)","speed-tab-INTERNET,USB Modem","speed-tab-INTERNET,<#Mobile_title#>","speed-tab-INTERNET1,<#Ethernet_wan#> (WAN)","speed-tab-INTERNET1,<#Ethernet_wan#> (LAN)","speed-tab-INTERNET1,<#Mobile_title#>","speed-tab-INTERNET1,USB Modem","speed-tab-WIRED,<#tm_wired#>", "speed-tab-LACP1,Bonding (LAN1)", "speed-tab-LACP2,Bonding (LAN2)", "speed-tab-WIRELESS0,<#tm_wireless#> (2.4GHz)","speed-tab-WIRELESS1,<#tm_wireless#> (5GHz)", "speed-tab-WIRELESS1,<#tm_wireless#> (5GHz-1)", "speed-tab-WIRELESS2,<#tm_wireless#> (5GHz-2)", "speed-tab-WIRELESS3,<#tm_wireless#> (60GHz)", "speed-tab-BRIDGE,LAN"];
 		var sortabs = [];		
 		for(var i=0;i<tabsort.length;i++){
 			for(var j=0;j<tabs.length;j++){	

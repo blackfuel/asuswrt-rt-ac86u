@@ -1,7 +1,7 @@
 /*
  * MSDU aggregation related header file
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_amsdu.h 625494 2016-03-16 20:02:20Z $
+ * $Id: wlc_amsdu.h 659019 2016-09-12 08:05:07Z $
 */
 
 
@@ -39,6 +39,9 @@ extern void wlc_amsdu_txop_upd(amsdu_info_t *ami);
 extern void wlc_amsdu_scb_agglimit_upd(amsdu_info_t *ami, struct scb *scb);
 extern void wlc_amsdu_txpolicy_upd(amsdu_info_t *ami);
 extern void wlc_amsdu_agg_flush(amsdu_info_t *ami);
+#ifdef DISABLE_AMSDUTX_FOR_VI
+extern bool wlc_amsdu_chk_priority_enable(amsdu_info_t *ami, uint8 tid);
+#endif
 #ifdef PROP_TXSTATUS
 extern void wlc_amsdu_flush_flowid_pkts(amsdu_info_t *ami, struct scb *scb, uint16 flowid);
 #endif

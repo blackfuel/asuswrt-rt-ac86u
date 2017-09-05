@@ -1,7 +1,7 @@
 /*
  * 802.11h CSA module header file
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_csa.h 629428 2016-04-05 11:31:51Z $
+ * $Id: wlc_csa.h 662097 2016-09-28 09:04:57Z $
 */
 
 /**
@@ -51,6 +51,10 @@ extern void wlc_recv_ext_csa_action(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 
 extern int wlc_send_action_switch_channel(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg);
 
+#ifdef CLIENT_CSA
+extern int wlc_send_unicast_action_switch_channel(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
+	const struct ether_addr *dst, wl_chan_switch_t *csa, uint8 action_id);
+#endif /* CLIENT_CSA */
 /* actions */
 extern void wlc_csa_do_switch(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 	chanspec_t chspec);

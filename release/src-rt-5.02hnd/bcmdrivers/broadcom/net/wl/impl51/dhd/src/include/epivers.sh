@@ -26,7 +26,7 @@
 # If the version header file already exists, increment its build number.
 # Otherwise, create a new file.
 #
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
+# Broadcom Proprietary and Confidential. Copyright (C) 2017,
 # All Rights Reserved.
 # 
 # This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -71,7 +71,7 @@ else # epivers.h doesn't exist
 	fi
 
 	# Following SVNURL should be expanded on checkout
-	SVNURL='$HeadURL: http://svn.sj.broadcom.com/svn/wlansvn/proj/tags/DHD45RC8403/DHD45RC8403_REL_1_363_6/src/include/epivers.sh $'
+	SVNURL='$HeadURL: http://svn.sj.broadcom.com/svn/wlansvn/proj/tags/DHD/DHD_REL_1_363_45_84015/src/include/epivers.sh $'
 
 	# .gclient_info is created by gclient checkout/sync steps
 	# and contains "DEPS='<deps-url1> <deps-url2> ..." entry

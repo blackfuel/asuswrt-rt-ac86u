@@ -90,6 +90,11 @@ struct pdc_ring_alloc {
 	u32		size;    /* size in bytes */
 };
 
+struct desc_cnt {
+	u16 rx;
+	u16 tx;
+};
+
 /* spu dma state structure */
 struct pdc_state {
 
@@ -130,7 +135,7 @@ struct pdc_state {
 
 	u32  last_rx_curr; /* Saved value of current hardware rx descriptor index. */
 	void *rxp_ctx[PDC_RING_ENTRIES]; /* opaque context associated with frame */
-	u32  rxin_numd[PDC_RING_ENTRIES]; /* Number of rx descriptors associated with the message */
+	struct desc_cnt numd[PDC_RING_ENTRIES]; /* Number of rx and tx descriptors associated with the message */
 
 	struct list_head msg_list;
 	u32 msg_count;

@@ -4,7 +4,7 @@
  *
  * VHT support
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_vht.c 658899 2016-09-10 11:19:36Z $
+ * $Id: wlc_vht.c 675653 2016-12-16 14:27:14Z $
  */
 
 
@@ -1322,8 +1322,21 @@ wlc_write_vht_cap_ie(wlc_bsscfg_t *cfg, vht_cap_ie_t *cap_ie)
 	}
 
 	/* VHT capabilities should always be the max capabilities supported.
-	 * Any changes of BW/NSS should be nofitied by Operating Mode Notification as per spec
+	 * Any changes of BW/NSS should be nofitied by Operating Mode Notification(OMN) as per spec
+	 * If DYN160 is enabled, we advertise capability as 160Mhz 4x4 so that we change between
+	 * 160 Mhz 2x2 and 80Mhz 4x4 using OMN.
+	 * If DYN160 is inactive, capability is advertised as 160Mhz 2x2. When changed to 80Mhz,
+	 * we stick to 2x2.
 	 */
+#ifdef DYN160
+	if (!DYN160_ACTIVE(wlc->pub) && BSSCFG_STA(cfg)) {
+		rx_mcs_map = wlc_rateset_filter_mcsmap(rx_mcs_map,
+				wlc->stf->op_rxstreams, (WLC_VHT_FEATURES_MCS_GET(wlc->pub)));
+		tx_mcs_map = wlc_rateset_filter_mcsmap(tx_mcs_map,
+				wlc->stf->op_txstreams, (WLC_VHT_FEATURES_MCS_GET(wlc->pub)));
+	}
+#endif /* DYN160 */
+
 	htol16_ua_store(rx_mcs_map, (uint8*)&cap_ie->rx_mcs_map);
 	htol16_ua_store(tx_mcs_map, (uint8*)&cap_ie->tx_mcs_map);
 
@@ -2757,7 +2770,7 @@ wlc_frameaction_vht(wlc_vht_info_t *vhti, uint action_id, struct scb *scb,
 		wlc_vht_set_scb_opermode_enab(vhti, scb, TRUE);
 		wlc_vht_update_scb_oper_mode(vhti, scb, oper_mode);
 #ifdef WL_MU_TX
-		wlc_mutx_bw_policy_update(wlc->mutx, scb->bsscfg, FALSE);
+		wlc_mutx_bw_policy_update(wlc->mutx, FALSE);
 #endif
 		break;
 	case DOT11_VHT_ACTION_GID_MGMT:
@@ -3287,6 +3300,13 @@ wlc_vht_update_scb_state(wlc_vht_info_t *vhti, int band, struct scb *scb,
 		}
 	}
 
+	/* Have a copy of peer WDS actual MCS rate and NSS.
+	 * Will be used if AP is upgraded to max NSS
+	 */
+	if (SCB_LEGACY_WDS(scb)) {
+		scb->vhtcap_orig_mcsmap = vht_cap_ie->rx_mcs_map;
+	}
+
 	/* Merge incoming rate with MCS rate of this device and store
 		temporarily in new_rateset.mcs[]
 	*/
@@ -3699,6 +3719,12 @@ wlc_vht_get_tx_mcsmap(wlc_vht_info_t *vhti)
 	return vhti->vht_cap.tx_mcs_map;
 }
 #endif /* BCMDBG || BCMCONDITIONAL_LOGGING */
+
+uint16
+wlc_vht_get_rx_mcsmap(wlc_vht_info_t *vhti)
+{
+	return vhti->vht_cap.rx_mcs_map;
+}
 
 bool
 wlc_vht_get_scb_opermode_enab(wlc_vht_info_t *vhti, struct scb *scb)

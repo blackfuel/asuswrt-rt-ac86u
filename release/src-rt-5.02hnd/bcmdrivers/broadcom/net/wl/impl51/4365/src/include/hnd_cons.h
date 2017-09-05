@@ -1,7 +1,7 @@
 /*
  * Console support for RTE - for host use only.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: hnd_cons.h 527405 2015-01-18 00:14:42Z $
+ * $Id: hnd_cons.h 663140 2016-10-04 05:19:10Z $
  */
 #ifndef	_hnd_cons_h_
 #define	_hnd_cons_h_
@@ -34,15 +34,11 @@
 #define CBUF_LEN	(128)
 #endif /* RWL_DONGLE || UART_REFLECTOR */
 
-#if defined(BCMDBG)
-#define LOG_BUF_LEN	(16 * 1024)
-#elif defined(ATE_BUILD)
-#define LOG_BUF_LEN	(2 * 1024)
+#if defined(WLTEST) || defined(BCMDBG) || defined(ATE_BUILD)
+#define LOG_BUF_LEN (16 * 1024)		/* Internal builds */
 #else
-#define LOG_BUF_LEN	1024
-#endif
-#undef LOG_BUF_LEN
-#define LOG_BUF_LEN (16 * 1024)
+#define LOG_BUF_LEN (8 * 1024)		/* External builds */
+#endif /* WLTEST || BCMDBG || ATE_BUILD */
 
 #ifdef BOOTLOADER_CONSOLE_OUTPUT
 #undef RWL_MAX_DATA_LEN

@@ -1,7 +1,7 @@
 /*
  * ACPHY RadarDetect module implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -339,54 +339,54 @@ WLBANDINITFN(phy_ac_radar_init)(phy_type_radar_ctx_t *ctx, bool on)
 	st = phy_radar_get_st(ri);
 	ASSERT(st != NULL);
 
-	if (on) {
-		if (CHSPEC_CHANNEL(pi->radio_chanspec) <= WL_THRESHOLD_LO_BAND) {
-			if (CHSPEC_IS20(pi->radio_chanspec)) {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_20_lo;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_20_lo;
-			} else if (CHSPEC_IS40(pi->radio_chanspec)) {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_40_lo;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_40_lo;
-			} else if (CHSPEC_IS80(pi->radio_chanspec)) {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_80_lo;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_80_lo;
-			} else {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_160_lo;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_160_lo;
-			}
+	/* Update radar_args according to the chanspec */
+	if (CHSPEC_CHANNEL(pi->radio_chanspec) <= WL_THRESHOLD_LO_BAND) {
+		if (CHSPEC_IS20(pi->radio_chanspec)) {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_20_lo;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_20_lo;
+		} else if (CHSPEC_IS40(pi->radio_chanspec)) {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_40_lo;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_40_lo;
+		} else if (CHSPEC_IS80(pi->radio_chanspec)) {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_80_lo;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_80_lo;
 		} else {
-			if (CHSPEC_IS20(pi->radio_chanspec)) {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_20_hi;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_20_hi;
-			} else if (CHSPEC_IS40(pi->radio_chanspec)) {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_40_hi;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_40_hi;
-			} else if (CHSPEC_IS80(pi->radio_chanspec)) {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_80_hi;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_80_hi;
-			} else {
-				st->rparams.radar_args.thresh0 =
-					st->rparams.radar_thrs.thresh0_160_hi;
-				st->rparams.radar_args.thresh1 =
-					st->rparams.radar_thrs.thresh1_160_hi;
-			}
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_160_lo;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_160_lo;
 		}
+	} else {
+		if (CHSPEC_IS20(pi->radio_chanspec)) {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_20_hi;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_20_hi;
+		} else if (CHSPEC_IS40(pi->radio_chanspec)) {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_40_hi;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_40_hi;
+		} else if (CHSPEC_IS80(pi->radio_chanspec)) {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_80_hi;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_80_hi;
+		} else {
+			st->rparams.radar_args.thresh0 =
+				st->rparams.radar_thrs.thresh0_160_hi;
+			st->rparams.radar_args.thresh1 =
+				st->rparams.radar_thrs.thresh1_160_hi;
+		}
+	}
 
-
+	if (on) {
 		/* phy_utils_write_phyreg(pi, ACPHY_RadarBlankCtrl, */
 		/*   (st->rparams.radar_args.blank | (0x0000))); */
 		phy_utils_write_phyreg(pi, ACPHY_RadarThresh0(pi->pubpi.phy_rev),

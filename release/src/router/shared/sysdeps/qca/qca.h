@@ -30,9 +30,13 @@ extern const char STA_5G[];
 extern const char VPHY_2G[];
 extern const char VPHY_5G[];
 extern const char WSUP_DRV[];
+extern const char WSUP_DRV_60G[];
 extern const char WIF_5G2[];
 extern const char STA_5G2[];
 extern const char VPHY_5G2[];
+extern const char WIF_60G[];
+extern const char STA_60G[];
+extern const char VPHY_60G[];
 
 #define URE	"apcli0"
 
@@ -280,7 +284,7 @@ enum ASUS_IOCTL_SUBCMD {
 #define ETH1_MAC_OFFSET			0x5006
 #elif defined(RTCONFIG_SOC_IPQ8064)
 
-#if defined(BRTAC828) || defined(RTAC88S)
+#if defined(BRTAC828) || defined(RTAD7200) || defined(RTAC88S)
 #define ETH0_MAC_OFFSET			0x1006	/* 2G EEPROM */
 #define ETH1_MAC_OFFSET			0x5006	/* 5G EEPROM */
 #elif defined(RTAC88N)
@@ -339,7 +343,7 @@ enum ASUS_IOCTL_SUBCMD {
  * 2G: follow WAN
  * 5G: follow LAN
  */
-#if defined(BRTAC828) || defined(RTAC88S)
+#if defined(BRTAC828) || defined(RTAD7200) || defined(RTAC88S)
 #define OFFSET_MAC_ADDR_2G		(MTD_FACTORY_BASE_ADDRESS + ETH0_MAC_OFFSET)
 #define OFFSET_MAC_ADDR			(MTD_FACTORY_BASE_ADDRESS + ETH1_MAC_OFFSET)
 #elif defined(RTAC88N)
@@ -384,8 +388,8 @@ enum ASUS_IOCTL_SUBCMD {
 #define OFFSET_DEF_GROUPID		(MTD_FACTORY_BASE_ADDRESS + 0x0D1B0)	// CFGSYNC_GROUPID_LEN (32 bytes)
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200) /* for Lyra */
-#define OFFSET_DISABLE_GUI		(MTD_FACTORY_BASE_ADDRESS + 0x0D1F0)	// 1 byte
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) /* for Lyra */
+#define OFFSET_DISABLE_WIFI_DRV		(MTD_FACTORY_BASE_ADDRESS + 0x0D1F2)	// 1 byte
 #endif
 
 #define OFFSET_DEV_FLAGS		(MTD_FACTORY_BASE_ADDRESS + 0x0ffa0)	//device dependent flags
@@ -465,7 +469,14 @@ typedef struct {
 #define BD_2G_HW_DIR	"hw.1"
 #define BD_5G_CHIP_DIR	"IPQ4019"
 #define BD_5G_HW_DIR	"hw.1"
-#elif defined(MAPAC1300)
+#elif defined(RTAC82U)
+#define BD_2G_PREFIX	"boardData_1_0_IPQ4019_DK04_2G"
+#define BD_5G_PREFIX	"boardData_QCA9984_CUS238_5G_v1_003"
+#define BD_2G_CHIP_DIR	"IPQ4019"
+#define BD_2G_HW_DIR	"hw.1"
+#define BD_5G_CHIP_DIR	"QCA9984"
+#define BD_5G_HW_DIR	"hw.1"
+#elif defined(MAPAC1300) || defined(VRZAC1300)
 #define BD_2G_PREFIX	"boardData_1_0_IPQ4019_YA131_wifi0"
 #define BD_5G_PREFIX	"boardData_1_0_IPQ4019_YA131_wifi1"
 #define BD_2G_CHIP_DIR	"IPQ4019"

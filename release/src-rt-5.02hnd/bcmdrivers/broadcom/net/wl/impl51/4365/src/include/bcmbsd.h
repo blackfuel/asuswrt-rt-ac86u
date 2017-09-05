@@ -2,7 +2,7 @@
  * NetBSD  2.0 OS Common defines
  * Private between the OSL and BSD per-port code
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

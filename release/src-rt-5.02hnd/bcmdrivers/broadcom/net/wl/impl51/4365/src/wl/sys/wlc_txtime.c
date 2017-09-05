@@ -4,7 +4,7 @@
  * Functionality relating to calculating the airtime
  * of frames, frame components, and frame exchanges.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

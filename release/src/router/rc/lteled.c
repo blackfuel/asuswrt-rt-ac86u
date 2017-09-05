@@ -110,11 +110,7 @@ int lteled_main(int argc, char **argv)
 				}
 			}
 			else if(!is_wan_connect(usb_unit)
-#ifdef RT4GAC68U
-					|| (percent = nvram_get_int(strcat_r(prefix2, "act_signal", tmp2))*20) < 0
-#else
-					|| (percent = Gobi_SignalQuality_Percent(Gobi_SignalQuality_Int(modem_unit))) < 0
-#endif
+					|| (percent = nvram_get_int(strcat_r(prefix2, "act_signal", tmp2))*25) < 0
 					)
 			{ //Not connected
 				if(state != STATE_CONNECTING)
@@ -143,14 +139,14 @@ int lteled_main(int argc, char **argv)
 				if (state != STATE_CONNECTED)
 				{
 					state = STATE_CONNECTED;
-#ifndef RT4GAC68U
+#ifdef RT4GAC55U
 					led_control(LED_LTE, LED_ON);
 #endif
 				}
 				if ((percent/25) != (old_percent/25))
 				{
-					led_control(LED_SIG1, (percent > 25)? LED_ON : LED_OFF);
-					led_control(LED_SIG2, (percent > 50)? LED_ON : LED_OFF);
+					led_control(LED_SIG1, (percent > 0)? LED_ON : LED_OFF);
+					led_control(LED_SIG2, (percent > 25)? LED_ON : LED_OFF);
 					led_control(LED_SIG3, (percent > 75)? LED_ON : LED_OFF);
 					old_percent = percent;
 				}
@@ -158,15 +154,6 @@ int lteled_main(int argc, char **argv)
 
 			if (old_state != state)
 				cprintf("%s: state(%d --> %d)\n", __func__, old_state, state);
-
-#ifndef RT4GAC68U
-			int temp = (percent<=0)? 0: (percent>100)? 4: (percent -1)/25 + 1;
-			if (modem_signal != temp)
-			{
-				modem_signal = temp;
-				nvram_set_int(strcat_r(prefix2, "act_signal", tmp2), modem_signal);
-			}
-#endif
 
 			if(NEED_LONG_PERIOD)
 			{

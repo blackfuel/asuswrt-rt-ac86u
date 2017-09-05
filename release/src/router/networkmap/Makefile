@@ -42,12 +42,25 @@ LDFLAGS += -L$(TOP)/libqcsapi_client -lqcsapi_client
 endif
 endif
 
+ifeq ($(RTCONFIG_QSR10G),y)
+CFLAGS += -I$(TOP)/libqcsapi_client_10g
+LDFLAGS += -L$(TOP)/libqcsapi_client_10g -lqcsapi_client
+endif
+
+ifeq ($(RTCONFIG_LANTIQ),y)
+LDFLAGS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi
+endif
+
 ifeq ($(RTCONFIG_BWDPI),y)
 CFLAGS += -I$(TOP)/sqlite -I$(TOP)/httpd
 CFLAGS += -I$(TOP)/bwdpi_source/src/tdts_udb_sample
 CFLAGS += -I$(TOP)/bwdpi_source/src/tdts_udb_sample/linux
 CFLAGS += -I$(TOP)/bwdpi_source/include
 CFLAGS += -I$(TOP)/bwdpi_source/asus_include
+endif
+ifeq ($(RTCONFIG_BWDPI_DEP),y)
+CFLAGS += -I$(TOP)/httpd
+CFLAGS += -I$(TOP)/bwdpi_dep/bwdpi
 endif
 
 LDFLAGS += -lm -L$(TOP)/shared -lshared -L$(TOP)/nvram${BCMEX} -lnvram -L$(TOP)/json-c/.libs -ljson-c
@@ -59,14 +72,26 @@ endif
 ifeq ($(RTCONFIG_BWDPI),y)
 LDFLAGS += -L$(TOP)/bwdpi_source/asus -lbwdpi
 endif
+ifeq ($(RTCONFIG_BWDPI_DEP),y)
+LDFLAGS += -L$(TOP)/bwdpi_dep/bwdpi -lbwdpi
+endif
 
 ifeq ($(RTCONFIG_NOTIFICATION_CENTER),y)
 CFLAGS  += -I$(TOP)/sqlite
 CFLAGS  += -I$(TOP)/nt_center/lib
 CFLAGS  += -DASUSWRT_SDK
-LDFLAGS += -L$(TOP)/nt_center/lib/ -lnt
+LDFLAGS += -L$(TOP)/nt_center/lib/ -lnt -lm
 LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3
 LDFLAGS += -lpthread
+endif
+
+ifeq ($(RTCONFIG_PERMISSION_MANAGEMENT),y)
+CFLAGS += -I$(TOP)/sqlCipher
+CFLAGS += -I$(TOP)/PMS_DBapis
+CFLAGS += -I$(TOP)/openssl/include/openssl
+LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
+LDFLAGS += -L $(TOP)/sqlCipher/.libs -lsqlcipher
+LDFLAGS += -L$(TOP)/PMS_DBapis -lpms_sql
 endif
 
 include $(SRCBASE)/.config
@@ -78,23 +103,18 @@ ifeq ($(HND_ROUTER),y)
 CFLAGS += -DHND_ROUTER
 endif
 
-ifeq ($(RTCONFIG_QSR10G),y)
-CFLAGS += -I$(TOP)/libqcsapi_client_10g
-LIBS += -L$(TOP)/libqcsapi_client_10g -lqcsapi_client
-endif
-
 ifneq ($(AC2900),y)
 ifeq ($(wildcard $(SRCBASE)/router/networkmap/*.c),)
 all: 
-	-cp -f prebuilt/networkmap networkmap
-	-cp -f prebuilt/asusdiscovery asusdiscovery
+	-cp -f prebuild/networkmap networkmap
+	-cp -f prebuild/asusdiscovery asusdiscovery
 else
 all: $(EXEC) asusdiscovery arpstorm
 endif
 else
 ifeq ($(wildcard $(SRCBASE)/router/networkmap/*.c),)
 all: 
-	-cp -f prebuilt/networkmap networkmap
+	-cp -f prebuild/networkmap networkmap
 else
 all: $(EXEC)
 endif

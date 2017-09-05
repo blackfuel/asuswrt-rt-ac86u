@@ -4,7 +4,7 @@
  * Stub functions used for dispatching RPC call
  * Broadcom 802.11bang Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_high_stubs.c 633077 2016-04-21 09:59:45Z $
+ * $Id: wlc_high_stubs.c 682548 2017-02-02 09:15:49Z $
  */
 
 /**
@@ -4987,6 +4987,23 @@ wlc_update_txppr_offset(wlc_info_t *wlc, ppr_t *txppr)
 		MFREE(wlc->osh, tbuf, slen);
 	}
 }
+
+#ifdef AP
+void
+wlc_tx_fifo_sync_bcmc_reset(wlc_info_t *wlc)
+{
+	bcm_xdr_buf_t b;
+	rpc_buf_t *rpc_buf;
+	int err;
+	rpc_info_t *rpc = wlc->rpc;
+
+	rpc_buf = wlc_rpc_buf_alloc(rpc, &b, 0, WLRPC_WLC_BMAC_TX_FIFO_SYNC_BCMC_RESET_ID);
+	ASSERT(rpc_buf != NULL);
+
+	err = wlc_rpc_call(rpc, rpc_buf);
+	ASSERT(!err);
+}
+#endif /* AP */
 
 #ifdef WL_MULTIQUEUE
 void

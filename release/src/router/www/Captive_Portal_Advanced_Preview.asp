@@ -7,7 +7,7 @@
 <meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
 <meta HTTP-EQUIV='Pragma' CONTENT='no-cache'>
 <meta HTTP-EQUIV='Expires' CONTENT='-1'>
-<title>Splash Page</title><!--untranslated-->
+<title><#FreeWiFi_title#></title>
 <script type="text/javascript" src="js/jquery.js"></script>
 <style>
 .component_container {
@@ -539,3 +539,4 @@ function transformHEXtoRGB(_hex) {
 <div id='component_background' class='component_background'></div>
 </body>
 </html>
+

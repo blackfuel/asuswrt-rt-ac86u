@@ -46,8 +46,11 @@ if(dualWAN_support && ( wans_dualwan.search("wan") >= 0 || wans_dualwan.search("
 		case "USB":
 			if(based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U")
 				location.href = "Advanced_MobileBroadband_Content.asp";
-			else
-				location.href = "Advanced_Modem_Content.asp";
+			else{
+				if(based_modelid != "BRT-AC828"){
+					location.href = "Advanced_Modem_Content.asp";
+				}
+			}
 			break;
 		default:
 			break;	
@@ -77,6 +80,10 @@ function initial(){
 			document.wanUnit_form.wan_unit.value = 0;
 			document.wanUnit_form.target = "";
 			document.wanUnit_form.submit();
+		}
+	}else{
+		if('<% nvram_get("wan_unit"); %>' == usb_index){
+			change_notusb_unit();
 		}
 	}
 	
@@ -110,6 +117,14 @@ function initial(){
 		showhide("dot1q_setting",1);
 	else
 		showhide("dot1q_setting",0);
+}
+
+function change_notusb_unit(){
+	document.wanUnit_form.wan_unit.value = (usb_index+1)%2;
+	FormActions("apply.cgi", "change_wan_unit", "", "");
+	document.wanUnit_form.target = "";
+	document.wanUnit_form.submit();
+	location.herf = document.wanUnit_form.current_page.value;
 }
 
 var dsltmp_transmode = "<% nvram_get("dsltmp_transmode"); %>";

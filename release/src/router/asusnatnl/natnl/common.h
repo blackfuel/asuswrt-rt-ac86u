@@ -105,6 +105,8 @@ struct natnl_data {
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
+#define NATNL_IM_MAX_LEN 13000
+
 #ifdef SOLARIS
 /* Copied from sys/time.h on linux system since solaris system that I tried to
  * compile on didn't have timeradd macro. */

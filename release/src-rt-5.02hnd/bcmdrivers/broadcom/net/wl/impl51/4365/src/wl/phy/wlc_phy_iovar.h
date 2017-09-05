@@ -5,7 +5,7 @@
  * to enums defined in wlc_phy_hal.h and ultimately calls wlc_phy_iovar_dispatch() in
  * the wlc_phy_hal.h
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

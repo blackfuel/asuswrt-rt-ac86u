@@ -2,7 +2,7 @@
  * PHY and RADIO specific portion of Broadcom BCM43XX 802.11abgn
  * Networking Device Driver.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_phy_ac.c 669851 2016-11-11 10:50:45Z $
+ * $Id: wlc_phy_ac.c 680493 2017-01-20 05:44:09Z $
  */
 
 #include <wlc_cfg.h>
@@ -7089,6 +7089,8 @@ BCMATTACHFN(wlc_phy_std_params_attach_acphy)(phy_info_t *pi)
 
 	uint8 i, core, core_num;
 	uint8 gain_len[] = {2, 6, 7, 10, 8, 8, 11}; /* elna, lna1, lna2, mix, bq0, bq1, dvga */
+	char *val = NULL;
+	uint lesidisab;
 
 	if (TINY_RADIO(pi)) {
 		gain_len[3] = 12; /* tia */
@@ -7302,6 +7304,11 @@ BCMATTACHFN(wlc_phy_std_params_attach_acphy)(phy_info_t *pi)
 	pi_ac->lesi = 0;
 	pi_ac->tia_idx_max_eq_init = FALSE;
 
+	if ((val = nvram_get("lesidisab")) != NULL)
+		lesidisab = bcm_atoi(val);
+	else
+		lesidisab = 0;
+
 	/* gainctrl/tia (tiny) related */
 	if (ACMAJORREV_32(pi->pubpi.phy_rev) || ACMAJORREV_33(pi->pubpi.phy_rev)) {
 		pi_ac->tia_idx_max_eq_init = TRUE;
@@ -7311,14 +7318,19 @@ BCMATTACHFN(wlc_phy_std_params_attach_acphy)(phy_info_t *pi)
 			/* channel smoothing is not supported in 80p80 */
 			if (!PHY_AS_80P80(pi, pi->radio_chanspec))
 				pi_ac->acphy_enable_smth = 1;
-
-			/* chippkg bit-2: LESI 0: Enable ; 1: Disable */
-			if ((pi->sh->chippkg & 0x4) == 0)
-				pi_ac->lesi = 1;
+			if (lesidisab) {
+				pi_ac->lesi = 0;
+				pi->lesi_mode = 1;
+			} else {
+				pi->lesi_mode = 0;
+				/* chippkg bit-2: LESI 0: Enable ; 1: Disable */
+				if ((pi->sh->chippkg & 0x4) == 0)
+					pi_ac->lesi = 1;
 #ifdef WLSTB
-			else
-				pi_ac->acphy_enable_smth = SMTH_DISABLE;
+				else
+					pi_ac->acphy_enable_smth = SMTH_DISABLE;
 #endif
+			}
 		}
 	}
 }

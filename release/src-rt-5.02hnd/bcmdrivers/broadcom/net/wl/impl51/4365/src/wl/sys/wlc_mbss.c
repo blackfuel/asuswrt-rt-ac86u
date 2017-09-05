@@ -1,7 +1,7 @@
 /*
  * MBSS module
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -643,8 +643,7 @@ mbss_bsscfg_up(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
 	 */
 	wlc_shm_ssid_upd(wlc, cfg);
 
-	cfg->bcmc_fid = INVALIDFID;
-	cfg->bcmc_fid_shm = INVALIDFID;
+	wlc_mbss_bcmc_reset(wlc, cfg);
 
 	cfg->flags &= ~(WLC_BSSCFG_SW_BCN | WLC_BSSCFG_SW_PRB);
 	cfg->flags &= ~(WLC_BSSCFG_HW_BCN | WLC_BSSCFG_HW_PRB);
@@ -655,6 +654,59 @@ mbss_bsscfg_up(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
 	}
 
 	return result;
+}
+
+/**
+ * This function is used to reinitialize the bcmc firmware/ucode interface for a certain bsscfg.
+ * Only to be called when there is no bcmc traffic pending.
+ *
+ * For MBSS, for each bss, every DTIM the last transmitted bcmc fid is set in SHM.
+ * Ucode will only transmit up to and including this fid even if more bcmc packets are added later.
+ * When there is no more bcmc traffic pending for a certain bss:
+ * 1) bcmc_fid and bcmc_fid_shm are set to INVALIDFID, in case last traffic was flushed shm needs to
+ *    be updated as well.
+ * 2) mc_fifo_pkts is set to 0.
+ * 3) a ps off transition can be marked as complete so that the PS bit for the bcmc scb of that bss
+ *    is properly set.
+ */
+void
+wlc_mbss_bcmc_reset(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
+{
+	uint fid_addr = 0;
+	bss_mbss_info_t *bmi;
+
+	cfg->bcmc_fid = INVALIDFID;
+	cfg->bcmc_fid_shm = INVALIDFID;
+
+	ASSERT(MBSS_SUPPORT(wlc->pub));
+
+	bmi = BSS_MBSS_INFO(wlc->mbss, cfg);
+	if (bmi == NULL) {
+		return;
+	}
+
+	WL_MBSS(("%s: resetting fids %d, %d; mc pkts %d\n", __FUNCTION__, cfg->bcmc_fid,
+		cfg->bcmc_fid_shm, bmi->mc_fifo_pkts));
+
+	bmi->mc_fifo_pkts = 0;
+
+	if (wlc->pub->hw_up) {
+		/* Let's also update the shm */
+		if (MBSS_ENAB16(wlc->pub)) {
+			fid_addr = SHM_MBSS_BC_FID_ADDR16(bmi->_ucidx);
+		}
+#ifdef WLC_LOW
+		else {
+			fid_addr = SHM_MBSS_BC_FID_ADDR(bmi->_ucidx);
+		}
+#endif /* WLC_LOW */
+		if (fid_addr) {
+			wlc_write_shm((wlc), fid_addr, INVALIDFID);
+		}
+	}
+	if (cfg->flags & WLC_BSSCFG_PS_OFF_TRANS) {
+		wlc_apps_bss_ps_off_done(wlc, cfg);
+	}
 }
 
 int
@@ -1197,6 +1249,7 @@ wlc_ap_mbss16_write_beacon(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
 
 		start = wlc->shm_bcn0_tpl_base + (ucidx * bcn_tmpl_len);
 		if (D11REV_GE(wlc->pub->corerev, 40)) {
+			uint8 offset = wlc_template_plcp_offset(wlc, wlc->bcn_rspec);
 
 			/* Get pointer TX header and build the phy header */
 			pt = (uint8 *) PKTDATA(wlc->osh, pkt);
@@ -1218,21 +1271,9 @@ wlc_ap_mbss16_write_beacon(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
 			txh = (d11actxh_t *) pt;
 			rate_info = WLC_TXD_RATE_INFO_GET(txh, wlc->pub->corerev);
 
-			if (D11REV_GE(wlc->pub->corerev, 64)) {
-				/* put plcp from offset 0 */
-				bcopy(rate_info[0].plcp, &phy_hdr[D11AC_PHY_BEACON_PLCP_OFFSET],
-					D11_PHY_HDR_LEN);
-			} else {
-				/* PLCP starts at offset 3 for 5 GHz and offset 6 for 2.4 GHz */
-				if (BAND_2G(wlc->band->bandtype)) {
-					bcopy(rate_info[0].plcp,
-					      &phy_hdr[D11AC_PHY_CCK_PLCP_OFFSET], D11_PHY_HDR_LEN);
-				} else {
-					bcopy(rate_info[0].plcp,
-					      &phy_hdr[D11AC_PHY_OFDM_PLCP_OFFSET],
-						D11_PHY_HDR_LEN);
-				}
-			}
+			bcopy(rate_info[0].plcp,
+			      &phy_hdr[offset], D11_PHY_HDR_LEN);
+
 			/* Now get the MAC frame */
 			pt += D11AC_TXH_LEN;
 			len -= D11AC_TXH_LEN;

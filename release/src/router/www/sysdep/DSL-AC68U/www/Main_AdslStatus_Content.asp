@@ -85,6 +85,10 @@ var status_isVDSLmode = "<% nvram_get("dsllog_xdslmode"); %>";
 var adsl_boottime = boottime - adsl_timestamp;
 var dsl_type = "<% nvram_get("dsllog_adsltype"); %>".replace("_", " ");
 
+var SystemVendorID_orig = "<% nvram_get("dsllog_sysvid"); %>";
+var SystemVendorModelID_orig = "<% nvram_get("dsllog_sysvmid"); %>";
+var ModemVendorID_orig = "<% nvram_get("dsllog_modemvid"); %>";
+
 var log_Opmode;
 var log_AdslType;
 var log_SNRMarginDown;
@@ -266,6 +270,9 @@ function initial(){
 	display_vdsl_band_status();
 	showadslbootTime();
 	document.getElementById("div_AdslType").innerHTML = dsl_type;
+	document.getElementById("tr_SystemVendorID").style.display = (SystemVendorID_orig != "")? "":"none";
+	document.getElementById("tr_SystemVendorModelID").style.display = (SystemVendorModelID_orig != "")? "":"none";
+	document.getElementById("tr_ModemVendorID").style.display = (ModemVendorID_orig != "")? "":"none";
 	setTimeout("update_log();", 5000);
 }
 
@@ -392,6 +399,24 @@ function showadslbootTime(){
 								<th>Current Profile</th>
 								<td colspan="2">
 									<div id="div_VDSL_CurrentProfile"><% nvram_get("dsllog_vdslcurrentprofile"); %></div>
+								</td>
+							</tr>
+							<tr id="tr_SystemVendorID" style="display:none;">
+								<th>System Vendor ID</th>
+								<td colspan="2">
+									<div><% nvram_get("dsllog_sysvid"); %></div>
+								</td>
+							</tr>
+							<tr id="tr_SystemVendorModelID" style="display:none;">
+								<th>System Vendor Model ID</th>
+								<td colspan="2">
+									<div><% nvram_get("dsllog_sysvmid"); %></div>
+								</td>
+							</tr>
+							<tr id="tr_ModemVendorID" style="display:none;">
+								<th>Modem Vendor ID</th>
+								<td colspan="2">
+									<div><% nvram_get("dsllog_modemvid"); %></div>
 								</td>
 							</tr>
 						</table>

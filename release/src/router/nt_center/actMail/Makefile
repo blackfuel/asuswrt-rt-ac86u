@@ -15,13 +15,13 @@ CFLAGS += -DNON_P_THREAD
 endif
 
 LDFLAGS = -L$(TOP)/nt_center/lib/ -lnt
-LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3
+LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3 -lm
 LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
 LIBS = -lpthread -lgcc_s
 
 ifeq ($(wildcard $(SRCBASE)/router/nt_center/actMail/*.c),)
 all: 
-	-cp -f prebuilt/nt_actMail nt_actMail
+	-cp -f prebuild/nt_actMail nt_actMail
 else
 all: nt_actMail
 endif

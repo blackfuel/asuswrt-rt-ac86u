@@ -1613,6 +1613,14 @@ if [ "$BRCM_63138" = "y" -o "$BRCM_63148" = "y" -o "$BRCM_4908" = "y" -o "$BRCM_
   fi
 fi
 
+if [ "$BRCM_4908" = "y" ]; then
+  if [ "$BRCM_CPU_FREQ_PWRSAVE" != "y" ]; then
+    bool 'Automated CPUIDLE clk divider' BRCM_CPUIDLE_CLK_DIVIDER
+  else
+    comment 'Automated CPUIDLE clk divider'
+  fi
+fi
+
 if [ "$BRCM_63268" = "y" -o "$BRCM_63381" = "y"  -o "$BRCM_63138" = "y" ]; then
   bool 'DDR Self-Refresh Power Saving' BRCM_DDR_SELF_REFRESH_PWRSAVE
 fi

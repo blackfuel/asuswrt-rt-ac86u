@@ -55,8 +55,10 @@ function initial(){
 	}
 
 	show_menu();
-
 	regen_band(document.form.wl_unit);
+	if(lantiq_support){
+		checkWLReady();
+	}	
 
 	if(!band5g_support)
 		document.getElementById("wl_unit_field").style.display = "none";
@@ -202,6 +204,11 @@ function addRow(obj, upper){
 }
 
 function applyRule(){
+	if(lantiq_support && wave_ready != 1){
+		alert("Please wait a minute for wireless ready");
+		return false;
+	}
+	
 	var rule_num = document.getElementById('wl_maclist_x_table').rows.length;
 	var item_num = document.getElementById('wl_maclist_x_table').rows[0].cells.length;
 	var tmp_value = "";
@@ -316,6 +323,25 @@ function enable_macMode(){
 		document.form.wl_maclist_x.disabled = true;
 	}	
 }
+
+function checkWLReady(){
+	$.ajax({
+	    url: '/ajax_wl_ready.asp',
+	    dataType: 'script',	
+	    error: function(xhr) {
+			setTimeout("checkWLReady();", 1000);
+	    },
+	    success: function(response){
+	    	if(wave_ready != 1){
+	    		$("#lantiq_ready").show();
+	    		setTimeout("checkWLReady();", 1000);
+	    	}
+	    	else{
+	    		$("#lantiq_ready").hide();
+	    	}	
+	    }
+  	});
+}
 </script>
 </head>
 
@@ -358,6 +384,7 @@ function enable_macMode(){
 					<div class="formfonttitle"><#menu5_1#> - <#menu5_1_4#></div>
 					<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
 					<div class="formfontdesc"><#DeviceSecurity11a_display1_sectiondesc#></div>
+					<div id="lantiq_ready" style="display:none;color:#FC0;margin-left:5px;font-size:13px;">Wireless is setting...</div>
 					<table id="MainTable1" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
 						<thead>
 						  <tr>

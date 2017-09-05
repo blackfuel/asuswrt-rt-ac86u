@@ -7,7 +7,7 @@
  *
  * FILE-CSTYLED
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -339,7 +339,7 @@ CONST d11regs_list_t MACLISTDATA(d11regsx64)[] = {
 	{D11REG_TYPE_IHR32, 0x154, 0, 0, 16},
 	{D11REG_TYPE_IHR32, 0x1D0, 0, 0, 64},
 	{D11REG_TYPE_IHR32, 0x158, 0, 0, 16},
-	{D11REG_TYPE_SCRX, 0, 0, 1, 32},
+	{D11REG_TYPE_SCRX, 0, 0, 1, 48},
 	{D11REG_TYPE_IHRX16, 0x64a, 0x55, 2, 0},
 	{D11REG_TYPE_IHRX16, 0x64c, 0x55, 2, 0},
 	{D11REG_TYPE_IHR32, 0x0, 0x00055540, 4, 0},
@@ -371,7 +371,7 @@ CONST d11regs_list_t MACLISTDATA(d11regsx65)[] = {
 	{D11REG_TYPE_IHR32, 0x154, 0, 0, 16},
 	{D11REG_TYPE_IHR32, 0x1D0, 0, 0, 64},
 	{D11REG_TYPE_IHR32, 0x158, 0, 0, 16},
-	{D11REG_TYPE_SCRX, 0, 0, 1, 32},
+	{D11REG_TYPE_SCRX, 0, 0, 1, 48},
 	{D11REG_TYPE_IHRX16, 0x64a, 0x55, 2, 0},
 	{D11REG_TYPE_IHRX16, 0x64c, 0x55, 2, 0},
 	{D11REG_TYPE_IHR32, 0x0, 0x00055540, 4, 0},

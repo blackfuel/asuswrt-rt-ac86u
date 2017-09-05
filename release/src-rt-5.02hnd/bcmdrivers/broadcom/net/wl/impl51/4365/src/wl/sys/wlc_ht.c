@@ -2,7 +2,7 @@
  * Common (OS-independent) portion of
  * Broadcom 802.11 Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_ht.c 642811 2016-06-10 08:57:15Z $
+ * $Id: wlc_ht.c 675602 2016-12-16 09:37:29Z $
  */
 
 /** 802.11n (High Throughput) */
@@ -3742,7 +3742,9 @@ wlc_ht_stbc_tx_set(wlc_ht_info_t *hti, int32 int_val)
 void
 wlc_ht_checkadd_rifs_permitted(wlc_ht_info_t *hti, int8 n_cfg, uint8* byte1)
 {
-	if (wlc_ht_get_rifs_advert(hti) &&
+	wlc_info_t* wlc = WLC_HT_INFO_PRIV(hti)->wlc;
+	/* A VHT AP shall set the RIFS Mode field in the HT Operation element to 0. */
+	if (!VHT_ENAB(wlc->pub) && wlc_ht_get_rifs_advert(hti) &&
 		(n_cfg != WLC_N_PROTECTION_MIXEDMODE)) {
 		*byte1 |= HT_RIFS_PERMITTED;
 	}

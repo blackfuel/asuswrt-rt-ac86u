@@ -1,3 +1,6 @@
+#ifndef _USB_INFO_H_
+#define _USB_INFO_H_
+
 #include <linux/version.h>
 #include <rtconfig.h>
 
@@ -35,7 +38,7 @@
 #define SYS_BLOCK "/sys/block"
 #define SYS_TTY "/sys/class/tty"
 #define SYS_NET "/sys/class/net"
-#ifndef HND_ROUTER
+#if !defined(HND_ROUTER) && !defined(RTCONFIG_LANTIQ)
 #define SYS_USB "/sys/class/usb"
 #else
 #define SYS_USB "/sys/class/usbmisc"
@@ -137,7 +140,7 @@ extern int isStorageDevice(const char *device_name);
 #if defined(RTCONFIG_M2_SSD)
 extern int isM2SSDDevice(const char *device_name);
 #else
-static inline int isM2SSDDevice(const char *device_name) { return 0; }
+static inline int isM2SSDDevice(__attribute__ ((unused)) const char *device_name) { return 0; }
 #endif
 #ifdef BCM_MMC
 extern int isMMCDevice(const char *device_name);
@@ -148,3 +151,5 @@ extern char *find_sg_of_device(const char *device_name, char *buf, const int buf
 #ifdef RTCONFIG_INTERNAL_GOBI
 extern char *get_gobi_portpath();
 #endif
+
+#endif	/* !_USB_INFO_H_ */

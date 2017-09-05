@@ -1,7 +1,7 @@
 /*
  * Implementation of wlc_key operations
  * Copyright (c) 2012-2013 Broadcom Corporation. All rights reserved.
- * $Id: km_key.c 556100 2015-05-12 17:38:50Z $
+ * $Id: km_key.c 678292 2017-01-09 02:10:56Z $
  */
 
 #include "km_key_pvt.h"
@@ -557,6 +557,10 @@ wlc_key_rx_mpdu(wlc_key_t *key, void *pkt, d11rxhdr_t *rxh)
 
 	} else if (rxh->RxStatus1 & RXS_DECERR) {
 		err = BCME_DECERR;
+		if (key->info.algo == CRYPTO_ALGO_TKIP &&
+			body_len <= (DOT11_IV_TKIP_LEN + TKIP_MIC_SIZE + DOT11_ICV_LEN)) {
+			hwdec = FALSE;
+		}
 	}
 
 	if (err == BCME_OK || err == BCME_DECERR) {

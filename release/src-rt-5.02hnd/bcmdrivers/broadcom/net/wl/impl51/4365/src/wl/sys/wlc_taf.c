@@ -2,7 +2,7 @@
  *
  *	This file implements the WL driver infrastructure for the TAF module.
  *
- *      Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ *      Broadcom Proprietary and Confidential. Copyright (C) 2017,
  *      All Rights Reserved.
  *      
  *      This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -2392,6 +2392,7 @@ BCMATTACHFN(wlc_taf_method_attach)(wlc_taf_info_t *taf_info, taf_scheduler_kind 
 			break;
 
 		default:
+			MFREE(taf_info->wlc->pub->osh, method, sizeof(*method));
 			return NULL;
 	}
 

@@ -2,7 +2,7 @@
  * Misc utility routines for accessing chip-specific features
  * of the SiliconBackplane-based Broadcom chips.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -7512,6 +7512,17 @@ BCMINITFN(si_otp_fabid)(si_t *sih, uint16 *fabid, bool rw)
 		mask = 0x3c;
 		shift = 2;
 		break;
+	case BCM4365_CHIP_ID:
+	case BCM4366_CHIP_ID:
+	case BCM43664_CHIP_ID:
+	case BCM43666_CHIP_ID:
+	/* Bit locations 64-67 */
+		if (sih->chiprev >= 4) {
+			offset = 4;
+			mask = 0x0f;
+			shift = 0;
+			}
+		break;
 	default:
 		error = BCME_EPERM;
 		return error;
@@ -7542,6 +7553,10 @@ uint16 BCMATTACHFN(si_fabid)(si_t *sih)
 		case BCM4329_CHIP_ID:
 		case BCM43362_CHIP_ID:
 		case BCM5356_CHIP_ID:
+		case BCM4365_CHIP_ID:
+		case BCM4366_CHIP_ID:
+		case BCM43664_CHIP_ID:
+		case BCM43666_CHIP_ID:
 			if (si_otp_fabid(sih, &fabid, TRUE) != BCME_OK)
 			{
 				SI_ERROR(("si_fabid: reading fabid from otp failed.\n"));

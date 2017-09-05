@@ -16,10 +16,6 @@
 		<script>
 			if(location.hash != "")	location.href = "QIS_wizard.htm";
 			
-			document.querySelector("meta[name=viewport]").setAttribute(
-				'content', 'width=' + verge.viewportW() + ', target-densitydpi=device-dpi, initial-scale=' + (0.5*verge.viewportW())/375 + ', maximum-scale=1, user-scalable=no'
-			);
-
 			String.prototype.repeat = function(times) {
 			   return (new Array(times + 1)).join(this);
 			};
@@ -31,7 +27,12 @@
 				}
 				return newstring;
 			};
-					
+			
+			jQuery.fn.showTextHint = function(hintStr){
+				this.parent().children().remove(".hint");
+				$("<div class='hint'>" + hintStr + "</div>").appendTo(this.parent());
+			}
+
 			var qisOriginData = {
 				/* user */
 				"http_username": '<% nvram_get("http_username"); %>',
@@ -137,55 +138,16 @@
 				"w_Setting": '1',
 				"qis_Setting": '1'
 			}
-			
+
 			var forceChangePW = ('<% check_pw(); %>' == '1') ? true : false;
 			var wanType = "";
 
-			function finishDetect(__wanType){
-				wanType = __wanType || wanType;
-				$(".detectBtn").html('<#CTL_next#>');
-			}
-
-			var detectWanType = function(handler){
-				wanType = "";
-
-				$.ajax({
-					url: '/detwan.cgi?action_mode=GetWanStatus',
-					dataType: 'json',
-					error: function(xhr){
-						// debug
-						// finishDetect();
-					},
-					
-					success: function(response){
-						if(response.state == 2 || response.state == 5){							
-							finishDetect("DHCP");
-						}
-						else if(response.state == 3 || response.state == 6){
-							finishDetect("PPPoE");
-						}
-						else if(response.state == 1 || response.state == 4 || response.state == 7){
-							finishDetect("Static");
-						}
-						else if(response.state == 0){
-							finishDetect("NoWan");
-							return false;
-						}
-						else{
-							setTimeout(detectWanType, 2000);
-							return false;
-						}
-
-						if(handler) handler.call(response);
-					}
-				});	
-			};
-
 			$(document).ready(function(){
-				detectWanType();
+				document.querySelector("meta[name=viewport]").setAttribute(
+					'content', 'width=' + verge.viewportW() + ', target-densitydpi=device-dpi, initial-scale=' + (0.5*verge.viewportW())/375 + ', maximum-scale=1, user-scalable=no'
+				);
 
-				$("#model_welcome").html("");
-				$("#model_welcome_field").html("");
+				setTimeout(detectWanType, 500);
 
 				// setup time_zone
 				var isDefault = ('<% nvram_get("x_Setting"); %>' == 0) ? true : false;
@@ -196,6 +158,9 @@
 						qisPostData.time_zone = timeZoneObj.time_zone;
 						qisPostData.time_zone_dst = (timeZoneObj.hasDst) ? 1 : 0;
 					});
+				}
+				else{
+					$(".tos").hide();
 				}
 
 				$("#pap_ip_advance_setting_ipaddr").keyup(function(e){
@@ -278,40 +243,115 @@
 						apply.pppoe();
 					}
 				});
+
+				patchUntranslatedString();
 			});
-					
+			
+			function patchUntranslatedString(){	
+				var untranslatedString = {
+					"untran_id_03": "By using ASUS Lyra, you agree to the ",
+					"untran_id_05": "Summary",
+					"untran_id_06": "Congratulations! Lyra is creating new WiFi network for you, wait until solid blue light shows up, Lyra is ready.",
+					"untran_id_07": "Tips",
+					"untran_id_08": "You can now press \"Pair button\" of first and second Lyra to setup another Lyra.",
+					"untran_id_09": "During pair process, blinking green light means Lyra is communicating to each other.",
+					"untran_id_10": "Wait until all Lyra show solid blue, means the system is ready.",
+					"untran_id_11": "You can repeat the steps to add another Lyra, please be noted, pair only works for First Lyra.",
+					"untran_id_12": "You can also download [ASUS Lyra] to connect another Lyra to the first Lyra."
+				}
+
+				$.each($(".untranString"), function(idx, obj){
+					$(obj).html(untranslatedString[obj.id])
+				})
+			}
+
 			function start_welcome(){
-				if(!$("#tosCheckbox").prop("checked")){
-					$("html, body").animate({ scrollTop: $(document).height() }, 800);
-					$(".tos").fadeOut(500).fadeIn(500).fadeOut(500).fadeIn(500);
+				if($("#tosCheckbox").is(":visible")){
+					if(!$("#tosCheckbox").prop("checked")){
+						$("html, body").animate({ scrollTop: $(document).height() }, 800);
+						$(".tos").fadeOut(500).fadeIn(500).fadeOut(500).fadeIn(500);
+						return false;
+					}
+				}
+				
+				if(!forceChangePW){
+					goTo.autoWan();
+				}
+				else{
+					$.mobile.changePage("#login_name", {transition: "slide", changeHash: false});
+				}
+			}
+
+			function getDetectResult(){
+				if(wanType == ""){
+					setTimeout(getDetectResult, 500);
 					return false;
 				}
 
-				if(wanType === "NoWan" || wanType === ""){
-					goTo.NoWan();
-				}
-				else{
-					if(!forceChangePW)
-						goTo.autoWan();
-					else
-						$.mobile.changePage("#login_name", {transition: "slide", changeHash: false});
-				}
+				goTo.autoWan();
 			}
 
-			function start_manual(){
-				finishDetect();
+			var detectWanType = function(handler){
+				wanType = "";
 
-				if(!forceChangePW)
-					$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false});
-				else
-					$.mobile.changePage("#login_name", {transition: "slide", changeHash: false});
+				$.ajax({
+					url: '/detwan.cgi?action_mode=GetWanStatus',
+					dataType: 'json',
+					error: function(xhr){
+						wanType = "unKnown";
+						finishDetect();
+					},
+					
+					success: function(response){
+						if(response.state === "2" || response.state === "5"){							
+							wanType = "DHCP";
+						}
+						else if(response.state === "3" || response.state === "6"){
+							wanType = "PPPoE";
+						}
+/*
+						else if(response.state == "1" || response.state === "4" || response.state === "7" || response.state === ""){
+							wanType = "unKnown";
+						}
+*/
+						else if(response.state === "0"){
+							wanType = "NoWan";
+						}
+						else{
+							wanType = "unKnown";
+						}
+
+						if(handler) handler.call(response);
+					}
+				});	
+			};
+
+			function finishDetect(){
+				clearInterval(window.noWanDetectTimer);
+				// $(".detectBtn").html('<#CTL_next#>');
 			}
 
 			function start_detect(){
-				$(".detectBtn").html('<div class="loadingIcon"></div>');
-
+				// $(".detectBtn").html('<div class="loadingIcon"></div>');
 				detectWanType(function(){
-					if(wanType != "noWan" || wanType != "") goTo.autoWan();
+					if(wanType == "DHCP"){
+						goTo.DHCP();
+					}
+					else if(wanType == "PPPoE"){
+						goTo.PPPoE();
+					}
+					else if(wanType == "Static"){
+						goTo.Static();
+					}
+					else if(wanType == "unKnown"){
+						apply.manual();
+					}
+					else if(wanType == "NoWan"){
+						setTimeout(start_detect, 1000);
+					}
+					else{
+						return false;
+					}
 				});
 			}
 
@@ -433,11 +473,6 @@
 					}
 				});
 			};
-			
-			jQuery.fn.showTextHint = function(hintStr){
-				this.parent().children().remove(".hint");
-				$("<div class='hint'>" + hintStr + "</div>").appendTo(this.parent());
-			}
 
 			function hasBlank(objArray){
 				$(".hint").remove();
@@ -539,7 +574,7 @@
 					if(validForm()){
 						qisPostData.http_username = $("#http_username").val();
 						qisPostData.http_passwd = $("#http_passwd").val();
-						
+
 						goTo.autoWan();
 					}
 				},
@@ -643,12 +678,18 @@
 						return (qisPostData.wl0_wpa_psk == "") ? "OPEN" : qisPostData.wl0_wpa_psk;
 					})());
 
+					nvramSet(new postData(qisPostData, "apply", "reboot", "", ""));
 					goTo.Finish();
 				},
 
-				"summary": function(){
-					goTo.More()
-					nvramSet(new postData(qisPostData, "apply", "reboot", "", ""));
+				"manual": function(){
+					finishDetect();
+					$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false});
+				},
+
+				"checkAddMore": function(){
+					$('.backToFinish').hide();
+					goTo.WPS();
 				}
 			};
 			
@@ -667,6 +708,21 @@
 					qisPostData.wan_pppoe_username = qisOriginData.wan_pppoe_username;
 					qisPostData.wan_pppoe_passwd = qisOriginData.wan_pppoe_passwd;
 
+					if(wanType == "NoWan"){
+						start_detect();
+						$.mobile.changePage("#noWan_page", {transition: "slide", changeHash: false, reverse: true});
+					}
+					else{
+						if(!forceChangePW)
+							$.mobile.changePage("#welcome", {transition: "slide", changeHash: false, reverse: true});
+						else
+							$.mobile.changePage("#login_name", {transition: "slide", changeHash: false, reverse: true});
+					}
+				},
+
+				"nowan": function(){
+					finishDetect();
+
 					if(!forceChangePW)
 						$.mobile.changePage("#welcome", {transition: "slide", changeHash: false, reverse: true});
 					else
@@ -680,7 +736,16 @@
 					qisPostData.wan_heartbeat_x = qisOriginData.wan_heartbeat_x;
 
 					$("#vpnServerContainer").hide();
-					$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});	
+
+					if(wanType == "PPPoE"){
+						if(!forceChangePW)
+							$.mobile.changePage("#welcome", {transition: "slide", changeHash: false, reverse: true});
+						else
+							$.mobile.changePage("#login_name", {transition: "slide", changeHash: false, reverse: true});
+					}
+					else{										
+						$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});
+					}
 				},
 
 				"getIp": function(){
@@ -699,7 +764,15 @@
 					qisPostData.wan_dns1_x = qisOriginData.wan_dns1_x;
 					qisPostData.wan_dns2_x = qisOriginData.wan_dns2_x;
 			
-					$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});	
+					if(wanType == "Static"){
+						if(!forceChangePW)
+							$.mobile.changePage("#welcome", {transition: "slide", changeHash: false, reverse: true});
+						else
+							$.mobile.changePage("#login_name", {transition: "slide", changeHash: false, reverse: true});
+					}
+					else{
+						$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});
+					}
 				},
 			
 				"wireless": function(){
@@ -728,6 +801,31 @@
 					else{
 						$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});
 					}
+				},
+
+				"Pair": function(){
+					$.mobile.changePage("#wps_page", {transition: "slide", changeHash: false, reverse: true});	
+					$(".flashingColor").removeClass("blue");
+					window.flashTimer = setInterval(function(){
+						$(".flashingColor").toggleClass("green");
+					}, 500);
+				},
+
+				"APP": function(){
+					$.mobile.changePage("#pair_page", {transition: "slide", changeHash: false, reverse: true});	
+					clearInterval(window.flashTimer);
+					$(".flashingColor").removeClass("green");
+					setTimeout(function(){
+						$(".flashingColor").addClass("blue");
+					}, 300);
+				},
+
+				"WPS": function(){
+					$.mobile.changePage("#summary_page", {transition: "slide", changeHash: false, reverse: true});
+					clearInterval(window.flashTimer);
+					setTimeout(function(){
+						$(".flashingColor").removeClass("green").addClass("blue")
+					}, 300);
 				}
 			};
 			
@@ -742,8 +840,17 @@
 					else if(wanType == "Static"){
 						goTo.Static();
 					}
+					else if(wanType == "unKnown"){
+						apply.manual();
+					}
+					else if(wanType == "NoWan"){
+						goTo.NoWan();
+					}
+					else if(wanType == ""){
+						goTo.waiting();
+					}
 					else{
-						$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false});
+						goTo.manual();
 					}
 				},
 
@@ -779,11 +886,31 @@
 				},
 
 				"Finish": function(){
-					$.mobile.changePage("#summary_page", {transition: "slide", changeHash: false, reverse: false});	
+					$.mobile.changePage("#summary_page", {transition: "slide", changeHash: false, reverse: false});
+					clearInterval(window.flashTimer);
+					setTimeout(function(){
+						$(".flashingColor").removeClass("green").addClass("blue")
+					}, 300);
 				},
 
-				"More": function(){
-					$.mobile.changePage("#setmore_page", {transition: "slide", changeHash: false, reverse: false});	
+				"APP": function(){
+					$.mobile.changePage("#app_page", {transition: "slide", changeHash: false, reverse: false});	
+				},
+
+				"WPS": function(){
+					$.mobile.changePage("#wps_page", {transition: "slide", changeHash: false, reverse: false});
+					$(".flashingColor").removeClass("blue");
+					window.flashTimer = setInterval(function(){
+						$(".flashingColor").toggleClass("green");
+					}, 500);
+				},
+
+				"Pair": function(){
+					$.mobile.changePage("#pair_page", {transition: "slide", changeHash: false, reverse: false});	
+					clearInterval(window.flashTimer);
+					setTimeout(function(){
+						$(".flashingColor").removeClass("green").addClass("blue")
+					}, 300);
 				},
 
 				"Welcome": function(){
@@ -791,7 +918,13 @@
 				},
 
 				"NoWan": function(){
+					start_detect();
 					$.mobile.changePage("#noWan_page", {transition: "slide", changeHash: false, reverse: false});	
+				},
+
+				"waiting": function(){
+					getDetectResult();
+					$.mobile.changePage("#waiting_page", {transition: "slide", changeHash: false, reverse: false});	
 				},
 
 				"AsusPP": function(){
@@ -834,7 +967,7 @@
 			</div>
 			<div>
 				<div style="font-family:Uni Sans Thin, Helvetica W01 Light, Arial;font-size:5em;color:#FFF;margin:50px 46px 0 46px;text-align:center;">
-					Welcome To Lyra
+					<#lyra_welcome_title#>
 				</div>
 				<!--div style="font-family:Uni Sans Thin, Helvetica W01 Light, Arial;font-size:2.5em;color:#999;text-align:center;margin:0px 20px 0 40px;">
 					Lyra makes sure your connection stable, well-covered and secure.
@@ -842,15 +975,17 @@
 				<div id="model_image" class="model_image"></div>
 				<div id="model_welcome_field" style="text-align:center;color:#0ECDA4;font-size:30pt;font-family:HelveticaNeueW10-35Thin,Helvetica W01 Light,Arial;line-height:23px;margin:21px 0"></div>
 				<div style="text-align:center;margin:31px 0">
-					<div id="welcome_button" style="cursor:pointer;width:600px;height:88px;border-radius:4px;color:#FFF;background-color:#27D1A4;border:1px solid #27D1A4;font-size:2.25em;margin:auto;line-height:88px;" onclick="start_welcome();">Create A New Lyra Network</div>
+					<div id="welcome_button" style="cursor:pointer;width:600px;height:88px;border-radius:4px;color:#FFF;background-color:#27D1A4;border:1px solid #27D1A4;font-size:2.25em;margin:auto;line-height:88px;" onclick="start_welcome();"><#lyra_welcome_create#></div>
 				</div>
-				<div style="color:#FFF;font-size:2em;text-align:center;"><a href="#" style="color:#27D1A4" onclick="goTo.More()">Or sign in to your existing Lyra network</a></div>
+				<div style="color:#FFF;font-size:2em;text-align:center;">
+					<a href="#" style="color:#27D1A4" onclick="apply.checkAddMore()"><#lyra_welcome_onboard#></a>
+				</div>
 				
 				<div class="tos">
 					<input id="tosCheckbox" type="checkbox">
-					<span id="tosTitle">By using ASUS Lyra, you agree to the</span>
+					<span id="tosTitle"><div id="untran_id_03" class="untranString"></div></span>
 					<a href="#" onclick="goTo.AsusPP()">ASUS Privacy Policy</a>, 
-					<a href="#" onclick="goTo.AsusToS()">ASUS Terms of Use</a> and 
+					<a href="#" onclick="goTo.AsusToS()">ASUS Terms of Use</a>, 
 					<a href="#" onclick="goTo.TMToS()">Trend Micro End User License Agreement</a>.
 				</div>
 				<script>
@@ -886,13 +1021,13 @@
 			</div>
 			<div class="desktop_left_field">
 				<div id="login_title">
-					<div style="font-size:60px;">Login</div>
-					<div style="font-size:32px;">Username/Passowrd</div>
-					<div style="font-size:32px;">Setting</div>
+					<div style="font-size:60px;"><#CTL_login#></div>
+					<div style="font-size:32px;"><#HSDPAConfig_Username_itemname#>/<#PPPConnection_Password_itemname#></div>
+					<div style="font-size:32px;"><#Settings#></div>
 				</div>
 			</div>
 			<div class="table_td">
-				<div id="login_desc" class="pageDesc">Create your Lyra account. The username and password will be used to login and manage your Lyra network.</div>
+				<div id="login_desc" class="pageDesc"><#lyra_user_desc#></div>
 				<div id="login_field">
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
@@ -916,19 +1051,19 @@
 							<div class="inputTitle"><#PASS_retype#></div>
 						</div>
 						<div class="inputContainer">
-							<input id="http_passwd_confirm" type="text" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true"></input>
+							<input id="http_passwd_confirm" type="password" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true"></input>
 						</div>
 					</div>
 					<!-- Action Button -->
 					<div class="footer_desktop">
-						<div class="desktop_abortBtn" onclick='abort.login()'><#CTL_Cancel#></div>
+						<div class="desktop_abortBtn" onclick='abort.login()'><#CTL_prev#></div>
 						<div class="desktop_applyBtn" onclick="apply.login();"><#CTL_next#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
 								<td style="width:50%" onclick='abort.login()'>
-									<div class="mobile_abortBtn"><#CTL_Cancel#></div>
+									<div class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
 								<td style="width:50%;background:#27D1A4" onclick="apply.login();">
 									<div class="mobile_applyBtn"><#CTL_next#></div>
@@ -936,6 +1071,79 @@
 							</tr>
 						</table>
 					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Detecting -->
+		<div id="waiting_page" data-role="page" class="qisBackground">
+			<div style="margin:30px 0 0 30px;">
+				<table style="width:100%">
+					<tr>
+						<td style="padding:0;width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu" style="width:17px;height:17px;display:none"></div>
+								</a>
+							</div>
+						</td>
+						<td style="padding:0;width:130px;">
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td style="padding:0;">
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="desktop_left_field">
+				<div id="login_title">
+					<div style="font-size:60px;"><#Internet#></div>
+					<div style="font-size:32px;"><#QKSet_detect_sanglass#></div>
+				</div>
+			</div>
+			<div class="table_td">
+				<div class="pageDesc">
+					<div><#QKSet_detect_waitdesc#></div>
+				</div>
+
+				<div>
+					<div class="cssload-bell">
+						<div class="cssload-circle">
+							<div class="cssload-inner"></div>
+						</div>
+						<div class="cssload-circle">
+							<div class="cssload-inner"></div>
+						</div>
+						<div class="cssload-circle">
+							<div class="cssload-inner"></div>
+						</div>
+						<div class="cssload-circle">
+							<div class="cssload-inner"></div>
+						</div>
+						<div class="cssload-circle">
+							<div class="cssload-inner"></div>
+						</div>
+					</div>
+					<!-- Action Button -->
+					<!--div class="footer_desktop">
+						<div class="desktop_abortBtn" onclick="abort.nowan()"><#CTL_prev#></div>
+						<div class="desktop_applyBtn detectBtn" onclick="apply.manual()"><#Manual_Setting_btn#></div>
+					</div>
+					<div class="footer_mobile">
+						<table style="width:100%;" cellpadding="0" cellspacing="0">
+							<tr style="height:102px;text-align:center">
+								<td style="width:50%" onclick='abort.nowan()'>
+									<div  class="mobile_abortBtn"><#CTL_prev#></div>
+								</td>
+								<td style="width:50%;background:#27D1A4" onclick="apply.manual()">
+									<div  class="mobile_applyBtn detectBtn"><#Manual_Setting_btn#></div>
+								</td>
+							</tr>
+						</table>
+					</div-->
 				</div>
 			</div>
 		</div>
@@ -964,28 +1172,31 @@
 				</table>
 			</div>
 			<div class="desktop_left_field">
-				<div>
-					<div style="font-size:60px;">Tips</div>
+				<div id="login_title">
+					<div style="font-size:60px;"><#Internet#></div>
+					<div style="font-size:32px;"><#Settings#></div>
 				</div>
 			</div>
 			<div class="table_td">
-				<div class="pageDesc"><#QKSet_detect_wanconnfault#></div>
+				<div class="pageDesc">
+					<#QIS_desc_1#>
+				</div>
 
 				<div>
-					<div class="noWanHint"></div>
+					<div class="noWanPic"></div>
 					<!-- Action Button -->
 					<div class="footer_desktop">
-						<div class="desktop_abortBtn" onclick="start_manual()"><#Manual_Setting_btn#></div>
-						<div class="desktop_applyBtn detectBtn" onclick="start_detect()"><#CTL_next#></div>
+						<div class="desktop_abortBtn" onclick="abort.nowan()"><#CTL_prev#></div>
+						<div class="desktop_applyBtn detectBtn" onclick="apply.manual()"><#Manual_Setting_btn#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
-								<td style="width:50%" onclick='start_manual()'>
-									<div  class="mobile_abortBtn"><#Manual_Setting_btn#></div>
+								<td style="width:50%" onclick='abort.nowan()'>
+									<div  class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
-								<td style="width:50%;background:#27D1A4" onclick="start_detect()">
-									<div  class="mobile_applyBtn detectBtn"><#CTL_next#></div>
+								<td style="width:50%;background:#27D1A4" onclick="apply.manual()">
+									<div  class="mobile_applyBtn detectBtn"><#Manual_Setting_btn#></div>
 								</td>
 							</tr>
 						</table>
@@ -1078,15 +1289,16 @@
 							</div>
 						</div>
 					</div>
+
 					<!-- Action Button -->
 					<div class="footer_desktop" style="color:#FFF;text-align:center;margin-top:30px;">
-						<div class="desktop_applyBtn" onclick='abort.wan()'><#CTL_Cancel#></div>
+						<div class="desktop_abortBtn" onclick='abort.wan()'><#CTL_prev#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
-								<td style="width:100%;background:#27D1A4" onclick='abort.wan()'>
-									<div class="mobile_applyBtn"><#CTL_Cancel#></div>
+								<td style="width:100%;" onclick='abort.wan()'>
+									<div class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
 							</tr>
 						</table>
@@ -1151,13 +1363,13 @@
 					</div>
 					<!-- Action Button -->
 					<div class="footer_desktop" style="color:#FFF;text-align:center;margin-top:30px;">
-						<div class="desktop_applyBtn" onclick='abort.getIp()'><#CTL_Cancel#></div>
+						<div class="desktop_abortBtn" onclick='abort.getIp()'><#CTL_prev#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
-								<td style="width:100%;background:#27D1A4" onclick='abort.getIp()'>
-									<div class="mobile_applyBtn"><#CTL_Cancel#></div>
+								<td style="width:100%;" onclick='abort.getIp()'>
+									<div class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
 							</tr>
 						</table>
@@ -1226,14 +1438,14 @@
 					</div>
 					<!-- Action Button -->
 					<div class="footer_desktop">
-						<div class="desktop_abortBtn" onclick='abort.pppoe()'><#CTL_Cancel#></div>
+						<div class="desktop_abortBtn" onclick='abort.pppoe()'><#CTL_prev#></div>
 						<div class="desktop_applyBtn" onclick="apply.pppoe();"><#CTL_next#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
 								<td style="width:50%" onclick='abort.pppoe()'>
-									<div class="mobile_abortBtn"><#CTL_Cancel#></div>
+									<div class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
 								<td style="width:50%;background:#27D1A4" onclick="apply.pppoe();">
 									<div class="mobile_applyBtn"><#CTL_next#></div>
@@ -1279,7 +1491,7 @@
 				<div>
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle">IP Address</div>
+							<div class="inputTitle"><#IPConnection_ExternalIPAddress_itemname#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="pap_ip_advance_setting_ipaddr" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text">
@@ -1287,7 +1499,7 @@
 					</div>
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle">Subnet Mask</div>
+							<div class="inputTitle"><#IPConnection_x_ExternalSubnetMask_itemname#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="pap_ip_advance_setting_subnet" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text">
@@ -1295,7 +1507,7 @@
 					</div>
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle">Default Gateway</div>
+							<div class="inputTitle"><#IPConnection_x_ExternalGateway_itemname#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="pap_ip_advance_setting_gateway" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text">
@@ -1303,7 +1515,7 @@
 					</div>
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle">DNS 1</div>
+							<div class="inputTitle"><#IPConnection_x_DNSServer1_itemname#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="pap_ip_advance_setting_dns1" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text">
@@ -1311,7 +1523,7 @@
 					</div>
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle">DNS 2</div>
+							<div class="inputTitle"><#IPConnection_x_DNSServer2_itemname#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="pap_ip_advance_setting_dns2" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text">
@@ -1319,14 +1531,14 @@
 					</div>
 					<!-- Action Button -->
 					<div class="footer_desktop">
-						<div class="desktop_abortBtn" onclick='abort.static()'><#CTL_Cancel#></div>
+						<div class="desktop_abortBtn" onclick='abort.static()'><#CTL_prev#></div>
 						<div class="desktop_applyBtn" onclick="apply.static();"><#CTL_next#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
 								<td style="width:50%" onclick='abort.static()'>
-									<div  class="mobile_abortBtn"><#CTL_Cancel#></div>
+									<div  class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
 								<td style="width:50%;background:#27D1A4" onclick="apply.static();">
 									<div  class="mobile_applyBtn"><#CTL_next#></div>
@@ -1396,17 +1608,17 @@
 				</div>
 				<!-- Action Button -->
 				<div class="footer_desktop" style="color:#FFF;text-align:center;margin-top:0;max-width:1000px;">
-					<div class="desktop_abortBtn" onclick='abort.wireless();'>PREVIOUS</div>
-					<div class="desktop_applyBtn" onclick="apply.wireless();">APPLY</div>
+					<div class="desktop_abortBtn" onclick='abort.wireless();'><#CTL_prev#></div>
+					<div class="desktop_applyBtn" onclick="apply.wireless();"><#CTL_apply#></div>
 				</div>
 				<div class="footer_mobile">
 					<table style="width:100%;" cellpadding="0" cellspacing="0">
 						<tr style="height:102px;text-align:center">
 							<td style="width:50%" onclick='abort.wireless();'>
-								<div class="mobile_abortBtn">PREVIOUS</div>
+								<div class="mobile_abortBtn"><#CTL_prev#></div>
 							</td>
 							<td style="width:50%;background:#27D1A4" onclick="apply.wireless();">
-								<div class="mobile_applyBtn">APPLY</div>
+								<div class="mobile_applyBtn"><#CTL_apply#></div>
 							</td>
 						</tr>
 					</table>
@@ -1439,16 +1651,19 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Summary</div>
+					<div style="font-size:60px;"><div id="untran_id_05" class="untranString"></div></div>
 				</div>
 			</div>
 			<div class="table_td">
-				<div class="pageDesc">Congratulations! Your Lyra network is ready to go!</div>
+				<div class="pageDesc">
+					<div id="untran_id_06" class="untranString"></div>
+				</div>
 
 				<div>
-					<!--div class="lyraGood"></div-->
+					<div class="flashingColor"></div>
+					<div class="wpsPic"></div>
 
-					<div style="margin-left:17px;">
+					<div style="margin-left:17px;" class="summaryNetwork">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
 							<div class="inputTitle"><#QIS_finish_wireless_item1#></div>
 						</div>
@@ -1456,7 +1671,7 @@
 							<input id="ssidSummary" type="text" class="textInput" data-role="none" disabled>
 						</div>
 					</div>
-					<div style="margin-left:17px;">
+					<div style="margin-left:17px;margin-top: -50px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
 							<div class="inputTitle"><#QIS_finish_wireless_item2#></div>
 						</div>
@@ -1468,12 +1683,12 @@
 
 				<div>
 					<div class="footer_desktop">
-						<div class="desktop_applyBtn" onclick="apply.summary();"><#CTL_next#></div>
+						<div class="desktop_applyBtn" onclick="goTo.WPS();"><#CTL_next#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
-								<td style="width:50%;background:#27D1A4" onclick="apply.summary();">
+								<td style="width:50%;background:#27D1A4" onclick="goTo.WPS();">
 									<div class="mobile_applyBtn"><#CTL_next#></div>
 								</td>
 							</tr>
@@ -1483,8 +1698,68 @@
 			</div>
 		</div>
 
-		<!-- Set More -->
-		<div id="setmore_page" data-role="page" class="qisBackgroundIndex">
+		<!-- WPS button -->
+		<div id="wps_page" data-role="page" class="qisBackground">
+			<div style="margin:30px 0 0 30px;">
+				<table style="width:100%">
+					<tr>
+						<td style="padding:0;width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu" style="width:17px;height:17px;display:none"></div>
+								</a>
+							</div>
+						</td>
+						<td style="padding:0;width:130px;">
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td style="padding:0;">
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="desktop_left_field">
+				<div>
+					<div style="font-size:60px;"><div id="untran_id_07" class="untranString"></div></div>
+				</div>
+			</div>
+			<div class="table_td">
+				<div class="pageDesc">
+					<div id="untran_id_08" class="untranString"></div>
+					<br/>
+					<div id="untran_id_09" class="untranString"></div>
+				</div>
+
+				<div>
+					<div class="flashingColor"></div>
+					<div class="wpsPic"></div>
+
+					<!-- Action Button -->
+					<div class="footer_desktop">
+						<div class="desktop_abortBtn backToFinish" onclick='abort.WPS()'><#CTL_prev#></div>
+						<div class="desktop_applyBtn" onclick="goTo.Pair()"><#CTL_next#></div>
+					</div>
+					<div class="footer_mobile">
+						<table style="width:100%;" cellpadding="0" cellspacing="0">
+							<tr style="height:102px;text-align:center">
+								<td style="width:50%" onclick='abort.WPS()' class="backToFinish">
+									<div  class="mobile_abortBtn"><#CTL_prev#></div>
+								</td>
+								<td style="width:50%;background:#27D1A4" onclick="goTo.Pair()">
+									<div  class="mobile_applyBtn detectBtn"><#CTL_next#></div>
+								</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Paring  -->
+		<div id="pair_page" data-role="page" class="qisBackground">
 			<div style="margin:30px 0 0 30px;">
 				<table style="width:100%">
 					<tr>
@@ -1512,44 +1787,114 @@
 				</div>
 			</div>
 			<div class="table_td">
-				<div class="pageDesc" style="color:#FFF">
-					Login to existing Lyra Network
-					<div class="appDescContainer">
-						<div class="appDesc">Please download the APP, and follow the procedure.</div>
-					</div>
+				<div class="pageDesc">
+					<div id="untran_id_10" class="untranString"></div>
+					<br/>
+					<div id="untran_id_11" class="untranString"></div>
+				</div>
 
-					<div  class="desktopView">
-						<table class="appTable">
-							<tr>
-								<td rowspan="2" align="right">
-									<div class="appQR"></div>
+				<div>
+					<div class="flashingColor"></div>
+					<div class="wpsPic"></div>
+
+					<!-- Action Button -->
+					<div class="footer_desktop">
+						<div class="desktop_abortBtn" onclick='abort.Pair()'><#CTL_prev#></div>
+						<div class="desktop_applyBtn" onclick="goTo.APP()"><#CTL_next#></div>
+					</div>
+					<div class="footer_mobile">
+						<table style="width:100%;" cellpadding="0" cellspacing="0">
+							<tr style="height:102px;text-align:center">
+								<td style="width:50%" onclick='abort.Pair()'>
+									<div  class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
-								<td>
-									<div class="itunesStore"></div>
-								</td>
-							</tr>
-							<tr>
-								<td>
-									<div class="googlePlay"></div>
+								<td style="width:50%;background:#27D1A4" onclick="goTo.APP()">
+									<div  class="mobile_applyBtn detectBtn"><#CTL_next#></div>
 								</td>
 							</tr>
 						</table>
-
-						<div class="appMobile"></div>
 					</div>
-	
-					<div class="mobileView">
-						<div class="appMobile" style="display:block"></div>
+				</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- APP -->
+		<div id="app_page" data-role="page" class="qisBackground">
+			<div style="margin:30px 0 0 30px;">
+				<table style="width:100%">
+					<tr>
+						<td style="padding:0;width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu" style="width:17px;height:17px;display:none"></div>
+								</a>
+							</div>
+						</td>
+						<td style="padding:0;width:130px;">
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td style="padding:0;">
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="desktop_left_field">
+				<div>
+					<div style="font-size:60px;">Tips</div>
+				</div>
+			</div>
+			<div class="table_td">
+				<div class="pageDesc">
+					<div id="untran_id_12" class="untranString"></div>
+
+					<div class="lyraGood"></div>
+					<div>
+						<div class="desktopView AppDownloadLink">
+							<table class="appTable">
+								<tr>
+									<td rowspan="2" align="right">
+										<div class="appQR"></div>
+									</td>
+									<td>
+										<div class="itunesStore"></div>
+									</td>
+								</tr>
+								<tr>
+									<td>
+										<div class="googlePlay"></div>
+									</td>
+								</tr>
+							</table>
+
+							<div class="appMobile"></div>
+						</div>
+		
+						<div class="mobileView">
+							<div class="appMobile"></div>
+						</div>
 					</div>
 				</div>
 
 				<div>
+					<div class="footer_desktop">
+						<div class="desktop_abortBtn" onclick='abort.APP()'><#CTL_prev#></div>
+						<div class="desktop_applyBtn iOS_go goToDownload AppDownloadLink" onclick="apply.openStore();">Open iTunes Store</div>
+						<div class="desktop_applyBtn android_go goToDownload AppDownloadLink" onclick="apply.openStore();">Open Google Play</div>
+					</div>
+
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr style="height:102px;text-align:center">
-								<td style="width:50%;background:#27D1A4" onclick="goTo.openStore()">
-									<div class="mobile_applyBtn iOS_go">Open iTunes Store</div>
-									<div class="mobile_applyBtn android_go">Open Google Play</div>
+								<td style="width:50%" onclick='abort.APP()'>
+									<div  class="mobile_abortBtn"><#CTL_prev#></div>
+								</td>
+								<td style="width:50%;background:#27D1A4" class="AppDownloadLink" onclick="goTo.openStore()">
+									<div class="mobile_applyBtn iOS_go AppDownloadLink goToDownload">Open iTunes Store</div>
+									<div class="mobile_applyBtn android_go AppDownloadLink goToDownload">Open Google Play</div>
 								</td>
 							</tr>
 						</table>
@@ -1585,7 +1930,7 @@
 
 							case "unknown":
 								$(".mobileView").hide();
-								$(".footer_mobile").hide();
+								$(".goToDownload").hide();
 
 								$(".appIconContainer").css({
 									"margin-top": "0px",
@@ -2120,7 +2465,7 @@
 							<strong>Term and Termination</strong>
 							<dl>
 								<dt>7.1</dt>
-								<dd>If for any reason this SERVICE is not capable of running as planned, including but not limited to force majeure, technical failures, unauthorized intervention, fraud or any other cause beyond the control of ASUS which corrupts or affects the administration, security, fairness, integrity or proper conduct of this SERVICE, ASUS reserves the right in its sole discretion to <#CTL_Cancel#>, terminate, modify or suspend the SERVICE subject to any written directions from a relevant governmental authority.
+								<dd>If for any reason this SERVICE is not capable of running as planned, including but not limited to force majeure, technical failures, unauthorized intervention, fraud or any other cause beyond the control of ASUS which corrupts or affects the administration, security, fairness, integrity or proper conduct of this SERVICE, ASUS reserves the right in its sole discretion to <#CTL_prev#>, terminate, modify or suspend the SERVICE subject to any written directions from a relevant governmental authority.
 								</dd>
 								<dt>7.1</dt>
 								<dd>This NOTICE is effective until terminated by YOU or ASUS. YOUR rights to use the SERVICE will be terminated automatically without notice if YOU fail to comply with the terms and conditions mentioned in this NOTICE. In this regard, ASUS will not bear any responsibility to YOU. Upon termination of this NOTICE, YOU shall immediately cease all use of the SERVICE and its copies, in whole or in part.

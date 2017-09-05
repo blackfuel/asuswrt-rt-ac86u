@@ -134,7 +134,7 @@ function initial(){
 			document.getElementById('dualwan_mode_ctrl').style.display = "";
 			document.getElementById('wan_enable_button').style.display = "none";
 			
-			if(wans_mode == "lb" && based_modelid != "4G-AC55U"){
+			if(wans_mode == "lb"){
 				document.getElementById('dualwan_row_main').style.display = "none";
 				showtext(document.getElementById("loadbalance_config"), loadBalance_Ratio);
 				
@@ -202,11 +202,13 @@ function initial(){
 		if(sw_mode == 3)
 			document.getElementById('RemoteAPtd').style.display = "none";
 		
-		if((sw_mode == 2 || sw_mode == 3 || sw_mode == 4) && decodeURIComponent("<% nvram_char_to_ascii("WLANConfig11b", "wlc_ssid"); %>").length >= 28){
-			showtext(document.getElementById("RemoteAP"), decodeURIComponent("<% nvram_char_to_ascii("WLANConfig11b", "wlc_ssid"); %>").substring(0, 26)+"...");
-			document.getElementById("RemoteAPtd").title = decodeURIComponent("<% nvram_char_to_ascii("WLANConfig11b", "wlc_ssid"); %>");
+		var wlc_ssid = decodeURIComponent("<% nvram_char_to_ascii("WLANConfig11b", "wlc_ssid"); %>");
+		var _wlc_ssid = wlc_ssid.replace(/\</g, "&lt;").replace(/\>/g, "&gt;");   //replace < to &lt and > to &gt	
+		if((sw_mode == 2 || sw_mode == 3 || sw_mode == 4) && wlc_ssid.length >= 28){
+			showtext(document.getElementById("RemoteAP"), _wlc_ssid.substring(0, 26)+"...");
+			document.getElementById("RemoteAPtd").title = wlc_ssid;
 		}else				
-			showtext(document.getElementById("RemoteAP"), decodeURIComponent("<% nvram_char_to_ascii("WLANConfig11b", "wlc_ssid"); %>"));
+			showtext(document.getElementById("RemoteAP"), _wlc_ssid);
 				
 		if(lanproto == "static")
 			showtext(document.getElementById("LanProto"), "<#BOP_ctype_title5#>");
@@ -249,6 +251,8 @@ function initial(){
 	if(gobi_support){
 		document.getElementById("wan_inf_title").innerHTML = "<#WAN_Interface_Title#>";
 	}
+
+	set_NM_height();
 	
 }
 
@@ -323,8 +327,10 @@ function loadBalance_form(lb_unit){
 	}else{
 		have_lease = (secondary_wanlink_type() == "dhcp" || secondary_wanlink_xtype() == "dhcp");
 		document.getElementById("dualwan_row_primary").style.display = "none";
-		document.getElementById("dualwan_row_secondary").style.display = "";	
-		showtext($("#dualwan_secondary_if")[0], sec_if);
+		if(!gobi_support){
+			document.getElementById("dualwan_row_secondary").style.display = "";
+			showtext($("#dualwan_secondary_if")[0], sec_if);
+		}
 		update_connection_type(1);
 		document.getElementById('primary_WANIP_ctrl').style.display = "none";
 		document.getElementById('primary_subnet_mask_ctrl').style.display = "none";
@@ -383,8 +389,13 @@ function update_all_ip(wanip, subnet_mask, wandns, wangateway, unit){
 	if(unit == 0){
 		showtext($("#WANIP")[0], wanip);
 		showtext($("#primary_subnet_mask")[0], subnet_mask);
-		showtext2($("#DNS1")[0], dnsArray[0], dnsArray[0]);
-		showtext2($("#DNS2")[0], dnsArray[1], dnsArray[1]);
+		if(wandns.length == 0){
+			$("#DNS1")[0].style.height = "20px";
+		}
+		else{
+			showtext2($("#DNS1")[0], dnsArray[0], dnsArray[0]);
+			showtext2($("#DNS2")[0], dnsArray[1], dnsArray[1]);
+		}
 		showtext($("#gateway")[0], wangateway);
 
 		if(parent.wans_flag){
@@ -404,8 +415,13 @@ function update_all_ip(wanip, subnet_mask, wandns, wangateway, unit){
 	else{
 		showtext($("#secondary_WANIP")[0], wanip);
 		showtext($("#secondary_subnet_mask")[0], subnet_mask);
-		showtext2($("#secondary_DNS1")[0], dnsArray[0], dnsArray[0]);
-		showtext2($("#secondary_DNS2")[0], dnsArray[1], dnsArray[1]);
+		if(wandns.length == 0){
+			$("#secondary_DNS1")[0].style.height = "20px";
+		}
+		else{
+			showtext2($("#secondary_DNS1")[0], dnsArray[0], dnsArray[0]);
+			showtext2($("#secondary_DNS2")[0], dnsArray[1], dnsArray[1]);
+		}
 		showtext($("#secondary_gateway")[0], wangateway);
 		if (secondary_wanlink_type() == "dhcp") {
 			showtext($("#secondary_lease")[0], format_time(secondary_lease, "Renewing..."));
@@ -575,23 +591,23 @@ function goToWAN(){
 			document.act_form.wan_unit.value = 1;
 		}
 		document.act_form.action_mode.value = "change_wan_unit";
-		document.act_form.target = "";		
-		document.act_form.submit();
-
+		document.act_form.target = "";
 		if(wans_dualwan.split(" ")[wan_selected].toUpperCase() == "USB"){
 			if(gobi_support)
-				parent.location.href = "/Advanced_MobileBroadband_Content.asp";
+				document.act_form.current_page.value = "Advanced_MobileBroadband_Content.asp";
 			else
-				parent.location.href = "/Advanced_Modem_Content.asp";
+				document.act_form.current_page.value = "Advanced_Modem_Content.asp";
 		}
 		else if(wans_dualwan.split(" ")[wan_selected].toUpperCase() == "WAN" || wans_dualwan.split(" ")[wan_selected].toUpperCase() == "LAN"){
-			parent.location.href = "/Advanced_WAN_Content.asp";
+			document.act_form.current_page.value = "Advanced_WAN_Content.asp";
 		}
 		else if(wans_dualwan.split(" ")[wan_selected].toUpperCase() == "DSL")
-			parent.location.href = "/Advanced_DSL_Content.asp";
+			document.act_form.current_page.value = "Advanced_DSL_Content.asp";
+
+		document.act_form.submit();
 	}
 	else{
-		if(dsl_support)			
+		if(dsl_support)
 			parent.location.href = '/Advanced_DSL_Content.asp';
 		else
 			parent.location.href = '/Advanced_WAN_Content.asp';
@@ -711,7 +727,15 @@ function addWANOption(obj, wanscapItem){
 	if(dsl_support && obj.name == "wans_second"){
 		for(i=0; i<wanscapItem.length; i++){
 			if(wanscapItem[i] == "dsl"){
-				wanscapItem.splice(i,1);	
+				wanscapItem.splice(i,1);
+			}
+		}
+	}
+
+	if(wanscapItem.indexOf("wan") >= 0 && wans_dualwan_array[1] == "none" && obj.name == "wans_primary" && curState == "0"){
+		for(i=0; i<wanscapItem.length; i++){
+			if(wanscapItem[i] == "lan"){
+				wanscapItem.splice(i,1);
 			}
 		}
 	}
@@ -918,15 +942,29 @@ left:-1px;">
 						$('#nm_radio_dualwan_enable').iphoneSwitch(parent.wans_flag, 
 							 function() {
 							 	dualwan_selection(1);
-								$("#dualwan_setting").fadeIn(300);	
+								$("#dualwan_setting").fadeIn(300);
 								curState = "1";
 								return true;
 							 },
 							 function() {
-								document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" none";
+								if(wans_caps.split(" ").indexOf("wan") >= 0 && wans_dualwan_array[0] == "lan"){
+									var cur_parimary_wan = wans_dualwan_array[0].toUpperCase() + " Port " + wans_lanport_orig;
+									var confirm_str = "The current primary wan is \"" + cur_parimary_wan + "\". Disable dual wan will change primary wan to \"Ethernet WAN\", are you sure to do it?"; //untranslated
+									if(!confirm(confirm_str)){
+										curState = "1";
+										$('#nm_radio_dualwan_enable').find('.iphone_switch').animate({backgroundPosition: -37}, "slow");
+										return false;
+									}
+									else{
+										wans_dualwan_array[0] = "wan";
+									}
+								}
+								curState = "0";
+								wans_dualwan_array[1] = "none";
+								document.internetForm.wans_dualwan.value = wans_dualwan_array.join(" ");
 								document.internetForm.wan_unit.value = 0;
 								document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
-								document.internetForm.action_script.value = "reboot";								
+								document.internetForm.action_script.value = "reboot";
 								parent.showLoading();
 								document.internetForm.submit();	
 								return true;
@@ -974,10 +1012,6 @@ left:-1px;">
     		<p class="formfonttitle_nwm"><#dualwan_mode#></p>
 
     		<p style="padding-left:10px; margin-top:3px; background-color:#444f53; line-height:20px;" id="dualwan_mode"></p>
-				<!--select style="*margin-top:-7px;" id="wansMode" class="input_option" onchange="">
-					<option value="1">Load Balance</option>
-					<option value="2">Fail Over</option>
-				</select-->
 
       	<img style="margin-top:5px;" src="/images/New_ui/networkmap/linetwo2.png">
     </td>

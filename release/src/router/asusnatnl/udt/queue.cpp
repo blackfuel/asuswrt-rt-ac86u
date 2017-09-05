@@ -1066,6 +1066,7 @@ int PJ_THREAD_FUNC CRcvQueue::worker(void *param)
          temp.setLength(self->m_iPayloadSize);
          self->m_pChannel->recvfrom(addr, temp);
          delete [] temp.m_pcData;
+         PJ_LOG(2, ("queue.cpp", "no space, skip this packet!!!"));
 		 goto TIMER_CHECK;
 		 // DEAN commented, for using pj_sem_trywait2
 		 //continue;
@@ -1074,8 +1075,9 @@ int PJ_THREAD_FUNC CRcvQueue::worker(void *param)
       unit->m_Packet.setLength(self->m_iPayloadSize);
 
       // reading next incoming packet, recvfrom returns -1 is nothing has been received
-	  if (self->m_pChannel->recvfrom(addr, unit->m_Packet) < 0)
+	  if (self->m_pChannel->recvfrom(addr, unit->m_Packet) < 0) {
 		  goto TIMER_CHECK;
+      }
 		  // DEAN commented, for using pj_sem_trywait2
 		  //continue;
 
@@ -1132,6 +1134,7 @@ TIMER_CHECK:
 
       CRNode* ul = self->m_pRcvUList->m_pUList;
       uint64_t ctime = currtime - 100000 * CTimer::getCPUFrequency();
+
       while ((NULL != ul) && (ul->m_llTimeStamp < ctime))
       {
          CUDT* u = ul->m_pUDT;
@@ -1154,7 +1157,6 @@ TIMER_CHECK:
 #endif
       // Check connection requests status for all sockets in the RendezvousQueue.
       self->m_pRendezvousQueue->updateConnStatus();
-
    }
 
    if (AF_INET == self->m_UnitQueue.m_iIPversion)

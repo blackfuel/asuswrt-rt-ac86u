@@ -18,12 +18,14 @@ if [ "`nvram get usb_path1`" != "storage" ] ; then
 fi
 
 path_dev=`nvram get usb_path1_fs_path0`
+modem_gobi_path=`nvram get modem_gobi_path`
 mounted_path=`mount |grep $path_dev |awk '{print $3}'`
+tftp_size=`nvram get modem_tftp_size`
 
-FOLDER=$mounted_path/4G-AC55U_LTE
+FOLDER=$mounted_path/$modem_gobi_path
 
 if [ ! -d ${FOLDER} ] ; then
-	echo "LTE: Folder /4G-AC55U_LTE/ not found !" | logger
+	echo "LTE: Folder /$modem_gobi_path/ not found !" | logger
 	nvram set lte_update_status=5
 	exit 1;
 fi
@@ -83,7 +85,11 @@ else
 
 	echo "LTE: Gobi internal network: uploading update.zip" | logger ;
 #	tftp -p -l update.zip -b 32768 192.168.225.1
-	tftp -p -l update.zip 192.168.225.1
+	if [ -n "$tftp_size" ]; then
+		tftp -b $tftp_size -p -l update.zip 192.168.225.1
+	else
+		tftp -p -l update.zip 192.168.225.1
+	fi
 	echo $? | logger ;
 	sleep 3 ;
 

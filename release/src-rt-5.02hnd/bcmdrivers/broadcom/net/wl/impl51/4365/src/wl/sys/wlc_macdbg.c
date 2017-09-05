@@ -2,7 +2,7 @@
  * MAC debug and print functions
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -1633,6 +1633,7 @@ wlc_bmac_psmx_errors(wlc_info_t *wlc)
 	if (macintstatus & MI_GP0) {
 		W_REG(osh, &regs->macintmask_x, MI_GP0);
 		wlc_dump_psmx_fatal(wlc, PSMX_FATAL_PSMWD);
+		ASSERT(!"PSMx Watchdog");
 
 		WLCNTINCR(wlc->pub->_cnt->psmxwds);
 #ifndef BCMNODOWN
@@ -1778,6 +1779,8 @@ wlc_dump_psmx_fatal(wlc_info_t *wlc, uint reason)
 		wlc_read_shmx(wlc, M_BOM_REV_MAJOR), wlc_read_shmx(wlc, M_BOM_REV_MINOR),
 		wlc_read_shm(wlc, M_UCODE_FEATURES)));
 
+	wlc_mac_event(wlc, WLC_E_PSM_WATCHDOG, NULL, R_REG(osh, &regs->psmdebug_x),
+		0, wlc_read_macregx(wlc, 0x490), NULL, 0);
 	WL_PRINT(("psmxdebug 0x%08x macctl 0x%x maccmd 0x%x\n"
 		 "psm_brc 0x%04x psm_brc_1 0x%04x MX_UCODE_DBGST 0x%x\n",
 		  R_REG(osh, &regs->psmdebug_x),
@@ -1827,6 +1830,13 @@ wlc_dump_psmx_fatal(wlc_info_t *wlc, uint reason)
 		wlc_dump_vasip_fatal(wlc);
 #endif
 
+
+#if defined(WLC_HOSTPMAC)
+	/* Mac dump for full dongle driver */
+	/* triggering DHD to dump d11core */
+	wlc_mac_event(wlc, WLC_E_MACDBG, NULL, WLC_E_STATUS_SUCCESS,
+		WLC_E_MACDBG_REGALL, 0, &reason, sizeof(reason));
+#endif /* WLC_HOSTPMAC */
 }
 
 #if WL_MACDBG
@@ -1856,34 +1866,31 @@ wlc_dump_sctpl_shmx(wlc_info_t *wlc, struct bcmstrbuf *b)
 	osh = wlc->osh;
 
 	gpio_sel = R_REG(osh, &regs->maccontrol1);
-	start = wlc_read_shmx(wlc, MX_UTRACEX_SPTR);
-
-	start = (start >> 1) & ~1;
-	end = wlc_read_shmx(wlc, MX_UTRACEX_EPTR);
-	end = (end >> 1) & ~1;
+	start = wlc_read_shmx(wlc, MX_UTRACEX_SPTR) & (~0x3);
+	end = (wlc_read_shmx(wlc, MX_UTRACEX_EPTR) + 2) & (~0x3);
+	/* stop sample capture for convenience */
+	wlc_write_shmx(wlc, MX_UTRACEX_SPTR, start);
 	wlc_bmac_copyfrom_objmem(wlc->hw, SX_UPTR << 2,
 		&curr, sizeof(curr), OBJADDR_SCRX_SEL);
-
 	len = (end - start);
 
 	if (b) {
 		bcm_bprintf(b, "Capture mode: maccontrol1 0x%02x scpctl 0x00\n",
 			gpio_sel);
 		bcm_bprintf(b, "Start/stop/cur 0x%04x 0x%04x 0x%04x byt_offset 0x%04x entries %u\n",
-			start*2, end*2, curr, len, len/4);
+			start, end, curr, (curr - start), len >> 2);
 		bcm_bprintf(b, "offset: low high\n");
 	} else {
 		printf("Capture mode: maccontrol1 0x%02x scpctl 0x00\n", gpio_sel);
 		printf("Start/stop/cur 0x%04x 0x%04x 0x%04x byt_offset 0x%04x entries %u\n",
-			start*2, end*2, curr, len*4, len*2);
+			start, end, curr, (curr - start), len >> 2);
 		printf("offset: low high\n");
 	}
 
-	for (i = 0; i < (uint)len * 2; i = i + 4) {
+	for (i = 0; i < (uint)len; i += 4) {
 		uint16 low16, hi16;
-
-		low16 = wlc_read_shmx(wlc, (start*2) +i);
-		hi16 = wlc_read_shmx(wlc, ((start+1)*2) + i);
+		low16 = wlc_read_shmx(wlc, start + i);
+		hi16 = wlc_read_shmx(wlc, (start + i + 2));
 		if (b)
 			bcm_bprintf(b, "%04X: %04X %04X\n", i, low16, hi16);
 		else

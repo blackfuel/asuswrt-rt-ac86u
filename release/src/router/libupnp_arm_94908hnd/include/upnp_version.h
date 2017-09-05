@@ -1,5 +1,5 @@
 /*
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -20,15 +20,15 @@
 
 #define	UPNP_RC_NUMBER		164
 
-#define	UPNP_INCREMENTAL_NUMBER	3
+#define	UPNP_INCREMENTAL_NUMBER	17
 
 #define	UPNP_BUILD_NUMBER	0
 
-#define	UPNP_VERSION		7, 14, 164, 3
+#define	UPNP_VERSION		7, 14, 164, 17
 
-#define	UPNP_VERSION_NUM	0x070ea403
+#define	UPNP_VERSION_NUM	0x070ea411
 
 /* Driver Version String, ASCII, 32 chars max */
-#define	UPNP_VERSION_STR	"7.14.164.3"
+#define	UPNP_VERSION_STR	"7.14.164.17"
 
 #endif /* __LIBUPNP_VERSION_H__ */

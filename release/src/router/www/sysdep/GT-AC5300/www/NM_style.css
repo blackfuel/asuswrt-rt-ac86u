@@ -61,7 +61,7 @@
 #iconInternet_secondary{ background:url(images/New_ui/networkmap/map-iconInternet.png) no-repeat 0% 0%;	width:107px;	height:95px; cursor:pointer;margin-left:12px;}
 #iconInternet_secondary a:link{ background:url(images/New_ui/networkmap/map-iconInternet.png) no-repeat 0% 100%;	width:107px;	height:95px; cursor:pointer;}
 
-#iconRouter{ background:url(images/New_ui/networkmap/map-iconRouter.png) no-repeat 0% 100%;	width:140px;	height:95px; cursor:pointer; margin:0px 17px 0px 0px;}
+#iconRouter{ background:url(images/New_ui/networkmap/map-iconRouter.png) no-repeat 0% 100%;	width:140px;	height:98px; cursor:pointer; margin:11px 17px 0px 0px;}
 
 #iflock{ 
 }

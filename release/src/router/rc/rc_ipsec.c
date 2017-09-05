@@ -277,9 +277,14 @@ void ipsec_prof_fill(int prof_idx, char *p_data, ipsec_prof_type_t prof_type)
     p_tmp = &(prof[prof_type][prof_idx].virtual_ip_en[0]);
     ipsec_profile_str_parse(p_end, p_tmp, &i);
     p_end += i;
+	
     /*virtual ip subnet*/
     p_tmp = &(prof[prof_type][prof_idx].virtual_subnet[0]);
     ipsec_profile_str_parse(p_end, p_tmp, &i);
+	/* if virtual_subnet=x.x.x, convert to x.x.x.0/24 */
+	if(0 != strcmp(p_tmp, "") && 0 == strstr(p_tmp, "/"))	
+		strcat(prof[prof_type][prof_idx].virtual_subnet, ".0/24");
+	
     p_end += i;
     /*accessible_networks*/
     prof[prof_type][prof_idx].accessible_networks = (uint8_t)ipsec_profile_int_parse(
@@ -409,7 +414,7 @@ int pre_ipsec_prof_set()
 
 int pre_ipsec_samba_prof_set()
 {
-    char buf[SZ_BUF];
+	char buf[SZ_BUF];
     char *p_tmp = NULL;
     int rc = 0;
 	int i;
@@ -548,6 +553,9 @@ void rc_ipsec_start(FILE *fp)
 {
     if(NULL != fp){
         fprintf(fp,"ipsec start > /dev/null 2>&1 \n");
+#if defined(RTCONFIG_QUICKSEC)
+		fprintf(fp, "quicksecpm -f /tmp/quicksecpm.xml -O /tmp/quicksecpm.log -d\n");
+#endif
     }
     return;
 }
@@ -556,6 +564,9 @@ void rc_ipsec_up(FILE *fp, int prof_idx, ipsec_prof_type_t prof_type)
 {
     if((NULL != fp) && ('\0' != prof[prof_type][prof_idx].profilename[0])){
         fprintf(fp, "ipsec up %s & \n", prof[prof_type][prof_idx].profilename);
+#if defined(RTCONFIG_QUICKSEC)
+		//fprintf(fp, "quicksecpm -f /tmp/%s.xml -d\n", prof[prof_type][prof_idx].profilename);
+#endif
     }
     return;
 }
@@ -586,6 +597,10 @@ void rc_ipsec_reload(FILE *fp)
         fprintf(fp, "ipsec reload > /dev/null 2>&1\n"
         		"sleep 1 > /dev/null 2>&1\n");
     }
+#if defined(RTCONFIG_QUICKSEC)
+	killall("quicksecpm", SIGHUP);
+#endif
+	
     return;
 }
 
@@ -604,7 +619,14 @@ void rc_ipsec_stop(FILE *fp)
         /*Disabled ipsec*/
         fprintf(fp, "ipsec stop > /dev/null 2>&1\n"
         		"sleep 1 > /dev/null 2>&1\n");
+#if defined(RTCONFIG_QUICKSEC)
+		//fprintf(fp, "killall quicksecpm\n");
+#endif
     }
+#if defined(RTCONFIG_QUICKSEC)	
+	if (pids("quicksecpm"))
+		killall("quicksecpm", SIGTERM);
+#endif
     return;
 }
 
@@ -1342,6 +1364,389 @@ void run_ipsec_firewall_scripts()
 	return;
 }
 
+#if defined(RTCONFIG_QUICKSEC)
+static qs_virtual_ip_t 
+get_virtual_ip_format(char *virtual_subnet)
+{
+	char *ip, *mask;
+	int i=0;
+	int ip_1, ip_2, ip_3, ip_4;
+	int mask_1, mask_2, mask_3, mask_4, mask_tmp;
+	int ip_start_1, ip_start_2, ip_start_3, ip_start_4;
+	int ip_end_1, ip_end_2, ip_end_3, ip_end_4;
+	
+	qs_virtual_ip_t virtual_ip;
+	memset(&virtual_ip, 0, sizeof(qs_virtual_ip_t));
+
+	ip = strtok(virtual_subnet, "/");
+	mask = strtok(NULL, "/");
+	//DBG(("ip=%s,mask=%s\n", ip, mask));
+	
+	ip_1 = atoi(strtok(ip, "."));
+	ip_2 = atoi(strtok(NULL, "."));
+	ip_3 = atoi(strtok(NULL, "."));
+	ip_4 = atoi(strtok(NULL, "."));
+	
+	mask_tmp = atoi(mask);
+	int bitpatten = 0xff00;
+	
+	if( mask_tmp >= 8){
+		mask_1 = 255;
+		mask_tmp -= 8;
+	}
+	else{
+		i = mask_1;
+		while (i > 0){
+			bitpatten = bitpatten >> 1;
+			i--;
+		}
+		mask_1 = bitpatten & 0xff;	
+	}
+	
+	if( mask_tmp >= 8){
+		mask_2 = 255;
+		mask_tmp -= 8;
+	}
+	else{
+		i = mask_2;
+		while (i > 0){
+			bitpatten = bitpatten >> 1;
+			i--;
+		}
+		mask_2 = bitpatten & 0xff;	
+	}
+	
+	if( mask_tmp >= 8){
+		mask_3 = 255;
+		mask_tmp -= 8;
+	}
+	else{
+		i = mask_3;
+		int bitpatten = 0xff00; 
+		while (i > 0){
+			bitpatten = bitpatten >> 1;
+			i--;
+		}
+		
+		mask_3 = bitpatten & 0xff;	
+	}
+	//DBG(("mask_tmp=%d\n",mask_tmp));
+	if( mask_tmp >= 8){
+		mask_4 = 255;
+	}
+	else{
+		i = mask_tmp;
+		while (i > 0){
+			bitpatten = bitpatten >> 1;
+			i--;
+		}
+		mask_4 = bitpatten & 0xff;	
+	}
+	
+	//DBG(("%d %d %d %d\n", mask_1, mask_2, mask_3, mask_4));
+	//DBG(("%d %d %d %d\n", ip_1, ip_2, ip_3, ip_4));
+	
+	ip_start_1 = ip_1 & mask_1;
+	ip_start_2 = ip_2 & mask_2;
+	ip_start_3 = ip_3 & mask_3;
+	ip_start_4 = (ip_4 & mask_4) + 1;
+	
+	ip_end_1 = ip_1 | (~ mask_1 & 0xff);
+	ip_end_2 = ip_2 | (~ mask_2 & 0xff);
+	ip_end_3 = ip_3 | (~ mask_3 & 0xff);
+	ip_end_4 = (ip_4 | (~ mask_4 & 0xff)) - 1;
+	
+	sprintf(virtual_ip.ip_start, "%d.%d.%d.%d", ip_start_1, ip_start_2, ip_start_3, ip_start_4);
+	sprintf(virtual_ip.ip_end, "%d.%d.%d.%d", ip_end_1, ip_end_2, ip_end_3, ip_end_4);
+	sprintf(virtual_ip.subnet, "%d.%d.%d.%d", mask_1, mask_2, mask_3, mask_4);
+	//DBG(("start_IP=%s, end_IP=%s, subnet=%s\n", ip_start, ip_end, subnet_mask));
+
+	return virtual_ip;
+}
+
+void rc_ipsec_topology_set_XML()
+{
+	int i,prof_count = 0;
+    FILE *fp = NULL;
+    char *p_tmp = NULL, buf[SZ_MIN];
+    p_tmp = &buf[0];
+	char flag_buf[SZ_64BUF], alg_buf[SZ_64BUF];
+    char *s_tmp = NULL, buf1[SZ_BUF];
+	char alg_enc[SZ_MIN], alg_hash[SZ_MIN];
+    s_tmp = &buf1[0];
+	qs_virtual_ip_t virtual_ip;
+	char lan_class[32];
+	char *subnet, *subnet_total;
+	
+    memset(p_tmp, 0, sizeof(char) * SZ_MIN);
+	memset(&virtual_ip, 0, sizeof(qs_virtual_ip_t));
+	memset(alg_buf, 0, sizeof(char)* SZ_64BUF);
+	   
+	if((fp = fopen("/tmp/quicksecpm.xml", "w")) == NULL){
+		DBG(("OPEN %s FAIL!!\n", "/tmp/quicksecpm.xml"));
+		return;
+	}
+	fprintf(fp,"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\n");
+	fprintf(fp,"<!DOCTYPE quicksec PUBLIC \"quicksec:dtd\" \"quicksec.dtd\">\n");
+	fprintf(fp,"<quicksec>\n");
+	fprintf(fp,"  <params>\n");
+	
+	for(prof_count = PROF_CLI; prof_count < PROF_ALL; prof_count++){
+	    for(i = 0; i < MAX_PROF_NUM; i++){
+			if(IPSEC_CONN_EN_DOWN != prof[prof_count][i].ipsec_conn_en){
+				if(PROF_SVR == prof_count)
+		        	sprintf(&buf[0], "ipsec_profile_%d", i+1);
+				else if(PROF_CLI == prof_count)
+					sprintf(&buf[0], "ipsec_profile_client_%d", i+1);
+		        memset(s_tmp, '\0', SZ_BUF);
+		        if(NULL != nvram_safe_get(&buf[0])){
+		            strcpy(s_tmp, nvram_safe_get(&buf[0]));
+		        }
+		        if('\0' == *s_tmp){
+		            memset((ipsec_prof_t *)&prof[prof_count][i], 0, sizeof(ipsec_prof_t));
+		            prof[prof_count][i].ipsec_conn_en = IPSEC_CONN_EN_DEFAULT;
+		            continue;
+		        }
+				
+				if(VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type)
+				{
+					/* virtual server settings */
+					fprintf(fp,"    <address-pool");
+					if(0 != strlen(samba_prof.dns1) && 0 != strlen(samba_prof.dns2))
+						fprintf(fp," dns=\"%s;%s\"", samba_prof.dns1, samba_prof.dns2);
+					else if(0 != strlen(samba_prof.dns1))
+						fprintf(fp," dns=\"%s\"", samba_prof.dns1);
+					else if(0 != strlen(samba_prof.dns2))
+						fprintf(fp," dns=\"%s\"", samba_prof.dns2);
+						
+					if(0 != strlen(samba_prof.nbios1) && 0 != strlen(samba_prof.nbios2))
+						fprintf(fp," wins=\"%s;%s\"", samba_prof.nbios1, samba_prof.nbios2);
+					else if(0 != strlen(samba_prof.nbios1))
+						fprintf(fp," wins=\"%s\"", samba_prof.nbios1);
+					else if(0 != strlen(samba_prof.nbios2))
+						fprintf(fp," wins=\"%s\"", samba_prof.nbios2);
+					fprintf(fp,">\n");
+					ip2class(nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), lan_class);
+					if(0 != strcmp(prof[prof_count][i].local_subnet,lan_class))
+						strncpy(prof[prof_count][i].local_subnet, lan_class, 32);
+					fprintf(fp,"      <subnet>%s</subnet>\n", prof[prof_count][i].local_subnet);
+					strcpy(buf, prof[prof_count][i].virtual_subnet);
+					virtual_ip = get_virtual_ip_format(buf);
+					//DBG(("virtual_subnet=%s\n",prof[prof_count][i].virtual_subnet));
+					fprintf(fp,"      <address netmask=\"%s\">%s-%s</address>\n", virtual_ip.subnet, virtual_ip.ip_start,virtual_ip.ip_end);					
+					fprintf(fp,"    </address-pool>\n");
+				}			
+			}
+		}
+	}
+
+	fprintf(fp,"    <auth-domain>\n");
+	for(prof_count = PROF_CLI; prof_count < PROF_ALL; prof_count++){
+		for(i = 0; i < MAX_PROF_NUM; i++){
+			if(IPSEC_CONN_EN_DOWN != prof[prof_count][i].ipsec_conn_en){
+				if(VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type)
+					fprintf(fp,"      <remote-secret id-type=\"email\" id=\"hostcli@ipsec.com\">%s</remote-secret>\n", prof[prof_count][i].auth_method_key);
+				else
+					fprintf(fp,"      <remote-secret id-type=\"email\" id=\"%s\">%s</remote-secret>\n", prof[prof_count][i].remote_id, prof[prof_count][i].auth_method_key);
+
+				/* support xauth server */
+				if(IPSEC_AUTH2_TYP_SVR == prof[prof_count][i].xauth){
+					char ipsec_client_list_name[SZ_MIN], xauth_buf[SZ_MAX], xauth_tmp[SZ_MAX];
+					char *p_str = NULL, *p_str1 = NULL;
+					char *delim = "\n";
+					char *pch;
+					int idx = 0;
+					memset(ipsec_client_list_name, 0, sizeof(char) * SZ_MIN);
+					sprintf(ipsec_client_list_name, "ipsec_client_list_%d", i+1);
+
+					/* xauth account/password */
+					if(NULL != nvram_safe_get(ipsec_client_list_name)){
+						p_str = &xauth_buf[0];
+						p_str1 = &xauth_tmp[0];
+						memset(xauth_buf, 0, sizeof(char) * SZ_MAX);
+						memset(xauth_tmp, 0, sizeof(char) * SZ_MAX);
+						strcpy(xauth_buf, nvram_safe_get(ipsec_client_list_name));
+						while('\0' != *p_str){
+							if('<' == *p_str){
+								*p_str = '\n';
+							}
+							if('>' == *p_str){
+								*p_str1 = *p_str++ = '\n';
+								
+								p_str1 +=  1;
+							}
+							*p_str1++ = *p_str++;
+						}
+						p_str1 = '\0';
+						pch = strtok(xauth_tmp,delim);
+						while (pch != NULL)
+						{
+							if(idx % 2 == 0)
+								fprintf(fp,"        <password user-name=\"%s",pch);
+							else
+								fprintf(fp,"\" password=\"%s\"/>\n",pch);
+							pch = strtok (NULL, delim);
+
+							idx++;
+						}  
+					}
+				}
+			}
+		}
+	}
+	fprintf(fp,"    </auth-domain>\n");	
+	fprintf(fp,"  </params>\n");
+	fprintf(fp,"  <policy>\n");
+	
+	for(prof_count = PROF_CLI; prof_count < PROF_ALL; prof_count++){
+		for(i = 0; i < MAX_PROF_NUM; i++){
+			if(IPSEC_CONN_EN_DOWN != prof[prof_count][i].ipsec_conn_en){
+				fprintf(fp,"  <!-- %s config -->\n", prof[prof_count][i].profilename);	
+				fprintf(fp,"    <tunnel name=\"%s\"", prof[prof_count][i].profilename);
+
+				flag_buf[0] = '\0';
+				if(VPN_TYPE_NET_NET_SVR == prof[prof_count][i].vpn_type || VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type)
+					strcat_r(flag_buf," dont-initiate",flag_buf);
+				if(VPN_TYPE_NET_NET_PEER == prof[prof_count][i].vpn_type || VPN_TYPE_NET_NET_CLI == prof[prof_count][i].vpn_type)
+					strcat_r(flag_buf," auto",flag_buf);	
+				if(IPSEC_AUTH2_TYP_SVR == prof[prof_count][i].xauth)
+					strcat_r(flag_buf," xauth-methods",flag_buf);
+				if(VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type)
+					strcat_r(flag_buf," require-cfgmode allow-cfgmode",flag_buf);
+				if(IKE_AGGRESSIVE_MODE == prof[prof_count][i].exchange)
+					strcat_r(flag_buf," aggressive-mode",flag_buf);
+				if(NULL == strcmp(prof[prof_count][i].tun_type,"transport"))
+					strcat_r(flag_buf," transport",flag_buf);
+				
+				if(0 != strlen(flag_buf))
+					fprintf(fp," flags=\"%s\"", flag_buf + 1);
+
+				flag_buf[0] = '\0';
+				DBG(("enc2=%d, hash2=%d\n",prof[prof_count][i].encryption_p2, prof[prof_count][i].hash_p2));
+
+				if(ENCRYPTION_TYPE_AES128 == prof[prof_count][i].encryption_p2)
+					strcat_r(flag_buf,"aes",flag_buf);
+				else if(ENCRYPTION_TYPE_3DES == prof[prof_count][i].encryption_p2)
+					strcat_r(flag_buf,"3des",flag_buf);	
+
+				if(HASH_TYPE_SHA1 == prof[prof_count][i].hash_p2)
+					strcat_r(flag_buf," sha1",flag_buf);
+				else if(HASH_TYPE_SHA256 == prof[prof_count][i].hash_p2)
+					strcat_r(flag_buf," sha2",flag_buf);
+				DBG(("flag_buf=%s\n", flag_buf));
+				if(0 != strlen(flag_buf))
+					fprintf(fp," transform=\"esp %s\"", flag_buf);	
+				if(0 != prof[prof_count][i].keylife_p1)
+					fprintf(fp," ike-life=\"%d\"", prof[prof_count][i].keylife_p1);	
+				fprintf(fp,">\n");	
+				if(VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type)
+					fprintf(fp,"      <identity id-type=\"email\" id=\"hostsrv@ipsec.com\">\n");
+				else
+					fprintf(fp,"      <identity id-type=\"email\" id=\"%s\">\n", prof[prof_count][i].local_id);
+				fprintf(fp,"        <local-secret>%s</local-secret>\n", prof[prof_count][i].auth_method_key);
+				fprintf(fp,"      </identity>\n");
+				if(VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type)
+					fprintf(fp,"      <identity type=\"remote\" id-type=\"email\" id=\"hostcli@ipsec.com\"/>\n");
+				else
+					fprintf(fp,"      <identity type=\"remote\" id-type=\"email\" id=\"%s\" flags=\"enforce-identity\"/>\n", prof[prof_count][i].remote_id);
+
+				DBG(("enc=%d, hash=%d\n",prof[prof_count][i].encryption_p1, prof[prof_count][i].hash_p1));
+				flag_buf[0] = '\0';
+				
+				if(ENCRYPTION_TYPE_AES128 == prof[prof_count][i].encryption_p1)
+					strcat_r(flag_buf,"aes",flag_buf);
+				else if(ENCRYPTION_TYPE_3DES == prof[prof_count][i].encryption_p1)
+					strcat_r(flag_buf,"3des",flag_buf);					
+				
+				
+				if(HASH_TYPE_SHA1 == prof[prof_count][i].hash_p1)
+					strcat_r(flag_buf," sha1",flag_buf);
+				else if(HASH_TYPE_SHA256 == prof[prof_count][i].hash_p1)
+					strcat_r(flag_buf," sha2",flag_buf);
+				if(0 != strlen(flag_buf))
+					fprintf(fp,"      <ike-algorithms>%s</ike-algorithms>\n", flag_buf);
+				
+				if(ENCRYPTION_TYPE_AES128 == prof[prof_count][i].encryption_p1)
+					fprintf(fp,"      <algorithm-properties algorithm=\"aes\" min-key-size=\"128\" max-key-size=\"128\" default-key-size=\"128\"/>\n");
+				if(HASH_TYPE_SHA256 == prof[prof_count][i].hash_p1)
+					fprintf(fp,"      <algorithm-properties algorithm=\"sha2\" min-key-size=\"256\" max-key-size=\"256\" default-key-size=\"256\"/>\n");
+				
+				if(0 != prof[prof_count][i].keylife_p2)
+					fprintf(fp,"      <life type=\"seconds\">%d</life>\n", prof[prof_count][i].keylife_p2);	
+				if(NULL != strcmp(prof[prof_count][i].remote_gateway, "null"))
+					fprintf(fp,"        <peer>%s</peer>\n", prof[prof_count][i].remote_gateway);
+				fprintf(fp,"      <local-ip>%s</local-ip>\n", prof[prof_count][i].local_pub_ip);
+				fprintf(fp,"      <ike-versions>%d</ike-versions>\n", prof[prof_count][i].ike);
+				if(0 != prof[prof_count][i].dead_peer_detection)
+					fprintf(fp,"      <dpd-timeout>%d</dpd-timeout>\n", prof[prof_count][i].ipsec_dpd);
+				fprintf(fp,"    </tunnel>\n");
+				if(VPN_TYPE_HOST_NET != prof[prof_count][i].vpn_type){
+					fprintf(fp,"    <rule to-tunnel=\"%s\">\n", prof[prof_count][i].profilename);
+					//fprintf(fp,"      <src>ipv4(%s)</src>\n",prof[prof_count][i].local_subnet);
+					//fprintf(fp,"      <dst>ipv4(%s)</dst>\n",prof[prof_count][i].remote_subnet);
+					fprintf(fp,"      <src>");
+					subnet_total = strdup(prof[prof_count][i].local_subnet);
+					while((subnet = strsep(&subnet_total, ",")) != NULL){
+						if(NULL != strstr(subnet, ":"))
+							fprintf(fp,"ipv6(%s),", subnet);
+						else
+							fprintf(fp,"ipv4(%s),", subnet);
+				    }
+					fprintf(fp,"</src>\n");
+					fprintf(fp,"      <dst>");
+					subnet_total = strdup(prof[prof_count][i].remote_subnet);
+					while((subnet = strsep(&subnet_total, ",")) != NULL){
+						if(NULL != strstr(subnet, ":"))
+							fprintf(fp,"ipv6(%s),", subnet);
+						else
+							fprintf(fp,"ipv4(%s),", subnet);
+				    }
+					fprintf(fp,"</dst>\n");
+					fprintf(fp,"    </rule>\n");
+				}
+
+				if(VPN_TYPE_HOST_NET == prof[prof_count][i].vpn_type){
+					fprintf(fp,"    <rule from-tunnel=\"%s\"/>\n", prof[prof_count][i].profilename);
+				}
+				else{
+					fprintf(fp,"    <rule from-tunnel=\"%s\">\n", prof[prof_count][i].profilename);
+					//fprintf(fp,"      <src>ipv4(%s)</src>\n", prof[prof_count][i].remote_subnet);
+					//fprintf(fp,"      <dst>ipv4(%s)</dst>\n", prof[prof_count][i].local_subnet);
+					fprintf(fp,"      <src>");
+					subnet_total = strdup(prof[prof_count][i].remote_subnet);
+					while((subnet = strsep(&subnet_total, ",")) != NULL){
+						if(NULL != strstr(subnet, ":"))
+							fprintf(fp,"ipv6(%s),", subnet);
+						else
+							fprintf(fp,"ipv4(%s),", subnet);
+				    }
+					fprintf(fp,"</src>\n");
+					fprintf(fp,"      <dst>");
+					subnet_total = strdup(prof[prof_count][i].local_subnet);
+					while((subnet = strsep(&subnet_total, ",")) != NULL){
+						if(NULL != strstr(subnet, ":"))
+							fprintf(fp,"ipv6(%s),", subnet);
+						else
+							fprintf(fp,"ipv4(%s),", subnet);
+				    }
+					fprintf(fp,"</dst>\n");
+					fprintf(fp,"    </rule>\n");
+				}
+			}
+		}
+	}
+		
+	fprintf(fp,"    <rule>\n");
+	fprintf(fp,"      <src>ipv4(0.0.0.0/0)</src>\n");
+	fprintf(fp,"      <dst>ipv4(0.0.0.0/0)</dst>\n");	
+	fprintf(fp,"    </rule>\n");
+	fprintf(fp,"  </policy>\n");
+	fprintf(fp,"</quicksec>\n");
+	fclose(fp);
+    return;
+}
+
+#endif
 
 void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 {
@@ -1365,6 +1770,9 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
     rc_ipsec_conf_set();
     rc_ipsec_secrets_set();
     rc_strongswan_conf_set();
+#if defined(RTCONFIG_QUICKSEC)
+	rc_ipsec_topology_set_XML();
+#endif
 	if ((fp = fopen(FILE_PATH_IPSEC_SH, "w")) == NULL){
 		DBG(("OPEN %s FAIL!!\n", FILE_PATH_IPSEC_SH));
 		return;
@@ -1374,7 +1782,7 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 		DBG(("OPEN %s FAIL!!\n", FILE_PATH_IPSEC_IPTABLES_RULE));
 		return;
 	}
-
+		
 #if 0
     if(FALSE == ipsec_start_en){
         rc_ipsec_start(fp);
@@ -1396,11 +1804,18 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 	if(FALSE == ipsec_start_en && (nvram_get_int("ipsec_server_enable") == 1 || nvram_get_int("ipsec_client_enable") == 1 )){
 		rc_ipsec_start(fp);
 		ipsec_start_en = TRUE;
+#if defined(RTCONFIG_QUICKSEC)		
+		modprobe("ah4");
+		modprobe("esp4");
+		modprobe("ipcomp");
+		modprobe("xfrm4_tunnel");
+		modprobe("xfrm_user");
+#endif
 	}
 	
-		rc_ipsec_rereadall(fp);
-		rc_ipsec_reload(fp);
-	
+	rc_ipsec_rereadall(fp);
+	rc_ipsec_reload(fp);
+
 	for(prof_count = PROF_CLI; prof_count < PROF_ALL; prof_count++){
 		DBG(("rc_ipsec_down_stat>>>> 0x%x,prof_count=%d\n", pre_bitmap_en[prof_count],prof_count));
     	for(i = 0; i < MAX_PROF_NUM; i++){
@@ -1480,6 +1895,7 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 	            if(((uint32_t)(1 << i)) != (pre_bitmap_en[prof_count] & ((uint32_t)(1 << i)))){
 						//cur_bitmap_en = cur_bitmap_en_scan();
 						get_bitmap_scan(cur_bitmap_en_p);
+						if(0 != strcmp(interface,"")){
 							fprintf(fp, "iptables -D INPUT -i %s --protocol esp -j ACCEPT\n", interface);
 							fprintf(fp, "iptables -D INPUT -i %s --protocol ah -j ACCEPT\n", interface);
 							fprintf(fp, "iptables -D INPUT -i %s -p udp --dport 500 -j ACCEPT\n", interface);
@@ -1527,6 +1943,7 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 						    }
 							
 						}
+						}
 						if(VPN_TYPE_NET_NET_PEER == prof[prof_count][i].vpn_type || VPN_TYPE_NET_NET_CLI == prof[prof_count][i].vpn_type)
                 rc_ipsec_up(fp, i, prof_count);
             }
@@ -1557,7 +1974,7 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 				rc_ipsec_down(fp, i, prof_count);
 			
 			}
-        }
+		}
 		pre_bitmap_en[prof_count] = cur_bitmap_en_p[prof_count];
 	}
 

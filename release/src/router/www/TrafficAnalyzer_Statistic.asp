@@ -1450,6 +1450,8 @@ function cal_agreement_block(){
 function eula_confirm(){
 	document.form.TM_EULA.value = 1;
 	document.form.bwdpi_db_enable.value = 1;
+	$("#agreement_panel").fadeOut(100);
+	document.getElementById("hiddenMask").style.visibility = "hidden";
 	document.form.action_wait.value = "15";
 	applyRule();
 }
@@ -1465,7 +1467,15 @@ function cancel(){
 
 function applyRule(){
 	document.form.action_script.value = "restart_wrs;restart_firewall";
-	document.form.submit();
+	
+	if(reset_wan_and_nat(document.form, document.form.bwdpi_db_enable.value)) {
+		document.form.submit();
+	}
+	else {
+		curState = 0;
+		document.form.bwdpi_db_enable.value = 0;
+		$('#traffic_analysis_enable').find('.iphone_switch').animate({backgroundPosition: -37}, "slow");
+	}
 }
 
 function setHover_css(){
@@ -1651,7 +1661,7 @@ function getClientCurrentName(_mac) {
 																	<div style="font-size:16px;"><#Statistic_display_type#>:</div>
 																</td>
 																<td>
-																	<div id="router" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter_pressed" onclick="switch_content(this);"><#Device_type_02_RT#></div>
+																	<div id="router" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter_pressed" onclick="switch_content(this);">Clients</div>
 																</td>
 																<td>
 																	<div id="apps" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter" onclick="switch_content(this);"><#Apps#></div>
@@ -1668,7 +1678,7 @@ function getClientCurrentName(_mac) {
 														<table>
 															<tr>
 																<td>
-																	<div style="font-size:16px;">Show by:</div>
+																	<div style="font-size:16px;"><#Statistic_show_type#>:</div>
 																</td>
 																<td>
 																	<select class="input_option" id="traffic_option" onChange="change_traffic_direction(this);">

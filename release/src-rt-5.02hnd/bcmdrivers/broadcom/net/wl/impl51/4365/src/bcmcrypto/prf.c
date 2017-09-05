@@ -5,7 +5,7 @@
  * Original implementation of hmac_sha1(), PRF(), and test vectors data are
  * from "SSN for 802.11-0.21.doc"
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

@@ -7,7 +7,7 @@
 # $Id: wl_generic.mk,v 1.10 2011-01-21 22:12:09 $
 #
 
-ifneq ($(wildcard ../hnd_shared/../../src/router/dpsta),)
+ifneq ($(wildcard ../../bcmdrivers/broadcom/net/wl/bcm94908/main/src/router/dpsta),)
     DPSTASRC := $(SRCBASE_OFFSET)/router/dpsta
 else
     DPSTASRC := $(SRCBASE_OFFSET)/../components/router/dpsta

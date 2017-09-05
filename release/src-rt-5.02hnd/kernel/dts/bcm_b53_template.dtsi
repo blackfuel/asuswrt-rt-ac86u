@@ -113,6 +113,15 @@
 				     <&B53_3>;
 	};
 
+        sdhci: sdhci@ff858000 {
+                compatible = "brcm,bcm63xx-sdhci";
+                reg = <0x00000000 0xff858000 0x00000000 0x100>;
+                interrupts = <GIC_SPI SDIO_EMMC_SPI IRQ_TYPE_LEVEL_HIGH>;
+                bus-width = <8>;
+                non-removable;
+                mmc-ddr-1_8v;
+        };
+
 	brcm-legacy {
 		compatible = "brcm,brcm-legacy";
 	};

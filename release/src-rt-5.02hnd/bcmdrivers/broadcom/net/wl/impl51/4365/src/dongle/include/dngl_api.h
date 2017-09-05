@@ -1,7 +1,7 @@
 /*
  * RTE DONGLE API external definitions
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: dngl_api.h 474819 2014-05-02 10:22:36Z $
+ * $Id: dngl_api.h 661371 2016-09-25 01:54:17Z $
  */
 
 #ifndef _dngl_api_h_
@@ -46,7 +46,12 @@ extern void dngl_detach(struct dngl *dngl);
 #ifdef RSOCK
 extern int dngl_sendslave(struct dngl *dngl, void *p);
 #endif
+#if defined(PKTC_TX_DONGLE) && defined(BCMMSGBUF)
+/* PCIE BCMMSGBUF based bus layer sendup using PKTC to include packet count */
+extern void dngl_sendup(struct dngl *dngl, void *p, uint32 pktcnt);
+#else
 extern void dngl_sendup(struct dngl *dngl, void *p);
+#endif
 extern void dngl_ctrldispatch(struct dngl *dngl, void *p, uchar *buf);
 extern void dngl_txstop(struct dngl *dngl);
 extern void dngl_txstart(struct dngl *dngl);

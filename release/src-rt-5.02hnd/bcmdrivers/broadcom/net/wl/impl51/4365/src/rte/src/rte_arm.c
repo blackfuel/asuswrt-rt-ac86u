@@ -2,7 +2,7 @@
  *
  * HND RTE support routines for ARM CPU.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -746,7 +746,7 @@ BCMATTACHFN(hnd_cpu_deadman_init)(si_t *sih)
 	}
 	else {
 		/* Default disable deadman timer if NVRAM is not specified */
-		deadman_to = 0;
+		deadman_to = 5000000; //0 DEADMAN_TIMER
 	}
 
 	if (deadman_to) {

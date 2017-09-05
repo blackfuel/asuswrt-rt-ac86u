@@ -328,7 +328,7 @@ function showDSLWANList(){
 				}
 				cell[6].style.color = "white";
 				cell[7] = addRow.insertCell(7);
-				cell[7].innerHTML = '<center><span style="cursor:pointer;" onclick="chg_pvc('+i.toString()+')"><img src="/images/New_ui/accountedit.png"></span></center>';
+				cell[7].innerHTML = '<center><span style="cursor:pointer;" onclick="chg_pvc('+i.toString()+')"><input class="edit_btn"></span></center>';
 				cell[7].style.color = "white";
 				cell[8] = addRow.insertCell(8);
 				cell[8].innerHTML = '<center><input class="remove_btn" onclick="del_pvc('+i.toString()+');" value=""/></center>';

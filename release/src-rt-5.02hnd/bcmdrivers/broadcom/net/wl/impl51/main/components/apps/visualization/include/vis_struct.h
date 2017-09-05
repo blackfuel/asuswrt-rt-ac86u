@@ -1,7 +1,7 @@
 /*
  * Linux Visualization System common structures header
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_struct.h 617465 2016-02-05 10:52:38Z $
+ * $Id: vis_struct.h 672659 2016-11-29 10:24:01Z $
  */
 
 #ifndef _VIS_STRUCT_H_
@@ -105,6 +105,7 @@ typedef struct dut_info_t_ {
 	char mcastrsntype[MAX_MULTICAST_RSN]; /* RSN multicast cipher */
 	char ucastrsntype[MAX_UNICAST_RSN]; /* RSN unicast ciphers */
 	char akmrsntype[MAX_AKM_TYPE]; /* RSN AKM Suites */
+	uint32 errinfo;			/* Error information. */
 } dut_info_t;
 
 typedef struct dut_list_t_ {

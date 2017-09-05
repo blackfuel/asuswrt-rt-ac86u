@@ -31,7 +31,7 @@ var href = self.location.hostname;
 	  		//data:'ip=' + login_ip +"&host=" + url_org,
 			async:false,
       		success: function(response) {
-				self.location = "http://" + lan_ip +":8083/fbwifi/forward.asp?u=" + href;
+				self.location = "http://" + lan_ip +":8084/fbwifi/forward.asp?u=" + href;
 		}
  	});
 	}

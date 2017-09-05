@@ -1,7 +1,7 @@
 /*
  * Key Management Module Implementation - bsscfg support
  * Copyright (c) 2012-2013 Broadcom Corporation, All rights reserved.
- * $Id: km_bsscfg.c 625998 2016-03-18 11:17:23Z $
+ * $Id: km_bsscfg.c 672672 2016-11-29 10:58:39Z $
  */
 
 #include "km_pvt.h"
@@ -405,7 +405,11 @@ km_bsscfg_get_amt_idx(keymgmt_t *km, const wlc_bsscfg_t *bsscfg)
 #ifdef PSTA
 	/* amt reservation support for psta */
 	if (PSTA_ENAB(KM_PUB(km))) {
-		km_hw_amt_reserve(km->hw, PSTA_TA_STRT_INDX, PSTA_RA_PRIM_INDX, TRUE);
+		/* Don't reserve in repeater mode then real-MAC bsscfg can use 0-24
+		 * for amt_idx.
+		 */
+		if (!PSTA_IS_REPEATER(KM_WLC(km)))
+			km_hw_amt_reserve(km->hw, PSTA_TA_STRT_INDX, PSTA_RA_PRIM_INDX, TRUE);
 		km_hw_amt_reserve(km->hw, PSTA_RA_PRIM_INDX, 1, TRUE);
 
 		amt_idx =  (km_amt_idx_t)wlc_psta_rcmta_idx(KM_PSTA(km), bsscfg);

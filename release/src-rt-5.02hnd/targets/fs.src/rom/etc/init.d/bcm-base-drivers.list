@@ -136,6 +136,7 @@ extra/cryptodev.ko
 extra/laser_dev.ko
 extra/sim_card.ko
 extra/i2s.ko
+extra/bcm_thermal.ko
 
 # presecure fullsecure modules
 extra/otp.ko

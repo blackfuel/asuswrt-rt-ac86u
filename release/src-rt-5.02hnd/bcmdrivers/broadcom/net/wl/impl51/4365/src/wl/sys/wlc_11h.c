@@ -2,7 +2,7 @@
  * 802.11h module source file (top level and spectrum management, radar avoidance)
  * Broadcom 802.11abgn Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_11h.c 644679 2016-06-21 10:03:32Z $
+ * $Id: wlc_11h.c 662037 2016-09-28 05:17:09Z $
  */
 
 /**
@@ -836,6 +836,7 @@ static void _wlc_11h_build_basic_report_radar(wlc_info_t *wlc, wlc_bsscfg_t *cfg
 	if (p == NULL) {
 		WL_INFORM(("wl%d: %s: no memory for Measure Report\n",
 		wlc->pub->unit, __FUNCTION__));
+		MFREE(wlc->osh, report, report_len);
 		return;
 	}
 

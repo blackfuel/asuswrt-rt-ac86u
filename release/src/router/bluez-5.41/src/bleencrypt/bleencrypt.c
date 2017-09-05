@@ -11,61 +11,34 @@
 #define SSL_VERSION     ""
 #endif
 
-struct cmd_handler_clnt cmd_handlers_clnt[] = {
-	{ "reqpublickey",	BLE_COMMAND_REQ_PUBLICKEY,		PackBLECommandReqPublicKey,		UnpackBLEResponseReqPublicKey },
-	{ "reqservernonce",	BLE_COMMAND_REQ_SERVERNONCE,		PackBLECommandReqServerNonce,		UnpackBLEResponseReqServerNonce },
-	{ "apply",		BLE_COMMAND_APPLY,			PackBLECommandAPPLY,			UnpackBLEResponseOnly },
-	{ "reset",		BLE_COMMAND_RESET,			PackBLECommandRESET,			UnpackBLEResponseOnly },
-	{ "getwanstatus",	BLE_COMMAND_GET_WAN_STATUS,		PackBLECommandGetWanStatus,		UnpackBLEResponseGetWanStatus },
-	{ "getwifistatus",	BLE_COMMAND_GET_WIFI_STATUS,		PackBLECommandGetWifiStatus,		UnpackBLEResponseGetWifiStatus },
-	{ "setwantype",		BLE_COMMAND_SET_WAN_TYPE,		PackBLECommandSetWanType,		UnpackBLEResponseOnly },
-	{ "setwanpppoename",	BLE_COMMAND_SET_WAN_PPPOE_NAME,		PackBLECommandSetWanPPPoEName,		UnpackBLEResponseOnly },
-	{ "setwanpppoepwd",	BLE_COMMAND_SET_WAN_PPPOE_PWD,		PackBLECommandSetWanPPPoEPWD,		UnpackBLEResponseOnly },
-	{ "setwanipaddr",	BLE_COMMAND_SET_WAN_IPADDR,		PackBLECommandSetWanIPAddr,		UnpackBLEResponseOnly },
-	{ "setwanipsubnetmask",	BLE_COMMAND_SET_WAN_SUBNET_MASK,	PackBLECommandSetWanSubMask,		UnpackBLEResponseOnly },
-	{ "setwandefgateway",	BLE_COMMAND_SET_WAN_GATEWAY,		PackBLECommandSetWanGateway,		UnpackBLEResponseOnly },
-	{ "setwandns1",		BLE_COMMAND_SET_WAN_DNS1,		PackBLECommandSetWanDns1,		UnpackBLEResponseOnly },
-	{ "setwandns2",		BLE_COMMAND_SET_WAN_DNS2,		PackBLECommandSetWanDns2,		UnpackBLEResponseOnly },
-	{ "setlanport",		BLE_COMMAND_SET_WAN_PORT,		PackBLECommandSetWanPort,		UnpackBLEResponseOnly },
-	{ "setwifiname",	BLE_COMMAND_SET_WIFI_NAME,		PackBLECommandSetWifiName,		UnpackBLEResponseOnly },
-	{ "setwifipwd",		BLE_COMMAND_SET_WIFI_PWD,		PackBLECommandSetWifiPWD,		UnpackBLEResponseOnly },
-	{ "setgroupid",		BLE_COMMAND_SET_GROUP_ID,		PackBLECommandSetGroupID,		UnpackBLEResponseOnly },
-	{ "setadminname",	BLE_COMMAND_SET_ADMIN_NAME,		PackBLECommandSetAdminName,		UnpackBLEResponseOnly },
-	{ "setadminpwd",	BLE_COMMAND_SET_ADMIN_PWD,		PackBLECommandSetAdminPWD,		UnpackBLEResponseOnly },
-	{ "setuserlocation",	BLE_COMMAND_SET_USER_LOCATION,		PackBLECommandSetUserLocation,		UnpackBLEResponseOnly },
-	{ "setuserplace",	BLE_COMMAND_SET_USER_PLACE,		PackBLECommandSetUserPlace,		UnpackBLEResponseOnly },
-	{ "setswmode",		BLE_COMMAND_SET_SW_MODE,		PackBLECommandSetSWMode,		UnpackBLEResponseOnly },
-	{ "setwandnsenable",	BLE_COMMAND_SET_WAN_DNS_ENABLE,		PackBLECommandSetWanDnsEnable,		UnpackBLEResponseOnly },
-	{ "getmacbleversion",	BLE_COMMAND_GET_MAC_BLE_VERSION,	PackBLECommandGetMacBleVersion,		UnpackBLEResponseGetMacBleVersion },
-	{ NULL, -1, NULL, NULL }
-};
-
 struct cmd_handler_svr cmd_handlers_svr[] = {
-	{ "reqpublickey",	BLE_COMMAND_REQ_PUBLICKEY,		UnpackBLECommandReqPublicKey,		PackBLEResponseReqPublicKey },
+	{ "reqpublickey",	BLE_COMMAND_REQ_PUBLICKEY,		UnpackBLECommandReq,			PackBLEResponseReqPublicKey },
 	{ "reqservernonce",	BLE_COMMAND_REQ_SERVERNONCE,		UnpackBLECommandReqServerNonce,		PackBLEResponseReqServerNonce },
-	{ "apply",		BLE_COMMAND_APPLY,			UnpackBLECommandAPPLY,			PackBLEResponseOnly },
-	{ "reset",		BLE_COMMAND_RESET,			UnpackBLECommandRESET,			PackBLEResponseOnly },
-	{ "getwanstatus",	BLE_COMMAND_GET_WAN_STATUS,		UnpackBLECommandGetWanStatus,		PackBLEResponseGetWanStatus },
-	{ "getwifistatus",	BLE_COMMAND_GET_WIFI_STATUS,		UnpackBLECommandGetWifiStatus,		PackBLEResponseGetWifiStatus },
-	{ "setwantype",		BLE_COMMAND_SET_WAN_TYPE,		UnpackBLECommandSetWanType,		PackBLEResponseOnly },
-	{ "setwanpppoename",	BLE_COMMAND_SET_WAN_PPPOE_NAME,		UnpackBLECommandSetWanPPPoEName,	PackBLEResponseOnly },
-	{ "setwanpppoepwd",	BLE_COMMAND_SET_WAN_PPPOE_PWD,		UnpackBLECommandSetWanPPPoEPWD,		PackBLEResponseOnly },
-	{ "setwanipaddr",	BLE_COMMAND_SET_WAN_IPADDR,		UnpackBLECommandSetWanIPAddr,		PackBLEResponseOnly },
-	{ "setwanipsubnetmask",	BLE_COMMAND_SET_WAN_SUBNET_MASK,	UnpackBLECommandSetWanSubMask,		PackBLEResponseOnly },
-	{ "setwandefgateway",	BLE_COMMAND_SET_WAN_GATEWAY,		UnpackBLECommandSetWanGateway,		PackBLEResponseOnly },
-	{ "setwandns1",		BLE_COMMAND_SET_WAN_DNS1,		UnpackBLECommandSetWanDns1,		PackBLEResponseOnly },
-	{ "setwandns2",		BLE_COMMAND_SET_WAN_DNS2,		UnpackBLECommandSetWanDns2,		PackBLEResponseOnly },
-	{ "setlanport",		BLE_COMMAND_SET_WAN_PORT,		UnpackBLECommandSetWanPort,		PackBLEResponseOnly },
-	{ "setwifiname",	BLE_COMMAND_SET_WIFI_NAME,		UnpackBLECommandSetWifiName,		PackBLEResponseOnly },
-	{ "setwifipwd",		BLE_COMMAND_SET_WIFI_PWD,		UnpackBLECommandSetWifiPWD,		PackBLEResponseOnly },
-	{ "setgroupid",		BLE_COMMAND_SET_GROUP_ID,		UnpackBLECommandSetGroupID,		PackBLEResponseOnly },
-	{ "setadminname",	BLE_COMMAND_SET_ADMIN_NAME,		UnpackBLECommandSetAdminName,		PackBLEResponseOnly },
-	{ "setadminpwd",	BLE_COMMAND_SET_ADMIN_PWD,		UnpackBLECommandSetAdminPWD,		PackBLEResponseOnly },
-	{ "setuserlocation",	BLE_COMMAND_SET_USER_LOCATION,		UnpackBLECommandSetUserLocation,	PackBLEResponseOnly },
-	{ "setuserplace",	BLE_COMMAND_SET_USER_PLACE,		UnpackBLECommandSetUserPlace,		PackBLEResponseOnly },
-	{ "setswmode",		BLE_COMMAND_SET_SW_MODE,		UnpackBLECommandSetSWMode,		PackBLEResponseOnly },
-	{ "setwandnsenable",	BLE_COMMAND_SET_WAN_DNS_ENABLE,		UnpackBLECommandSetWanDnsEnable,	PackBLEResponseOnly },
-	{ "getmacbleversion",	BLE_COMMAND_GET_MAC_BLE_VERSION,	UnpackBLECommandGetMacBleVersion,	PackBLEResponseGetMacBleVersion },
+	{ "apply",		BLE_COMMAND_APPLY,			UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "reset",		BLE_COMMAND_RESET,			UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "getwanstatus",	BLE_COMMAND_GET_WAN_STATUS,		UnpackBLECommandReq,			PackBLEResponseGetWanStatus },
+	{ "getwifistatus",	BLE_COMMAND_GET_WIFI_STATUS,		UnpackBLECommandReq,			PackBLEResponseGetWifiStatus },
+	{ "setwantype",		BLE_COMMAND_SET_WAN_TYPE,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwanpppoename",	BLE_COMMAND_SET_WAN_PPPOE_NAME,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwanpppoepwd",	BLE_COMMAND_SET_WAN_PPPOE_PWD,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwanipaddr",	BLE_COMMAND_SET_WAN_IPADDR,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwanipsubnetmask",	BLE_COMMAND_SET_WAN_SUBNET_MASK,	UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwandefgateway",	BLE_COMMAND_SET_WAN_GATEWAY,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwandns1",		BLE_COMMAND_SET_WAN_DNS1,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwandns2",		BLE_COMMAND_SET_WAN_DNS2,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setlanport",		BLE_COMMAND_SET_WAN_PORT,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwifiname",	BLE_COMMAND_SET_WIFI_NAME,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwifipwd",		BLE_COMMAND_SET_WIFI_PWD,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setgroupid",		BLE_COMMAND_SET_GROUP_ID,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setadminname",	BLE_COMMAND_SET_ADMIN_NAME,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setadminpwd",	BLE_COMMAND_SET_ADMIN_PWD,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setuserlocation",	BLE_COMMAND_SET_USER_LOCATION,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setuserplace",	BLE_COMMAND_SET_USER_PLACE,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setswmode",		BLE_COMMAND_SET_SW_MODE,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "setwandnsenable",	BLE_COMMAND_SET_WAN_DNS_ENABLE,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
+	{ "getmacbleversion",	BLE_COMMAND_GET_MAC_BLE_VERSION,	UnpackBLECommandReq,			PackBLEResponseGetMacBleVersion },
+	{ "getath1chan",	BLE_COMMAND_GET_ATH1_CHAN,		UnpackBLECommandReq,			PackBLEResponseGetAth1Chan },
+	{ "setath1chan",	BLE_COMMAND_SET_ATH1_CHAN,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
 	{ NULL,			-1,					NULL,					NULL }
 };
 
@@ -88,13 +61,15 @@ struct param_handler_svr param_handlers_svr[] = {
 	{ BLE_COMMAND_SET_WIFI_NAME,		"wlc_ssid",			"restart_wireless",		BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_SET_WIFI_PWD,		"wlc_wpa_psk",			"restart_wireless",		BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_SET_GROUP_ID,		"cfg_group",			"restart_cfgsync",		BLE_DATA_TYPE_STRING },
-	{ BLE_COMMAND_SET_ADMIN_NAME,		"http_username",		"chpass",			BLE_DATA_TYPE_STRING },
-	{ BLE_COMMAND_SET_ADMIN_PWD,		"http_passwd",			"chpass",			BLE_DATA_TYPE_STRING },
+	{ BLE_COMMAND_SET_ADMIN_NAME,		"http_username",		"chpass restart_ftpsamba",	BLE_DATA_TYPE_STRING },
+	{ BLE_COMMAND_SET_ADMIN_PWD,		"http_passwd",			"chpass restart_ftpsamba",	BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_SET_USER_LOCATION,	"cfg_alias",			NULL,				BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_SET_USER_PLACE,		"bt_user_place",		NULL,				BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_SET_SW_MODE,		"sw_mode",			"ble_qis_done",			BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_SET_WAN_DNS_ENABLE,	"wan_dnsenable_x",		"restart_wan_if 0",		BLE_DATA_TYPE_STRING },
 	{ BLE_COMMAND_GET_MAC_BLE_VERSION,	NULL,				NULL,				BLE_DATA_TYPE_NULL },
+	{ BLE_COMMAND_GET_ATH1_CHAN,		NULL,				NULL,				BLE_DATA_TYPE_NULL },
+	{ BLE_COMMAND_SET_ATH1_CHAN,		NULL,				"restart_wireless",             BLE_DATA_TYPE_STRING },
 	{ -1,					NULL,				NULL,				-1 }
 };
 
@@ -198,12 +173,7 @@ void ble_key_act(char *type,  char *action)
 
 	switch (typenum) {
 	case 0:
-		if (actionnum == 0)
-			KeyReset_C();
-		else if (actionnum == 1)
-			KeyInit_C();
-		else
-			goto err;
+		goto err;
 	case 1:
 		if (actionnum == 0)
 			KeyReset_S();
@@ -215,49 +185,6 @@ void ble_key_act(char *type,  char *action)
 
 err:
 	return ;
-}
-
-int ble_encrypt_clnt(unsigned char *input, unsigned char *output, size_t input_len)
-{
-	unsigned char *pdu=malloc(MAX_PACKET_SIZE);
-	unsigned char *data=malloc(MAX_PACKET_SIZE);
-	unsigned int datalen=0;
-	int cmdno, status, pdulen;
-	struct cmd_handler_clnt *handler;
-	int ret;
-
-	memset(pdu, '\0', MAX_PACKET_SIZE);
-	memset(data, '\0', MAX_PACKET_SIZE);
-
-	memcpy(pdu, input, input_len);
-	pdulen = (int) input_len;
-
-	if(BLEENCRYPT_DEBUG) {
-		printf("Clnt Read data \n");
-		dumpHEX(pdu, pdulen);
-	}
-
-	if((ret=UnpackBLEResponseData(pdu, pdulen, &cmdno, &status, data, &datalen))==BLE_RESULT_OK) {
-		for(handler = &cmd_handlers_clnt[0]; handler->command; handler++)
-		{
-			if(handler->cmdno==cmdno) break;
-		}
-		if(handler->command!=NULL) {
-			handler = &cmd_handlers_clnt[cmdno];
-			handler->unpack(data, datalen);
-		}
-	}
-
-	if(BLEENCRYPT_DEBUG) {
-		printf("Clnt Write data \n");
-		dumpHEX(pdu, pdulen);
-	}
-
-	memcpy(output, pdu, pdulen);
-	free(pdu);
-	free(data);
-
-	return pdulen;
 }
 
 int ble_encrypt_svr(unsigned char *input, unsigned char *output, size_t input_len)

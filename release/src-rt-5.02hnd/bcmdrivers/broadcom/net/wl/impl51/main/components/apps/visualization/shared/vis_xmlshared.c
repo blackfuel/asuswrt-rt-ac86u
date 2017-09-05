@@ -1,7 +1,7 @@
 /*
  * Linux Visualization System common xml utility implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_xmlshared.c 617465 2016-02-05 10:52:38Z $
+ * $Id: vis_xmlshared.c 672659 2016-11-29 10:24:01Z $
  */
 
 #include <string.h>
@@ -393,6 +393,9 @@ add_dut_info_node(xmlDocPtr *doc, xmlNodePtr *root_node, dut_info_t *dut_info)
 		xmlNewChild(node, NULL, (const xmlChar*)TAG_AKM,
 			(const xmlChar*)dut_info->akmrsntype);
 	}
+
+	snprintf(tmpstr, sizeof(tmpstr), "%d", dut_info->errinfo);
+	xmlNewChild(node, NULL, (const xmlChar*)TAG_ERR_INFO, (const xmlChar*)tmpstr);
 }
 
 /* Adds Networks TAG node */

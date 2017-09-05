@@ -19,6 +19,7 @@
 #
     
 include $(SRCBASE)/.config
+include $(HND_SRC)/router/.config
 
 TARGET := dhd
 obj-$(CONFIG_BCM_WLAN) := $(TARGET).o
@@ -69,6 +70,7 @@ ifeq ($(REBUILD_DHD_MODULE),1)
 
     # BCA build identifier
     KBUILD_CFLAGS += -DBCA_HNDROUTER
+    KBUILD_CFLAGS += -DBCM_DHDHDR
 
     # dhd-objs is for linking to dhd.o
     $(TARGET)-objs := $(DHD_OBJS)

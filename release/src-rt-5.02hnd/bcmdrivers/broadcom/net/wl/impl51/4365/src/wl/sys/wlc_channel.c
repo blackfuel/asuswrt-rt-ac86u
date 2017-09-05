@@ -1,6 +1,6 @@
 /*
  * Common interface to channel definitions.
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -8,7 +8,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_channel.c 667151 2016-10-26 05:49:20Z $
+ * $Id: wlc_channel.c 675653 2016-12-16 14:27:14Z $
  */
 
 
@@ -3019,13 +3019,21 @@ wlc_channel_set_chanspec(wlc_cm_info_t *wlc_cmi, chanspec_t chanspec)
 		ASSERT((stf->txstreams > 1) && (stf->rxstreams > 1));
 		/* Number of tx and rx streams must be even to combine two 80 streams for 160Mhz */
 		ASSERT((stf->txstreams & 1) == 0 && (stf->rxstreams & 1) == 0);
-		if (stf->op_txstreams > 2) {
+		if (stf->op_txstreams >= 2) {
 			stf->op_txstreams = stf->txstreams >> 1;
 			stf->op_rxstreams = stf->rxstreams >> 1;
 			update_cap = TRUE;
 		}
 	}
 #ifdef DYN160
+	/* When DYN160 is not enabled, NSS is limited to 2 */
+	else if (!DYN160_ACTIVE(wlc->pub) && BSSCFG_STA(bsscfg)) {
+		if (stf->op_txstreams >= 2) {
+			stf->op_txstreams = stf->txstreams >> 1;
+			stf->op_rxstreams = stf->rxstreams >> 1;
+			update_cap = TRUE;
+		}
+	}
 	/* bw <= 80MHz with DYN160 */
 	else if (DYN160_ACTIVE(wlc->pub) &&
 			((stf->op_txstreams != stf->txstreams) ||
@@ -3054,8 +3062,6 @@ wlc_channel_set_chanspec(wlc_cm_info_t *wlc_cmi, chanspec_t chanspec)
 	if (BSSCFG_AP(bsscfg)) {
 		if (CHSPEC_IS160(chanspec) || WL_BW_CAP_160MHZ(wlc->band->bw_cap)) {
 			bsscfg->oper_mode_enabled = TRUE;
-		} else if (CHSPEC_IS80(chanspec) && WL_BW_CAP_80MHZ(wlc->band->bw_cap)) {
-			bsscfg->oper_mode_enabled = FALSE;
 		}
 	} else {
 		/* For STA oper_mode is NOT Enabled */

@@ -1,7 +1,7 @@
 /*
  * AP Module
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_ap.c 651892 2016-07-28 20:55:44Z $
+ * $Id: wlc_ap.c 676345 2016-12-21 15:16:06Z $
  */
 
 #include <wlc_cfg.h>
@@ -46,6 +46,7 @@
 #include <wlc.h>
 #include <wlc_ie_misc_hndlrs.h>
 #include <wlc_hw.h>
+#include <wlc_hw_priv.h>
 #include <wlc_apps.h>
 #include <wlc_scb.h>
 #include <wlc_scb_ratesel.h>
@@ -1532,6 +1533,7 @@ wlc_ap_authresp(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
 #endif /* WLBTAMP */
 
 		/* auth_alg is coming from the STA, not us */
+		scb->auth_alg = (uint8)auth_alg;
 		switch (auth_alg) {
 		case DOT11_OPEN_SYSTEM:
 
@@ -1557,6 +1559,8 @@ wlc_ap_authresp(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
 			}
 			break;
 		case DOT11_SHARED_KEY:
+			break;
+		case DOT11_FAST_BSS:
 			break;
 		default:
 			WL_ERROR(("wl%d: %s: unhandled algorithm %d from %s\n",
@@ -1608,23 +1612,20 @@ parse_ies:
 
 send_result:
 
-	/* send authentication response */
-	if (status == DOT11_SC_SUCCESS && scb && SCB_AUTHENTICATED(scb)) {
-		WL_ASSOC(("wl%d.%d %s: %s authenticated\n", wlc->pub->unit,
-			WLC_BSSCFG_IDX(bsscfg), __FUNCTION__, sa));
-		wlc_bss_mac_event(wlc, bsscfg, WLC_E_AUTH_IND, &hdr->sa, WLC_E_STATUS_SUCCESS,
-			DOT11_SC_SUCCESS, auth_alg, 0, 0);
-	}
+	if ((status == DOT11_SC_SUCCESS) && (ftpparm.auth.alg == DOT11_FAST_BSS) &&
+		SCB_AUTHENTICATING(scb)) {
 
 #ifdef RXCHAIN_PWRSAVE
 	/* fast switch back from rxchain_pwrsave state upon authentication */
-	if ((status == DOT11_SC_SUCCESS) && scb && SCB_AUTHENTICATED(scb)) {
 		wlc_reset_rxchain_pwrsave_mode(ap);
-	}
 #endif /* RXCHAIN_PWRSAVE */
+		goto smf_stats;
+	}
 
-	wlc_sendauth(bsscfg, &hdr->sa, &bsscfg->BSSID, scb,
-		auth_alg, auth_seq + 1, status, NULL, short_preamble);
+	if (scb != NULL) {
+		wlc_ap_sendauth(wlc->ap, bsscfg, scb, auth_alg, auth_seq + 1, status, NULL,
+			short_preamble, TRUE);
+	}
 
 smf_stats:
 	wlc_smfstats_update(wlc, bsscfg, SMFS_TYPE_AUTH, status);
@@ -2783,7 +2784,8 @@ static void wlc_ap_process_assocreq_exit(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg
 	reassoc = ((ltoh16(hdr->fc) & FC_KIND_MASK) == FC_REASSOC_REQ);
 	/* send WLC_E_REASSOC_IND/WLC_E_ASSOC_IND to interested App and/or non-WIN7 OS */
 	wlc_bss_mac_event(wlc, bsscfg, reassoc ? WLC_E_REASSOC_IND : WLC_E_ASSOC_IND,
-		&hdr->sa, WLC_E_STATUS_SUCCESS, param->status, 0, param->e_data, param->e_datalen);
+		&hdr->sa, WLC_E_STATUS_SUCCESS, param->status, scb->auth_alg,
+		param->e_data, param->e_datalen);
 	/* Suspend STA sniffing if it is associated to AP  */
 	if (STAMON_ENAB(wlc->pub) && STA_MONITORING(wlc, &hdr->sa))
 		wlc_stamon_sta_sniff_enab(wlc->stamon_info, &hdr->sa, FALSE);
@@ -3122,8 +3124,16 @@ wlc_ap_sta_onradar_upd(wlc_bsscfg_t *cfg)
 			FOREACH_AS_STA(wlc, sta_idx, sta_cfg) {
 				wlc_bss_info_t *sta_bss = sta_cfg->current_bss;
 				uint8 sta_ctlchan = wf_chspec_ctlchan(sta_bss->chanspec);
-
-				if (ap_ctlchan == sta_ctlchan) {
+				/* Intentionally disable dfs_slave_present for following
+				 * configuration:
+				 * WBD application + DWDS repeater running as STA and
+				 * MBSS created with AP configuration.
+				 */
+				if ((ap_ctlchan == sta_ctlchan) &&
+#ifdef CLIENT_CSA
+						!(sta_cfg->_dwds) &&
+#endif	/* CLIENT_CSA */
+						TRUE) {
 					dfs_slave_present = TRUE;
 					break;
 				}
@@ -3173,6 +3183,9 @@ wlc_restart_ap(wlc_ap_info_t *ap)
 #endif /* RADAR */
 
 	ap->pre_tbtt_us = (MBSS_ENAB(wlc->pub)) ? MBSS_PRE_TBTT_DEFAULT_us : PRE_TBTT_DEFAULT_us;
+
+	/* Reset to re-configure TSF registers for beaconing */
+	wlc->aps_associated = 0;
 
 	/* Bring up any enabled AP configs which aren't up yet */
 	FOREACH_AP(wlc, i, bsscfg) {
@@ -3657,13 +3670,24 @@ wlc_ap_sta_probe(wlc_ap_info_t *ap, struct scb *scb)
 static void
 wlc_ap_sta_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb, void *pkt)
 {
-#if defined(BCMDBG) || defined(WLMSG_INFORM)
-	char eabuf[ETHER_ADDR_STR_LEN];
-#endif
-
+	bool infifoflush = FALSE;
 	ASSERT(scb != NULL);
 
 	scb->flags &= ~SCB_PENDING_PROBE;
+
+	/* Reprobe if the pkt is freed (txstatus 0) or the pkt txstatus updated right before
+	 * mac got suspended due to fifo flush
+	 */
+#ifdef WLC_LOW
+	infifoflush = (wlc->hw->mac_suspend_depth > 0);
+#endif /* WLC_LOW */
+	if (!txstatus || infifoflush) {
+		WL_ERROR(("wl%d.%d: STA "MACF" probe bailed out. cnt %d txs 0x%x macsusp %d\n",
+			wlc->pub->unit, WLC_BSSCFG_IDX(SCB_BSSCFG(scb)), ETHER_TO_MACF(scb->ea),
+			scb->grace_attempts, txstatus, infifoflush));
+		wlc->ap->reprobe_scb = TRUE;
+		return;
+	}
 
 #ifdef PSPRETEND
 	if (SCB_PS_PRETEND_PROBING(scb)) {
@@ -3720,8 +3744,12 @@ wlc_ap_sta_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb, void 
 		return;
 	}
 
-	WL_INFORM(("wl%d: wlc_ap_sta_probe_complete: no ACK from %s for Null Data\n",
-		wlc->pub->unit, bcm_ether_ntoa(&scb->ea, eabuf)));
+	/* Don't attempt to deauth/free an scb during big hammers */
+	if (wlc->hw->reinit)
+		return;
+
+	WL_INFORM(("wl%d: wlc_ap_sta_probe_complete: no ACK from "MACF" for Null Data\n",
+		wlc->pub->unit, ETHER_TO_MACF(scb->ea)));
 
 	if (SCB_AUTHENTICATED(scb)) {
 		wlc_deauth_complete(wlc, SCB_BSSCFG(scb), WLC_E_STATUS_SUCCESS, &scb->ea,
@@ -5146,7 +5174,8 @@ static void wlc_ap_bsscfg_deinit(void *context, wlc_bsscfg_t *cfg)
 static uint16
 wlc_bsscfg_newaid(wlc_bsscfg_t *cfg)
 {
-	int pos;
+	int pos, i;
+	wlc_bsscfg_t *bsscfg;
 
 	ASSERT(cfg);
 
@@ -5162,6 +5191,16 @@ wlc_bsscfg_newaid(wlc_bsscfg_t *cfg)
 			/* mark the position being used */
 			setbit(cfg->aidmap, pos);
 			break;
+		}
+	}
+	/* To keep the AID unique across BSSes, mark the same position across other BSSes
+	   so that it will not be used for those BSSes.
+	   Note that the aidmap for a BSSCFG no more represents ONLY the STAs
+	   associated to that BSS but more than those.
+	*/
+	FOREACH_BSS(cfg->wlc, i, bsscfg) {
+		if (bsscfg->aidmap) {
+			setbit(bsscfg->aidmap, pos);
 		}
 	}
 	ASSERT(pos < cfg->wlc->pub->tunables->maxscb);
@@ -5183,6 +5222,9 @@ wlc_ap_scb_free_notify(void *context, struct scb *scb)
 	wlc_ap_info_pvt_t *appvt = (wlc_ap_info_pvt_t*)context;
 	wlc_info_t *wlc = appvt->wlc;
 	wlc_bsscfg_t *bsscfg = SCB_BSSCFG(scb);
+	int i;
+	wlc_bsscfg_t *cfg;
+
 #if defined(BCMDBG) || defined(WLMSG_ASSOC)
 	char eabuf[ETHER_ADDR_STR_LEN], *ea = bcm_ether_ntoa(&scb->ea, eabuf);
 #endif /* BCMDBG */
@@ -5206,6 +5248,14 @@ wlc_ap_scb_free_notify(void *context, struct scb *scb)
 	if (bsscfg && scb->aid && bsscfg->aidmap) {
 		ASSERT(AID2AIDMAP(scb->aid) < wlc->pub->tunables->maxscb);
 		clrbit(scb->bsscfg->aidmap, AID2AIDMAP(scb->aid));
+	}
+	/* to keep the AID unique, clear position across other BSSes */
+	if (scb->aid) {
+		FOREACH_BSS(wlc, i, cfg) {
+			if (cfg->aidmap) {
+				clrbit(cfg->aidmap, AID2AIDMAP(scb->aid));
+			}
+		}
 	}
 }
 
@@ -6610,3 +6660,30 @@ wlc_wlancoex_upd(wlc_info_t *wlc, wlc_ap_info_t *ap, bool coex_en)
 	return err;
 }
 #endif /* USBAP */
+
+int
+wlc_ap_sendauth(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
+	struct scb *scb, int auth_alg,
+	int auth_seq, int status, uint8 *challenge_text,
+	bool short_preamble, bool send_auth)
+{
+	wlc_ap_info_pvt_t *appvt = (wlc_ap_info_pvt_t *) ap;
+	wlc_info_t *wlc = appvt->wlc;
+
+	if ((status == DOT11_SC_SUCCESS) && scb && SCB_AUTHENTICATED(scb)) {
+		wlc_bss_mac_event(wlc, bsscfg, WLC_E_AUTH_IND, &scb->ea,
+			WLC_E_STATUS_SUCCESS, DOT11_SC_SUCCESS, auth_alg, 0, 0);
+
+#ifdef RXCHAIN_PWRSAVE
+		/* fast switch back from rxchain_pwrsave state upon authentication */
+		wlc_reset_rxchain_pwrsave_mode(ap);
+#endif /* RXCHAIN_PWRSAVE */
+	}
+
+	if (send_auth) {
+		wlc_sendauth(bsscfg, &scb->ea, &bsscfg->BSSID, scb,
+			auth_alg, auth_seq, status, NULL, short_preamble);
+	}
+
+	return BCME_OK;
+}

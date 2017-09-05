@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: linux_osl.c 633903 2016-04-26 03:01:52Z $
+ * $Id: linux_osl.c 661372 2016-09-25 01:55:55Z $
  */
 
 #define LINUX_PORT
@@ -1829,6 +1829,65 @@ osl_pktdup(osl_t *osh, void *skb)
 #else
 	if ((p = skb_clone((struct sk_buff *)skb, GFP_ATOMIC)) == NULL)
 #endif
+		return NULL;
+
+#ifdef CTFPOOL
+	if (PKTISFAST(osh, skb)) {
+		ctfpool_t *ctfpool;
+
+		/* if the buffer allocated from ctfpool is cloned then
+		 * we can't be sure when it will be freed. since there
+		 * is a chance that we will be losing a buffer
+		 * from our pool, we increment the refill count for the
+		 * object to be alloced later.
+		 */
+		ctfpool = (ctfpool_t *)CTFPOOLPTR(osh, skb);
+		ASSERT(ctfpool != NULL);
+		PKTCLRFAST(osh, p);
+		PKTCLRFAST(osh, skb);
+		ctfpool->refills++;
+	}
+#endif /* CTFPOOL */
+
+	/* Clear PKTC  context */
+	PKTSETCLINK(p, NULL);
+	PKTCCLRFLAGS(p);
+	PKTCSETCNT(p, 1);
+	PKTCSETLEN(p, PKTLEN(osh, skb));
+
+	/* skb_clone copies skb->cb.. we don't want that */
+	if (osh->pub.pkttag)
+		OSL_PKTTAG_CLEAR(p);
+
+	/* Increment the packet counter */
+	atomic_inc(&osh->cmn->pktalloced);
+#ifdef BCMDBG_CTRACE
+	ADD_CTRACE(osh, (struct sk_buff *)p, file, line);
+#endif
+	return (p);
+}
+
+/* Copy a packet.
+ * The pkttag contents are NOT cloned.
+ */
+#ifdef BCMDBG_CTRACE
+void *
+osl_pktdup_cpy(osl_t *osh, void *skb, int line, char *file)
+#else
+void *
+osl_pktdup_cpy(osl_t *osh, void *skb)
+#endif /* BCMDBG_CTRACE */
+{
+	void * p;
+
+	ASSERT(!PKTISCHAINED(skb));
+
+	/* clear the CTFBUF flag if set and map the rest of the buffer
+	 * before cloning.
+	 */
+	PKTCTFMAP(osh, skb);
+
+	if ((p = pskb_copy((struct sk_buff *)skb, GFP_ATOMIC)) == NULL)
 		return NULL;
 
 #ifdef CTFPOOL

@@ -131,9 +131,6 @@ extern void stop_dc();
 extern void start_dc(char *path);
 extern int data_collect_main(char *cmd, char *path);
 
-//tools.c
-extern void check_filesize(char *path, long int size);
-
 //watchdog_check.c
 extern void auto_sig_check();
 extern void sqlite_db_check();

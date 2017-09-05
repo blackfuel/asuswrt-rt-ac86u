@@ -993,6 +993,7 @@ pj_bool_t pjsua_call_on_incoming(pjsip_rx_data *rdata)
 	return PJ_TRUE;
 	} 
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	/* Remote peer requires SCTP*/
 	if ((options & PJSIP_INV_TNL_REQUIRE_SCTP) > 0) {
 		call->use_sctp = 1;
@@ -1000,6 +1001,7 @@ pj_bool_t pjsua_call_on_incoming(pjsip_rx_data *rdata)
 		if (call->med_orig)
 			call->med_orig->use_sctp = 1;  // dtls
 	}
+#endif
 
 
     /* Get suitable Contact header */

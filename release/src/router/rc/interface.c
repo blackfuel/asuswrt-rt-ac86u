@@ -335,11 +335,11 @@ static int route_manip(int cmd, char *name, int metric, char *dst, char *gateway
 
 	/* Fill in rtentry */
 	memset(&rt, 0, sizeof(rt));
-	if (dst)
+	if (dst && *dst)
 		inet_aton(dst, &sin_addr(&rt.rt_dst));
-	if (gateway)
+	if (gateway && *gateway)
 		inet_aton(gateway, &sin_addr(&rt.rt_gateway));
-	if (genmask)
+	if (genmask && *genmask)
 		inet_aton(genmask, &sin_addr(&rt.rt_genmask));
 	rt.rt_metric = metric;
 	rt.rt_flags = RTF_UP;
@@ -522,7 +522,11 @@ int start_vlan(void)
 	if(!nvram_match("switch_wantag", "none")&&!nvram_match("switch_wantag", "")&&!nvram_match("switch_wantag", "hinet"))
 	{
 #if defined(RTCONFIG_QCA)
+#if defined(RTCONFIG_SWITCH_RTL8370MB_PHY_QCA8033_X2)
+		char *wan_base_if = "eth1";	/* lan_1, WAN interface if IPTV is enabled. */
+#else
 		char *wan_base_if = "eth0";
+#endif
 #elif defined(RTCONFIG_RALINK)
 #if defined(RTCONFIG_RALINK_MT7620) /* RT-N14U, RT-AC52U, RT-AC51U, RT-N11P, RT-N54U, RT-AC1200HP, RT-AC54U */
 		char *wan_base_if = "eth2";

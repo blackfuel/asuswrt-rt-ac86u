@@ -23,6 +23,14 @@ INIT += fsys/rw-rootfs.sh
 RC3  += S70rw-rootfs
 endif
 
+ifneq ($(strip $(BRCM_DRIVER_SPU)),)
+ifneq ($(strip $(BRCM_DRIVER_PKTFLOW)),)
+ifeq ($(strip $(BRCM_CHIP)),4908)
+BIN += spu_blog_enable
+endif
+endif
+endif
+
 init-install: ${INIT}
 	mkdir -p $(INSTALL_DIR)/rom/rom/etc/init.d
 	mkdir -p $(INSTALL_DIR)/rom/rom/etc/rc3.d

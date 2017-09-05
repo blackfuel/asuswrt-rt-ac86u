@@ -1,7 +1,7 @@
 /*
  * Driver O/S-independent utility routines
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: bcmutils.c 564652 2015-06-18 01:44:25Z $
+ * $Id: bcmutils.c 668198 2016-11-02 07:31:15Z $
  */
 
 #ifndef __FreeBSD__
@@ -3273,6 +3273,185 @@ set_bitrange(void *array, uint start, uint end, uint maxbit)
 		set_bitrange(array, 0, end, maxbit);
 	}
 }
+
+/* Number of bits in a uint32 */
+#define NUM_BITS_U32                (NBBY * sizeof(uint32))
+/* Number of uint32 required for a bitmap */
+#define BMAP_NUM_U32(sz)            ((sz) / NUM_BITS_U32)
+/* Given a bitmap position [0..maxbits), get the index iinto uint32 array */
+#define BMAP_B2U32IDX(pos)          ((pos) / NUM_BITS_U32)
+
+#define __WRAP_INC(ix, wrap)        (((ix) + 1) % (wrap))
+
+/* Helper routines for counting sequence of 0's and setting a sequence of 1's */
+static INLINE uint32 /* within a single uint32 */
+_bcm_count_zeros_sequence_u32(uint32 u32, uint32 pos32, const uint32 numbits);
+static INLINE uint32 /* across 'm'ultiple uint32 */
+_bcm_count_zeros_sequence_m32(const uint32 *bmap, uint32 s32, const uint32 e32,
+	const uint32 spos32, const uint32 epos, const uint32 numbits,
+	const uint32 maxbits);
+
+/**
+ * +---------------------------------------------------------------------------+
+ * count number of contiguous zeros from start pos in a uint32
+ * bounded to a range of numbits
+ * +---------------------------------------------------------------------------+
+ */
+static INLINE uint32
+_bcm_count_zeros_sequence_u32(uint32 u32, uint32 pos32, const uint32 numbits)
+{
+	uint32 mask; /* clearing mask */
+
+	/* Zero out all bits trailing from bit pos32 in a uint32 bit word */
+	mask = ((~0U) << pos32);
+	u32 &= mask;
+
+	/* Zero out all bits leading till bit pos32 + numbits in a uint32 bit word */
+	mask = ((~0U) >> (NUM_BITS_U32 - (pos32 + numbits)));
+	u32 &= mask;
+
+	if (u32 != 0U) { /* at least one set bit after masking trailing bits */
+		uint32 lz, tz; /* leading zeros and trailing zeros */
+		u32 ^= (u32-1); /* clear all set bits except the trailing set bit */
+
+		/* Count leading zeros: Use ARMv7 clz instruction */
+		lz = bcm_count_leading_zeros(u32);
+		tz = 31 - lz; /* number of trailing zero bits */
+		return (tz - pos32); /* number of trailing zero bits from position */
+	} else {
+		return numbits; /* return range, as all bits until end of word are zero */
+	}
+}
+
+/**
+ * +---------------------------------------------------------------------------+
+ *
+ * _bcm_count_zeros_sequence_m32
+ *
+ * count number of contiguous zeros from start pos in a multi-uint32.
+ *
+ *    bmap   : pointer to the start of a multiword bitmap
+ *    s32    : uint32 array index in which the start position occurs
+ *    e32    : uint32 array index in which the end position occurs
+ *    spos32 : postion in the uint32 word identified by s32
+ *    epos   : position of the end bit in the multiword bitmap
+ *    numbits: number of bits in the range from [spos .. epos], inclusive
+ *    maxbits: total bits in the bmap
+ *
+ * +---------------------------------------------------------------------------+
+ */
+static INLINE uint32
+_bcm_count_zeros_sequence_m32(const uint32 *bmap, uint32 s32, const uint32 e32,
+	const uint32 spos32, const uint32 epos, const uint32 numbits,
+	const uint32 maxbits)
+{
+	uint32 w32, count, find, found;
+
+	/* Search first word in multi word bitmap */
+	find = NUM_BITS_U32 - spos32;
+	count = _bcm_count_zeros_sequence_u32(bmap[s32], spos32, find);
+
+	if (count < find) {
+		return count;
+	}
+
+	/* Loop over each uint32 with wrapover, until end uint32 (not inclusive) */
+	w32 = (maxbits / NUM_BITS_U32);
+	for (s32 = __WRAP_INC(s32, w32); s32 != e32; s32 = __WRAP_INC(s32, w32)) {
+		if (bmap[s32] != 0) {
+			/* range is entire word */
+			found = _bcm_count_zeros_sequence_u32(bmap[s32], 0, NUM_BITS_U32);
+			return count + found;
+		}
+		count += NUM_BITS_U32;
+	}
+
+	/* Now search in the end uint32 word */
+	find = (epos % NUM_BITS_U32) + 1; /* range is from 0 to end position */
+	found = _bcm_count_zeros_sequence_u32(bmap[e32], 0, find);
+	return count + found;
+}
+
+/**
+ * +---------------------------------------------------------------------------+
+ *
+ * Count the number of continous zeroes starting from bit position "pos",
+ * upto "numbits" bits, in a bitmap carrying "maxbits" number of bits.
+ *
+ *      pos : starting bit position.
+ *            pos must be in the positional range [0 .. maxbits)
+ *            bit at pos is tested for 0.
+ *
+ *      numbits : number of bits in the positional range [pos .. pos+numbits)
+ *            to be tested for 0. bit at position pos+numbits is not tested.
+ *            The positional range may wrap around the bmap.
+ *
+ *      maxbits : total number of bits in bmap
+ *
+ * +---------------------------------------------------------------------------+
+ *
+ * Example: Input bitmap with "maxbits" = 128 total bits:
+ *
+ *      3        2        1        0      0
+ *      1        3        5        7      0      "bmap"
+ *
+ *      10000000 00000000 00000000 10000001      0x80000081
+ *      00000000 10000000 00000000 00000000      0x00800000
+ *      00000000 00000000 00000000 00000000      0x00010000
+ *      00000001 00000000 00000000 00000000      0x01000000
+ *
+ *      --------------------------
+ *      | "pos" | "num" | return |
+ *      --------------------------
+ *      |  ANY  |    0  | ASSERT |  numbits cannot be zero !
+ *      |    0  |    1  |    0   |
+ *      |   30  |   10  |    1   |
+ *      |   32  |   32  |   23   |
+ *      |   60  |   64  |   60   |
+ *      |  127  |    2  |    1   |
+ *      --------------------------
+ *
+ * +---------------------------------------------------------------------------+
+ */
+uint32
+bcm_count_zeros_sequence(const uint8 *bmap,
+	const uint32 pos, const uint32 numbits, const uint32 maxbits)
+{
+	uint32 epos; /* end bit position to test */
+	uint32 s32;  /* index into uint32 array for pos bit */
+	uint32 e32;  /* index into uint32 array for epos bit */
+	uint32 count;
+
+	ASSERT(pos < maxbits);
+	ASSERT(numbits != 0U);
+	ASSERT(numbits <= maxbits);
+	ASSERT(maxbits > NUM_BITS_U32);
+
+	if (numbits == 0)
+		return 0;
+
+	s32 = BMAP_B2U32IDX(pos); /* index into uint32 array of pos */
+
+	if (numbits == 1) { /* test a single bit */
+		count = ((((const uint32 *)bmap)[s32] & (1 << (pos % NUM_BITS_U32))) == 0);
+		return count;
+	}
+
+	epos = (pos + (numbits - 1)) % maxbits; /* end bit position for range */
+	e32 = BMAP_B2U32IDX(epos); /* index into uint32 array of epos */
+
+	if ((e32 == s32) && (numbits <= NUM_BITS_U32)) {
+		/* both pos and epos fall in the same uint32 word */
+		count = _bcm_count_zeros_sequence_u32(((const uint32 *)bmap)[s32],
+			pos % NUM_BITS_U32, numbits);
+	} else { /* pos and epos span multiple uint32 */
+		count = _bcm_count_zeros_sequence_m32((const uint32 *)bmap, s32, e32,
+			pos % NUM_BITS_U32, epos, numbits, maxbits);
+	}
+
+	return count;
+}
+
 
 void
 bcm_bitprint32(const uint32 u32arg)

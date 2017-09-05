@@ -78,7 +78,7 @@ written consent.
 /*--- globals ---*/
 
 /* RFC4008 */
-uint32_t blog_nat_tcp_def_idle_timeout = BLOG_NAT_TCP_DEFAULT_IDLE_TIMEOUT; /* 20 minutes */
+uint32_t blog_nat_tcp_def_idle_timeout = BLOG_NAT_TCP_DEFAULT_IDLE_TIMEOUT; /* 40 minutes */
 uint32_t blog_nat_udp_def_idle_timeout = BLOG_NAT_UDP_DEFAULT_IDLE_TIMEOUT; /* 300 seconds */
 
 uint32_t blog_nat_generic_def_idle_timeout = 600 *HZ;/* 600 seconds */

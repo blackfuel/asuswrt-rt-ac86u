@@ -125,6 +125,8 @@ char referer_host[64];
 char current_page_name[128];
 char user_agent[1024];
 char gen_token[32]={0};
+int do_ssl = 0; 	// use Global for HTTPS upgrade judgment in web.c
+int ssl_stream_fd; 	// use Global for HTTPS stream fd in web.c
 char last_fail_token[32]={0};
 
 asus_token_t *head;
@@ -823,6 +825,10 @@ int check_user_agent(char* user_agent){
 				fromapp=FROM_ASSIA;
 			else if(strcmp( app_framework, "IFTTT") == 0)
 				fromapp=FROM_IFTTT;
+			else if(strcmp( app_framework, "Alexa") == 0)
+				fromapp=FROM_ALEXA;
+			else
+				fromapp=FROM_UNKNOWN;
 		}
 		if(cp1) free(cp1);
 	}
@@ -1287,6 +1293,10 @@ handle_request(void)
 	x_Setting = nvram_get_int("x_Setting");
 
 	for (handler = &mime_handlers[0]; handler->pattern; handler++) {
+#ifdef RTCONFIG_HTTPS
+		if (do_ssl && !strcmp(url, "offline.htm"))
+			continue;
+#endif
 		if (match(handler->pattern, url))
 		{
 			nvram_set("httpd_handle_request", url);
@@ -1306,12 +1316,9 @@ handle_request(void)
 				if ((mime_exception&MIME_EXCEPTION_NOAUTH_FIRST)&&!x_Setting) {
 					//skip_auth=1;
 				}
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 				else if ((mime_exception&MIME_EXCEPTION_NOAUTH_FIRST)&&nvram_match("qis_Setting", "0")) {
 					// pass
-				}else if(!fromapp && nvram_match("sw_mode", "1") && nvram_match("qis_Setting", "0")){
-					snprintf(inviteCode, sizeof(inviteCode), "<script>top.location.href='/QIS_wizard.htm';</script>");
-					send_page( 200, "OK", (char*) 0, inviteCode, 0);
 				}else if(!fromapp && !nvram_match("sw_mode", "1") && strcmp(nvram_safe_get("hive_ui"), "") == 0){
 					snprintf(inviteCode, sizeof(inviteCode), "<script>top.location.href='/message.htm';</script>");
 					send_page( 200, "OK", (char*) 0, inviteCode, 0);
@@ -1416,6 +1423,9 @@ handle_request(void)
 #endif
 #ifdef RTCONFIG_DSL_TCLINUX
 					&& !strstr(file, "TCC.log")
+#endif
+#ifdef RTCONFIG_IPSEC
+					&& !strstr(file, "ipsec.log")
 #endif
 #ifdef RTCONFIG_IFTTT
 					&& !strstr(file, "asustitle.png")
@@ -2113,8 +2123,6 @@ void reapchild()	// 0527 add
 	wait(NULL);
 }
 
-int do_ssl = 0; 	// use Global for HTTPS upgrade judgment in web.c
-int ssl_stream_fd; 	// use Global for HTTPS stream fd in web.c
 int main(int argc, char **argv)
 {
 	usockaddr usa;

@@ -24,7 +24,6 @@ ifeq ($(or $(PLATFORM_ARCH),$(CROSS_COMPILE),$(CONFIGURE),$(ARCH),$(HOST)),)
 $(error Define Platform-specific definitions in platform.mak)
 endif
 
-export BUILD := $(shell (gcc -dumpmachine))
 export HOSTCC := gcc
 
 export PLT := $(ARCH)

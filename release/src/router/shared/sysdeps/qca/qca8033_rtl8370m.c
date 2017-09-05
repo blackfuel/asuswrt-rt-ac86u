@@ -75,6 +75,7 @@ int rtkswitch_ioctl(int val, int *val2)
 	case 44:	/* set WAN port */
 	case 45:	/* set LAN trunk group */
 	case 46:	/* set LAN trunk port mask */
+	case 47:	/* set LAN hash algorithm */
 	case 99:
 	case 100:
 	case 109:	/* Set specific ext port txDelay */
@@ -210,7 +211,7 @@ unsigned int rtkswitch_wanPort_phyStatus(int wan_unit)
 		ifname = nvram_get(strcat_r(prefix, "ifname", tmp));
 		break;
 	case SW_MODE_AP:
-#if defined(BRTAC828)
+#if defined(BRTAC828) || defined(RTAD7200)
 #if defined(RTCONFIG_SWITCH_RTL8370M_PHY_QCA8033_X2)
 		/* BRT-AC828 SR1~SR3, REV 1.00 ~ 1.20 */
 		ifname = (!wan_unit)? "eth2" : "eth3";

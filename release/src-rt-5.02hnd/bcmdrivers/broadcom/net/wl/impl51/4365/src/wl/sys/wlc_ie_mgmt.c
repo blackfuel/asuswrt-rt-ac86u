@@ -45,7 +45,7 @@
  * IE found in the user supplied IEs list found for the registered callback's tag.
  * These callbacks can then write the expected IEs in the frame when invoked.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

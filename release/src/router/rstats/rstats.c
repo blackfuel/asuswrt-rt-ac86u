@@ -72,10 +72,10 @@
 /* INTERNET:	2
  * WIRED:	1
  * BRIDGE:	1
- * WIFI_2G:	4
- * WIFI_5G:	4 x number of 5g bands
+ * WIFI_2G:	7
+ * WIFI_5G:	7 x number of 5g bands
  */
-#define MAX_SPEED_IF	25
+#define MAX_SPEED_IF	35
 
 #define MAX_ROLLOVER	(MAX_BW * INTERVAL / 8ULL * M)
 
@@ -94,6 +94,10 @@
 
 #define RA_OFFSET_ISP_METER	0x4FF00
 
+/**
+ * If you expand this enumeration, check MAX_SPEED_IF array size too.
+ * If you expand Y of IFID_WIRELESSX_Y, you must update desc_to_id() function too.
+ */
 enum if_id {
 	IFID_INTERNET = 0,	/* INTERNET */
 	IFID_INTERNET1,		/* INTERNET1 */
@@ -103,14 +107,30 @@ enum if_id {
 	IFID_WIRELESS0_1,	/* WIRELESS0.1 */
 	IFID_WIRELESS0_2,	/* WIRELESS0.2 */
 	IFID_WIRELESS0_3,	/* WIRELESS0.3 */
+	IFID_WIRELESS0_4,	/* WIRELESS0.4 */
+	IFID_WIRELESS0_5,	/* WIRELESS0.5 */
+	IFID_WIRELESS0_6,	/* WIRELESS0.6 */
 	IFID_WIRELESS1,		/* WIRELESS1 */
 	IFID_WIRELESS1_1,	/* WIRELESS1.1 */
 	IFID_WIRELESS1_2,	/* WIRELESS1.2 */
 	IFID_WIRELESS1_3,	/* WIRELESS1.3 */
+	IFID_WIRELESS1_4,	/* WIRELESS1.4 */
+	IFID_WIRELESS1_5,	/* WIRELESS1.5 */
+	IFID_WIRELESS1_6,	/* WIRELESS1.6 */
 	IFID_WIRELESS2,		/* WIRELESS2 */
 	IFID_WIRELESS2_1,	/* WIRELESS2.1 */
 	IFID_WIRELESS2_2,	/* WIRELESS2.2 */
 	IFID_WIRELESS2_3,	/* WIRELESS2.3 */
+	IFID_WIRELESS2_4,	/* WIRELESS2.4 */
+	IFID_WIRELESS2_5,	/* WIRELESS2.6 */
+	IFID_WIRELESS2_6,	/* WIRELESS2.5 */
+	IFID_WIRELESS3,		/* WIRELESS3 */
+	IFID_WIRELESS3_1,	/* WIRELESS3.1 */
+	IFID_WIRELESS3_2,	/* WIRELESS3.2 */
+	IFID_WIRELESS3_3,	/* WIRELESS3.3 */
+	IFID_WIRELESS3_4,	/* WIRELESS3.4 */
+	IFID_WIRELESS3_5,	/* WIRELESS3.6 */
+	IFID_WIRELESS3_6,	/* WIRELESS3.5 */
 
 	IFID_MAX
 };
@@ -734,18 +754,23 @@ static enum if_id desc_to_id(char *desc)
 	else if (!strncmp(desc, "WIRELESS0", 9)) {
 		if (*d == '\0')
 			id = IFID_WIRELESS0;
-		else if (*d == '.' && *s >= '0' && *s <= '2' && *(s + 1) == '\0')
+		else if (*d == '.' && *s >= '0' && *s <= '6' && *(s + 1) == '\0')
 			id = IFID_WIRELESS0 + *s - '0' + 1;
 	} else if (!strncmp(desc, "WIRELESS1", 9)) {
 		if (*d == '\0')
 			id = IFID_WIRELESS1;
-		else if (*d == '.' && *s >= '0' && *s <= '2' && *(s + 1) == '\0')
+		else if (*d == '.' && *s >= '0' && *s <= '6' && *(s + 1) == '\0')
 			id = IFID_WIRELESS1 + *s - '0' + 1;
 	} else if (!strncmp(desc, "WIRELESS2", 9)) {
 		if (*d == '\0')
 			id = IFID_WIRELESS2;
-		else if (*d == '.' && *s >= '0' && *s <= '2' && *(s + 1) == '\0')
+		else if (*d == '.' && *s >= '0' && *s <= '6' && *(s + 1) == '\0')
 			id = IFID_WIRELESS2 + *s - '0' + 1;
+	} else if (!strncmp(desc, "WIRELESS3", 9)) {
+		if (*d == '\0')
+			id = IFID_WIRELESS3;
+		else if (*d == '.' && *s >= '0' && *s <= '6' && *(s + 1) == '\0')
+			id = IFID_WIRELESS3 + *s - '0' + 1;
 	}
 
 	if (id < 0 || id == IFID_MAX)
@@ -792,7 +817,7 @@ static void calc(void)
 	tx2 = 0;
 	now = time(0);
 	exclude = nvram_safe_get("rstats_exclude");
-
+#ifndef RTCONFIG_LANTIQ
 	if ((f = fopen("/proc/net/dev", "r")) == NULL) return;
 	fgets(buf, sizeof(buf), f);	// header
 	fgets(buf, sizeof(buf), f);	// "
@@ -807,7 +832,26 @@ static void calc(void)
 
 		// <rx bytes, packets, errors, dropped, fifo errors, frame errors, compressed, multicast><tx ...>
 		if (sscanf(p + 1, "%llu%*u%*u%*u%*u%*u%*u%*u%llu", &counter[0], &counter[1]) != 2) continue;
-
+#else
+	#define RS_PPACMD_WAN_PATH "/tmp/rs_ppacmd_getwan"
+	#define RS_PPACMD_LAN_PATH "/tmp/rs_ppacmd_getlan"
+	#define RS_PPACMD_TRAFFIC_PATH "/tmp/rs_ppacmd_traffic"
+	char ifname_buf[10];
+	if(nvram_get_int("wave_ready") == 0 ||
+		nvram_get_int("wave_action") != 0 ) return;
+	memset(tmp_speed, 0, sizeof(tmp_speed));
+	doSystem("ppacmd getwan > %s", RS_PPACMD_WAN_PATH);
+	doSystem("ppacmd getlan > %s", RS_PPACMD_LAN_PATH);
+	doSystem("cat %s %s > %s", RS_PPACMD_WAN_PATH, RS_PPACMD_LAN_PATH, RS_PPACMD_TRAFFIC_PATH);
+	if ((f = fopen(RS_PPACMD_TRAFFIC_PATH, "r")) == NULL) return;
+	while (fgets(buf, sizeof(buf), f)) {
+		if ((p = strchr(buf, '[')) == NULL || strstr(buf, "errno")) continue;
+		if (sscanf(buf, "%*s%*s%s%*s%*s%llu", ifname_buf, &counter[0]) != 2) continue;
+		if ((p = strchr(buf, ':')) == NULL) continue;
+		sscanf(p + 1, "%llu", &counter[1]);
+		ifname = &ifname_buf;
+		//_dprintf("%s, rx: %llu, tx: %llu\n", ifname, counter[0], counter[1]);
+#endif
 //TODO: like httpd/web.c ej_netdev()
 #ifdef RTCONFIG_BCM5301X_TRAFFIC_MONITOR
 		if(strncmp(ifname, "vlan", 4)==0){
@@ -856,6 +900,11 @@ loopagain:
 
 #endif
 	}
+#ifdef RTCONFIG_LANTIQ
+	unlink(RS_PPACMD_WAN_PATH);
+	unlink(RS_PPACMD_LAN_PATH);
+	unlink(RS_PPACMD_TRAFFIC_PATH);
+#endif
 	fclose(f);
 
 	for (t = 0, tmp = tmp_speed; t < ARRAY_SIZE(tmp_speed); ++t, ++tmp) {

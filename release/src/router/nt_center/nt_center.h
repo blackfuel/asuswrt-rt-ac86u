@@ -44,12 +44,16 @@ PUSHMSG_CONFIG_T PushConf;
 
 #define NC_VERSION           0
 #define PUSH_MSG_MAX_LEN     4096
+#define IFTTT_HOOK_MAX_LEN   512
+
+#define IFTTT_PUSH_SERVER    "nwep.asus.com/router/ifttt/v1/triggers/"
 
 /* PUSH MESSAGE RETURN CODE DEFINE
 ---------------------------------*/
 #define PSM_SUCCESS          0   /* Success */
 #define PSM_AUTH_FAIL        1   /* Authentication Fail */
 #define PSM_NO_DEVICE        3   /* No device exist */
+#define PSM_NO_USER          5   /* No user exist */
 #define PSM_XML_IVLD         7   /* Invalid xml document */
 #define PSM_DB_ERR           8   /* Database error */
 #define PSM_NT_SERVER_ERR    11  /* Apple/Google notification service fail */

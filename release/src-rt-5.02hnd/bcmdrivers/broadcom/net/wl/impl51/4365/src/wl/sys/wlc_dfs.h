@@ -1,7 +1,7 @@
 /*
  * 802.11h DFS module header file
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_dfs.h 644679 2016-06-21 10:03:32Z $
+ * $Id: wlc_dfs.h 661486 2016-09-26 09:03:57Z $
  */
 
 
@@ -27,9 +27,6 @@
 /* radar subband information is available only for 4365/4366 corerev 0x40 (<=b1) and 0x41 (c0) */
 #define DFS_HAS_SUBBAND_INFO(wlc) (D11REV_IS(wlc->pub->corerev, 0x40) || \
 		D11REV_IS(wlc->pub->corerev, 0x41))
-
-/* 160MHz mode is available only for 4365/4366 corerev 0x41 (c0) */
-#define DFS_HAS_DYN160(wlc)	D11REV_IS(wlc->pub->corerev, 0x41)
 
 #ifdef WLDFS
 

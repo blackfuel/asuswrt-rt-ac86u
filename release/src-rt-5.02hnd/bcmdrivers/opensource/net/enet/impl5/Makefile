@@ -50,7 +50,7 @@ endif
 ifneq ($(strip $(BUILD_ETHTOOL)),)
 bcm_enet-objs += ../shared/bcmenet_ethtool.o
 endif
-else	## PREBUILT_EXTRAMOD
+else   ## PREBUILT_EXTRAMOD
 bcm_enet-objs += bcm_enet$(PRBM_EXT).o
 endif   ## PREBUILT_EXTRAMOD
 

@@ -2,7 +2,7 @@
  * MBSS (Multi BSS) related declarations and exported functions for
  * Broadcom 802.11 Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -102,5 +102,6 @@ extern void wlc_mbss_dump_spt_pkt_state(wlc_info_t *wlc, wlc_bsscfg_t *cfg, int 
 extern wlc_pkt_t wlc_mbss_get_probe_template(wlc_info_t *wlc, wlc_bsscfg_t *cfg);
 extern wlc_spt_t *wlc_mbss_get_bcn_template(wlc_info_t *wlc, wlc_bsscfg_t *cfg);
 extern uint32 wlc_mbss_get_bcmc_pkts_sent(wlc_info_t *wlc, wlc_bsscfg_t *cfg);
+extern void wlc_mbss_bcmc_reset(wlc_info_t *wlc, wlc_bsscfg_t *cfg);
 
 #endif /* _WLC_MBSS_H_ */

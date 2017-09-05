@@ -1,7 +1,7 @@
 #
 # Makefile for hndrte based 4365c0 ROM Offload image building
 #
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
+# Broadcom Proprietary and Confidential. Copyright (C) 2017,
 # All Rights Reserved.
 # 
 # This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -83,6 +83,11 @@ PROP_TXSTATUS	:= 1
 # - BCMPKTIDMAP: Suppresses pkt pointers to Ids in lbuf<next,link>, pktpool, etc
 #   Must specify max number of packets (various pools + heap)
 # 4365c0 has 2M+128KB MEMSIZE, so need to disable HNDLBUFCOMPACT feature.
+#
+# When dhdhdr builds are used, DHD will insert SFH (LLCSNAP) and provide
+# space for all MPDU's TxHeaders, upto a maximum of 2560 packets, as tracked by
+# PKT_MAXIMUM_ID below.
+#
 HNDLBUFCOMPACT	:= 0
 BCMPKTIDMAP     := 1
 BCMFRAGPOOL	:= 1
@@ -97,13 +102,18 @@ DLL_USE_MACROS	:= 1
 HNDLBUF_USE_MACROS := 1
 
 POOL_LEN_MAX    := 1536
-POOL_LEN        := 32
+POOL_LEN        := 10
 
 WL_POST_FIFO1   := 2
 MFGTESTPOOL_LEN := 10
 FRAG_POOL_LEN	:= 1536
 RXFRAG_POOL_LEN	:= 320
-PKT_MAXIMUM_ID  := 2048
+PKT_MAXIMUM_ID  := 2560
+
+# Split lbuf_frag control block and data buffer for tx lfrag pool
+# Dongle has two types of data buffer D3 and D11
+FRAG_D3_BUFFER_LEN := 768
+FRAG_D11_BUFFER_LEN := 768
 
 # Because 4365C0 cannot support HNDLBUFCOMPACT memroy enhancement feature,
 # the lbuf size will be 4-bytes large than HNDLBUFCOMPACT enabled (4365B1).
@@ -223,7 +233,7 @@ EXTRA_DFLAGS    += -DMAX_TX_STATUS_QUEUE=256
 EXTRA_DFLAGS    += -DMAX_TX_STATUS_COMBINED=128
 
 # Size of local queue to store completions
-EXTRA_DFLAGS    += -DPCIEDEV_CNTRL_CMPLT_Q_SIZE=16
+EXTRA_DFLAGS    += -DPCIEDEV_CNTRL_CMPLT_Q_SIZE=64
 
 # RxOffsets for the PCIE mem2mem DMA
 EXTRA_DFLAGS    += -DH2D_PD_RX_OFFSET=0
@@ -261,3 +271,17 @@ EXTRA_DFLAGS += -DDONGLE_MAX_CAL_CACHE=5
 
 # ROM compatibility with legacy version of wlc_l2_filter.
 EXTRA_DFLAGS += -DWLC_L2_FILTER_ROM_COMPAT
+WL_POST := 127
+
+# Disable/enable AMSDU for AC_VI
+EXTRA_DFLAGS    += -DDISABLE_AMSDUTX_FOR_VI
+
+# Instead of disabling frameburst completly in dynamic frame burst logic, we enable RTS/CTS in frameburst.
+EXTRA_DFLAGS    += -DFRAMEBURST_RTSCTS_PER_AMPDU
+
+# To tune frameburst override thresholds
+EXTRA_DFLAGS    += -DTUNE_FBOVERRIDE
+
+# Min SCB alloc memory limit - 12KB
+EXTRA_DFLAGS    += -DMIN_SCBALLOC_MEM=12288
+

@@ -84,6 +84,10 @@ function initial(){
 			document.getElementById("wps_band_word").innerHTML = band0 + " / " + band1;
 		}
 	}
+
+	if(lantiq_support){
+		checkWLReady();
+	}
 	
 	if(!ValidateChecksum(document.form.wps_sta_pin.value) || document.form.wps_sta_pin.value == "00000000"){
 		document.form.wps_method[0].checked = true;
@@ -200,6 +204,11 @@ function enableWPS(){
 }
 
 function configCommand(){
+	if(lantiq_support && wave_ready != 1){
+		alert("Please wait a minute for wireless ready");
+		return false;
+	}
+
 	if(document.form.wps_method[1].checked == true){
 		if(PIN_PBC_Check()){
 			FormActions("apply.cgi", "wps_apply", "", "");
@@ -216,6 +225,11 @@ function configCommand(){
 }
 
 function resetWPS(){
+	if(lantiq_support && wave_ready != 1){
+		alert("Please wait a minute for wireless ready");
+		return false;
+	}
+
 	var sec = 5;
 	if (Qcawifi_support)
 		sec += 7;
@@ -646,6 +660,26 @@ function _change_wl_advanced_unit_status(__unit){
 	document.titleForm.next_page.value = "Advanced_WAdvanced_Content.asp?af=wl_radio";
 	change_wl_unit_status(__unit);
 }
+
+function checkWLReady(){
+	$.ajax({
+	    url: '/ajax_wl_ready.asp',
+	    dataType: 'script',	
+	    error: function(xhr) {
+			setTimeout("checkWLReady();", 1000);
+	    },
+	    success: function(response){
+	    	if(wave_ready != 1){
+	    		$("#lantiq_ready").show();
+	    		setTimeout("checkWLReady();", 1000);
+	    	}
+	    	else{
+	    		$("#lantiq_ready").hide();
+	    	}
+			
+	    }
+  	});
+}
 </script>
 </head>
 
@@ -703,6 +737,7 @@ function _change_wl_advanced_unit_status(__unit){
 		  <div class="formfonttitle"><#menu5_1#> - <#menu5_1_2#></div>
 		  <div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
 		  <div class="formfontdesc"><#WLANConfig11b_display6_sectiondesc#></div>
+		  <div id="lantiq_ready" style="display:none;color:#FC0;margin-left:5px;font-size:13px;">Wireless is setting...</div>
 		  <div id="WPS_hideSSID_hint" class="formfontdesc" style="display:none;color:#FFCC00;"></div>		  
 
 		<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0"  class="FormTable">

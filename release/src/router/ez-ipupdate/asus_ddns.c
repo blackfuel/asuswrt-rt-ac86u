@@ -275,12 +275,22 @@ int asus_reg_domain (void)
 	char old_mac[13];
 	memset(old_mac, 0, 13);
 	if(TransferMacAddr(nvram_safe_get("ddns_transfer"), old_mac)) {
-		snprintf(buf, BUFFER_SIZE, "GET /ddns/register.jsp?hostname=%s&myip=%s&oldmac=%s HTTP/1.0\015\012", 
+		snprintf(buf, BUFFER_SIZE, "GET /ddns/register.jsp?hostname=%s&myip=%s&oldmac=%s",
 			 host, address, old_mac);
 	}
 	else {
-		snprintf(buf, BUFFER_SIZE, "GET /ddns/register.jsp?hostname=%s&myip=%s HTTP/1.0\015\012", host, address);
+		snprintf(buf, BUFFER_SIZE, "GET /ddns/register.jsp?hostname=%s&myip=%s", host, address);
 	}
+	output(buf);
+#ifdef RTCONFIG_LETSENCRYPT
+	char acme_txt[64] = {0};
+	if(nvram_match("le_enable", "1") && f_read_string("/tmp/acme.txt", acme_txt, sizeof(acme_txt)) > 0) {
+		PRINT("acme: TXT: %s", acme_txt);
+		snprintf(buf, BUFFER_SIZE, "&acme_challenge=1&txtdata=%s", acme_txt);
+		output(buf);
+	}
+#endif
+	snprintf(buf, BUFFER_SIZE, " HTTP/1.0\015\012");
 	output(buf);
 	snprintf(buf, BUFFER_SIZE, "Authorization: Basic %s\015\012", auth);
 	output(buf);
@@ -429,12 +439,22 @@ int asus_update_entry(void)
         char old_mac[13];
         memset(old_mac, 0, 13);
         if(TransferMacAddr(nvram_safe_get("ddns_transfer"), old_mac)) {
-                snprintf(buf, BUFFER_SIZE, "GET /ddns/update.jsp?hostname=%s&myip=%s&oldmac=%s HTTP/1.0\015\012",
+                snprintf(buf, BUFFER_SIZE, "GET /ddns/update.jsp?hostname=%s&myip=%s&oldmac=%s",
                          host, address, old_mac);
         }
         else {
-                snprintf(buf, BUFFER_SIZE, "GET /ddns/update.jsp?hostname=%s&myip=%s HTTP/1.0\015\012", host, address);
+                snprintf(buf, BUFFER_SIZE, "GET /ddns/update.jsp?hostname=%s&myip=%s", host, address);
         }
+	output(buf);
+#ifdef RTCONFIG_LETSENCRYPT
+	char acme_txt[64] = {0};
+	if(nvram_match("le_enable", "1") && f_read_string("/tmp/acme.txt", acme_txt, sizeof(acme_txt)) > 0) {
+		PRINT("acme: TXT: %s", acme_txt);
+		snprintf(buf, BUFFER_SIZE, "&acme_challenge=1&txtdata=%s", acme_txt);
+		output(buf);
+	}
+#endif
+	snprintf(buf, BUFFER_SIZE, " HTTP/1.0\015\012");
 	output(buf);
 	snprintf(buf, BUFFER_SIZE, "Authorization: Basic %s\015\012", auth);
 	output(buf);

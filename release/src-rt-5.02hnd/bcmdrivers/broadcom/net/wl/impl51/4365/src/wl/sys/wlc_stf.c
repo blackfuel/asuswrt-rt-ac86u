@@ -4,7 +4,7 @@
  * Code that controls the antenna/core/chain to aid space/time coding (MIMO/STBC/beamforming)
  * Broadcom 802.11bang Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_stf.c 650786 2016-07-22 12:23:40Z $
+ * $Id: wlc_stf.c 670014 2016-11-12 10:06:33Z $
  */
 
 #include <wlc_cfg.h>
@@ -504,6 +504,14 @@ wlc_stf_doiovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *n
 				bool enabled = (int_val & 0xff00) >> 8;
 				uint8 oper_mode = int_val & 0xff;
 
+				if (wlc_quiet_chanspec(wlc->cmi, WLC_BAND_PI_RADIO_CHANSPEC)) {
+					err = BCME_NOTREADY;
+					WL_ERROR(("wl%d: %s: oper_mode set 0x%03x failed:"
+							"quiet channel 0x%04x\n",
+							wlc->pub->unit, __FUNCTION__,
+							int_val, WLC_BAND_PI_RADIO_CHANSPEC));
+					break;
+				}
 				if (wlc_modesw_is_req_valid(wlc->modesw, bsscfg) != TRUE) {
 					err = BCME_BUSY;
 					break;
@@ -2922,7 +2930,7 @@ wlc_stf_tempsense_upd(wlc_info_t *wlc)
 		if ((WLCISHTPHY(wlc->band) || WLCISACPHY(wlc->band)) &&
 		    !(ACREV_IS(wlc->band->phyrev, 32) || ACREV_IS(wlc->band->phyrev, 33)))
 			txchain = wlc_stf_get_target_core(wlc);
-
+		WLCNTINCR(wlc->pub->_cnt->txchain_shutdown);
 		wlc_stf_txchain_set(wlc, txchain, TRUE, WLC_TXCHAIN_ID_TEMPSENSE);
 	} else {
 		wlc_stf_txchain_reset(wlc, WLC_TXCHAIN_ID_TEMPSENSE);

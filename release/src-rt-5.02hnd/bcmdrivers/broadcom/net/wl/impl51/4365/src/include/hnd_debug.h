@@ -1,7 +1,7 @@
 /*
  * HND Run Time Environment debug info area
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: hnd_debug.h 561104 2015-06-03 09:12:33Z $
+ * $Id: hnd_debug.h 675320 2016-12-15 07:49:24Z $
  */
 
 #ifndef	_HND_DEBUG_H
@@ -85,6 +85,8 @@ typedef struct hnd_ramsize_ptr {
 
 #endif /* _RTE_ */
 
+#define  HND_DEBUG_EPIVERS_MAX_STR_LEN  32
+
 typedef struct hnd_debug {
 	uint32	magic;
 #define HND_DEBUG_MAGIC 0x47424544	/* 'DEBG' */
@@ -93,7 +95,7 @@ typedef struct hnd_debug {
 #define HND_DEBUG_VERSION 1
 
 	uint32	fwid;			/* 4 bytes of fw info */
-	char	epivers[32];
+	char	epivers[HND_DEBUG_EPIVERS_MAX_STR_LEN];
 
 	_HD_TRAP_P trap_ptr;		/* trap_t data struct */
 	_HD_CONS_P console;		/* Console  */

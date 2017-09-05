@@ -1,7 +1,7 @@
 /*
  * wlc_modesw.c -- .
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -98,6 +98,8 @@ static const struct {
 #define MODESW_DRAIN_TIMEOUT		3000
 /* Action Frame retry limit init */
 #define ACTION_FRAME_RETRY_LIMIT 1
+/* OMN is disabled after these many DTIMs or (n x dtim period) Beacons */
+#define MODESW_DISABLE_OMN_DTIMS	5
 
 /* IOVAR Specific defines */
 #define BWSWITCH_20MHZ	20
@@ -177,6 +179,7 @@ typedef struct {
 	uint8 oper_mode_new;
 	uint8 oper_mode_old;
 	uint8 state;
+	uint8 opmode_disable_dtim_cnt; /* OMN is disabled after these many DTIMs */
 	uint16 action_sendout_counter; /* count of sent out action frames */
 	uint16 max_opermode_chanspec;  /* Oper mode channel changespec */
 	chanspec_t new_chanspec;
@@ -895,6 +898,36 @@ wlc_modesw_is_req_valid(wlc_modesw_info_t *modesw_info, wlc_bsscfg_t *cfg)
 	return valid_req;
 }
 
+/* This function is to check if we can disable OMN. Once oper_mode is enabled,
+ * we can disable it if we already operating in MAX NSS and BW.
+ *
+ * Returns TRUE if OMN can be disbaled.
+ */
+static bool
+wlc_modesw_opmode_be_disabled(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
+{
+	modesw_bsscfg_cubby_t *pmodesw_bsscfg = MODESW_BSSCFG_CUBBY(wlc->modesw, cfg);
+	chanspec_t max_oper_chspec = pmodesw_bsscfg->max_opermode_chanspec;
+	chanspec_t cur_chspec = cfg->current_bss->chanspec;
+	uint8 max_nss, cur_nss = DOT11_OPER_MODE_RXNSS(cfg->oper_mode);
+	uint16 cap_mcsmap;
+
+	cap_mcsmap = wlc_vht_get_rx_mcsmap(wlc->vhti);
+	max_nss = VHT_MAX_SS_SUPPORTED(cap_mcsmap);
+
+	if (!WL_BW_CAP_160MHZ(wlc->band->bw_cap) &&
+			max_nss == cur_nss &&
+			CHSPEC_BW(max_oper_chspec) == CHSPEC_BW(cur_chspec)) {
+#ifdef BCMDBG
+		WL_MODE_SWITCH(("wl%d: max_oper_chspec 0x%x cur_chspec 0x%x cap_mcsmap 0x%x"
+				"cur_nss %d max nss %d\n", WLCWLUNIT(wlc),
+				max_oper_chspec, cur_chspec, cap_mcsmap, cur_nss, max_nss));
+#endif
+		return TRUE;
+	}
+	return FALSE;
+}
+
 /* Handles the TBTT interrupt for AP. Required to process
  * the AP downgrade procedure, which is waiting for DTIM
  * beacon to go out before perform actual downgrade of link
@@ -905,7 +938,8 @@ wlc_modesw_bss_tbtt(wlc_modesw_info_t *modesw_info, wlc_bsscfg_t *cfg)
 	wlc_info_t *wlc = modesw_info->wlc;
 	modesw_bsscfg_cubby_t *pmodesw_bsscfg = MODESW_BSSCFG_CUBBY(modesw_info, cfg);
 	if (cfg->oper_mode_enabled && pmodesw_bsscfg &&
-		pmodesw_bsscfg->state == MSW_DN_PERFORM &&
+		(pmodesw_bsscfg->state == MSW_DN_PERFORM ||
+		pmodesw_bsscfg->state == MSW_DN_AF_WAIT_ACK) &&
 		!CTRL_FLAGS_HAS(pmodesw_bsscfg->ctrl_flags, MODESW_CTRL_DN_SILENT_DNGRADE))
 	{
 		uint32 val;
@@ -916,13 +950,40 @@ wlc_modesw_bss_tbtt(wlc_modesw_info_t *modesw_info, wlc_bsscfg_t *cfg)
 		/* AP downgrade is pending */
 		/* If it is the TBTT for DTIM then start the non-periodic timer */
 		wlc_bmac_copyfrom_objmem(wlc->hw, (S_DOT11_DTIMCOUNT << 2),
-		&val, sizeof(val), OBJADDR_SCR_SEL);
-			if (!val) {
-			WL_MODE_SWITCH(("DTIM Tbtt..Start timer for 50 msec \n"));
+			&val, sizeof(val), OBJADDR_SCR_SEL);
+		if (!val) {
+			WL_MODE_SWITCH(("wl%d: DTIM Tbtt..Start timer for 50 msec \n",
+				WLCWLUNIT(wlc)));
 			ASSERT(pmodesw_bsscfg->oper_mode_timer != NULL);
-			WL_MODE_SWITCH(("TBTT Timer set....\n"));
+			if (pmodesw_bsscfg->state == MSW_DN_AF_WAIT_ACK) {
+				WL_MODE_SWITCH(("wl%d: Updating state in TBTT timer\n",
+					WLCWLUNIT(wlc)));
+				pmodesw_bsscfg->action_sendout_counter = 0;
+				wlc_modesw_change_state(modesw_info, cfg, MSW_DN_PERFORM);
+			}
+			WL_MODE_SWITCH(("wl%d: TBTT Timer set....\n", WLCWLUNIT(wlc)));
 			wl_add_timer(wlc->wl, pmodesw_bsscfg->oper_mode_timer,
 				MODESW_AP_DOWNGRADE_BACKOFF, FALSE);
+		}
+		return;
+	}
+	/* This is to disable OMNs after a few DTIMs. After BGDFS NSS upgrade,
+	 * OMNs will be disabled
+	 */
+	if (cfg->oper_mode_enabled && wlc_modesw_opmode_be_disabled(wlc, cfg)) {
+		uint32 val;
+
+		wlc_bmac_copyfrom_objmem(wlc->hw, (S_DOT11_DTIMCOUNT << 2),
+				&val, sizeof(val), OBJADDR_SCR_SEL);
+		if (!val) {
+			if (!(pmodesw_bsscfg->opmode_disable_dtim_cnt--)) {
+				cfg->oper_mode_enabled = FALSE;
+				pmodesw_bsscfg->opmode_disable_dtim_cnt = MODESW_DISABLE_OMN_DTIMS;
+				wlc_bss_update_beacon(wlc, cfg);
+				wlc_bss_update_probe_resp(wlc, cfg, TRUE);
+				WL_MODE_SWITCH(("wl%d: OMN disabled after %d DTIMs\n",
+						WLCWLUNIT(wlc),	MODESW_DISABLE_OMN_DTIMS));
+			}
 		}
 	}
 	return;
@@ -1129,13 +1190,6 @@ wlc_bsscfg_t * bsscfg)
 		bsscfg->flags2 |= WLC_BSSCFG_FL2_MODESW_BWSW;
 		wlc_update_bandwidth(wlc, bsscfg, pmodesw_bsscfg->new_chanspec);
 		bsscfg->flags2 &= ~WLC_BSSCFG_FL2_MODESW_BWSW;
-
-		bsscfg->oper_mode = wlc_modesw_derive_opermode(wlc->modesw,
-				pmodesw_bsscfg->new_chanspec, bsscfg, wlc->stf->op_rxstreams);
-		if (BSSCFG_AP(bsscfg) && !CTRL_FLAGS_HAS(pmodesw_bsscfg->ctrl_flags,
-				MODESW_CTRL_DN_SILENT_DNGRADE)) {
-			wlc_modesw_ap_upd_bcn_act(modesw_info, bsscfg, pmodesw_bsscfg->state);
-		}
 	}
 	wlc_modesw_time_measure(wlc->modesw, pmodesw_bsscfg->ctrl_flags,
 		MODESW_TM_PHY_COMPLETE);
@@ -1909,7 +1963,7 @@ wlc_modesw_change_ap_oper_mode(wlc_modesw_info_t *modesw_info, wlc_bsscfg_t *bss
 			WL_MODE_SWITCH(("Entering %s again \n", __FUNCTION__));
 
 		wlc_modesw_change_state(modesw_info, bsscfg, MSW_DOWNGRADE_PENDING);
-		/* skipping drain for testing */
+
 		if (CTRL_FLAGS_HAS(pmodesw_bsscfg->ctrl_flags,
 			MODESW_CTRL_AP_ACT_FRAMES) &&
 			(new_rxnss == old_rxnss)) {
@@ -2342,7 +2396,7 @@ wlc_modesw_send_action_frame_complete(wlc_info_t *wlc, uint txstatus, void *arg)
 	ctx = pmodesw_scb->cb_ctx;
 
 	if (ctx == NULL)
-			return;
+		return;
 	WL_MODE_SWITCH(("wlc_modesw_send_action_frame_complete called \n"));
 	bsscfg = wlc_bsscfg_find_by_ID(wlc, ctx->connID);
 
@@ -2364,6 +2418,12 @@ wlc_modesw_send_action_frame_complete(wlc_info_t *wlc, uint txstatus, void *arg)
 		          wlc->pub->unit, __FUNCTION__, ctx->pkt));
 		wlc_user_wake_upd(wlc, WLC_USER_WAKE_REQ_VHT, FALSE);
 		wlc_modesw_update_PMstate(wlc, bsscfg);
+		return;
+	}
+	if (BSSCFG_AP(bsscfg) && (pmodesw_bsscfg->state != MSW_DN_AF_WAIT_ACK) &&
+		(pmodesw_bsscfg->state != MSW_UP_AF_WAIT_ACK)) {
+		WL_MODE_SWITCH(("wl%d: TBTT timer handled the downgrade already\n",
+			WLCWLUNIT(wlc)));
 		return;
 	}
 	/* Retry Action frame sending upto RETRY LIMIT if ACK not received for STA and AP case */
@@ -2622,6 +2682,23 @@ wlc_modesw_restore_defaults(void *ctx, wlc_bsscfg_t *bsscfg)
 	pmodesw_bsscfg->oper_mode_old = 0;
 }
 
+/* Function to reset the oper mode
+ */
+static void
+wlc_modesw_reset_opmode(void *ctx, wlc_bsscfg_t *bsscfg)
+{
+	wlc_modesw_info_t *modesw_info = (wlc_modesw_info_t *)ctx;
+	wlc_info_t *wlc = modesw_info->wlc;
+	modesw_bsscfg_cubby_t *pmodesw_bsscfg = MODESW_BSSCFG_CUBBY(modesw_info, bsscfg);
+
+	if (!WL_BW_CAP_160MHZ(wlc->band->bw_cap)) {
+		bsscfg->oper_mode_enabled = FALSE;
+	}
+	bsscfg->oper_mode = wlc_modesw_derive_opermode(modesw_info, wlc->default_bss->chanspec,
+			bsscfg, wlc->stf->op_rxstreams);
+	pmodesw_bsscfg->opmode_disable_dtim_cnt = MODESW_DISABLE_OMN_DTIMS;
+}
+
 /* Callback from assoc. This Function will free the timer context and reset
 * the bsscfg variables when STA association state gets updated.
 */
@@ -2694,6 +2771,7 @@ wlc_modesw_updown_cb(void *ctx, bsscfg_up_down_event_data_t *updown_data)
 		__FUNCTION__));
 
 	wlc_modesw_restore_defaults(ctx, updown_data->bsscfg);
+	wlc_modesw_reset_opmode(ctx, updown_data->bsscfg);
 }
 
 /* Function to Clear PHY context created during bandwidth switching */
@@ -3263,18 +3341,18 @@ wlc_modesw_dyn_switch_calc(wlc_modesw_info_t *modesw_info, wlc_bsscfg_t *bsscfg)
 			/* BFE */
 			if (SCB_VHT_CAP(scb)) {
 				nonVHT = 0;
+				/* RX Chain */
+				nss = VHT_MAX_SS_SUPPORTED(scb->vhtcap_orig_mcsmap);
 			} else {
 				nonVHT = 1;
+				/* RX Chain */
+				rxmcs_map = wlc_vht_get_scb_rxmcsmap_sds(wlc->vhti, scb);
+				nss = VHT_MAX_SS_SUPPORTED(rxmcs_map);
 			}
 			/* 1024QAM */
 			nitroqam = (uint8)(SCB_1024QAM_CAP(scb) != 0);
 			/* BW support */
 			bw160_cap = (uint8)(SCB_BW160_CAP(scb) != 0);
-
-
-			/* RX Chain */
-			rxmcs_map = wlc_vht_get_scb_rxmcsmap_sds(wlc->vhti, scb);
-			nss = VHT_MAX_SS_SUPPORTED(rxmcs_map);
 
 			w_unit = ((nitroqam == 1) ? 5 : 4);
 			w_unit = w_unit * 4;

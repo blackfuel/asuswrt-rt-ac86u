@@ -1,7 +1,7 @@
 /*
  * Exposed interfaces of wlc_modesw.c
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -104,15 +104,6 @@ typedef struct {
 	uint8 w_bf_nss[5];
 	uint8 init;
 } dyn_switch_info_t;
-
-typedef struct {
-	uint ver;
-	uint len;
-	int rssi_th[3];
-	uint8 rssi_gain_80[4];
-	uint8 rssi_gain_160[4];
-} wl_dyn_switch_th_t;
-
 
 #define chspec_to_rspec(chspec_bw)	\
 		(((uint32)(((((uint16)(chspec_bw)) & WL_CHANSPEC_BW_MASK) >> \

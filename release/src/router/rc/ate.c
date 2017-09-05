@@ -1,6 +1,7 @@
 #include <rc.h>
 #include <shared.h>
 #include <shutils.h>
+
 #ifdef RTCONFIG_RALINK
 #include <ralink.h>
 #if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC54U) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC51UP) || defined(RTAC53)
@@ -99,6 +100,31 @@ static int setAllSpecificColorLedOn(enum ate_led_color color)
 			};
 			all_led[LED_COLOR_BLUE] = blue_led;
 			all_led[LED_COLOR_RED] = red_led;
+		}
+		break;
+#endif
+#if defined(RTAD7200)
+	case MODEL_RTAD7200:
+		{
+			static enum led_id white_led[] = {
+				LED_POWER, LED_WAN, LED_WAN2,
+				LED_USB, LED_USB3, LED_2G, LED_5G,
+				LED_FAILOVER,
+#if defined(RTCONFIG_SATA_LED)
+				LED_SATA,
+#else
+				LED_60G,
+#endif
+				LED_ID_MAX
+			};
+			static enum led_id red_led[] = {
+				LED_POWER_RED, LED_WAN_RED,
+				LED_WAN2_RED,
+				LED_ID_MAX
+			};
+			all_led[LED_COLOR_WHITE] = white_led;
+			all_led[LED_COLOR_RED] = red_led;
+			rtk_switch_led_color = LED_COLOR_WHITE;
 		}
 		break;
 #endif
@@ -636,7 +662,7 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 			return EINVAL;
 #endif
 		//Andy Chiu, 2016/02/04.
-		const char *p = (char *) value;
+		char *p = (char *) value;
 		char UpperMac[20] = {0};
 		int i;
 		for(i = 0; p[i]; ++i)
@@ -662,7 +688,7 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 			return EINVAL;
 #endif
 		//Andy Chiu, 2016/02/04.
-		const char *p = (char *) value;
+		char *p = (char *) value;
 		char UpperMac[20] = {0};
 		int i;
 		for(i = 0; p[i]; ++i)
@@ -681,7 +707,8 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 		}
 		return 0;
 	}
-#if defined(RTAC3200) || defined(RTAC5300)|| defined(GTAC5300) || defined(MAPAC2200)
+#if defined(RTAC3200) || defined(RTAC5300)|| defined(GTAC5300) || \
+    (defined(RTCONFIG_QCA) && defined(RTCONFIG_HAS_5G_2))
 	else if (!strcmp(command, "Set_MacAddr_5G_2")) {
 #if defined(RTCONFIG_CFEZ) && defined(RTCONFIG_BCMARM)
 		if (!chk_envrams_proc())
@@ -1200,7 +1227,8 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 #endif
 		return 0;
 	}
-#if defined(RTAC3200) || defined(RTAC5300) || defined(GTAC5300) || defined(MAPAC2200)
+#if defined(RTAC3200) || defined(RTAC5300) || defined(GTAC5300) || \
+    (defined(RTCONFIG_QCA) && defined(RTCONFIG_HAS_5G_2))
 	else if (!strcmp(command, "Get_MacAddr_5G_2")) {
 		getMAC_5G_2();
 		return 0;
@@ -1330,7 +1358,8 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 			puts("ATE_ERROR");
 		return 0;
 	}
-#if defined(RTAC3200) || defined(RTAC5300) || defined(GTAC5300) || defined(MAPAC2200)
+#if defined(RTAC3200) || defined(RTAC5300) || defined(GTAC5300) || \
+    (defined(RTCONFIG_QCA) && defined(RTCONFIG_HAS_5G_2))
 	else if (!strcmp(command, "Get_ChannelList_5G_2")) {
 		if (!Get_ChannelList_5G_2())
 			puts("ATE_ERROR");
@@ -1351,7 +1380,7 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 		return 0;
 	}
 #ifdef RTCONFIG_RALINK
-#if !defined(RTN14U) && !defined(RTAC52U) && !defined(RTAC51U) && !defined(RTN11P) && !defined(RTN300) && !defined(RTN54U) && !defined(RTAC1200HP) && !defined(RTN56UB1) && !defined(RTAC54U) && !defined(RTN56UB2) && !defined(RTAC54U) && !defined(RTAC1200) && !defined(RTAC1200GA1) && !defined(RTAC1200GU) && !defined(RTN11P_B1) && !defined(RTAC51UP) && !defined(RTAC53) && !defined(RPAC87) && !defined(RTAC85U) 
+#if !defined(RTN14U) && !defined(RTAC52U) && !defined(RTAC51U) && !defined(RTN11P) && !defined(RTN300) && !defined(RTN54U) && !defined(RTAC1200HP) && !defined(RTN56UB1) && !defined(RTAC54U) && !defined(RTN56UB2) && !defined(RTAC54U) && !defined(RTAC1200) && !defined(RTAC1200GA1) && !defined(RTAC1200GU) && !defined(RTN11P_B1) && !defined(RTN10P_V3) && !defined(RTAC51UP) && !defined(RTAC53) && !defined(RPAC87) && !defined(RTAC85U) && !defined(RTAC65U)
 	else if (!strcmp(command, "Ra_FWRITE")) {
 		return FWRITE(value, value2);
 	}
@@ -1535,17 +1564,17 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 		return 0;
 	}
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) /* for Lyra */
-	else if (!strcmp(command, "Set_DisableGUI")) {
-		if (setDisableGUI(value))
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) /* for Lyra */
+	else if (!strcmp(command, "Set_DisableWifiDrv")) {
+		if (setDisableWifiDrv(value))
 		{
 			puts("ATE_ERROR_INCORRECT_PARAMETER");
 			return EINVAL;
 		}
 		return 0;
 	}
-	else if (!strcmp(command, "Get_DisableGUI")) {
-		if (getDisableGUI())
+	else if (!strcmp(command, "Get_DisableWifiDrv")) {
+		if (getDisableWifiDrv())
 		{
 			puts("Invalid content!");
 			return EINVAL;
@@ -1797,8 +1826,9 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 		return 0;
 	}
 #endif
+#endif  /* RTCONFIG_QCA */
 #ifdef RT4GAC55U
-	else if (!strcmp(command, "Get_LteButtonStatus")) {
+	else if(!strcmp(command, "Get_LteButtonStatus")) {
 		puts(nvram_safe_get("btn_lte"));
 		return 0;
 	}
@@ -1909,7 +1939,10 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 		return 0;
 	}
 #endif
-#endif
+	else if (!strcmp(command, "Get_FwUpgradeState")) {
+		ate_get_fw_upgrade_state();
+		return 0;
+	}
 	else
 	{
 		puts("ATE_UNSUPPORT");
@@ -2023,4 +2056,40 @@ int ate_run_arpstrom(void) {
 	}
 
 	return 1;
+}
+
+int ate_get_fw_upgrade_state(void) {
+
+	FILE *fp;
+	char buf[64];
+
+#ifdef CONFIG_BCMWL5
+                if (!factory_debug() && !nvram_match(ATE_UPGRADE_MODE_STR(), "1"))
+#else
+                if (!IS_ATE_FACTORY_MODE() && !nvram_match(ATE_UPGRADE_MODE_STR(), "1"))
+#endif
+		{
+			puts("ATEMODE ONLY");
+			return 0;
+		}
+
+		if (!(fp=fopen("/tmp/ate_upgrade_state", "r"))) {
+			puts("ERROR TO CHECK STATE");
+			return 0;
+		}
+		fgets(buf, sizeof(buf), fp);
+		fclose(fp);
+
+		if(strstr(buf, "Upgarde Complete")) {
+			puts("COMPLETE");
+			return 1;
+		}
+		else if(strstr(buf, "stop_upgarde_ate"))
+			puts("UPGRADING(1)");
+		else if(strstr(buf, "start_upgarde_ate"))
+			puts("UPGRADING(2)");
+		else
+			puts("UNKNOWN STATE");
+
+		return 0;
 }

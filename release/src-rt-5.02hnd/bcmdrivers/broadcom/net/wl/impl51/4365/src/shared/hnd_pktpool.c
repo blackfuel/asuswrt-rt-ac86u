@@ -1,7 +1,7 @@
 /*
  * HND generic packet pool operation primitives
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -411,6 +411,326 @@ pktpool_enq(pktpool_t *pktp, void *p)
 	ASSERT(pktp->avail <= pktp->len);
 }
 
+
+/* BCM_DHDHDR cannot be compiled into the ROM */
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+
+#if defined(HNDLBUFCOMPACT)
+#error "BCM_DHDHDR is exclusive of HNDLBUFCOMPACT."
+#endif
+#if !defined(PKTC_DONGLE) || !defined(DUALPKTAMSDU)
+#error "BCM_DHDHDR needs both PKTC_DONGLE and DUALPKTAMSDU defined."
+#endif
+#if !defined(WLFC_CONTROL_TO_HOST_DISABLED)
+#error "BCM_DHDHDR is exclusive of WLFC_CONTROL_TO_HOST_DISABLED."
+#endif
+
+#ifndef D3_BUFFER_LEN
+#define D3_BUFFER_LEN	(SHARED_FRAG_POOL_LEN/2)
+#endif
+#ifndef D11_BUFFER_LEN
+#define D11_BUFFER_LEN	(SHARED_FRAG_POOL_LEN/2)
+#endif
+
+/* Here are D3_BUFFER (small) and D11_BUFFER (big) pools for split packet context and packet buffer
+ * design in order to reduce packet store memory in dongle
+ */
+lfrag_buf_pool_t *d3_lfrag_buf_pool = NULL;
+lfrag_buf_pool_t *d11_lfrag_buf_pool = NULL;
+#define LFRAG_BUF_POOL_NUM	2
+
+#define LFBUFFREELIST(buf)		(((lfrag_buf_t *)(buf))->freelist)
+#define LFBUFSETFREELIST(buf, x)	(((lfrag_buf_t *)(buf))->freelist = ((lfrag_buf_t *)(x)))
+#define LFBUFHOMEPOOL(buf)		(((lfrag_buf_t *)(buf))->lfbufp)
+#define LFBUFSETHOMEPOOL(buf, p)	(((lfrag_buf_t *)(buf))->lfbufp = (p))
+
+#define D3LFBUF_ETHERHDRSZ	(14)
+#define D3LFBUF_SZ		(D3LFBUF_ETHERHDRSZ)
+#define D11LFBUF_HEADROOM	(224)
+
+static void *
+lfbufpool_deq(lfrag_buf_pool_t *lfbufp)
+{
+	void *buf = NULL;
+
+	if (lfbufp->avail == 0)
+		return NULL;
+
+	ASSERT(lfbufp->freelist != NULL);
+
+	buf = lfbufp->freelist; /* dequeue buffer from head of lfrag_buf_pool_t free list */
+	lfbufp->freelist = LFBUFFREELIST(buf); /* free list points to next buffer */
+	LFBUFSETHOMEPOOL(buf, lfbufp); /* set home pool */
+
+	lfbufp->avail--;
+
+	return buf;
+}
+
+static void
+lfbufpool_enq(lfrag_buf_pool_t *lfbufp, void *buf)
+{
+	ASSERT(buf != NULL);
+
+	LFBUFSETFREELIST(buf, lfbufp->freelist); /* insert at head of lfrag_buf_pool_t free list */
+	lfbufp->freelist = buf; /* free list points to newly inserted buffer */
+
+	lfbufp->avail++;
+	ASSERT(lfbufp->avail <= lfbufp->len);
+}
+
+/* Initial a lfrag buffer pool and add pplen number of buffer to pool */
+int
+BCMATTACHFN(lfbufpool_init)(osl_t *osh, lfrag_buf_pool_t *lfbufp, int *lfbufplen, int buflen)
+{
+	int i, err = BCME_OK;
+	int plen;
+
+	ASSERT(osh != NULL);
+	ASSERT(lfbufp != NULL);
+	ASSERT(lfbufplen != NULL);
+
+	plen = *lfbufplen;
+
+	bzero(lfbufp, sizeof(lfrag_buf_pool_t));
+
+	lfbufp->inited = TRUE;
+	lfbufp->buflen = (uint16)buflen;
+
+	if (HND_PKTPOOL_MUTEX_CREATE("lfbufpool", &lfbufp->mutex) != OSL_EXT_SUCCESS) {
+		return BCME_ERROR;
+	}
+
+	lfbufp->maxlen = PKTPOOL_LEN_MAX;
+	plen = LIMIT_TO_MAX(plen, lfbufp->maxlen);
+
+	for (i = 0; i < plen; i++) {
+		lfrag_buf_t *buf;
+
+		buf = (lfrag_buf_t *)MALLOC(OSH_NULL, buflen + LFBUFSZ);
+		if (buf == NULL) {
+			/* Not able to allocate all requested pkts
+			 * so just return what was actually allocated
+			 * We can add to the pool later
+			 */
+			if (lfbufp->freelist == NULL) /* pktpool free list is empty */
+				err = BCME_NOMEM;
+
+			goto exit;
+		}
+		buf->lfbufp = lfbufp;
+		LFBUFSETFREELIST(buf, lfbufp->freelist); /* insert p at head of free list */
+		lfbufp->freelist = buf;
+		lfbufp->avail++;
+	}
+
+exit:
+	lfbufp->len = lfbufp->avail;
+
+	*lfbufplen = lfbufp->len;
+	return err;
+}
+
+/* De-initial a lfrag buffer pool, free the data in this pool */
+int
+BCMATTACHFN(lfbufpool_deinit)(osl_t *osh, lfrag_buf_pool_t *lfbufp)
+{
+	uint16 freed = 0;
+	void *buf = NULL;
+
+	ASSERT(osh != NULL);
+	ASSERT(lfbufp != NULL);
+
+	if (lfbufp->inited == FALSE)
+		return BCME_OK;
+
+	while (lfbufp->freelist != NULL) {
+		buf = lfbufp->freelist;
+		lfbufp->freelist = LFBUFFREELIST(buf); /* unlink head buffer from free list */
+		LFBUFSETFREELIST(buf, NULL);
+
+		MFREE(OSH_NULL, lfbufp, lfbufp->buflen);
+
+		freed++;
+		ASSERT(freed <= lfbufp->len);
+	}
+
+	lfbufp->avail -= freed;
+	ASSERT(lfbufp->avail == 0);
+
+	lfbufp->len -= freed;
+
+	if (HND_PKTPOOL_MUTEX_DELETE(&lfbufp->mutex) != OSL_EXT_SUCCESS)
+		return BCME_ERROR;
+
+	lfbufp->inited = FALSE;
+
+	/* Are there still pending buffer? */
+	ASSERT(lfbufp->len == 0);
+
+	return BCME_OK;
+}
+
+/* fill more buffer to the pool */
+int
+lfbufpool_fill(osl_t *osh, lfrag_buf_pool_t *lfbufp, bool minimal)
+{
+	lfrag_buf_t *lfbuf;
+	int err = BCME_OK;
+	int len, psize, maxlen;
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_ACQUIRE(&lfbufp->mutex, OSL_EXT_TIME_FOREVER) != OSL_EXT_SUCCESS)
+		return BCME_ERROR;
+
+	ASSERT(lfbufp->buflen != 0);
+
+	maxlen = lfbufp->maxlen;
+	psize = minimal ? (maxlen >> 2) : maxlen;
+	for (len = (int)lfbufp->len; len < psize; len++) {
+		lfbuf = (lfrag_buf_t *)MALLOC(osh, lfbufp->buflen + LFBUFSZ);
+		if (lfbuf == NULL) {
+			err = BCME_NOMEM;
+			break;
+		}
+		lfbuf->lfbufp = lfbufp;
+
+		lfbufp->len++;
+		lfbufpool_enq(lfbufp, (void *)lfbuf);
+	}
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_RELEASE(&lfbufp->mutex) != OSL_EXT_SUCCESS)
+		return BCME_ERROR;
+
+	return err;
+}
+
+void *
+lfbufpool_get(lfrag_buf_pool_t *lfbufp)
+{
+	uchar *buf;
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_ACQUIRE(&lfbufp->mutex, OSL_EXT_TIME_FOREVER) != OSL_EXT_SUCCESS)
+		return NULL;
+
+	buf = (uchar *)lfbufpool_deq(lfbufp);
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_RELEASE(&lfbufp->mutex) != OSL_EXT_SUCCESS)
+		return NULL;
+
+	/* Shift lfrag_buf header */
+	return (void *)(buf ? (buf + LFBUFSZ) : NULL);
+}
+
+void
+lfbufpool_free(void *buf)
+{
+	lfrag_buf_t *lfbuf;
+
+	ASSERT(buf != NULL);
+
+	lfbuf = (lfrag_buf_t*)((uchar*)buf - LFBUFSZ);
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_ACQUIRE(&LFBUFHOMEPOOL(lfbuf)->mutex, OSL_EXT_TIME_FOREVER) !=
+		OSL_EXT_SUCCESS)
+		return;
+
+	lfbufpool_enq(LFBUFHOMEPOOL(lfbuf), lfbuf);
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_RELEASE(&LFBUFHOMEPOOL(lfbuf)->mutex) != OSL_EXT_SUCCESS)
+		return;
+}
+
+/* Swap D3_BUFFER to use D11_BUFFER */
+int
+lfbufpool_swap_d11_buf(osl_t *osh, void *p)
+{
+	void *d3buf_head, *d3buf_data, *d11buf;
+	uint16 len, extra_push = 0;
+
+	if (lfbufpool_avail(d11_lfrag_buf_pool) == 0) {
+		/* Can not fail now; Resources should be checked upfront */
+		ASSERT(0);
+		return BCME_ERROR;
+	}
+
+	/* The length must be 14B */
+	len = PKTLEN(osh, p);
+	ASSERT(len == D3LFBUF_ETHERHDRSZ);
+
+	if (len > D3LFBUF_ETHERHDRSZ)
+		extra_push = len - D3LFBUF_ETHERHDRSZ;
+
+	if ((d11buf = lfbufpool_get(d11_lfrag_buf_pool)) == NULL)
+		return BCME_ERROR;
+
+	/* save d3 buffer head and data pointers */
+	d3buf_head = PKTHEAD(osh, p);
+	d3buf_data = PKTDATA(osh, p);
+
+	/* set d11 buffer to lbuf */
+	PKTSETBUF(osh, p, d11buf, d11_lfrag_buf_pool->buflen);
+
+	/* pull for headroom */
+	PKTPULL(osh, p, D11LFBUF_HEADROOM - extra_push);
+	PKTSETLEN(osh, p, len);
+
+	/* copy all d3buf data to d11buf */
+	bcopy(d3buf_data, PKTDATA(osh, p), len);
+
+	/* free d3 buffer */
+	lfbufpool_free(d3buf_head);
+
+	return BCME_OK;
+}
+
+void
+lfbufpool_early_free_buf(osl_t *osh, void *p)
+{
+	void *buf_head;
+
+	/* save buffer head and data pointers */
+	buf_head = PKTHEAD(osh, p);
+
+	/* set buffer to end of lbuffrag and length to 0 */
+	PKTSETBUF(osh, p, ((uchar *)p + LBUFFRAGSZ), 0);
+
+	/* free buffer */
+	lfbufpool_free(buf_head);
+}
+
+/* Force lfbufpool_setmaxlen () into RAM as it uses a constant
+ * (PKTPOOL_LEN_MAX) that may be changed post tapeout for ROM-based chips.
+ */
+int
+BCMRAMFN(lfbufpool_setmaxlen)(lfrag_buf_pool_t *lfbufp, uint16 maxlen)
+{
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_ACQUIRE(&lfbufp->mutex, OSL_EXT_TIME_FOREVER) != OSL_EXT_SUCCESS)
+		return BCME_ERROR;
+
+	if (maxlen > PKTPOOL_LEN_MAX)
+		maxlen = PKTPOOL_LEN_MAX;
+
+	/* if pool is already beyond maxlen, then just cap it
+	 * since we currently do not reduce the pool len
+	 * already allocated
+	 */
+	lfbufp->maxlen = (lfbufp->len > maxlen) ? lfbufp->len : maxlen;
+
+	/* protect shared resource */
+	if (HND_PKTPOOL_MUTEX_RELEASE(&lfbufp->mutex) != OSL_EXT_SUCCESS)
+		return BCME_ERROR;
+
+	return lfbufp->maxlen;
+}
+#endif /* BCM_DHDHDR && DONGLEBUILD */
+
 /* utility for registering host addr fill function called from pciedev */
 int
 /* BCMATTACHFN */
@@ -812,7 +1132,7 @@ pktpool_avail_notify(pktpool_t *pktp)
 }
 
 void *
-pktpool_get(pktpool_t *pktp)
+_pktpool_get(pktpool_t *pktp, void *bufp)
 {
 	void *p;
 
@@ -853,6 +1173,21 @@ pktpool_get(pktpool_t *pktp)
 			p = NULL;
 		}
 	}
+#if defined(BCM_DHDHDR) && defined(BCMFRAGPOOL) && !defined(BCMFRAGPOOL_DISABLED)
+	else if (BCMLFRAG_ENAB() && (pktp->type == lbuf_frag) && bufp) {
+		void *buf;
+
+		/* head pointer into data buffer got from the pool */
+		buf = lfbufpool_get(bufp);
+		if (buf == NULL) {
+			pktpool_enq(pktp, p);
+			p = NULL;
+			goto done;
+		}
+
+		PKTSETBUF(OSH_NULL, p, buf, ((lfrag_buf_pool_t *)bufp)->buflen);
+	}
+#endif /* BCM_DHDHDR &&  BCMFRAGPOOL && !BCMFRAGPOOL_DISABLED */
 #endif /* _RTE_ */
 
 done:
@@ -874,6 +1209,17 @@ pktpool_free(pktpool_t *pktp, void *p)
 #ifdef BCMDBG_POOL
 	/* pktpool_stop_trigger(pktp, p); */
 #endif
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD) && defined(BCMFRAGPOOL) && \
+	!defined(BCMFRAGPOOL_DISABLED)
+	if (BCMLFRAG_ENAB() && (pktp->type == lbuf_frag)) {
+		/* free head pointer to buffer pool if not freed */
+		if (PKTHEAD(OSH_NULL, p) != ((uchar *)p + LBUFFRAGSZ)) {
+			lfbufpool_free(PKTHEAD(OSH_NULL, p));
+			PKTSETBUF(OSH_NULL, p, ((uchar *)p + LBUFFRAGSZ), 0);
+		}
+	}
+#endif /* BCM_DHDHDR &&  DONGLEBUILD && BCMFRAGPOOL && !BCMFRAGPOOL_DISABLED */
 
 	pktpool_enq(pktp, p);
 
@@ -1004,7 +1350,15 @@ BCMATTACHFN(hnd_pktpool_init)(osl_t *osh)
 		ASSERT(0);
 		goto error2;
 	}
-#endif
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	d3_lfrag_buf_pool = MALLOCZ(osh, sizeof(lfrag_buf_pool_t) * LFRAG_BUF_POOL_NUM);
+	if (d3_lfrag_buf_pool == NULL) {
+		ASSERT(0);
+		goto error3;
+	}
+	d11_lfrag_buf_pool = d3_lfrag_buf_pool + 1;
+#endif /* BCM_DHDHDR && DONGLEBUILD */
+#endif /* BCMFRAGPOOL && !BCMFRAGPOOL_DISABLED */
 
 #if defined(BCMRXFRAGPOOL) && !defined(BCMRXFRAGPOOL_DISABLED)
 	pktpool_shared_rxlfrag = MALLOCZ(osh, sizeof(pktpool_t));
@@ -1037,14 +1391,41 @@ BCMATTACHFN(hnd_pktpool_init)(osl_t *osh)
 	pktpool_setmaxlen(pktpool_shared, SHARED_POOL_LEN);
 
 #if defined(BCMFRAGPOOL) && !defined(BCMFRAGPOOL_DISABLED)
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* tx_lfrag header initialization */
+	n = 1;
+	if (pktpool_init(osh, pktpool_shared_lfrag, &n, 0, TRUE, lbuf_frag) == BCME_ERROR) {
+		ASSERT(0);
+		goto error5;
+	}
+	pktpool_setmaxlen(pktpool_shared_lfrag, SHARED_FRAG_POOL_LEN);
+
+	/* D3_BUFFER pool initialization */
+	n = 1;
+	if (lfbufpool_init(osh, d3_lfrag_buf_pool, &n, D3LFBUF_SZ) == BCME_ERROR) {
+		ASSERT(0);
+		goto error6;
+	}
+	lfbufpool_setmaxlen(d3_lfrag_buf_pool, D3_BUFFER_LEN);
+
+	/* D11_BUFFER pool initialization */
+	n = 1;
+	if (lfbufpool_init(osh, d11_lfrag_buf_pool, &n, PKTFRAGSZ) == BCME_ERROR) {
+		ASSERT(0);
+		goto error6;
+	}
+	lfbufpool_setmaxlen(d11_lfrag_buf_pool, D11_BUFFER_LEN);
+
+#else /* !(BCM_DHDHDR && DONGLEBUILD) */
 	n = 1;
 	if (pktpool_init(osh, pktpool_shared_lfrag,
 	                 &n, PKTFRAGSZ, TRUE, lbuf_frag) == BCME_ERROR) {
 		ASSERT(0);
 		goto error5;
 	}
-	 pktpool_setmaxlen(pktpool_shared_lfrag, SHARED_FRAG_POOL_LEN);
-#endif
+	pktpool_setmaxlen(pktpool_shared_lfrag, SHARED_FRAG_POOL_LEN);
+#endif /* BCM_DHDHDR && DONGLEBUILD */
+#endif /* BCMFRAGPOOL && !BCMFRAGPOOL_DISABLED */
 #if defined(BCMRXFRAGPOOL) && !defined(BCMRXFRAGPOOL_DISABLED)
 	n = 1;
 	if (pktpool_init(osh, pktpool_shared_rxlfrag,
@@ -1065,8 +1446,14 @@ error6:
 
 #if defined(BCMFRAGPOOL) && !defined(BCMFRAGPOOL_DISABLED)
 	pktpool_deinit(osh, pktpool_shared_lfrag);
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	if (d3_lfrag_buf_pool)
+		lfbufpool_deinit(osh, d3_lfrag_buf_pool);
+	if (d11_lfrag_buf_pool)
+		lfbufpool_deinit(osh, d11_lfrag_buf_pool);
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 error5:
-#endif
+#endif /* BCMFRAGPOOL && !BCMFRAGPOOL_DISABLED */
 
 #if (defined(BCMRXFRAGPOOL) && !defined(BCMRXFRAGPOOL_DISABLED)) || \
 	(defined(BCMFRAGPOOL) && !defined(BCMFRAGPOOL_DISABLED))
@@ -1083,6 +1470,13 @@ error3:
 #if defined(BCMFRAGPOOL) && !defined(BCMFRAGPOOL_DISABLED)
 	hnd_free(pktpool_shared_lfrag);
 	pktpool_shared_lfrag = (pktpool_t *)NULL;
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	if (d3_lfrag_buf_pool) {
+		hnd_free(d3_lfrag_buf_pool);
+		d3_lfrag_buf_pool = (lfrag_buf_pool_t *)NULL;
+		d11_lfrag_buf_pool = (lfrag_buf_pool_t *)NULL;
+	}
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 error2:
 #endif /* BCMFRAGPOOL */
 
@@ -1097,6 +1491,12 @@ void
 hnd_pktpool_fill(pktpool_t *pktpool, bool minimal)
 {
 	pktpool_fill(pktpool_osh, pktpool, minimal);
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	if (pktpool->type == lbuf_frag) {
+		lfbufpool_fill(pktpool_osh, d3_lfrag_buf_pool, minimal);
+		lfbufpool_fill(pktpool_osh, d11_lfrag_buf_pool, minimal);
+	}
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 }
 
 /* refill pktpools after reclaim */
@@ -1110,6 +1510,10 @@ hnd_pktpool_refill(bool minimal)
 #ifdef BCMFRAGPOOL
 	if (POOL_ENAB(pktpool_shared_lfrag)) {
 		pktpool_fill(pktpool_osh, pktpool_shared_lfrag, minimal);
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+		lfbufpool_fill(pktpool_osh, d3_lfrag_buf_pool, minimal);
+		lfbufpool_fill(pktpool_osh, d11_lfrag_buf_pool, minimal);
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 	}
 #endif /* BCMFRAGPOOL */
 /* rx fragpool reclaim */

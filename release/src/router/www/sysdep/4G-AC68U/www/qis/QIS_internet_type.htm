@@ -157,19 +157,6 @@ function QKinternettype_load_body(){
 		if( !parent.movistarTriple_support ){
 			document.getElementById('movistarOption').outerHTML = "";
 		}
-
-		if(parent.based_modelid == "RT-AC95U"){ //MODELDEP: RT-AC95U : TRUNK ports
-			document.getElementById("voip_lan").innerHTML = "LAN4";	//P3
-			document.getElementById("iptv_lan").innerHTML = "LAN8"; //P4
-			document.getElementById("voip_port3").innerHTML = "VoIP (LAN port 4):"; //P3
-			document.getElementById("iptv_port4").innerHTML = "IPTV (LAN port 8):"; //P4
-		}
-		else if(parent.based_modelid == "RT-AC53"){
-			document.getElementById("voip_lan").innerHTML = "LAN1";
-			document.getElementById("iptv_lan").innerHTML = "LAN2";
-			document.getElementById("voip_port3").innerHTML = "VoIP (LAN port 1):";
-			document.getElementById("iptv_port4").innerHTML = "IPTV (LAN port 2):";
-		}
 		
 		if(is_TW_sku){
 			ISP_Profile_Selection("none");

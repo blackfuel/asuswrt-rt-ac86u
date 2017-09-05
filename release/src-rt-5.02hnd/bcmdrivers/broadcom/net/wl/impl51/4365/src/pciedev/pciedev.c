@@ -7,7 +7,7 @@
  * 3. message buffer protocol
  * 4. DMA handling
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -299,9 +299,6 @@ static uint8  pciedev_host_wake_gpio_init(struct dngl_bus *pciedev);
 #endif /* PCIE_PHANTOM_DEV */
 
 static bool pciedev_setup_common_msgbuf_rings(struct dngl_bus *pciedev);
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-static bool pciedev_setup_txflow_msgbuf_ring(struct dngl_bus *pciedev);
-#endif
 
 #ifdef PCIE_PHANTOM_DEV
 static uint16 pciedev_htoddma_pktlen(struct dngl_bus *pciedev, msgbuf_ring_t **msgbuf);
@@ -332,9 +329,7 @@ static void pciedev_process_d2h_ring_config(struct dngl_bus * pciedev, void *p);
 
 static int pciedev_process_flow_ring_create_rqst(struct dngl_bus * pciedev, void *p);
 static bool BCMATTACHFN(pciedev_setup_flow_rings)(struct dngl_bus *pciedev);
-#ifndef BCMPCIE_SUPPORT_TX_PUSH_RING
 static void pciedev_free_flowrings(struct dngl_bus *pciedev);
-#endif /* BCMPCIE_SUPPORT_TX_PUSH_RING */
 static int pciedev_flush_flow_ring(struct dngl_bus * pciedev, uint16 flowid);
 static int pciedev_process_flow_ring_delete_rqst(struct dngl_bus * pciedev, void *p);
 static void pciedev_process_flow_ring_flush_rqst(struct dngl_bus * pciedev, void *p);
@@ -718,23 +713,6 @@ BCMATTACHFN(pciedev_api_shmem_init_rev3)(struct dngl_bus *pciedev, pciedev_share
 	pciedev_cmn_ring_init(pciedev, ring_i, BCMPCIE_D2H_MSGRING_TX_COMPLETE);
 	pciedev_cmn_ring_init(pciedev, ring_i, BCMPCIE_D2H_MSGRING_RX_COMPLETE);
 
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-	/* support one push txring */
-	pciedev->txp_msgbuf.ringmem = ring_m;
-	EVENT_LOG(EVENT_LOG_TAG_PCI_DBG,
-		"TXRING memptr %x \n", (uint32)pciedev->txp_msgbuf.ringmem);
-
-	pciedev->txp_msgbuf.tcm_rs_w_ptr =
-		(pcie_rw_index_t *)(ring_i->h2d_w_idx_ptr +
-		(PCIE_RW_INDEX_SZ * (BCMPCIE_H2D_MSGRING_TXFLOW_IDX_START)));
-	pciedev->txp_msgbuf.tcm_rs_r_ptr =
-		(pcie_rw_index_t *)(ring_i->h2d_r_idx_ptr +
-		(PCIE_RW_INDEX_SZ * (BCMPCIE_H2D_MSGRING_TXFLOW_IDX_START)));
-	EVENT_LOG(EVENT_LOG_TAG_PCI_DBG,
-		"h2d TXP write read %p   %p  \n",
-		(uint32)pciedev->txp_msgbuf.tcm_rs_w_ptr, (uint32)pciedev->txp_msgbuf.tcm_rs_r_ptr);
-#endif /* BCMPCIE_SUPPORT_TX_PUSH_RING */
-
 	pciedev->h2d_mb_data_ptr = (uint32 *)shmem->h2d_mb_data_ptr;
 	pciedev->d2h_mb_data_ptr = (uint32 *)shmem->d2h_mb_data_ptr;
 
@@ -745,11 +723,9 @@ bool
 pciedev_init_flowrings(struct dngl_bus *pciedev)
 {
 	pciedev_shared_t *shmem = pciedev->pcie_sh;
-#ifndef BCMPCIE_SUPPORT_TX_PUSH_RING
 	ring_info_t *ring_info = (ring_info_t *)shmem->rings_info_ptr;
 	ring_mem_t *rmem = (ring_mem_t *)ring_info->ringmem_ptr;
 	int i;
-#endif
 
 	pciedev->flow_ring_msgbuf = MALLOCZ(pciedev->osh,
 		BCMPCIE_MAX_TX_FLOWS * sizeof(msgbuf_ring_t));
@@ -760,7 +736,6 @@ pciedev_init_flowrings(struct dngl_bus *pciedev)
 		return FALSE;
 	}
 
-#ifndef BCMPCIE_SUPPORT_TX_PUSH_RING
 	rmem += BCMPCIE_COMMON_MSGRINGS;
 
 	for (i = 0; i < BCMPCIE_MAX_TX_FLOWS; i++) {
@@ -770,7 +745,6 @@ pciedev_init_flowrings(struct dngl_bus *pciedev)
 		rmem++;
 		pciedev_flow_ring_init(pciedev, ring_info, i);
 	}
-#endif /* BCMPCIE_SUPPORT_TX_PUSH_RING */
 
 	pciedev->schedule_prio = PCIEDEV_SCHEDULER_AC_PRIO;
 
@@ -1002,7 +976,10 @@ void *regs, uint bustype)
 	pciedev_tunables_init(pciedev);
 #ifdef BCMFRAGPOOL
 	pciedev->pktpool_lfrag = SHARED_FRAG_POOL;	/* shared tx frag pool */
-#endif
+#ifdef BCM_DHDHDR
+	pciedev->d3_lfbufpool = D3_LFRAG_BUF_POOL;
+#endif /* BCM_DHDHDR */
+#endif /* BCMFRAGPOOL */
 
 	pciedev->pktpool_rxlfrag = SHARED_RXFRAG_POOL;	/* shared rx frag pool */
 	pciedev->pktpool = SHARED_POOL;	/* shared lbuf pool */
@@ -1030,12 +1007,6 @@ void *regs, uint bustype)
 	}
 #endif /* PCIE_D2H_DOORBELL_RINGER */
 
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-	if (!pciedev_setup_txflow_msgbuf_ring(pciedev)) {
-		evnt_ctrl = PCIE_ERROR2;
-		goto fail2;
-	}
-#endif
 	/* setup event and IOCTL resp buffer pools */
 	pciedev->event_pool = pciedev_init_host_dma_buf_pool_init(pciedev,
 		PCIEDEV_EVENT_BUFPOOL_MAX);
@@ -1057,10 +1028,6 @@ void *regs, uint bustype)
 	pciedev_dump_common_msgbuf_ring_info(pciedev->dtoh_txcpl);
 	pciedev_dump_common_msgbuf_ring_info(pciedev->dtoh_rxcpl);
 	pciedev_dump_common_msgbuf_ring_info(pciedev->dtoh_ctrlcpl);
-
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-	pciedev_dump_common_msgbuf_ring_info(pciedev->htod_tx);
-#endif
 #endif /* PCIE_DEBUG_DUMP_MSGBUF_RINGINFO */
 
 	/* htod dma queue init */
@@ -1886,6 +1853,13 @@ pciedev_init(struct dngl_bus *pciedev)
 #ifdef PCIE_DMAINDEX16
 	pciedev->pcie_sh->flags |= PCIE_SHARED_2BYTE_INDICES;
 #endif
+#ifdef BCM_DHDHDR
+	/* Lbuf pktid is used to locate a free TxHeader buffer in host memory */
+	ASSERT(PKT_MAXIMUM_ID <= BCM_DHDHDR_MAXIMUM);
+
+	/* Advertize to DHD to insert SFH/LLCSNAP and reserve space for TxHdrs */
+	pciedev->pcie_sh->flags |= PCIE_SHARED_DHDHDR;
+#endif /* BCM_DHDHDR */
 
 	pciedev->cur_ltr_state = LTR_SLEEP;
 	/* Update LTR stat */
@@ -2727,11 +2701,7 @@ BCMATTACHFN(pciedev_detach)(struct dngl_bus *pciedev)
 		sizeof(flowring_pool_t));
 
 	pciedev_cleanup_common_msgbuf_rings(pciedev);
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-	pciedev_free_msgbuf_ring(pciedev, pciedev->htod_tx);
-#else
 	pciedev_free_flowrings(pciedev);
-#endif /* BCMPCIE_SUPPORT_TX_PUSH_RING */
 
 	/* Free device state */
 	dngl_detach(pciedev->dngl);
@@ -2768,19 +2738,6 @@ BCMATTACHFN(pciedev_detach)(struct dngl_bus *pciedev)
 	/* Free chip state */
 	MFREE(pciedev->osh, pciedev, sizeof(struct dngl_bus));
 } /* pciedev_detach */
-
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-static bool
-BCMATTACHFN(pciedev_setup_txflow_msgbuf_ring)(struct dngl_bus *pciedev)
-{
-	bool success = FALSE;
-	pciedev->htod_tx = &pciedev->txp_msgbuf;
-	success = pciedev_allocate_msgbuf_ring(pciedev, pciedev->htod_tx,
-			"h2dtx", 4, 32, FALSE, FALSE, FALSE);
-
-	return success;
-}
-#endif /* PCIE_DEBUG_DUMP_MSGBUF_RINGINFO */
 
 static const char BCMATTACHDATA(rstr_h2dctl)[] = "h2dctl";
 static const char BCMATTACHDATA(rstr_h2drx)[]  = "h2drx";
@@ -2844,7 +2801,7 @@ BCMATTACHFN(pciedev_setup_common_msgbuf_rings)(struct dngl_bus *pciedev)
 	/* D2H control completion */
 	pciedev->dtoh_ctrlcpl = &pciedev->cmn_msgbuf_ring[BCMPCIE_D2H_MSGRING_CONTROL_COMPLETE];
 	success = pciedev_allocate_msgbuf_ring(pciedev, pciedev->dtoh_ctrlcpl,
-		rstr_d2hctl, 8, 1, d2h_phase_supported,
+		rstr_d2hctl, 64, 1, d2h_phase_supported,
 		dma_indices_supported, dma_indices_supported, FALSE);
 	if (!success)
 		goto fail;
@@ -2877,10 +2834,6 @@ pciedev_init_sharedbufs(struct dngl_bus *pciedev)
 		BCMPCIE_D2H_RW_INDEX_ARRAY_SZ(PCIE_RW_INDEX_SZ);
 
 #endif /* PCIE_DMA_INDEX */
-#ifdef BCM_HOST_MEM
-	/* D2H_PD_RX_OFFSET can be 0 */
-	uint32 round = (ROUNDUP(D2H_PD_RX_OFFSET, 16) > 0)? ROUNDUP(D2H_PD_RX_OFFSET, 16) : 16;
-#endif /* BCM_HOST_MEM */
 
 	shmem = pciedev->pcie_sh;
 
@@ -2892,41 +2845,80 @@ pciedev_init_sharedbufs(struct dngl_bus *pciedev)
 	init_needed |= !pciedev_link_host_msgbuf_ring_cbuf(pciedev, pciedev->dtoh_txcpl, NULL);
 	init_needed |= !pciedev_link_host_msgbuf_ring_cbuf(pciedev, pciedev->dtoh_rxcpl, NULL);
 
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-	init_needed |= !pciedev_link_host_msgbuf_ring(pciedev, pciedev->htod_tx,
-		pciedev_handle_h2d_msg_txsubmit);
-#endif
+
 	if (pciedev->scratch_inited == FALSE) {
-		pciedev->d2h_dma_scratchbuf_len = shmem->host_dma_scratch_buffer_len;
+
+		const uint32 rounding = 4096; /* Sections are padded to 4096 Bytes */
+		uint32 mem_offset, mem_bytes, scratch_buffer_len;
+
+		scratch_buffer_len = shmem->host_dma_scratch_buffer_len;
+		PCI_INFORM(("HOST BUFFER: bytes %u rounding %u phy:%08x:%08x\n",
+			scratch_buffer_len, rounding,
+			(uint32)HIGH_ADDR_32(shmem->host_dma_scratch_buffer),
+			(uint32)LOW_ADDR_32(shmem->host_dma_scratch_buffer)));
+
+		/* Section: D2H DMA RxOffset at start */
+		mem_offset = 0;
+		mem_bytes = 8; /* minimum size is 8 Bytes DMA RxOffset */
+
+		PCI_INFORM(("D2H_PD_RX_OFFSET<%d>: reserving %u phy:%08x:%08x\n",
+			D2H_PD_RX_OFFSET, mem_bytes,
+			(uint32)HIGH_ADDR_32(shmem->host_dma_scratch_buffer),
+			(uint32)LOW_ADDR_32(shmem->host_dma_scratch_buffer)));
+
+		mem_offset += ROUNDUP(mem_bytes, rounding); /* Pad to rounding */
+
+#ifdef BCM_DHDHDR
+		/* Section: DHD based Txheaders */
+
+		dma64addr_t dhdhdr_dma64addr;
+
+		mem_bytes = BCM_DHDHDR_SIZE * BCM_DHDHDR_MAXIMUM;
+		ASSERT(scratch_buffer_len >= (mem_offset + mem_bytes));
+
+		dhdhdr_dma64addr.hiaddr = HIGH_ADDR_32(shmem->host_dma_scratch_buffer);
+		dhdhdr_dma64addr.loaddr = LOW_ADDR_32(shmem->host_dma_scratch_buffer) +
+			mem_offset;
+
+		/* Register host memory extention with lbuf subsystem */
+		lbuf_dhdhdr_memory_register(BCM_DHDHDR_SIZE, BCM_DHDHDR_MAXIMUM,
+			(void *)&dhdhdr_dma64addr);
+
+		PCI_INFORM(("BCM_DHDHDR: offset %u bytes %u phy:%08x:%08x\n",
+			mem_offset, mem_bytes,
+			dhdhdr_dma64addr.hiaddr, dhdhdr_dma64addr.loaddr));
+
+
+		mem_offset += ROUNDUP(mem_bytes, rounding);
+#endif /* BCM_DHDHDR */
 
 #ifdef BCM_HOST_MEM
-		if (pciedev->d2h_dma_scratchbuf_len > round) {
-			pciedev->d2h_dma_hostbuf_len = shmem->host_dma_scratch_buffer_len;
-			pciedev->d2h_dma_hostbuf_len -= round;
+		if (scratch_buffer_len > mem_offset) {
 
-			PCI_INFORM(("scratch_buffer_len:%d hostbuf_len:%d D2H_PD_RX_OFFSET:%d\n",
-				shmem->host_dma_scratch_buffer_len,
-				pciedev->d2h_dma_hostbuf_len, D2H_PD_RX_OFFSET));
+			/* Section: Rest of host memory */
+			mem_bytes = scratch_buffer_len - mem_offset;
+
+			pciedev->d2h_dma_hostbuf_len = mem_bytes;
 
 			PHYSADDR64HISET(pciedev->d2h_dma_hostbuf,
 				(uint32)HIGH_ADDR_32(shmem->host_dma_scratch_buffer));
 			PHYSADDR64LOSET(pciedev->d2h_dma_hostbuf,
-				(uint32)LOW_ADDR_32(shmem->host_dma_scratch_buffer) + round);
+				(uint32)LOW_ADDR_32(shmem->host_dma_scratch_buffer) + mem_offset);
 
-			PCI_INFORM(("scratch_buffer len:%d(%d) phy:%08x:%08x dma:%08x:%08x\n",
-				shmem->host_dma_scratch_buffer_len, pciedev->d2h_dma_hostbuf_len,
-				pciedev->d2h_dma_hostbuf.hiaddr, pciedev->d2h_dma_hostbuf.loaddr,
-				(uint32)HIGH_ADDR_32(shmem->host_dma_scratch_buffer),
-				(uint32)LOW_ADDR_32(shmem->host_dma_scratch_buffer)));
+			PCI_INFORM(("BCM_HOST_MEM: offset %u bytes %u phy:%08x:%08x\n",
+				mem_offset, mem_bytes,
+				pciedev->d2h_dma_hostbuf.hiaddr, pciedev->d2h_dma_hostbuf.loaddr));
 
 			W_REG(pciedev->osh, &pciedev->regs->sbtopcie1,
 				(pciedev->d2h_dma_hostbuf.loaddr & SBTOPCIE1_MASK) | 0xc);
+
 			PCI_INFORM(("SBtoPCIE1 %08x @ regs:%p\n",
 				R_REG(pciedev->osh, &pciedev->regs->sbtopcie1),
 				(uint8 *)(&pciedev->regs)));
 		}
 #endif /* BCM_HOST_MEM */
 
+		pciedev->d2h_dma_scratchbuf_len = scratch_buffer_len;
 		if (pciedev->d2h_dma_scratchbuf_len > D2H_PD_RX_OFFSET)
 			pciedev->d2h_dma_scratchbuf_len = D2H_PD_RX_OFFSET;
 
@@ -2937,6 +2929,7 @@ pciedev_init_sharedbufs(struct dngl_bus *pciedev)
 				(uint32) LOW_ADDR_32(shmem->host_dma_scratch_buffer));
 			pciedev->d2h_dma_rxoffset = 0;
 		}
+
 		pciedev->scratch_inited = TRUE;
 	}
 
@@ -3493,7 +3486,8 @@ pciedev_bus_iovar(struct dngl_bus *pciedev, char *buf, uint32 inlen, uint32 *out
 	} else if (!strcmp(cmd, "sbaddr")) {
 		/* Read SB to PCIe translation addr */
 		uint32 host_buffer_sbtopcie_addr =
-			(CCI400_SBTOPCIE1_BASE | (pciedev->d2h_dma_hostbuf.loaddr & ~SBTOPCIE1_MASK));
+			(CCI400_SBTOPCIE1_BASE |
+			(pciedev->d2h_dma_hostbuf.loaddr & ~SBTOPCIE1_MASK));
 		uint32 *ret = (uint32 *)buf;
 		ret[0] = host_buffer_sbtopcie_addr;
 		ret[1] = pciedev->d2h_dma_hostbuf_len;
@@ -3596,7 +3590,7 @@ pciedev_bus_iovar(struct dngl_bus *pciedev, char *buf, uint32 inlen, uint32 *out
 #ifdef FFSHCED_SATURATED_MODE
 	} else if (!strcmp(cmd, "ffsched_saturated")) {
 		if (set) {
-			/* force_metadata_len to 0 */
+		/* force_metadata_len to 0 */
 			pciedev->_ffsched_saturated = val;
 		} else {
 			val = pciedev->_ffsched_saturated;
@@ -5524,7 +5518,6 @@ BCMATTACHFN(pciedev_setup_flow_rings)(struct dngl_bus *pciedev)
 	return TRUE;
 }
 
-#ifndef BCMPCIE_SUPPORT_TX_PUSH_RING
 static void
 BCMATTACHFN(pciedev_free_flowrings)(struct dngl_bus *pciedev)
 {
@@ -5540,7 +5533,6 @@ BCMATTACHFN(pciedev_free_flowrings)(struct dngl_bus *pciedev)
 	pciedev_free_cir_buffer(pciedev, pciedev->cir_flowring_buf);
 	pciedev->cir_flowring_buf = NULL;
 }
-#endif /* BCMPCIE_SUPPORT_TX_PUSH_RING */
 
 static void
 pciedev_process_insert_flowring(struct dngl_bus * pciedev, flowring_pool_t * lcl_pool, uint8 ac_tid)
@@ -5645,6 +5637,13 @@ pciedev_process_flow_ring_create_rqst(struct dngl_bus * pciedev, void *p)
 		goto send_resp;
 	}
 
+	if (OSL_MEM_AVAIL() < MIN_SCBALLOC_MEM) {
+		PCI_ERROR(("flow create error invalid flowid %d:"
+		" OSL_MEM_AVAIL = %d \n", flowid, OSL_MEM_AVAIL()));
+		status = BCMPCIE_NOMEM;
+		goto send_resp;
+	}
+
 	bcm_ether_ntoa((struct ether_addr *)flow_ring_create_req->da, eabuf);
 	PCI_TRACE(("Create flowid %d for %c%c%c%c  prio %d"
 		"maxitems %d len item %d %p\n",
@@ -5709,6 +5708,9 @@ pciedev_process_flow_ring_create_rqst(struct dngl_bus * pciedev, void *p)
 			flow_ring->bitmap_size++;
 	}
 #endif /* FLOWRING_USE_SHORT_BITSETS */
+
+	/* bcm_count_zeros_sequence relies on 32bit manipulations */
+	ASSERT((flow_ring->bitmap_size % (NBBY * sizeof(uint32))) == 0);
 
 	PCI_ERROR(("flow_create : bitmap_size=%d  maxitems=%d\n",
 		flow_ring->bitmap_size, maxitems));
@@ -5945,6 +5947,14 @@ pciedev_send_flow_ring_delete_resp(struct dngl_bus * pciedev, uint16 flowid, uin
 		flow_ring->status |= FLOW_RING_DELETE_RESP_RETRY;
 		pciedev->ctrl_resp_q->num_flow_ring_delete_resp_pend++;
 		return BCME_ERROR;
+	}
+
+	/* If flow is not inited yet, it implies lcl_pool is not allocated as well.
+	 * Just return the deletion err to host and not to remove flowring.
+	 */
+	if (!flow_ring->inited) {
+		PCI_ERROR(("%s: del a non-inited flow!\n", __FUNCTION__));
+		return BCME_NOTREADY;
 	}
 
 	/* If the work item made it to the queue, it will be sent

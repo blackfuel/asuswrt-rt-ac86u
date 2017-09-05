@@ -3,7 +3,7 @@
  * @brief
  * Common (OS-independent) portion of Broadcom 802.11bang Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -11,7 +11,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc.c 667324 2016-10-26 19:54:36Z $
+ * $Id: wlc.c 676345 2016-12-21 15:16:06Z $
  */
 
 #include <wlc_cfg.h>
@@ -1913,7 +1913,6 @@ static const struct wlc_otp_manf_info wlc_manf_info[] = {
 #define WLAUTH2DOT11AUTH(val) (val == WL_AUTH_OPEN_SYSTEM ? DOT11_OPEN_SYSTEM : DOT11_SHARED_KEY)
 
 /* local prototypes */
-static uint8 wlc_template_plcp_offset(wlc_info_t *wlc, ratespec_t rspec);
 static void wlc_pkttag_scb_restore_ex(wlc_info_t* wlc, void* p, wlc_txh_info_t* txh_info,
 	wlc_bsscfg_t **bsscfg_out, struct scb **scb_out);
 static void wlc_pkttag_scb_restore(void *ctxt, void* p);
@@ -3799,7 +3798,6 @@ void BCMINITFN(wlc_init)(wlc_info_t *wlc)
 		 * information, in particular the TSF (since we reset it above).
 		 */
 		if (AP_ENAB(wlc->pub)) {
-			wlc->aps_associated = 0;
 			wlc_restart_ap(wlc->ap);
 		}
 		/*
@@ -4377,6 +4375,10 @@ wlc_set_mac(wlc_bsscfg_t *cfg)
 	if (cfg == wlc->cfg) {
 		/* enter the MAC addr into the match registers */
 		uint16 attr = AMT_ATTR_VALID | AMT_ATTR_A1;
+#ifdef PSTA
+		if (PSTA_IS_REPEATER(wlc))
+			attr |= AMT_ATTR_A3;
+#endif
 		wlc_set_addrmatch(wlc, WLC_ADDRMATCH_IDX_MAC, addr, attr);
 	}
 #ifdef PSTA
@@ -4744,6 +4746,24 @@ wlc_set_phy_chanspec(wlc_info_t *wlc, chanspec_t chanspec)
 				WLC_RATES_CCK_OFDM, RATE_MASK, wlc_get_mcsallow(wlc, cfg));
 		}
 	}
+
+#if defined(RADAR) || defined(SLAVE_RADAR)
+	if (WL11H_ENAB(wlc) && (AP_ACTIVE(wlc) ||
+#ifdef SLAVE_RADAR
+		STA_ACTIVE(wlc) ||
+#endif /* SLAVE_RADAR */
+		FALSE)) {
+		phy_info_t *pinfo = (phy_info_t *)WLC_PI(wlc);
+
+		if (wlc->dfs && wlc_dfs_get_radar(wlc->dfs) &&
+		    wlc_radar_chanspec(wlc->cmi, chanspec)) {
+			phy_radar_detect_enable(pinfo, TRUE);
+		} else {
+			phy_radar_detect_enable(pinfo, FALSE);
+		}
+	}
+#endif /* RADAR || SLAVE_RADAR */
+
 	WL_CHANLOG(wlc, __FUNCTION__, TS_EXIT, 0);
 }
 
@@ -7503,7 +7523,7 @@ BCMATTACHFN(wlc_info_init)(wlc_info_t *wlc, int unit)
 
 
 #if defined(WLFBT) && !defined(WLFBT_DISABLED)
-	wlc->pub->_fbt = TRUE;
+	wlc->pub->_fbt_cap = TRUE;
 #endif
 
 #if defined(DMATXRC) && !defined(DMATXRC_DISABLED)
@@ -7645,6 +7665,9 @@ BCMATTACHFN(wlc_info_init)(wlc_info_t *wlc, int unit)
 		wlc->cpbusy_war = TRUE;
 	}
 #endif
+
+	/* remains invalid till set through iovar; defaults are used till then */
+	wlc->pub->_dyn160_active = WL_DEFAULT_DYN160_INVALID;
 }
 
 #if defined(WLC_LOW) && defined(DMATXRC)
@@ -11508,9 +11531,9 @@ wlc_watchdog(void *arg)
 		struct scb_iter scbiter;
 		FOREACHSCB(wlc->scbstate, &scbiter, scb) {
 			if (!SCB_INTERNAL(scb) &&
-			SCB_ASSOCIATED(scb) &&
-			SCB_AUTHENTICATED(scb))
-			wlc_scb_upd_all_flr_weight(wlc, scb);
+				((SCB_ASSOCIATED(scb) && SCB_AUTHENTICATED(scb)) || SCB_WDS(scb))) {
+				wlc_scb_upd_all_flr_weight(wlc, scb);
+			}
 		}
 	}
 #endif /* PROP_TXSTATUS && BCMPCIEDEV */
@@ -11736,10 +11759,15 @@ wlc_watchdog(void *arg)
 	/* push assoc state to phy. If no associations then set the flag so
 	 * that phy can clear any desense it has done before.
 	 */
-	if (wlc_stas_active(wlc) || wlc_ap_stas_associated(wlc->ap))
+	if (wlc_stas_active(wlc) || wlc_ap_stas_associated(wlc->ap) ||
+#ifdef WDS
+		wlc_wds_peers_connected(wlc) ||
+#endif /* WDS */
+		FALSE) {
 		wlc_phy_hold_upd(WLC_PI(wlc), PHY_HOLD_FOR_NOT_ASSOC, FALSE);
-	else
+	} else {
 		wlc_phy_hold_upd(WLC_PI(wlc), PHY_HOLD_FOR_NOT_ASSOC, TRUE);
+	}
 
 	if (wlc->pm_dur_clear_timeout)
 		wlc->pm_dur_clear_timeout--;
@@ -14762,24 +14790,26 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
 		val = DOT11_RC_INACTIVITY;
 		/* Fall through */
 
-	case WLC_SCB_DEAUTHENTICATE_FOR_REASON:
+	case WLC_SCB_DEAUTHENTICATE_FOR_REASON: {
+		void* eaptr = arg;
 		if (cmd == WLC_SCB_DEAUTHENTICATE_FOR_REASON) {
 			/* point arg at MAC addr */
 			if (len < (int)sizeof(scb_val_t)) {
 				bcmerror = BCME_BUFTOOSHORT;
 				break;
 			}
-			arg = &((scb_val_t *)arg)->ea;
+			eaptr = &((scb_val_t *)arg)->ea;
 			/* reason stays in `val' */
+			val = ((scb_val_t*)arg)->val ? ((scb_val_t*)arg)->val : val;
 		}
 #ifdef STA
 		if (BSSCFG_STA(bsscfg)) {
-			struct ether_addr *apmac = (struct ether_addr *)arg;
+			struct ether_addr *apmac = (struct ether_addr *)eaptr;
 			if (ETHER_ISMULTI(apmac)) {
 				WL_ERROR(("wl%d: bc/mc deauth%s on STA BSS?\n", wlc->pub->unit,
 					(cmd == WLC_SCB_DEAUTHENTICATE) ? "" : "_reason"));
 				apmac = &bsscfg->BSSID;
-			} else if ((scb = wlc_scbfind(wlc, bsscfg, (struct ether_addr *)arg)) &&
+			} else if ((scb = wlc_scbfind(wlc, bsscfg, (struct ether_addr *)eaptr)) &&
 			           (scb->flags & SCB_MYAP))
 				wlc_scb_resetstate(scb);
 			if (bsscfg->BSS) {
@@ -14793,7 +14823,7 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
 			}
 #if defined(IBSS_PEER_MGMT)
 			else if (IBSS_PEER_MGMT_ENAB(wlc->pub)) {
-				(void)wlc_senddeauth(wlc, bsscfg, scb, arg, &bsscfg->BSSID,
+				(void)wlc_senddeauth(wlc, bsscfg, scb, eaptr, &bsscfg->BSSID,
 				                     &bsscfg->cur_etheraddr, (uint16)val);
 				if (scb) {
 					wlc_scb_disassoc_cleanup(wlc, scb);
@@ -14804,13 +14834,24 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
 			break;
 		}
 #endif /* STA */
+	}
 		/* fall thru */
 	case WLC_SCB_AUTHORIZE:
 	case WLC_SCB_DEAUTHORIZE: {
 		uint32 flag;
-		int rc = val;
+		int rc;
 		bool enable = (cmd == WLC_SCB_AUTHORIZE);
 
+		if (cmd == WLC_SCB_DEAUTHENTICATE_FOR_REASON) {
+			/* point arg at MAC addr */
+			if (len < (int)sizeof(scb_val_t)) {
+				bcmerror = BCME_BUFTOOSHORT;
+				break;
+			}
+			arg = &((scb_val_t*)arg)->ea;
+		}
+
+		rc = val;
 		/* ethernet address must be specified - otherwise we assert in dbg code  */
 		if (!arg) {
 			bcmerror = BCME_BADARG;
@@ -14822,6 +14863,10 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
 		else
 			flag = AUTHENTICATED;
 
+		if (cmd == WLC_SCB_AUTHORIZE)
+		wlc_smfstats_update(wlc, bsscfg, SMFS_TYPE_AUTHORIZE, SMFS_8021x_AUTHORIZE);
+		if (cmd == WLC_SCB_DEAUTHORIZE)
+		wlc_smfstats_update(wlc, bsscfg, SMFS_TYPE_DEAUTHORIZE, SMFS_8021x_DEAUTHORIZE);
 		/* (de)authorize/authenticate all stations in this BSS */
 		if (ETHER_ISBCAST(arg)) {
 
@@ -15425,7 +15470,7 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
 		} else
 #endif /* BCMSUP_PSK */
 #ifdef WLFBT
-			if (WLFBT_ENAB(wlc->pub) && BSSCFG_STA(bsscfg)) {
+			if (BSSCFG_IS_FBT(bsscfg) && BSSCFG_STA(bsscfg)) {
 				bcmerror = wlc_fbt_set_pmk(wlc->fbt, bsscfg, (wsec_pmk_t *)pval,
 					bsscfg->associated);
 				break;
@@ -17576,12 +17621,10 @@ wlc_doiovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *name,
 
 			bsscfg->WPA_auth = int_val;
 #ifdef WLFBT
-			if (WLFBT_ENAB(wlc->pub)) {
-				/* Reset the current state so as to do initial FT association
-				 * on a wl join command
-				 */
-				wlc_fbt_reset_current_akm(wlc->fbt, bsscfg);
-			}
+			/* Reset the current state so as to do initial FT association
+			 * on a wl join command
+			 */
+			wlc_fbt_reset_current_akm(wlc->fbt, bsscfg);
 #endif /* WLFBT */
 			if (prev_psallowed != PS_ALLOWED(bsscfg))
 				wlc_set_pmstate(bsscfg, pm->PMenabled);
@@ -23827,6 +23870,24 @@ wlc_pktc_sdu_prep_copy(wlc_info_t *wlc, struct scb *scb, void *p, void *n, uint3
 	WLPKTTAG(n)->flags3 = WLPKTTAG(p)->flags3;
 	PKTSETPRIO(n, PKTPRIO(p));
 
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* When BCM_DHDHDR enabled the DHD host driver will prepare the dot3_mac_llc_snap_header,
+	 * dongle only need to change the host data low addr to include it
+	 */
+	if (PKTISTXFRAG(wlc->osh, n) && !PKTISTXPKTFETCHED(wlc->osh, n)) {
+		ASSERT(PKTISTXFRAG(wlc->osh, p));
+
+		/* now we have llc snap part but just in host */
+		PKTSETFRAGDATA_LO(wlc->osh, n, 1,
+			PKTFRAGDATA_LO(wlc->osh, n, 1) - DOT11_LLC_SNAP_HDR_LEN);
+		PKTSETFRAGLEN(wlc->osh, n, 1,
+			PKTFRAGLEN(wlc->osh, n, 1) + DOT11_LLC_SNAP_HDR_LEN);
+		PKTSETFRAGTOTLEN(wlc->osh, n,
+			PKTFRAGTOTLEN(wlc->osh, n) + DOT11_LLC_SNAP_HDR_LEN);
+		goto bypass_dot3lsh;
+	}
+#endif /* BCM_DHDHDR && DONGLEBUILD */
+
 	/* Init llc snap hdr and fixup length */
 	/* Original is ethernet hdr (14)
 	 * Convert to 802.3 hdr (22 bytes) so only need to
@@ -23838,6 +23899,10 @@ wlc_pktc_sdu_prep_copy(wlc_info_t *wlc, struct scb *scb, void *p, void *n, uint3
 	bcopy(PKTDATA(wlc->osh, p), dot3lsh,
 		OFFSETOF(struct dot3_mac_llc_snap_header, type));
 
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+bypass_dot3lsh:
+#endif
+
 	/* Set packet exptime */
 	if (lifetime != 0)
 		wlc_lifetime_set(wlc, n, lifetime);
@@ -23848,7 +23913,17 @@ wlc_pktc_sdu_prep(wlc_info_t *wlc, struct scb *scb, void *p, void *n, uint32 lif
 {
 	struct dot3_mac_llc_snap_header *dot3lsh;
 	uint pktlen;
+
 	wlc_pktc_sdu_prep_copy(wlc, scb, p, n, lifetime);
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* When BCM_DHDHDR enabled the DHD host driver will prepare the dot3_mac_llc_snap_header,
+	 * it also set the length appropriately.
+	 */
+	if (PKTISTXFRAG(wlc->osh, n) && !PKTISTXPKTFETCHED(wlc->osh, n))
+		return;
+#endif
+
 	dot3lsh = (struct dot3_mac_llc_snap_header *)PKTDATA(wlc->osh, n);
 	pktlen = pkttotlen(wlc->osh, n) - ETHER_HDR_LEN;
 	dot3lsh->length = HTON16(pktlen);
@@ -29534,11 +29609,12 @@ wlc_wsec(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, uint32 val)
 		wlc_set_pmstate(bsscfg, bsscfg->pm->PMenabled);
 #endif /* STA */
 
+	wlc_keymgmt_notify(wlc->keymgmt, WLC_KEYMGMT_NOTIF_BSS_WSEC_CHANGED,
+		bsscfg, NULL /* scb */, NULL /* key */, NULL /* pkt */);
+
 	if (!wlc->pub->up)
 		return (0);
 
-	wlc_keymgmt_notify(wlc->keymgmt, WLC_KEYMGMT_NOTIF_BSS_WSEC_CHANGED,
-		bsscfg, NULL /* scb */, NULL /* key */, NULL /* pkt */);
 	if (AIBSS_ENAB(wlc->pub)) {
 		wlc_update_beacon(wlc);
 		wlc_update_probe_resp(wlc, TRUE);
@@ -31195,7 +31271,7 @@ wlc_queue_80211_frag(wlc_info_t *wlc, void *p, wlc_txq_info_t *qi, struct scb *s
 		fifo = prio2fifo[prio];
 
 #ifdef WL_MU_TX
-	if (BSSCFG_AP(scb->bsscfg) && SCB_MU(scb) && MU_TX_ENAB(wlc)) {
+	if (BSSCFG_AP(scb->bsscfg) && MU_TX_ENAB(wlc)) {
 		wlc_mutx_sta_txfifo(wlc->mutx, scb, &fifo);
 	}
 #endif
@@ -31323,7 +31399,7 @@ wlc_sendctl(wlc_info_t *wlc, void *p, wlc_txq_info_t *qi, struct scb *scb, uint 
 		fifo = prio2fifo[prio];
 
 #ifdef WL_MU_TX
-	if (BSSCFG_AP(scb->bsscfg) && SCB_MU(scb) && MU_TX_ENAB(wlc)) {
+	if (BSSCFG_AP(scb->bsscfg) && MU_TX_ENAB(wlc)) {
 		wlc_mutx_sta_txfifo(wlc->mutx, scb, &fifo);
 	}
 #endif
@@ -31541,6 +31617,9 @@ wlc_sendauth(
 	wlc_iem_cbparm_t cbparm;
 	ASSERT(cfg != NULL);
 
+	if (scb == NULL) {
+		return NULL;
+	}
 	/* assert:  (status == success) -> (scb is not NULL) */
 	ASSERT((auth_status != DOT11_SC_SUCCESS) || (scb != NULL));
 
@@ -33788,7 +33867,7 @@ wlc_link(wlc_info_t *wlc, bool isup, struct ether_addr *addr, wlc_bsscfg_t *bssc
 
 #if defined(WLFBT)
 			/* Don't report the association event if it's a fast transition */
-			if (WLFBT_ENAB(wlc->pub) && (bcmwpa_is_wpa2_auth(wlc->cfg->WPA_auth)) &&
+			if (BSSCFG_IS_FBT(bsscfg) && (bcmwpa_is_wpa2_auth(wlc->cfg->WPA_auth)) &&
 				isup && reason) {
 				wlc_event_free(wlc->eventq, e);
 				return;
@@ -36731,7 +36810,7 @@ wlc_rfd_intr(wlc_info_t *wlc)
 }
 #endif /* WLC_HIGH */
 
-static uint8
+uint8
 wlc_template_plcp_offset(wlc_info_t *wlc, ratespec_t rspec)
 {
 	bool ac_phy = FALSE;

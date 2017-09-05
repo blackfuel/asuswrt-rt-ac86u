@@ -364,7 +364,6 @@ function edit_Row(r){
 	if(cloud_synclist_all[r][0] == 0){
 		change_service("WebStorage");
 		document.form.cloud_username.value = cloud_synclist_all[r][1];
-		document.form.cloud_password.value = cloud_synclist_all[r][2];
 		document.form.cloud_rule.value = cloud_synclist_all[r][4];
 		document.form.cloud_dir.value = cloud_synclist_all[r][5].substring(4);	
 		showOneProvider("/images/cloudsync/ASUS-WebStorage.png", "ASUS WebStorage");
@@ -372,7 +371,6 @@ function edit_Row(r){
 	else if(cloud_synclist_all[r][0] == 3){
 		change_service("Dropbox");
 		document.form.cloud_username.value = cloud_synclist_all[r][2];
-		document.form.cloud_password.value = cloud_synclist_all[r][3];
 		document.form.cloud_rule.value = cloud_synclist_all[r][5];
 		document.form.cloud_dir.value = cloud_synclist_all[r][6].substring(4);	
 		showOneProvider("/images/cloudsync/dropbox.png", "Dropbox");
@@ -383,7 +381,6 @@ function edit_Row(r){
 		document.form.sambaclient_ip.value = cloud_synclist_all[r][2].substring(6);
 		document.form.sambaclient_sharefolder.value = cloud_synclist_all[r][3];
 		document.form.cloud_username.value = cloud_synclist_all[r][4];
-		document.form.cloud_password.value = cloud_synclist_all[r][5];
 		document.form.cloud_rule.value = cloud_synclist_all[r][6];
 		document.form.cloud_dir.value = cloud_synclist_all[r][7].substring(4);	
 		showOneProvider("/images/cloudsync/ftp_server.png", "Samba");
@@ -394,7 +391,6 @@ function edit_Row(r){
 		document.form.usbclient_ip.value = cloud_synclist_all[r][2].substring(6);
 		document.form.usbclient_sharefolder.value = cloud_synclist_all[r][3];
 		document.form.cloud_username.value = cloud_synclist_all[r][4];
-		document.form.cloud_password.value = cloud_synclist_all[r][5];
 		document.form.cloud_rule.options[1] = new Option("USB Disk A to B", 1, false, false);
 		document.form.cloud_rule.options[2] = new Option("USB Disk B to A", 2, false, false);
 		document.form.cloud_rule.value = cloud_synclist_all[r][6];
@@ -577,8 +573,14 @@ function showcloud_synclist(){
 
 function getDropBoxClientName(token, uid){
     $.ajax({
-    	url: 'https://api.dropbox.com/1/account/info?access_token=' + token,
-    	dataType: 'json', 
+		type: 'POST',
+		headers: {
+			'Content-Type': 'application/json; charset=utf-8',
+			'Authorization': 'Bearer ' + token
+		},
+		data: JSON.stringify(null),
+		url: 'https://api.dropboxapi.com/2/users/get_current_account',
+		dataType: 'json',
     	error: function(xhr){
       		getDropBoxClientName();
     	},
@@ -1754,10 +1756,10 @@ function dropbox_login(){
 		}
 		callback_url += not_use; 
 	}
-	var url = "https://www.dropbox.com/1/oauth2/authorize?response_type=token&client_id=" + app_key;
+	var url = "https://www.dropbox.com/oauth2/authorize?response_type=token&client_id=" + app_key;
 	url += "&redirect_uri=" + encodeURIComponent(redirect_url);
 	url += "&state=base64_" + base64Encode(callback_url);
-	url += "&force_reapprove=true";
+	url += "&force_reapprove=true&force_reauthentication=true";
 			
 	window.open(url,"mywindow","menubar=1,resizable=0,width=630,height=550");
 }

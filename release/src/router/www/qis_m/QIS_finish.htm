@@ -1020,25 +1020,8 @@ function QKfinish_load_body(){
 			if(parent.isStatic){
 				$("#lanip")[0].innerHTML = parent.staticIP;
 				document.getElementById("applyBtn").innerHTML = "<div style='text-align:left;margin-left:70px;'><br/><br/><#SAVE_restart_desc#><br><#LAN_IP_changed_suggedtion1#>&nbsp;" + parent.staticIP + "&nbsp;<#LAN_IP_changed_suggedtion2#></div>";
-				
-				var startQuery = function(){
-					$.ajax({ 
-						url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
-						dataType: 'jsonp',
-						timeout: 2000,
 
-						error: function(){
-							setTimeout(function(){
-								startQuery();
-							}, 1000);
-						}
-					});
-
-				}
-
-				setTimeout(function(){
-					startQuery();
-				}, 80000);
+				setTimeout(startQuery, 80000);
 			}
 			else{
 				$("#lanip")[0].innerHTML = "<#BOP_ctype_title1#>";
@@ -1093,14 +1076,24 @@ function QKfinish_load_body(){
 	setTimeout("check_fimware();", 1000);
 }
 
+var startQuery = function(){
+	$.ajax({ 
+		url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
+		dataType: "script",
+		timeout: 5000,
+		success: function(){
+			top.location.href = location_org.replace(header_info[0].host, parent.staticIP);
+		},
+		error: function(){
+			setTimeout(startQuery, 1000);
+		}
+	});
+};
+
 function check_fimware(){
 	if(!parent.new_FW){
 		gotoNext();
 	}	
-}
-
-function repage(){
-	top.location.href = "http://" + parent.staticIP;					
 }
 
 function gotoASUS(){

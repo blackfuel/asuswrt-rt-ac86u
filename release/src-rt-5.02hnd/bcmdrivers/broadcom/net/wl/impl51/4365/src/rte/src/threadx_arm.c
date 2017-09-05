@@ -2,7 +2,7 @@
  * ThreadX ARM port specific routines.
  * Contains functions that are specific to both ARM processor *and* RTE RTOS.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

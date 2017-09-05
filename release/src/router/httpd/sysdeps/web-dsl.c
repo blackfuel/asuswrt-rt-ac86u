@@ -475,8 +475,11 @@ int update_dsl_iptv_variables()
 	_dprintf("dsltmp_cfg_iptv_mr=%s\n", nvram_safe_get("dsltmp_cfg_iptv_mr"));
 	if(nvram_get_int("dsltmp_cfg_iptv_mr") > 0) {
 		nvram_set("mr_enable_x", "1");
+//TODO: Setting Wireless WMF / igmp snooping, rc service restart_net, wireless
+#if 0
 #ifdef __CONFIG_EMF__
 		nvram_set("emf_enable", "1");
+#endif
 #endif
 		//dhcp route
 		if(is_dhcp) {
@@ -485,8 +488,10 @@ int update_dsl_iptv_variables()
 	}
 	else {
 		nvram_set("mr_enable_x", "0");
+#if 0
 #ifdef __CONFIG_EMF__
 		nvram_set("emf_enable", "0");
+#endif
 #endif
 	}
 

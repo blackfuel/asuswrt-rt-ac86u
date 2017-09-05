@@ -875,6 +875,34 @@ get_ifname_unit(const char* ifname, int *unit, int *subunit)
 	if (ifname_len + 1 > sizeof(str))
 		return -1;
 
+#if defined(RTCONFIG_QCA) && defined(RTCONFIG_WIGIG)
+	/* QCA's 802.11ad Wigig interface name is wlan0 and unit number is WL_60G_BAND,
+	 * that is, 3.  It's not compatible with below rule and we can't extract unit
+	 * number from interface name.
+	 */
+	if (strstr(ifname, get_wififname(WL_60G_BAND)) != NULL) {
+		int i;
+		char tmp_ifname[IFNAMSIZ];
+
+		if (unit)
+			*unit = WL_60G_BAND;
+
+		if (subunit) {
+			*subunit = 0;
+
+			if (strchr(ifname, '.') != NULL) {
+				for (i = 1; subunit && i < MAX_NO_MSSID; ++i) {
+					if (strcmp(ifname, get_wlxy_ifname(WL_60G_BAND, i, tmp_ifname)))
+						continue;
+					*subunit = i;
+					break;
+				}
+			}
+		}
+		return 0;
+	}
+#endif
+
 	strcpy(str, ifname);
 
 	/* find the trailing digit chars */
@@ -1226,6 +1254,12 @@ nvifname_to_osifname(const char *nvifname, char *osifname_buf,
 		strncpy(osifname_buf, nvifname, osifname_buf_len);
 		return 0;
 	}
+#if defined(RTCONFIG_WIGIG)
+	if (strstr(nvifname, "wlan")) {
+		strlcpy(osifname_buf, nvifname, osifname_buf_len);
+		return 0;
+	}
+#endif
 #endif
 
 	snprintf(varname, sizeof(varname), "%s_ifname", nvifname);
@@ -1266,7 +1300,12 @@ osifname_to_nvifname(const char *osifname, char *nvifname_buf,
 	memset(nvifname_buf, 0, nvifname_buf_len);
 
 	if (strstr(osifname, "wl") || strstr(osifname, "br") ||
-	     strstr(osifname, "wds")) {
+	    strstr(osifname, "wds")
+#if defined(RTCONFIG_QCA) && defined(RTCONFIG_WIGIG)
+	    || strstr(osifname, "wlan")
+#endif
+	   )
+	{
 		strncpy(nvifname_buf, osifname, nvifname_buf_len);
 		return 0;
 	}

@@ -1,7 +1,7 @@
 /*
  * Misc useful os-independent macros and functions.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bcmutils.h 644354 2016-06-20 04:47:38Z $
+ * $Id: bcmutils.h 661371 2016-09-25 01:54:17Z $
  */
 
 #ifndef	_bcmutils_h_
@@ -635,6 +635,13 @@ extern void set_bitrange(void *array, uint start, uint end, uint maxbit);
 #define	NBITMASK(nbits)	MAXBITVAL(nbits)
 #define MAXNBVAL(nbyte)	MAXBITVAL((nbyte) * 8)
 
+/* In a bitmap of size maxbit, count number of zero bits from a given bit
+ * position, upto num following bits. Return the count of zero bits when a set
+ * bit is found starting from bit postion.
+ */
+extern uint32 bcm_count_zeros_sequence(const uint8 *bmap,
+	const uint32 pos, const uint32 num, const uint32 maxbit);
+
 extern void bcm_bitprint32(const uint32 u32);
 
 /*
@@ -1073,6 +1080,11 @@ C_bcm_count_leading_zeros(uint32 u32arg)
 #if defined(__ARM_ARCH_7R__) /* Cortex R4 */
 #define __USE_ASM_CLZ__
 #endif /* __ARM_ARCH_7R__ */
+#if defined(__ARM_ARCH_7A__)
+#if defined(CA7)
+#define __USE_ASM_CLZ__
+#endif
+#endif /* __ARM_ARCH_7A__ */
 #endif /* __arm__ */
 
 static INLINE int
@@ -1160,6 +1172,8 @@ extern uint32 id16_map_failures(void * id16_map_hndl);
 /* Audit the 16bit id allocator state. */
 extern bool id16_map_audit(void * id16_map_hndl);
 /* End - Simple 16bit Id Allocator. */
+#else /* !BCMDRIVER */
+#define bcm_count_leading_zeros(u32arg) C_bcm_count_leading_zeros(u32arg)
 #endif /* BCMDRIVER */
 
 extern void bcm_uint64_right_shift(uint32* r, uint32 a_high, uint32 a_low, uint32 b);

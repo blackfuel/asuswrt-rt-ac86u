@@ -15,6 +15,7 @@ LDFLAGS += -L$(TOP)/shared -lshared
 LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
 LDFLAGS += -L$(TOP)/curl-7.21.7/lib/.libs -lcurl
 LDFLAGS += -L$(TOP)/libxml2/.libs -lxml2
+LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
 LDFLAGS += -L$(TOP)/wb -lws
 
 ifeq ($(RTCONFIG_BCMARM),y)

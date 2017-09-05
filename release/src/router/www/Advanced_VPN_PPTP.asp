@@ -178,7 +178,7 @@ function initial(){
 var MAX_RETRY_NUM = 5;
 var external_ip_retry_cnt = MAX_RETRY_NUM;
 function show_warning_message(){
-	if(realip_support && wans_mode != "lb"){
+	if(realip_support && (based_modelid == "BRT-AC828" || wans_mode != "lb")){
 		if(realip_state != "2" && external_ip_retry_cnt > 0){
 			if( external_ip_retry_cnt == MAX_RETRY_NUM )
 				get_real_ip();
@@ -282,12 +282,7 @@ function applyRule() {
 			for(var i = 0; i < rule_num; i += 1) {
 				tmp_value += "<"		
 				for(var j = 1; j < item_num - 2; j += 1) {
-					if(document.getElementById("pptpd_clientlist_table").rows[i].cells[j].innerHTML.lastIndexOf("...") < 0) {
-						tmp_value += document.getElementById("pptpd_clientlist_table").rows[i].cells[j].innerHTML;
-					}
-					else {
-						tmp_value += document.getElementById("pptpd_clientlist_table").rows[i].cells[j].title;
-					}					
+					tmp_value += document.getElementById("pptpd_clientlist_table").rows[i].cells[j].title;
 					if(j != item_num - 3)
 						tmp_value += ">";
 				}
@@ -571,12 +566,8 @@ function showpptpd_clientlist(){
 						code +='<td width="30%" title="'+pptpd_clientlist_col[0]+'">'+ pptpd_clientlist_col[0] +'</td>';
 				}
 				else if(j == 1){
-					if(pptpd_clientlist_col[1].length >28){
-						overlib_str1[i] += pptpd_clientlist_col[1];
-						pptpd_clientlist_col[1]=pptpd_clientlist_col[1].substring(0, 26)+"...";
-						code +='<td width="30%" title="'+overlib_str1[i]+'">'+ pptpd_clientlist_col[1] +'</td>';
-					}else
-						code +='<td width="30%">'+ pptpd_clientlist_col[1] +'</td>';
+					overlib_str1[i] += pptpd_clientlist_col[1];
+					code +='<td width="30%" title="'+overlib_str1[i]+'" style="text-align:center;">-</td>';
 				} 
 			}
 			

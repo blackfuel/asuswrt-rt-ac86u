@@ -951,8 +951,9 @@ int bcm_mcast_should_deliver(int ifindex, const struct sk_buff *skb, struct net_
                if ( opt_hdr->nexthdr == IPPROTO_ICMPV6 )
                {
                   bcm_mcast_lower_port* destLowerPort = NULL;
+		  char *opt_ptr = (char *)opt_hdr;
                   /* verify that we can read the ICMP header */
-                  struct icmphdr *picmp = (struct icmphdr *)(opt_hdr + ipv6_optlen(opt_hdr));
+		  struct icmp6hdr *picmp = (struct icmp6hdr *)(opt_ptr + ipv6_optlen(opt_hdr));
                   len = skb_network_offset(skb) + iph_offset + sizeof(*pipv6) +  ipv6_optlen(opt_hdr) + sizeof(*picmp);
                   if ( len > skb_headlen(skb) )
                   {
@@ -963,7 +964,7 @@ int bcm_mcast_should_deliver(int ifindex, const struct sk_buff *skb, struct net_
                   if ( dst_dev->priv_flags & IFF_WANDEV )
                   {
                      /* do not forward queries to a WAN interface */
-                     if (picmp->type == ICMPV6_MGM_QUERY) 
+		     if (picmp->icmp6_type == ICMPV6_MGM_QUERY)
                      {
                         __logDebug("discard MLD report from WAN");
                         rv = 0;
@@ -975,7 +976,7 @@ int bcm_mcast_should_deliver(int ifindex, const struct sk_buff *skb, struct net_
                      spin_lock_bh(&pif->config_lock);
                      destLowerPort = bcm_mcast_if_get_lower_port_by_ifindex(pif, dst_dev->ifindex);
                      /* do not forward anything to LAN ports except queries and reports toward querying LAN ports*/
-                     if ( pif->mld_snooping && (picmp->type != ICMPV6_MGM_QUERY) && 
+		     if ( pif->mld_snooping && (picmp->icmp6_type != ICMPV6_MGM_QUERY) &&
                          ((NULL == destLowerPort) || (0 == destLowerPort->mld_querying_port)) )
                      {
                         __logDebug("discard MLD report from LAN");

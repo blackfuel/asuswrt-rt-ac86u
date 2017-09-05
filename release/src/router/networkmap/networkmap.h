@@ -165,7 +165,7 @@ typedef unsigned char UCHAR;
 typedef unsigned short USHORT;
 typedef unsigned long ULONG;
 
-#if defined(BRTAC828)
+#if defined(RTCONFIG_SOC_IPQ40XX) && defined(RTCONFIG_WIFI_QCA9994_QCA9994)
 #define MAX_NR_CLIENT_LIST	1024	/* occupies 436252 bytes. */
 #else
 #define MAX_NR_CLIENT_LIST	255	/* occupies 108656 bytes. */
@@ -203,12 +203,15 @@ typedef struct {
 	unsigned char	wireless[MAX_NR_CLIENT_LIST];
 /* wireless log information
 */
+#ifdef RTCONFIG_LANTIQ
+	time_t tstamp[MAX_NR_CLIENT_LIST];
+#endif
 	char		ssid[MAX_NR_CLIENT_LIST][32];
 	char 		txrate[MAX_NR_CLIENT_LIST][7];
 	char 		rxrate[MAX_NR_CLIENT_LIST][10];
 	unsigned int 	rssi[MAX_NR_CLIENT_LIST];
 	char 		conn_time[MAX_NR_CLIENT_LIST][12];
-#if defined(BRTAC828)
+#if defined(RTCONFIG_FBWIFI) || defined(RTCONFIG_CAPTIVE_PORTAL)
 	char		subunit[MAX_NR_CLIENT_LIST];
 #endif
 #if (defined(RTCONFIG_BWDPI) || defined(RTCONFIG_BWDPI_DEP))

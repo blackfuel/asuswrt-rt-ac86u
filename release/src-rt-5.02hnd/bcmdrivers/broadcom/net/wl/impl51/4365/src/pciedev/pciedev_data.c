@@ -1,7 +1,7 @@
 /*
  * PCIEDEV timing critical datapath functions
  * compiled for performance rather than size
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -212,11 +212,7 @@ pciedev_msgbuf_intr_process(struct dngl_bus *pciedev)
 	/* the above call could change the ioctl lock status */
 	if (pciedev->ioctl_lock == FALSE) {
 		pciedev_read_host_buffer(pciedev, pciedev->htod_rx); /* starts pulling */
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-		pciedev_read_host_buffer(pciedev, pciedev->htod_tx);
-#else
 		pciedev_schedule_flow_ring_read_buffer(pciedev);
-#endif /* BCMPCIE_SUPPORT_TX_PUSH_RING */
 	}
 
 	return FALSE;
@@ -611,6 +607,7 @@ pciedev_flow_ring_calc_maxpktcnt(struct dngl_bus *pciedev,
 {
 	ASSERT(SCHEDCXT_FL_W(flow_ring));
 	ASSERT(SCHEDCXT_SUM_W(pciedev));
+
 #ifdef FFSHCED_SATURATED_MODE
 		if (FFSHCED_SATURATED(pciedev)) {
 			FL_MAXPKTCNT(flow_ring) =
@@ -632,6 +629,7 @@ pciedev_flow_ring_calc_maxpktcnt(struct dngl_bus *pciedev,
 #ifdef FFSHCED_SATURATED_MODE
 		if (FL_MAXPKTCNT(flow_ring) == 0)
 			FL_MAXPKTCNT(flow_ring) = PCIEDEV_MIN_PACKETFETCH_COUNT;
+
 #endif /* FFSHCED_SATURATED_MODE */
 }
 
@@ -828,8 +826,13 @@ pciedev_get_maxpkt_fetch_count(struct dngl_bus *pciedev, msgbuf_ring_t *flow_rin
 	}
 
 #ifdef BCMFRAGPOOL
+	lbuf_avail = pktpool_avail(pciedev->pktpool_lfrag);
+#ifdef BCM_DHDHDR
+	lbuf_avail = MIN(lbuf_avail, lfbufpool_avail(pciedev->d3_lfbufpool));
+#endif
+
 	/* If there is no lbuf/lfrags wait for freeups */
-	if (!(lbuf_avail = pktpool_avail(pciedev->pktpool_lfrag))) {
+	if (!lbuf_avail) {
 		EVENT_LOG(EVENT_LOG_TAG_PCI_DBG,
 			"No lbus/lfrags Available\n");
 		return 0;
@@ -875,10 +878,17 @@ pciedev_get_maxpkt_fetch_count(struct dngl_bus *pciedev, msgbuf_ring_t *flow_rin
 				 * Assigning minimum weight if there is available packets in the
 				 * pool with taking into account currently fetched pending packets.
 				 */
-				if (ret_len == 0 &&
-					pciedev->fetch_pending <
-						pktpool_avail(pciedev->pktpool_lfrag))
-					ret_len = 1;
+				if (ret_len <= 1) {
+					lbuf_avail = pktpool_avail(pciedev->pktpool_lfrag);
+#ifdef BCM_DHDHDR
+					lbuf_avail = MIN(lbuf_avail,
+						lfbufpool_avail(pciedev->d3_lfbufpool));
+#endif
+					if (pciedev->fetch_pending < lbuf_avail)
+						ret_len = 1;
+					else
+						return 0;
+				}
 			}
 			ret_len = MIN(ret_len, lfrags_credit);
 		} else {
@@ -888,9 +898,6 @@ pciedev_get_maxpkt_fetch_count(struct dngl_bus *pciedev, msgbuf_ring_t *flow_rin
 		}
 	}
 #endif /* BCMFRAGPOOL */
-	//cathy merge rb:111979
-	/* Do not fetch more than maxpktcnt packets for this ring */
-	//ret_len = MIN(ret_len, FL_MAXPKTCNT(flow_ring));
 
 	/* Cap till contiguous available buffer */
 	ret_len = MIN(ret_len, READ_AVAIL_SPACE(DNGL_RING_WPTR(flow_ring),
@@ -1213,7 +1220,6 @@ pciedev_read_flow_ring_host_buffer(struct dngl_bus *pciedev, msgbuf_ring_t *flow
 	uint8 *src_addr;
 	uint16 src_len, ret_len;
 	int8 i;
-	int k;
 	flow_fetch_rqst_t *flowfetchp;
 
 	cir_buf_pool_t *cpool = flow_ring->cbuf_pool;
@@ -1242,12 +1248,10 @@ pciedev_read_flow_ring_host_buffer(struct dngl_bus *pciedev, msgbuf_ring_t *flow
 		pciedev_fetch_pending, availcnt);
 
 	/* If next fetched packets are already status_cmpl do not fetch them */
-	for (k = 0; k < ret_len; k++) {
-		if (isset(flow_ring->status_cmpl,
-			MODULO_RING_IDX((flowfetchp->start_ringinx + k), flow_ring))) {
-			ret_len = k;
-			break;
-		}
+	if (ret_len) {
+		ret_len = bcm_count_zeros_sequence(flow_ring->status_cmpl,
+			MODULO_RING_IDX(flowfetchp->start_ringinx, flow_ring),
+			ret_len, flow_ring->bitmap_size);
 	}
 
 	if (ret_len) {
@@ -1538,9 +1542,6 @@ static int pciedev_update_txstatus(struct dngl_bus *pciedev, uint32 status,
 	int ret = BCME_OK;
 	int i;
 	uint16 first_free_rd_ptr;
-#ifdef BCMPCIE_SUPPORT_TX_PUSH_RING
-	return;
-#endif
 	uint16 bit_idx;
 	index = flowid - BCMPCIE_H2D_MSGRING_TXFLOW_IDX_START;
 	flow_ring = &pciedev->flow_ring_msgbuf[index];
@@ -2385,6 +2386,28 @@ pciedev_check_process_d2h_message(struct dngl_bus *pciedev, uint32 txdesc, uint3
 	uint32  rxdesc_needed;
 	cmn_msg_hdr_t *msg;
 
+#ifdef BCM_DHDHDR
+	/* When BCM_DHDHDR is defined for txfrag packet we save the txstatus 4B in last 4B of pkttag
+	 * we don't leverage the PKTDATA to carry the cmn_msg_hdr_t because we may not have PKTDATA.
+	 * for example the second msdu which has free the D3 buffer.
+	 * Here if the p is txfrag means it wants to do txmetadata/txstatus
+	 */
+	if (PKTISTXFRAG(pciedev->osh, p)) {
+		/* Check if there are resources to queue txstatus */
+		if (!pciedev_resource_avail_for_txmetadata(pciedev))
+			return FALSE;
+
+		txdesc_needed = MIN_TXDESC_AVAIL + 2;
+		rxdesc_needed = MIN_RXDESC_AVAIL + 3;
+		*msg_handler = pciedev_process_d2h_txmetadata;
+
+		if (txdesc < txdesc_needed || rxdesc < rxdesc_needed)
+			return FALSE;
+
+		return TRUE;
+	}
+#endif /* BCM_DHDHDR */
+
 	msg = (cmn_msg_hdr_t *)PKTDATA(pciedev->osh, p);
 
 	/* check if dma resources are available to send payload */
@@ -2660,12 +2683,22 @@ pciedev_process_d2h_txmetadata(struct dngl_bus *pciedev, void *p)
 	/* assert that the packet has big enough metadata len to carry it */
 	ASSERT(PKTISTXFRAG(pciedev->osh, p));
 
+	metadatabuf_len = PKTFRAGMETADATALEN(pciedev->osh, p);
+
+	/* When BCM_DHDHDR is defined for txfrag packet we save the txstatus 2B in latest 2B of
+	 * pkttag we don't leverage the PKTDATA to carry the txstatus because we may not have
+	 * PKTDATA. For example the second msdu which has free the D3 buffer.
+	 * Here use the saved txstatus 2B value in latest 2B of pkttag.
+	 */
+#ifdef BCM_DHDHDR
+	ASSERT(metadatabuf_len == 0);
+	txstatus = PKTFRAGTXSTATUS(pciedev->osh, p);
+	metadata_len = 1;
+#else
 	/* tx status is passed in unused msg hdr request id, pick it up */
 	txstatus = ((cmn_msg_hdr_t *)PKTDATA(pciedev->osh, p))->request_id;
 
 	PKTPULL(pciedev->osh, p, sizeof(cmn_msg_hdr_t)); /* skip common message header */
-
-	metadatabuf_len = PKTFRAGMETADATALEN(pciedev->osh, p);
 
 	/*
 	 * When a packet is suppressed then the packet length itself is modified to 1byte or 4byte
@@ -2681,6 +2714,7 @@ pciedev_process_d2h_txmetadata(struct dngl_bus *pciedev, void *p)
 		haddr.low_addr = PKTFRAGMETADATA_LO(pciedev->osh, p);
 		haddr.high_addr = PKTFRAGMETADATA_HI(pciedev->osh, p);
 	}
+#endif /* BCM_DHDHDR */
 
 	PKTRESETHASMETADATA(pciedev->osh, (struct lbuf *)p);
 	ifindx = PKTIFINDEX(pciedev->osh, p);
@@ -3189,20 +3223,56 @@ bool
 pciedev_lbuf_callback(void *arg, void* p)
 {
 	struct dngl_bus *pciedev = (struct dngl_bus *) arg;
-	uint32 metadata_len = 0, status = 0;
+	uint32 status = 0;
 	uint16 seq = 0;
+#ifndef BCM_DHDHDR
+	uint32 metadata_len = 0;
+#endif
 
 	if (PKTISTXFRAG(pciedev->osh, p)) {
+#ifndef BCM_DHDHDR
 		cmn_msg_hdr_t *cmn_msg;
+#else
+		/* Reset tx packet fetched */
+		PKTRESETTXPKTFETCHED(pciedev->osh, p);
+#endif /* BCM_DHDHDR */
+
 		if (!PKTHASMETADATA(pciedev->osh, (struct lbuf *)p))
 			return FALSE;
-
-		metadata_len = PKTLEN(pciedev->osh, p);
 
 		/* Check if PKT has been TXstatus processed */
 		if (PKTISTXSPROCESSED(pciedev->osh, p)) {
 			/* Reset TXstatus processed state */
 			PKTRESETTXSPROCESSED(pciedev->osh, p);
+
+#ifdef BCM_DHDHDR
+			status = PKTFRAGTXSTATUS(pciedev->osh, p);
+			seq = PKTWLFCSEQ(pciedev->osh, p);
+
+			if (seq && ((status == WLFC_CTL_PKTFLAG_D11SUPPRESS) ||
+				(status == WLFC_CTL_PKTFLAG_WLSUPPRESS))) {
+				/*
+				 * The WLC layer assigns d11 sequence numbers to packets. If
+				 * a packet was suppressed, it might or might not have been
+				 * assigned a valid sequence number. Therefore, need to
+				 * check if seq number is valid from FW by checking the
+				 * FROMFW flag before reusing it. Note that for PCIe FD, the
+				 * usage of the 'FROMDRV' flag does not correspond with its
+				 * name, since the driver was not compiled with
+				 * PROP_TXSTATUS support.
+				 * Symptom was sniff capture showed pkts with seq number
+				 * of zero being re-used leading to OOO.
+				 */
+				if (WL_SEQ_GET_FROMFW(seq)) {
+					WL_SEQ_SET_FROMDRV(seq, 1);
+					WL_SEQ_SET_FROMFW(seq, 0);
+				} else {
+					/* Explicitly clear seq no to indicate 'no reuse' */
+					seq = 0;
+				}
+			}
+#else /* !BCM_DHDHDR */
+			metadata_len = PKTLEN(pciedev->osh, p);
 			if (metadata_len == TXSTATUS_LEN) {
 				status = *((uint8*)PKTDATA(pciedev->osh, p) +
 					BCMPCIE_D2H_METADATA_HDRLEN);
@@ -3241,7 +3311,13 @@ pciedev_lbuf_callback(void *arg, void* p)
 					}
 				}
 			}
+#endif /* BCM_DHDHDR */
 		}
+#ifdef BCM_DHDHDR
+		else {
+			PKTFRAGSETTXSTATUS(pciedev->osh, p, 0);
+		}
+#endif /* BCM_DHDHDR */
 
 		if (pciedev_update_txstatus(pciedev, status, PKTFRAGRINGINDEX(pciedev->osh, p),
 			PKTFRAGFLOWRINGID(pciedev->osh, p), seq)) {
@@ -3254,17 +3330,20 @@ pciedev_lbuf_callback(void *arg, void* p)
 			return TRUE;
 		}
 
-		PKTPUSH(pciedev->osh, p, sizeof(cmn_msg_hdr_t));
-		cmn_msg = (cmn_msg_hdr_t *)PKTDATA(pciedev->osh, p);
+#ifndef BCM_DHDHDR
 		/* check for tx frag */
 		if (PKTHEADROOM(pciedev->osh, p) < 8) {
 			PCI_ERROR(("PKTHEADROOM is less than needed 8, %d\n",
 				PKTHEADROOM(pciedev->osh, p)));
 			ASSERT(0);
 		}
+		PKTPUSH(pciedev->osh, p, sizeof(cmn_msg_hdr_t));
+		cmn_msg = (cmn_msg_hdr_t *)PKTDATA(pciedev->osh, p);
+
 		cmn_msg->msg_type = MSG_TYPE_TXMETADATA_PYLD;
 		/* Passing tx status on request_id as it is unused internally */
 		cmn_msg->request_id = status;
+#endif /* !BCM_DHDHDR */
 
 		/* Why do we need this check */
 		/* if (pktid != DMA_XFER_PKTID) */
@@ -3859,7 +3938,7 @@ pciedev_handle_h2d_msg_txsubmit(struct dngl_bus *pciedev, void *p,
 	/* We can send the chained packets here */
 	if (pciedev->pkthead) {
 		/* Forward the tx packets to the wireless subsystem */
-		dngl_sendup(pciedev->dngl, pciedev->pkthead);
+		dngl_sendup(pciedev->dngl, pciedev->pkthead, pciedev->pkt_chain_cnt);
 		pciedev->pkt_chain_cnt = 0;
 		pciedev->pkthead = pciedev->pkttail = NULL;
 	}
@@ -3889,11 +3968,9 @@ pciedev_process_tx_post(struct dngl_bus *pciedev, void* p, uint16 msglen,
 	/* Need 202 bytes of headroom for TXOFF, 22 bytes for amsdu path */
 	uint16 headroom = 224;	/* TXOFF + amsdu headroom */
 	void *lfrag;
-	uint8 hdrlen = ETHER_HDR_LEN;
-#ifndef BCMPCIE_SUPPORT_TX_PUSH_RING
+	const uint8 hdrlen = ETHER_HDR_LEN;
 	msgbuf_ring_t *flow_ring = &pciedev->flow_ring_msgbuf[ringid -
 		BCMPCIE_H2D_MSGRING_TXFLOW_IDX_START];
-#endif
 #ifdef PKTC_TX_DONGLE
 	struct ether_header *eh;
 	bool break_chain = FALSE;
@@ -3925,7 +4002,7 @@ pciedev_process_tx_post(struct dngl_bus *pciedev, void* p, uint16 msglen,
 		return;
 	}
 #else
-	lfrag = pktpool_get(pciedev->pktpool_lfrag);
+	lfrag = pktpool_lfrag_get(pciedev->pktpool_lfrag, D3_LFRAG_BUF_POOL);
 	if (lfrag == NULL) {
 		/* No free packets in the pool. Just drop this packet. */
 		PCI_ERROR(("pciedev_process_tx_post:%d: No free packets in the pool. "
@@ -3937,6 +4014,9 @@ pciedev_process_tx_post(struct dngl_bus *pciedev, void* p, uint16 msglen,
 		pciedev->dropped_txpkts ++;
 		return;
 	}
+#ifdef BCM_DHDHDR
+	headroom = PKTLEN(pciedev->osh, lfrag) - ETHER_HDR_LEN;
+#endif /* BCM_DHDHDR */
 #endif /* BCMFRAGPOOL */
 
 #ifdef PCIEDEV_HOST_PKTID_AUDIT_ENABLED
@@ -3964,16 +4044,14 @@ pciedev_process_tx_post(struct dngl_bus *pciedev, void* p, uint16 msglen,
 	/* Set tot len and tot fragment count */
 	PKTSETFRAGTOTLEN(pciedev->osh, lfrag, ltoh16(txdesc->data_len));
 
-#ifndef BCMPCIE_SUPPORT_TX_PUSH_RING
 	PKTSETFRAGFLOWRINGID(pciedev->osh, lfrag, ringid);
 	flow_ring->flow_info.pktinflight++;
 	PKTFRAGSETRINGINDEX(pciedev->osh, lfrag, fetch_idx);
 	pciedev->pend_user_tx_pkts++;
-#endif
 
 	/* Should be based on a config option to use it as meta data or regular frag */
 	/* don't need to set the 63rd bit, as this is handled by the mem2mem DMA */
-	if (ltoh16(txdesc->metadata_buf_len)) {
+	if (txdesc->metadata_buf_len) {
 		PKTSETFRAGMETADATA_HI(pciedev->osh, lfrag,
 			(ltoh32(txdesc->metadata_buf_addr.high_addr)));
 		PKTSETFRAGMETADATA_LO(pciedev->osh, lfrag,
@@ -4008,7 +4086,7 @@ pciedev_process_tx_post(struct dngl_bus *pciedev, void* p, uint16 msglen,
 	if (break_chain) {
 		PKTSETCLINK(lfrag, NULL);
 		/* Forward the tx packets to the wireless subsystem */
-		dngl_sendup(pciedev->dngl, lfrag);
+		dngl_sendup(pciedev->dngl, lfrag, 1);
 	} else {
 		if (pciedev->pkttail) {
 			PKTSETCLINK(pciedev->pkttail, lfrag);
@@ -4504,11 +4582,11 @@ void pciedev_process_reqst_packet(struct dngl_bus * pciedev,
 				uint8 tid_ac = fptr[i]->flow_info.tid_ac;
 				if (pciedev->schedule_prio == PCIEDEV_SCHEDULER_TID_PRIO)
 					tid_ac = PCIEDEV_TID2AC(fptr[i]->flow_info.tid_ac);
+				fptr[i]->flow_info.flags &= ~FLOW_RING_FLAG_LAST_TIM;
 				dngl_flowring_update(pciedev->dngl, fptr[i]->flow_info.ifindex,
 					(uint8) fptr[i]->handle, FLOW_RING_TIM_RESET,
 					(uint8 *)&fptr[i]->flow_info.sa,
 					(uint8 *)&fptr[i]->flow_info.da, tid_ac);
-				fptr[i]->flow_info.flags &= ~FLOW_RING_FLAG_LAST_TIM;
 			}
 			i--;
 			continue;
@@ -4545,7 +4623,10 @@ static void pciedev_push_pkttag_tlv_info(struct dngl_bus *pciedev, void* p,
 		sizeof(uint32));
 	uint16 seq = 0;
 	uint16 bit_idx = MODULO_RING_IDX(index, flow_ring);
-
+#ifdef BCM_DHDHDR
+	ASSERT(len <= sizeof(struct lbuf_finfo));
+	buf = PKTFRAGFCTLV(pciedev->osh, p);
+#else
 	if (PKTHEADROOM(pciedev->osh, p) < len) {
 		PCI_ERROR(("pciedev_push_pkttag_tlv_info: No room for pkttag TLV\n"));
 		return;
@@ -4553,6 +4634,8 @@ static void pciedev_push_pkttag_tlv_info(struct dngl_bus *pciedev, void* p,
 
 	PKTPUSH(pciedev->osh, p, len);
 	buf = PKTDATA(pciedev->osh, p);
+#endif /* BCM_DHDHDR */
+
 	PKTSETDATAOFFSET(p, len >> 2);
 	buf[TLV_TAG_OFF] = WLFC_CTL_TYPE_PKTTAG;
 	buf[TLV_LEN_OFF] = WLFC_CTL_VALUE_LEN_PKTTAG + WLFC_CTL_VALUE_LEN_SEQ;

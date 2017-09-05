@@ -12,10 +12,6 @@ extern void init_wl(void);
 #if defined(RTCONFIG_QCA)
 extern void load_wifi_driver(void);
 extern void load_testmode_wifi_driver(void);
-extern char *__get_wlifname(int band, int subunit, char *buf);
-extern int get_wlsubnet(int band, const char *ifname);
-extern char *get_staifname(int band);
-extern char *get_vphyifname(int band);
 #endif
 #if defined(RTCONFIG_ALPINE)
 extern void load_wifi_driver(void);
@@ -51,7 +47,10 @@ extern void reinit_sfe(int unit);
 static inline void tweak_wifi_ps(const char *wif) { }
 #elif defined(RTCONFIG_SOC_IPQ8064)
 #define reinit_hwnat(unit) reinit_ecm(unit)
+extern int ecm_selection(void);
+extern void init_ecm(void);
 extern void reinit_ecm(int unit);
+extern void post_ecm(void);
 extern void tweak_wifi_ps(const char *wif);
 #else
 #error

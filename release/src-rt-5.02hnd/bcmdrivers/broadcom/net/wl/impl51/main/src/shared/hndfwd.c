@@ -1,7 +1,7 @@
 /** HND GMAC Forwarder Implementation: LAN(GMAC) <--FWD--> WLAN
  * Include WOFA dictionary with 3 stage lookup.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1378,8 +1378,8 @@ fwder_flood(fwder_t * fwder, struct sk_buff * skb, void * osh, bool clone,
 		/* do not flood back to self, so skb->dev must be properly set */
 		if ((dev != skb->dev) && (dev->flags & IFF_UP)) {
 
-			/* Use PKTDUP, which will manipulate the appropriate CTF fields */
-			if ((nskb = (struct sk_buff *)PKTDUP(osh, skb)) == NULL) {
+			/* Use PKTDUP_CPY, which will manipulate the appropriate CTF fields */
+			if ((nskb = (struct sk_buff *)PKTDUP_CPY(osh, skb)) == NULL) {
 				ret = FWDER_FAILURE;
 				break;
 			}
@@ -1410,7 +1410,7 @@ fwder_fixup(fwder_t * fwder, struct sk_buff * skb, uint32 len)
 	              fwder, __SSTR(fwder, name), skb));
 	/* strip off rxhdr and popping of BRCM TAG */
 	__skb_pull(skb, fwder->dataoff);
-	ASSERT(((ulong)skb->data & 3) == 2); /* aligned 2-mod-4 */
+	ASSERT(ISALIGNED(skb->data, 2)); /* 2Byte aligned */
 
 	/* strip off 4Byte CRC32 at tail end */
 	skb_trim(skb, skb->len - ETHER_CRC_LEN);

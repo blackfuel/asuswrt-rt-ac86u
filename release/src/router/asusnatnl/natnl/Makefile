@@ -32,6 +32,10 @@ ifeq ($(AR),)
 AR=ar
 endif
 
+ifeq ($(RTCONFIG_SW_HW_AUTH),y)
+CFLAGS += -DSW_HW_AUTH
+endif
+
 ifeq ($(router), yes)
 #CFLAGS += -DROUTER=1
 #for wl_ioctl used.

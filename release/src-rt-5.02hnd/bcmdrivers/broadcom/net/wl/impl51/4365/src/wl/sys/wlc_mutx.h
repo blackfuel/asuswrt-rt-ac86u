@@ -1,7 +1,7 @@
 /*
  * MU-MIMO transmit module for Broadcom 802.11 Networking Adapter Device Drivers
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_mutx.h 654068 2016-08-11 01:23:43Z $
+ * $Id: wlc_mutx.h 675290 2016-12-15 06:43:47Z $
  */
 
 #ifndef _wlc_mutx_h_
@@ -33,7 +33,7 @@ void wlc_mutx_update_vht_cap(wlc_mutx_info_t *mu_info, struct scb *scb);
 void wlc_mutx_active_update(wlc_mutx_info_t *mu_info);
 
 /* APIs to set and get MU group membership */
-void wlc_mutx_membership_clear(wlc_mutx_info_t *mu_info, uint16 client_index);
+void wlc_mutx_membership_clear(wlc_mutx_info_t *mu_info, struct scb *scb);
 int wlc_mutx_membership_get(wlc_mutx_info_t *mu_info, uint16 client_index,
 	uint8 *membership, uint8 *position);
 int wlc_mutx_membership_set(wlc_mutx_info_t *mu_info, uint16 client_index,
@@ -48,6 +48,7 @@ void wlc_mutx_update_txcounters(wlc_mutx_info_t *mu_info, struct scb *scb,
       uint8 gid, tx_status_t *txs);
 #endif /* WLCNT */
 void wlc_mutx_sta_txfifo(wlc_mutx_info_t *mu_info, struct scb *scb, uint *pfifo);
+void wlc_mutx_sta_fifo_bitmap(wlc_mutx_info_t *mu_info, struct scb *scb, uint *fifo_bitmap);
 int wlc_mutx_ntxd_adj(wlc_info_t *wlc, uint fifo, uint *out_ntxd, uint *out_ntxd_aqm);
 
 #if defined(BCMDBG) || defined(BCMDBG_MU)
@@ -58,7 +59,7 @@ int wlc_mutx_switch(wlc_info_t *wlc, bool mutx_feature, bool is_iov);
 #ifdef WL_PSMX
 void wlc_mutx_hostflags_update(wlc_info_t *wlc);
 #endif /* WL_PSMX */
-uint32 wlc_mutx_bw_policy_update(wlc_mutx_info_t *mu_info, wlc_bsscfg_t *bsscfg, bool force);
+uint32 wlc_mutx_bw_policy_update(wlc_mutx_info_t *mu_info, bool force);
 bool wlc_mutx_sta_on_hold(wlc_mutx_info_t *mu_info, struct scb *scb);
 bool wlc_mutx_sta_mu_link_permit(wlc_mutx_info_t *mu_info, struct scb *scb);
 bool wlc_mutx_sta_ac_check(wlc_mutx_info_t *mu_info, struct scb *scb);

@@ -180,7 +180,7 @@ extern int kerSysScratchPadGet(char *tokenId, char *tokBuf, int bufLen);
  *
  * +---------------------------------------------------------------------
  */
-//#define DHD_RNR_MEM_ALLOC_AUDIT
+/* #define DHD_RNR_MEM_ALLOC_AUDIT */
 /* memory allocation */
 #define DHD_RNR_MEM_ALLOC_TYPE_OSAL        0x0000    /* OSL DMA_ALLOC_CONSISTENT */
 #define DHD_RNR_MEM_ALLOC_TYPE_COHERENT    0x0001    /* dma_alloc_coherent */
@@ -405,6 +405,26 @@ typedef struct dhd_runner_flowmgr
 	struct dhd_runner_hlp *dhd_hlp;                  /* dhd runner helper object */
 } dhd_runner_flowmgr_t;
 
+
+/*
+ * Runner's DHD helper supported features
+ */
+#if defined(RDPA_DHD_HELPER_FEATURE_TXCOMPL_SUPPORT)
+#define RNR_DHD_HLPR_TXCMPL2HOST
+#endif /* RDPA_DHD_HELPER_FEATURE_TXCOMPL_SUPPORT */
+
+#if defined(RDPA_DHD_HELPER_FEATURE_LLCSNAPHDR_SUPPORT)
+#define RNR_DHD_HLPR_LLCSNAPHDR
+#endif /* RNR_DHD_HLPR_LLCSNAPHDR */
+
+#if defined(RDPA_DHD_HELPER_FEATURE_LBRAGGR_SUPPORT)
+#define RNR_DHD_HLPR_LBRAGGR
+#endif /* RDPA_DHD_HELPER_FEATURE_LBRAGGR_SUPPORT */
+
+#define RNR_DHD_HLPR_FEATURE_STS_STRING(dhd_hlp, feat) \
+	(dhd_hlp->rnr_sup_feat.feat ? \
+	    (dhd_hlp->rnr_en_feat.feat ? #feat" 1" : #feat" 0") :"")
+
 /*
  * +---------------------------------------------------------------------
  *           Section: Instance of a dhd runner helper object per radio
@@ -429,6 +449,8 @@ typedef struct dhd_runner_hlp {
 	dhd_runner_ring_cfg_t rxcmpl_ring_cfg; /* RXCMPL ring configuration object */
 	dhd_runner_ring_cfg_t txsts_ring_cfg;  /* TXSTS ring configuration object */
 	dhd_dma_buf_t coherent_mem_pool;       /* Coherent memory pool object */
+	dhd_helper_feat_t rnr_sup_feat;        /* Features supported by Runner dhd helper */
+	dhd_helper_feat_t rnr_en_feat;         /* Features enabled in Runner dhd helper */
 
 	/* local counters */
 	ulong h2r_txpost_notif;        /* Host notifies Runner to post tx packets */
@@ -466,6 +488,13 @@ static int  dhd_runner_dma_buf_init(dhd_runner_hlp_t *dhd_hlp, void *osh,
 /* Setup the PCIE RC match and Ubus remap registers using PCI#_BASE */
 static int dhd_runner_pcie_init(dhd_runner_hlp_t *dhd_hlp,
 	struct pci_dev *pci_dev);
+
+/* Setup llcsnaphdr runner feature */
+static int dhd_runner_llcsnaphdr_init(dhd_runner_hlp_t *dhd_hlp);
+
+/* Setup txcmpl2host runner feature */
+static int dhd_runner_txcmpl2host_init(dhd_runner_hlp_t *dhd_hlp,
+	bdmf_object_handle mo);
 
 /* DHD proto layer init completed, configure Runner helper object */
 static int  dhd_runner_init(dhd_runner_hlp_t *dhd_hlp, struct pci_dev *pci_dev);
@@ -526,6 +555,8 @@ static int dhd_runner_iovar_set_rxoffl(dhd_runner_hlp_t *dhd_hlp,
 	char *buf, int buflen);
 static int dhd_runner_iovar_dump(dhd_runner_hlp_t *dhd_hlp, char *buff,
 	int bufflen);
+static int dhd_runner_iovar_get_rnr_status(dhd_runner_hlp_t *dhd_hlp,
+	char *buf, int buflen);
 static int dhd_runner_iovar_get_rnr_stats(dhd_runner_hlp_t *dhd_hlp,
 	char *buf, int buflen);
 
@@ -533,8 +564,7 @@ typedef int
 (dhd_runner_iovar_fn_t)(dhd_runner_hlp_t *dhd_hlp, char *buf, int buflen);
 
 
-dhd_runner_iovar_fn_t * dhd_rnr_iovar_table[DHD_RNR_MAX_IOVARS][2] =
-{
+dhd_runner_iovar_fn_t * dhd_rnr_iovar_table[DHD_RNR_MAX_IOVARS][2] = {
 	{
 	    dhd_runner_iovar_get_profile,    /* DHD_RNR_IOVAR_PROFILE, GET */
 	    dhd_runner_iovar_set_profile,    /* DHD_RNR_IOVAR_PROFILE, SET */
@@ -554,7 +584,11 @@ dhd_runner_iovar_fn_t * dhd_rnr_iovar_table[DHD_RNR_MAX_IOVARS][2] =
 	{
 	    dhd_runner_iovar_dump,          /* DHD_RNR_IOVAR_DUMP, GET */
 	    NULL,                           /* DHD_RNR_IOVAR_DUMP, SET */
-	}
+	},
+	{
+	    dhd_runner_iovar_get_rnr_status,     /* DHD_RNR_IOVAR_STATUS, GET */
+	    NULL,                                /* DHD_RNR_IOVAR_STATUS, SET */
+	},
 };
 
 static int dhd_rnr_mcast_obj_ref_cnt = 0;
@@ -710,6 +744,7 @@ int
 dhd_runner_txpost(dhd_pub_t *dhd, void *txp, uint32 ifindex)
 {
 	int pktlen = PKTLEN(dhd->osh, txp);
+	uint8* pktdata = PKTDATA(dhd->osh, txp);
 	rdpa_dhd_tx_post_info_t info = {};
 #if (defined(CONFIG_BCM_SPDSVC) || defined(CONFIG_BCM_SPDSVC_MODULE))
 	spdsvcHook_transmit_t spdsvc_transmit;
@@ -734,7 +769,13 @@ dhd_runner_txpost(dhd_pub_t *dhd, void *txp, uint32 ifindex)
 #else
 	info.is_spdsvc_setup_packet = 0;
 #endif
-	OSL_CACHE_FLUSH(PKTDATA(dhd->osh, txp), pktlen);
+	if (DHDHDR_SUPPORT(dhd)) {
+		/* Include LLCSNAP header as well for the flush */
+		pktdata -= DOT11_LLC_SNAP_HDR_LEN;
+		OSL_CACHE_FLUSH(pktdata, (pktlen + DOT11_LLC_SNAP_HDR_LEN));
+	} else {
+		OSL_CACHE_FLUSH(pktdata, pktlen);
+	}
 
 	return rdpa_dhd_helper_send_packet_to_dongle(txp, pktlen, &info);
 }
@@ -849,13 +890,13 @@ dhd_runner_rx_tasklet_handler(unsigned long data)
 	        txsts->cmn_hdr.request_id, txsts->tx_status,
 	        txsts->compl_hdr.flow_ring_id);
 
-#if defined(DHD_RNR_NO_NONACCPKT_TXSTSOFFL)
 	    rnrtxsts.pkt = NULL;
-	    if ((dhd_complete_data.buf_type == RDPA_DHD_TX_POST_HOST_BUFFER_VALUE)
-	        && (dhd_complete_data.txp)) {
+#if defined(RNR_DHD_HLPR_TXCMPL2HOST)
+	    if ((dhd_complete_data.buf_type == RDPA_DHD_TX_POST_HOST_BUFFER_VALUE) &&
+	        (dhd_complete_data.txp)) {
 	        rnrtxsts.pkt = dhd_complete_data.txp;
 	    }
-#endif /* DHD_RNR_NO_NONACCPKT_TXSTSOFFL */
+#endif /* RNR_DHD_HLPR_TXCMPL2HOST */
 
 	    /*
 	         * Filter out the spurious/unwanted Tx Complete messages
@@ -943,14 +984,15 @@ dhd_runner_cfg_cpu_queue(dhd_runner_hlp_t *dhd_hlp, int cpu_queue_size)
 	    goto exit;
 
 #ifdef CONFIG_BCM96858
-    {
-        /* XXX: Need to hold own CPU object for DHD driver, which will have separate queue configured per each radio,
-         * and have TC configured for IP flow miss. */
-    }
-#else
+	{
+	    /* XXX: Need to hold own CPU object for DHD driver, which will have separate queue
+	     * configured per each radio, and have TC configured for IP flow miss
+	     */
+	}
+#else /* !CONFIG_BCM96858 */
 	for (i = 0; i < 2; i++) {
-        rdpa_cpu_reason_cfg_t reason_cfg = {};
-        rdpa_cpu_reason_index_t cpu_reason = {};
+	    rdpa_cpu_reason_cfg_t reason_cfg = {};
+	    rdpa_cpu_reason_index_t cpu_reason = {};
 
 	    cpu_reason.reason = dhd_hlp->trap_reason;
 	    cpu_reason.dir = i ? rdpa_dir_us : rdpa_dir_ds;
@@ -961,7 +1003,7 @@ dhd_runner_cfg_cpu_queue(dhd_runner_hlp_t *dhd_hlp, int cpu_queue_size)
 	    if (rc < 0)
 	        goto exit;
 	}
-#endif
+#endif /* !CONFIG_BCM96858 */
 
 	rdpa_cpu_int_enable(rdpa_cpu_host, dhd_hlp->cpu_queue_id);
 
@@ -1279,6 +1321,63 @@ dhd_runner_pcie_init(dhd_runner_hlp_t *dhd_hlp, struct pci_dev *pci_dev)
 }
 
 /**
+ * enable adding llcsnap header feature in the runner based on dhd and dongle support.
+ */
+static int
+dhd_runner_llcsnaphdr_init(dhd_runner_hlp_t *dhd_hlp)
+{
+#if defined(BCM_DHDHDR)
+	uint8 llcsnaphdr = DHDHDR_SUPPORT(dhd_hlp->dhd);
+
+	/* Check if runner has support for llcsnap header */
+	if (llcsnaphdr && dhd_hlp->rnr_sup_feat.dhdhdr == 0) {
+	    DHD_ERROR(("%s: Add LLCSNAP_HDR is not supported by runner\n",
+	        __FUNCTION__));
+	    return BCME_UNSUPPORTED;
+	}
+
+#if defined(RNR_DHD_HLPR_LLCSNAPHDR)
+	dhd_hlp->dhd_init_cfg.add_llcsnap_header = llcsnaphdr;
+	dhd_hlp->rnr_en_feat.dhdhdr = llcsnaphdr;
+#endif /* RNR_DHD_HLPR_LLCSNAPHDR */
+#endif /* BCM_DHDHDR */
+
+	return BCME_OK;
+}
+
+/**
+ * enable txcmpl2host feature in the runner.
+ */
+static int
+dhd_runner_txcmpl2host_init(dhd_runner_hlp_t *dhd_hlp, bdmf_object_handle mo)
+{
+	int rc = BCME_OK;
+
+	if (DHD_RNR_TXSTS_OFFLOAD(dhd_hlp) &&
+	    !(DHD_RNR_NONACCPKT_TXSTS_OFFLOAD(dhd_hlp))) {
+
+	    /* fail if Runner does not support this feature */
+	    if (dhd_hlp->rnr_sup_feat.txcmpl2host == 0) {
+	        return BCME_UNSUPPORTED;
+	    }
+
+#if defined(RNR_DHD_HLPR_TXCMPL2HOST)
+	    rc = rdpa_dhd_helper_tx_complete_send2host_set(mo, TRUE);
+
+	    if (rc < 0) {
+	        DHD_ERROR(("dhd%d_runner: set tx_complete_send2host failed %d\r\n",
+	            dhd_hlp->dhd->unit, rc));
+	        return BCME_ERROR;
+	    }
+	    dhd_hlp->rnr_en_feat.txcmpl2host = 1;
+	    RPR2("rdpa_dhd_helper_tx_complete_send2host_set=TRUE\r\n");
+#endif /* RNR_DHD_HLPR_TXCMPL2HOST */
+	}
+
+	return rc;
+}
+
+/**
  * DHD requests Runner to complete the configuration of the dhd_hlp object
  * once all dhd DMA-able buffers for common rings, flowrings and H2D/D2H indices
  * is completed.
@@ -1300,28 +1399,16 @@ dhd_runner_init(dhd_runner_hlp_t *dhd_hlp, struct pci_dev *pci_dev)
 	if ((rc = dhd_runner_pcie_init(dhd_hlp, pci_dev)) != BCME_OK)
 	    return rc;
 
-#if defined(BCM_DHDHDR)
-	dhd_init_cfg->add_llcsnap_header = DHDHDR_SUPPORT(dhdp);
-#endif /* BCM_DHDHDR */
+	if ((rc = dhd_runner_llcsnaphdr_init(dhd_hlp)) != BCME_OK)
+	    return rc;
+
 	dhd_init_cfg->doorbell_isr = dhd_runner_wake_dongle_isr;
 	dhd_init_cfg->doorbell_ctx = dhd_hlp;
 	rdpa_dhd_helper_radio_idx_set(dhd_helper_attr, dhdp->unit);
 	rdpa_dhd_helper_init_cfg_set(dhd_helper_attr, dhd_init_cfg);
 
-#if defined(DHD_RNR_NO_NONACCPKT_TXSTSOFFL)
-	if (DHD_RNR_TXSTS_OFFLOAD(dhd_hlp) &&
-	    !(DHD_RNR_NONACCPKT_TXSTS_OFFLOAD(dhd_hlp))) {
-	    rc = rdpa_dhd_helper_tx_complete_send2host_set(
-	        dhd_helper_attr, TRUE);
-
-	    if (rc < 0) {
-	        DHD_ERROR(("dhd%d_runner: set tx_complete_send2host failed %d\r\n",
-	            dhd_hlp->dhd->unit, rc));
-	        return BCME_ERROR;
-	    }
-	    RPR2("rdpa_dhd_helper_tx_complete_send2host_set=TRUE\r\n");
-	}
-#endif /* DHD_RNR_NO_NONACCPKT_TXSTSOFFL */
+	if ((rc = dhd_runner_txcmpl2host_init(dhd_hlp, dhd_helper_attr)) == BCME_ERROR)
+	    return rc;
 
 #if defined(BCA_HNDROUTER)
 	/* 4.1 kernels doesn't allow ioremap calls in interrupt context */
@@ -1402,6 +1489,24 @@ dhd_helper_attach(dhd_runner_hlp_t *dhd_hlp, void *dhd)
 	    rdpa_cpu_rx_reason_pci_ip_flow_miss_3};
 
 	DHD_INFO(("%s: hlp<%p> dhd<%p>\n", __FUNCTION__, dhd_hlp, dhd));
+
+	/* Base features are enabled by default */
+	dhd_hlp->rnr_sup_feat.txoffl = 1;
+	dhd_hlp->rnr_sup_feat.rxoffl = 1;
+
+	/* Extra features are enabled conditionally */
+#if defined(RNR_DHD_HLPR_TXCMPL2HOST)
+	dhd_hlp->rnr_sup_feat.txcmpl2host = 1;
+#endif /* RNR_DHD_HLPR_TXCMPL2HOST */
+
+#if defined(RNR_DHD_HLPR_LLCSNAPHDR)
+	dhd_hlp->rnr_sup_feat.dhdhdr = 1;
+#endif /* RNR_DHD_HLPR_LLCSNAPHDR */
+
+#if defined(RNR_DHD_HLPR_LBRAGGR)
+	dhd_hlp->rnr_sup_feat.lbraggr = 1;
+#endif /* RNR_DHD_HLPR_LBRAGGR */
+
 	dhd_hlp->dhd = dhd;
 	dhd_hlp->cpu_queue_id = cpu_queues[dhd_hlp->dhd->unit];
 	dhd_hlp->trap_reason = cpu_reasons[dhd_hlp->dhd->unit];
@@ -1529,6 +1634,7 @@ dhd_runner_attach(dhd_pub_t *dhd, bcmpcie_soft_doorbell_t *soft_doobells)
 	    dhd_runner_wakeup_init(tx_soft_doorbell,
 	        wakeup_info.tx_complete_wakeup_register,
 	        HTOL32(wakeup_info.tx_complete_wakeup_value));
+	    dhd_hlp->rnr_en_feat.txoffl = 1;
 	}
 
 	if (DHD_RNR_RX_OFFLOAD(dhd_hlp)) {
@@ -1536,6 +1642,7 @@ dhd_runner_attach(dhd_pub_t *dhd, bcmpcie_soft_doorbell_t *soft_doobells)
 	    dhd_runner_wakeup_init(rx_soft_doorbell,
 	        wakeup_info.rx_complete_wakeup_register,
 	        HTOL32(wakeup_info.rx_complete_wakeup_value));
+	    dhd_hlp->rnr_en_feat.rxoffl = 1;
 	}
 
 
@@ -1848,6 +1955,7 @@ dhd_runner_flowmgr_init(dhd_runner_hlp_t *dhd_hlp, int max_h2d_rings,
 	/* Fetch the reserved memory by dhd radio instance */
 	snprintf(dhd_name, sizeof(dhd_name), "dhd%d", dhdp->unit);
 	dhd_name[4] = '\0';
+
 	if (BcmMemReserveGetByName(dhd_name,
 	    (void **)&flowmgr->hw_mem_addr, &flowmgr->hw_mem_size)) {
 	    DHD_INFO(("BcmMemReserveGetByName returned no memory\n"));
@@ -2271,7 +2379,6 @@ dhd_runner_notify(struct dhd_runner_hlp *dhd_hlp,
 #endif
 	        break;
 
-#ifdef DHD_RNR_LBR_AGGR
 	    /* Host notifies Runner to configure aggregation */
 	    case H2R_AGGR_CONFIG_NOTIF: /* arg1:dhd_runner_aggr_config_t* */
 	        DHD_TRACE(("H2R_AGGR_CONFIG_NOTIF aggr_config<0x%p>\n", (void*)arg1));
@@ -2279,11 +2386,20 @@ dhd_runner_notify(struct dhd_runner_hlp *dhd_hlp,
 	        /* Check if any tx flow rings are offloaded */
 	        if (DHD_RNR_TXSTS_OFFLOAD(dhd_hlp)) {
 	            dhd_runner_aggr_config_t* aggr_cfg = (dhd_runner_aggr_config_t*)arg1;
+#if defined(RNR_DHD_HLPR_LBRAGGR)
 	            bdmf_number aggr_size;
 	            bdmf_number aggr_timer;
 	            bdmf_index wme_ac = 0;
 	            int prio = 0;
 	            int rc = 0;
+#endif /* RNR_DHD_HLPR_LBRAGGR */
+
+	            /* Check if Runner supports LBR aggregation */
+	            if (dhd_hlp->rnr_sup_feat.lbraggr == 0) {
+	                DHD_ERROR(("dhd%d_runner: LBR Aggregation is not supported by Runner\n",
+	                    dhd_hlp->dhd->unit));
+	                return BCME_UNSUPPORTED;
+	            }
 
 	            /* Sanity Check input parameters */
 	            if ((aggr_cfg == NULL) || (dhd_hlp->dhd_helper_obj == NULL)) {
@@ -2293,16 +2409,17 @@ dhd_runner_notify(struct dhd_runner_hlp *dhd_hlp,
 	            }
 
 	            DHD_TRACE(("dhd%d_runner: aggr mask<0x%x>, len<%d pkts>, timeout<%d msec>\n",
-	                dhd_hlp->dhd->unit, aggr_cfg->en_mask, aggr_cfg->len, 
+	                dhd_hlp->dhd->unit, aggr_cfg->en_mask, aggr_cfg->len,
 	                aggr_cfg->timeout));
 
-	            /* 
+#if defined(RNR_DHD_HLPR_LBRAGGR)
+	            /*
 	             * Convert DHD parameters to Runner parameters
 	             * DHD (aggr_en + aggr_len) to  Runner (aggr_size)
 	             * DHD (prio) to Runner (wme_ac)
 	             */
-	            while ( prio < wme_ac_max) {
-	                if ( (1 << prio) & aggr_cfg->en_mask) {
+	            while (prio < wme_ac_max) {
+	                if ((1 << prio) & aggr_cfg->en_mask) {
 	                    aggr_size = (bdmf_number)aggr_cfg->len;
 	                } else {
 	                    aggr_size = 1;
@@ -2318,6 +2435,8 @@ dhd_runner_notify(struct dhd_runner_hlp *dhd_hlp,
 	                prio++;
 	            }
 
+	            dhd_hlp->rnr_en_feat.lbraggr = (aggr_cfg->en_mask) ? 1 : 0;
+
 	            /* Set the aggregation timeout in the runner */
 	            aggr_timer = (bdmf_number)aggr_cfg->timeout;
 	            rc = rdpa_dhd_helper_aggregation_timer_set(
@@ -2327,19 +2446,31 @@ dhd_runner_notify(struct dhd_runner_hlp *dhd_hlp,
 	                DHD_ERROR(("dhd%d_runner: set aggr timeout failed %d\r\n",
 	                    dhd_hlp->dhd->unit, rc));
 	            }
+#endif /* RNR_DHD_HLPR_LBRAGGR */
 	        }
 	        break;
-#endif /* DHD_RNR_LBR_AGGR */
 
-#if defined(DHD_RNR_NO_NONACCPKT_TXSTSOFFL)
 	    /* Host notifies Runner to set/unset sending nonacceleted packet txstatus to dhd */
 	    case H2R_TXSTS_CONFIG_NOTIF: /* arg1: enable */
 	        DHD_TRACE(("H2R_TXSTS_CONFIG_NOTIF enable <%d>\n", (int)arg1));
+
 	        if (DHD_RNR_TXSTS_OFFLOAD(dhd_hlp)) {
+
 	            dhd_hlp->txsts_ring_cfg.offload = arg1&DHD_RNR_TXSTS_CFG_OFFL_MASK;
+
+	            if (!(arg1 & DHD_RNR_TXSTS_CFG_NONACCPKT_OFFL) &&
+	                (dhd_hlp->rnr_sup_feat.txcmpl2host == 0)) {
+	                /*
+	                 * dhd requested to disable offload of txsts but runner can not support
+	                 * sending nonacceleted packet txstatus to dhd
+	                 */
+	                dhd_hlp->txsts_ring_cfg.offload |= DHD_RNR_TXSTS_CFG_NONACCPKT_OFFL;
+	                rc = BCME_UNSUPPORTED;
+	                DHD_ERROR(("dhd%d_runner: TXSTS2DHD not supported by Runner f/w\r\n",
+	                    dhd_hlp->dhd->unit));
+	            }
 	        }
 	        break;
-#endif /* DHD_RNR_NO_NONACCPKT_TXSTSOFFL */
 
 	    /* Host requests Runner to read DMA Index buffer */
 	    case H2R_IDX_BUF_RD_REQUEST: /* arg1:buffer ptr, arg2:read value ptr */
@@ -3386,25 +3517,17 @@ dhd_runner_iovar_dump(dhd_runner_hlp_t *dhd_hlp, char *buff,
 	dhd_runner_flowmgr_t *flowmgr;
 	enum dhd_wme_ac wme_ac;
 	char policy_str[DHD_RNR_IOVAR_BUFF_SIZE];
-	int rnr_tx = 0;
-	int rnr_rx = 0;
-	int nonacctxsts_offl = 0;
 
 	flowmgr = &dhd_hlp->flowmgr;
 
-	if (DHD_RNR_RX_OFFLOAD(dhd_hlp))
-	    rnr_rx = 1;
-
-	if (DHD_RNR_TXSTS_OFFLOAD(dhd_hlp))
-	    rnr_tx = 1;
-
-	if (DHD_RNR_NONACCPKT_TXSTS_OFFLOAD(dhd_hlp))
-	    nonacctxsts_offl = 1;
-
 	/* Status */
 	bcm_bprintf(b, "\nDHD Runner: \n");
-	bcm_bprintf(b, "  Status     : radio#  %d tx_Offl %d  rx_Offl %d nonacctxsts_offl %d\n",
-	    dhd_hlp->dhd->unit, rnr_tx, rnr_rx, nonacctxsts_offl);
+	bcm_bprintf(b, "  Status     : %s %s %s %s %s\n",
+	    RNR_DHD_HLPR_FEATURE_STS_STRING(dhd_hlp, txoffl),
+	    RNR_DHD_HLPR_FEATURE_STS_STRING(dhd_hlp, rxoffl),
+	    RNR_DHD_HLPR_FEATURE_STS_STRING(dhd_hlp, txcmpl2host),
+	    RNR_DHD_HLPR_FEATURE_STS_STRING(dhd_hlp, dhdhdr),
+	    RNR_DHD_HLPR_FEATURE_STS_STRING(dhd_hlp, lbraggr));
 
 	/* Profile */
 	bcm_bprintf(b, "  Profile    : prfl_id %d id_valu", flowmgr->profile->id);
@@ -3528,6 +3651,39 @@ dhd_runner_iovar_get_rnr_stats(dhd_runner_hlp_t *dhd_hlp, char *buf,
 	return BCME_OK;
 }
 
+/**
+ * Fills the Iovar structure with the dhd-runner status information
+ *
+ */
+static int
+dhd_runner_iovar_get_rnr_status(dhd_runner_hlp_t *dhd_hlp, char *buf,
+	int buflen)
+{
+	dhd_helper_status_t *pstatus = (dhd_helper_status_t*)buf;
+	int ac = wme_ac_bk;
+
+	if ((buf == NULL) || (buflen < sizeof(dhd_helper_status_t))) {
+	    DHD_ERROR(("dhd%d_runner iovar [%d] bad arguments", dhd_hlp->dhd->unit,
+	        DHD_RNR_IOVAR_STATUS));
+	    DHD_ERROR(("buf 0x%p, buflen %d\r\n", buf, buflen));
+	    return BCME_BADARG;
+	}
+
+	/* Copy the supported and enabled features */
+	memcpy(&pstatus->sup_features, &dhd_hlp->rnr_sup_feat, sizeof(dhd_helper_feat_t));
+	memcpy(&pstatus->en_features, &dhd_hlp->rnr_en_feat, sizeof(dhd_helper_feat_t));
+
+	pstatus->hw_flowrings = 0;
+	pstatus->sw_flowrings = 0;
+	while (ac <= wme_ac_max) {
+	    pstatus->hw_flowrings += dhd_hlp->flowmgr.hw_ring_cnt[ac];
+	    pstatus->sw_flowrings += dhd_hlp->flowmgr.sw_ring_cnt[ac];
+	    ac++;
+	}
+
+	return BCME_OK;
+}
+
 
 /**
  * Process dhd_runner related IOVAR's
@@ -3536,6 +3692,10 @@ int
 dhd_runner_do_iovar(struct dhd_runner_hlp *dhd_hlp, dhd_runner_iovar_t iovar,
 	bool set, char *buf, int buflen)
 {
+	if (iovar >= DHD_RNR_MAX_IOVARS) {
+	    return BCME_UNSUPPORTED;
+	}
+
 	ASSERT(dhd_hlp != NULL);
 	return dhd_rnr_iovar_table[iovar][set](dhd_hlp, buf, buflen);
 }

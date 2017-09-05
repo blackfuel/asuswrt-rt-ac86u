@@ -129,10 +129,11 @@ void KeyReset_S()
 void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
 {
 	char *str_data=malloc(DEF_LEN_128);
-	char word[DEF_LEN_128], tmp[DEF_LEN_128], *next;
+	char word[DEF_LEN_128*2], tmp[DEF_LEN_128], *next;
 	char prefix[DEF_LEN_128];
-	char *delim=";", *str_service;
-	int unit=0, chk_service=0;
+	char *delim=";", *str_service, *delim_1=",";
+	unsigned char countryCode[3];
+	int unit=0, chk_service=0, list=0;
 	int is_change_lanip;
 	struct in_addr lan_addr, dhcp_start_addr, dhcp_end_addr;
 	
@@ -222,9 +223,43 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 			AdvSplit_CombineStr(prefix, "_", "wan", "0", tmp);
 			nvram_set(tmp, str_data);
 			break;
-		case BLE_COMMAND_SET_SW_MODE:
 		case BLE_COMMAND_SET_ADMIN_NAME:
+			snprintf(tmp, sizeof(tmp), "%s>%s", str_data, nvram_safe_get("http_passwd"));
+			nvram_set("acc_list",tmp);
+			break;
 		case BLE_COMMAND_SET_ADMIN_PWD:
+			snprintf(tmp, sizeof(tmp), "%s>%s", nvram_safe_get("http_username"), str_data);
+			nvram_set("acc_list",tmp);
+			break;
+		case BLE_COMMAND_SET_ATH1_CHAN:
+			unit = 1;
+
+			memset(countryCode, 0, sizeof(countryCode));
+
+			snprintf(prefix, sizeof(prefix), "wl%d_", unit);
+			strncpy(countryCode, nvram_safe_get(strcat_r(prefix, "country_code", tmp)), 2);
+
+			list = get_channel_list_via_driver(unit, word, sizeof(word));
+			if (list<=0 && countryCode[0] != 0xff && countryCode[1] != 0xff) {   // 0xffff is default
+				list = get_channel_list_via_country(unit, countryCode, word, sizeof(word));
+			}
+
+			if (list>0) {
+				list=0;
+				next = strtok(word, delim_1);
+				while (next!=NULL) {
+					if (!strncmp(next, str_data, strlen(next))) {
+						list=1;
+						break;
+					}
+					next = strtok(NULL, delim_1);
+				}
+
+				if (list)
+					nvram_set(strcat_r(prefix, "channel", tmp), str_data);
+			}
+			break;
+		case BLE_COMMAND_SET_SW_MODE:
 		case BLE_COMMAND_SET_GROUP_ID:
 		case BLE_COMMAND_SET_USER_PLACE:
 		case BLE_COMMAND_SET_USER_LOCATION:
@@ -282,7 +317,10 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 					if (chk_service==3)
 					{
 						if (strstr(do_rc_service, "chpass"))
+						{
 							notify_rc_and_wait("chpass");
+							notify_rc_and_wait("restart_ftpsamba");
+						}
  
 						memset(do_rc_service, '\0', DEF_LEN_256);
 						if (!strlen(do_rc_service))
@@ -309,6 +347,7 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 				{
 					if ( chk_service == 1 )
 					{
+#ifdef RTCONFIG_BWDPI
 						nvram_set("wrs_protect_enable", "1");
 						nvram_set("wrs_mals_t", "0");
 						nvram_set("wrs_cc_t", "0");
@@ -316,7 +355,10 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 						nvram_set("bwdpi_db_enable", "1");
 						nvram_set("apps_analysis", "1");
 						nvram_set("TM_EULA", "1");
+#endif
 					} else {
+						eval("iwconfig", "ath1", "channel", nvram_safe_get("wl1_channel"));
+
 						eval("modprobe", "-r", "shortcut_fe_cm");
 						eval("modprobe", "-r", "shortcut_fe_ipv6");
 						eval("modprobe", "-r", "shortcut_fe");
@@ -338,7 +380,9 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 					if(chk_service==1)
 					{
 						snprintf(do_rc_service, sizeof(do_rc_service), "%s%s%s", do_rc_service, delim, "start_hyfi_process");
+#ifdef RTCONFIG_BWDPI
 						snprintf(do_rc_service, sizeof(do_rc_service), "%s%s%s", do_rc_service, delim, "restart_wrs");
+#endif
 						snprintf(do_rc_service, sizeof(do_rc_service), "%s%s%s", do_rc_service, delim, "restart_firewall");
 					}
 					else if(chk_service==3)
@@ -361,27 +405,8 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 // Server Receive Command
 //
 // UnpackBLECommandData				
-// UnpackBLECommandReqPublicKey			: Send command to get public key
+// UnpackBLECommandReq				:
 // UnpackBLECommandReqNonce			: Send command to get nonce
-// UnpackBLECommandGetWanStatus			: Send command to get wan status
-// UnpackBLECommandGetWifiStatus		: Send command to get wifi status
-// UnpackBLECommandGetMacBleVersion
-//
-// UnpackBLECommandSetWanPPPoEName		: Send command to set Name of PPPoE
-// UnpackBLECommandSetWanPPPoEPWD		: Send command to set Password of PPPoE
-// UnpackBLECommandSetWanIPAddr			: Send command to set IP address of Wan
-// UnpackBLECommandSetWanSubMask		: Send command to set Subnet mask of Wan
-// UnpackBLECommandSetWanGateway		: Send command to set Gateway of Wan
-// UnpackBLECommandSetWanDns1			: Send command to set Dns1 of Wan
-// UnpackBLECommandSetWanDns2			: Send command to set Dns2 of Wan
-// UnpackBLECommandSetWanPort		: Send command to set Lan port
-// UnpackBLECommandSetWifiName			: Send command to set SSID of Wifi
-// UnpackBLECommandSetWifiPWD			: Send command to set Password of Wifi
-// UnpackBLECommandSetGroupID			: Send command to set Group ID of Device
-// UnpackBLECommandSetAdminName			: Send command to set Name of Admin
-// UnpackBLECommandSetAdminPWD			: Send command to set Password of Admin
-// UnpackBLECommandSetUserLocation		: Send command to set Location of User
-// UnpackBLECommandSetUserPlace			: Send command to set Place of User
 //
 int UnpackBLECommandData(unsigned char *pdu, int pdulen, int *cmdno, unsigned char *data, unsigned int *datalen)
 {
@@ -462,7 +487,7 @@ int UnpackBLECommandData(unsigned char *pdu, int pdulen, int *cmdno, unsigned ch
 	return (BLE_RESULT_OK);
 }
 
-void UnpackBLECommandReqPublicKey(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
+void UnpackBLECommandReq(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
 {
 }
 void UnpackBLECommandReqServerNonce(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
@@ -565,95 +590,6 @@ void UnpackBLECommandReqServerNonce(struct param_handler_svr *param_handler, uns
 		return;
 	}
 #endif
-}
-void UnpackBLECommandAPPLY(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandRESET(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandGetWanStatus(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-}
-void UnpackBLECommandGetWifiStatus(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-}
-void UnpackBLECommandGetMacBleVersion(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-}
-void UnpackBLECommandSetWanType(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanPPPoEName(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanPPPoEPWD(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanIPAddr(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanSubMask(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanGateway(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanDns1(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanDns2(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanPort(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWifiName(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWifiPWD(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetGroupID(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetAdminName(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetAdminPWD(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetUserLocation(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetUserPlace(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetSWMode(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
-}
-void UnpackBLECommandSetWanDnsEnable(struct param_handler_svr *param_handler, unsigned char *data, int datalen)
-{
-	UnpackBLEDataToNvram(param_handler, data, datalen);
 }
 
 // Server Return Response
@@ -760,13 +696,76 @@ void PackBLEResponseGetMacBleVersion(int cmdno, int status, unsigned char *pdu, 
 	PackBLEResponseData(cmdno, status, (unsigned char*)tmp, sizeof(tmp), pdu, pdulen, BLE_RESPONSE_FLAGS|BLE_FLAG_WITH_ENCRYPT);
 }
 
+void PackBLEResponseGetAth1Chan(int cmdno, int status, unsigned char *pdu, int *pdulen)
+{
+	FILE *fp;
+	char tmp[DEF_LEN_128], buf[DEF_LEN_128];
+	char *pt1,*pt2;
+	int band=1, cac=-1;
+	int len, freq=-2;
+
+	memset(tmp, '\0', sizeof(tmp));
+	memset(buf, '\0', sizeof(buf));
+	snprintf(tmp, sizeof(tmp), "%d", freq);
+
+	if (nvram_get_int("sw_mode")==1) {
+		sprintf(buf, "iwpriv %s get_cac_state", get_wififname(band));
+
+		fp = popen(buf, "r");
+		if (fp) {
+			memset(buf, 0, sizeof(buf));
+			len = fread(buf, 1, sizeof(buf), fp);
+			pclose(fp);
+			if (len > 1) {
+				buf[len-1] = '\0';
+				pt1 = strstr(buf, "get_cac_state:");
+				if (pt1) {
+					pt2 = pt1 + strlen("get_cac_state: ");
+					chomp(pt2);
+					cac = safe_atoi(pt2);
+				}
+			}
+		}
+
+		if (cac)
+			snprintf(tmp, sizeof(tmp), "%s", cac);
+		else {
+			memset(buf, '\0', sizeof(buf));
+			sprintf(buf, "iwconfig %s", get_wififname(band));
+
+			fp = popen(buf, "r");
+			if (fp) {
+				memset(buf, 0, sizeof(buf));
+				len = fread(buf, 1, sizeof(buf), fp);
+				pclose(fp);
+				if (len > 1) {
+					buf[len-1] = '\0';
+					pt1 = strstr(buf, "Frequency:");
+					if (pt1) {
+						pt2 = strstr(pt1, "GHz");
+						if(pt2) {
+							memset(tmp, '\0', sizeof(tmp));
+							strncpy(tmp,pt1+strlen("Frequency:"),pt2-pt1-strlen("Frequency:"));
+							chomp(tmp);
+							freq=(int)(1000*atof(tmp));
+							freq=(freq-5170)*2/10 + 34;
+							memset(tmp, '\0', sizeof(tmp));
+							snprintf(tmp, sizeof(tmp), "%s%d", tmp, freq);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	PackBLEResponseData(cmdno, status, (unsigned char*)tmp, sizeof(tmp), pdu, pdulen, BLE_RESPONSE_FLAGS|BLE_FLAG_WITH_ENCRYPT);
+}
+
 void PackBLEResponseGetWanStatus(int cmdno, int status, unsigned char *pdu, int *pdulen)
 {
 	char var_name[DEF_LEN_128];
 	char *detwan[] = {"detwan", NULL};
-	char *old_wan_ifname = nvram_safe_get("wan0_ifname");
 	int wanstatus=BLE_WAN_STATUS_ALL_DISCONN;
-	int old_wan_proto = nvram_get_int("detwan_proto"); 
 	int idx, max_inf, value, wan_proto;
 	int conn=0, conn_tmp=1;
 

@@ -100,6 +100,10 @@ function initial(){
 }
 function check_game_boost(){
 	if(document.getElementById("game_boost_enable").checked){
+		if(!reset_wan_and_nat(document.form, 1)) {
+			document.getElementById("game_boost_enable").checked = false;
+			return false;
+		}
 		document.form.qos_enable.value = '1';
 		document.form.qos_type.value = '1';
 		document.form.bwdpi_app_rulelist.disabled = false;

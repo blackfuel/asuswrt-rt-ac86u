@@ -89,9 +89,9 @@ var fwdl_percent="";
 var varload = 0;
 var helplink = "";
 var dpi_engine_status = <%bwdpi_engine_status();%>;
-var lyra_fwup = "<% nvram_get("lyra_fwup"); %>";
 var cfg_check = '<% nvram_get("cfg_check"); %>';
 var sig_ver_ori = '<% nvram_get("bwdpi_sig_ver"); %>';
+var sig_update_t = '<% nvram_get("sig_update_t"); %>';
 
 function initial(){
 	show_menu();
@@ -101,13 +101,11 @@ function initial(){
 		else
 			document.getElementById("sig_ver_field").style.display="none";
 			
-		var sig_ver_ori = '<% nvram_get("bwdpi_sig_ver"); %>';
 		if(sig_ver_ori == "")
 			document.getElementById("sig_ver_word").innerHTML = "1.008";
 		else
 			document.getElementById("sig_ver_word").innerHTML = sig_ver_ori;
 
-		var sig_update_t = "<% nvram_get("sig_update_t"); %>";
 		if(sig_update_t == "" || sig_update_t == "0")
 			document.getElementById("sig_update_date").innerHTML = "";
 		else
@@ -178,13 +176,6 @@ function initial(){
 	else{
 		inputCtrl(document.form.file, 1);
 		inputCtrl(document.form.upload, 1);
-	}
-
-	if(lyra_hide_support){
-		document.getElementById("productid_tr").style.display = "none";
-		document.getElementById("beta_firmware_path_span").style.display = "none";
-		if(lyra_fwup != "1")
-			document.getElementById("manually_upgrade_tr").style.display = "none";
 	}
 }
 
@@ -493,7 +484,7 @@ function sig_check_status(){
 	$.ajax({
     	url: '/detect_firmware.asp',
     	dataType: 'script',
-	timeout: 3000,
+    	timeout: 3000,
     	error:	function(xhr){
 			sdead++;
 			if(sdead < 20){				
@@ -517,10 +508,7 @@ function sig_check_status(){
 					document.getElementById("sig_check").disabled = false;
 				}
 				else{
-					if(sig_state_upgrade == 1){		//update complete
-						$("#sig_status").html("Signature update completely");	/* Untranslated */
-						document.getElementById("sig_update_scan").style.display = "none";
-
+					if(sig_state_upgrade == 1){		//update complete						
 						update_sig_ver();
 						document.getElementById("sig_check").disabled = false;
 					}
@@ -540,13 +528,16 @@ function update_sig_ver(){
     	dataType: 'script',
 		timeout: 3000,
     	error:	function(xhr){
-    		setTimeout('update_sig_ver();', 2000);
+    		setTimeout('update_sig_ver();', 1000);
     	},
     	success: function(){
-    		if(sig_ver_ori == sig_ver){
-    			setTimeout('update_sig_ver();', 2000);
+    		if(sig_ver_ori == sig_ver){    			
+    			setTimeout('update_sig_ver();', 1000);
     		}	
     		else{
+    			document.getElementById("sig_update_date").innerHTML = "";
+    			document.getElementById("sig_update_scan").style.display = "none";
+    			$("#sig_status").html("Signature update completely");	/* Untranslated */
     			$("#sig_ver_word").html(sig_ver);
     		}			
   		}
@@ -611,9 +602,9 @@ function updateDateTime()
 					document.firmware_form.upgrade_date_x_Fri,
 					document.firmware_form.upgrade_date_x_Sat);
 		document.firmware_form.fw_schedule.value = setfirmwareTimeRange(
-																									document.firmware_form.fw_schedule,
-																									document.firmware_form.upgrade_time_x_hour,
-																									document.firmware_form.upgrade_time_x_min);
+					document.firmware_form.fw_schedule,
+					document.firmware_form.upgrade_time_x_hour,
+					document.firmware_form.upgrade_time_x_min);
 	}	
 }
 
@@ -800,7 +791,7 @@ function transferTimeFormat(time){
 
 <!--###HTML_PREP_END###-->
 			<tr id="sig_ver_field" style="display:none">
-				<th>Signature Version</th>
+				<th><#sig_ver#></th>
 				<td >
 					<div style="height:33px;margin-top:5px;"><span id="sig_ver_word" style="color:#FFFFFF;"></span><span id="sig_update_date"></span></div>
 					<div style="margin-left:200px;margin-top:-38px;">
@@ -819,7 +810,7 @@ function transferTimeFormat(time){
 					<div id="update_div" style="margin-left:200px;margin-top:-38px;display:none;">
 						<input type="button" id="update" name="update" class="button_gen" onclick="detect_update(document.start_update.firmware_path.value);" value="<#liveupdate#>" />
 						<span id="beta_firmware_path_span" style="display:none;">
-							<input type="checkbox" name="beta_firmware_path" id="beta_firmware_path" onclick="change_firmware_path(this.checked==true);"  <% nvram_match("firmware_path", "1", "checked"); %>>Get Beta Firmware</input>
+							<input type="checkbox" name="beta_firmware_path" id="beta_firmware_path" onclick="change_firmware_path(this.checked==true);"  <% nvram_match("firmware_path", "1", "checked"); %>><#get_beta#></input>
 						</span>
 					</div>
 					<div id="linkpage_div" class="button_helplink" style="margin-left:200px;margin-top:-38px;display:none;">

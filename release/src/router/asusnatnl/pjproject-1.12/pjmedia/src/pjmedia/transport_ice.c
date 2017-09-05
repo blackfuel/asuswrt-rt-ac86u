@@ -2272,6 +2272,10 @@ static void ice_on_ice_complete(pj_ice_strans *ice_st,
 
 	tp_ice->base.ice_retry_count = 1;//pj_ice_strans_get_transmit_count(ice_st);
 
+	// Prepare stun and turn last status.
+	tp_ice->base.stun_last_status = pj_ice_strans_get_stun_last_status(ice_st);
+	tp_ice->base.turn_last_status = pj_ice_strans_get_turn_last_status(ice_st);
+
     /* Notify application */
     if (tp_ice->cb.on_ice_complete)
 		(*tp_ice->cb.on_ice_complete)(&tp_ice->base, op, result, turn_mapped_addr);

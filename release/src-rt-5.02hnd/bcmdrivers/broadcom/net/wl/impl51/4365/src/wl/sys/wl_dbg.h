@@ -2,7 +2,7 @@
  * Minimal debug/trace/assert driver definitions for
  * Broadcom 802.11 Networking Adapter.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,7 +16,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: wl_dbg.h 580000 2015-08-17 22:08:34Z $
+ * $Id: wl_dbg.h 664112 2016-10-10 13:27:40Z $
  */
 
 
@@ -151,6 +151,8 @@ extern int osl_printf(const char *fmt, ...);
     do {if (wl_msg_level2 & WL_NET_DETECT_VAL) WL_PRINT(args);} while (0)
 /* not using WL_ROAM for BCMDBG at the moment */
 #define WL_ROAM(args)
+#define WL_FBT(args)	do {if (wl_msg_level2 & WL_FBT_VAL) WL_PRINT(args);} while (0)
+//#define WL_FBT(args)
 #define WL_PRMAC(args)	do {if (wl_msg_level & WL_PRMAC_VAL) WL_PRINT(args);} while (0)
 
 #define WL_ERROR_ON()		(wl_msg_level & WL_ERROR_VAL)
@@ -199,6 +201,7 @@ extern int osl_printf(const char *fmt, ...);
 #define WL_PCIE_ON()		(wl_msg_level2 & WL_PCIE_VAL)
 #define WL_CHANLOG_ON()		(wl_msg_level2 & WL_TIMESTAMP_VAL)
 #define WL_NET_DETECT_ON()	(wl_msg_level2 & WL_NET_DETECT)
+#define WL_FBT_ON()            (wl_msg_level2 & WL_FBT_VAL)
 
 /* Extra message control for APSTA debugging */
 #define	WL_APSTA_UPDN_VAL	0x00000001 /* Config up/down related  */
@@ -510,6 +513,7 @@ extern uint32 wl_ampdu_dbg;
 #define WL_MUMIMO(args)
 #define WL_CHANLOG(w, s, i, j)
 #define WL_NET_DETECT(args)
+#define WL_FBT(args)
 
 #ifdef BCMDBG_ERR
 #define WL_ERROR_ON()		1

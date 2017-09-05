@@ -1,7 +1,7 @@
 /*
  * Broadcom Event  protocol definitions
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,7 +17,7 @@
  *
  * Dependencies: proto/bcmeth.h
  *
- * $Id: bcmevent.h 645847 2016-06-27 14:26:06Z $
+ * $Id: bcmevent.h 663427 2016-10-05 09:46:29Z $
  *
  */
 
@@ -229,6 +229,7 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 #define WLC_E_TX_STAT_ERROR		126	/* tx error indication */
 #define WLC_E_BCMC_CREDIT_SUPPORT	127	/* credit check for BCMC supported */
 #define WLC_E_PEER_TIMEOUT	128 /* silently drop a STA because of inactivity */
+#define WLC_E_FBT_AUTH_REQ_IND          132     /* FBT Authentication Request Indication */
 #define WLC_E_AUTHORIZED	136	/* a STA been authroized for traffic */
 #define WLC_E_PROBREQ_MSG_RX	137 /* probe req with wl_event_rx_frame_data_t header */
 #define WLC_E_PRE_ASSOC_RSEP_IND	139
@@ -238,9 +239,10 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 #define WLC_E_RANGING_EVENT		161	/* Ranging event */
 #define WLC_E_INVALID_IE		162	/* Received invalid IE */
 #define WLC_E_MODE_SWITCH		163	/* Mode switch event */
-#define WLC_E_LAST			164	/* highest val + 1 for range checking */
-#if (WLC_E_LAST > 164)
-#error "WLC_E_LAST: Invalid value for last event; must be <= 164."
+#define WLC_E_FBT			166     /* FBT event */
+#define WLC_E_LAST			167	/* highest val + 1 for range checking */
+#if (WLC_E_LAST > 167)
+#error "WLC_E_LAST: Invalid value for last event; must be <= 166."
 #endif /* WLC_E_LAST */
 
 /* define an API for getting the string name of an event */
@@ -589,6 +591,22 @@ typedef struct {
 	int8 rssi;		/* RSSI of the STA */
 	uint8 traffic;		/* internal metric of traffic */
 } wl_event_mode_switch_dyn160;
+
+#define WL_EVENT_FBT_VER_1		1
+
+#define WL_E_FBT_TYPE_FBT_OTD_AUTH	1
+
+/* event structure for WLC_E_FBT */
+typedef struct {
+	uint16 version;
+	uint16 length;	/* size including 'data' field */
+	uint16 type; /* value 0: unknown, 1: FBT OTD Auth Req */
+	uint16 data_offset;	/* offset to 'data' from beginning of this struct.
+				 * fields may be added between data_offset and data
+				 */
+	/* ADD NEW FIELDS HERE */
+	uint8 data[];	/* type specific data; could be empty */
+} wl_event_fbt_t;
 
 /* This marks the end of a packed structure section. */
 #include <packed_section_end.h>

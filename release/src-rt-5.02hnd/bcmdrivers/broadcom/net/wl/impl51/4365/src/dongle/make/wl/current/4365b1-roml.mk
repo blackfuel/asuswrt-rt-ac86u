@@ -6,7 +6,7 @@
 # or duplicated in any form, in whole or in part, without the prior
 # written permission of Broadcom Corporation.
 #
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
+# Broadcom Proprietary and Confidential. Copyright (C) 2017,
 # All Rights Reserved.
 # 
 # This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -286,3 +286,12 @@ EXTRA_DFLAGS += -DDONGLE_MAX_CAL_CACHE=5
 
 # ROM compatibility with legacy version of wlc_l2_filter.
 EXTRA_DFLAGS += -DWLC_L2_FILTER_ROM_COMPAT
+
+# Disable/enable AMSDU for AC_VI
+EXTRA_DFLAGS    += -DDISABLE_AMSDUTX_FOR_VI
+
+# Instead of disabling frameburst completly in dynamic frame burst logic, we enable RTS/CTS in frameburst.
+EXTRA_DFLAGS    += -DFRAMEBURST_RTSCTS_PER_AMPDU
+
+# To tune frameburst override thresholds
+EXTRA_DFLAGS    += -DTUNE_FBOVERRIDE

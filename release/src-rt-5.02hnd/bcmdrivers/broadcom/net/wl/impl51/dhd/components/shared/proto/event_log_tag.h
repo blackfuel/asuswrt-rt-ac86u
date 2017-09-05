@@ -1,7 +1,7 @@
 /*
  * EVENT_LOG system definitions
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,7 +18,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: event_log_tag.h 655607 2016-08-22 17:35:01Z $
+ * $Id: event_log_tag.h 660406 2016-09-20 11:21:19Z $
  */
 
 #ifndef _EVENT_LOG_TAG_H_
@@ -163,10 +163,10 @@
 #define EVENT_LOG_TAG_CHANCTXT_WARN		141
 #define EVENT_LOG_TAG_MSCHPROFILE		142
 #define EVENT_LOG_TAG_4WAYHANDSHAKE		143
-
+#define EVENT_LOG_TAG_MSCHPROFILE_TLV		144
 
 /* EVENT_LOG_TAG_MAX	= Set to the same value of last tag, not last tag + 1 */
-#define EVENT_LOG_TAG_MAX			143
+#define EVENT_LOG_TAG_MAX			144
 /* Note: New event should be added/reserved in trunk before adding it to branches */
 
 

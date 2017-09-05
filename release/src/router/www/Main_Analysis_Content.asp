@@ -59,6 +59,7 @@
 function initial(){
 	show_menu();
 	showLANIPList();
+	update_ntool_unit();
 }
 
 function validForm(){
@@ -111,6 +112,17 @@ function hideCNT(_val){
 		document.getElementById("pingCNT_tr").style.display = "none";
 		document.getElementById("cmdDesc").innerHTML = "<#NetworkTools_nslookup#>";
 	}
+	update_ntool_unit();
+}
+
+function update_ntool_unit(){
+	var wans_dualwan_array = '<% nvram_get("wans_dualwan"); %>'.split(" ");
+	var wans_mode = '<%nvram_get("wans_mode");%>';
+	if(sw_mode != 1 || document.form.cmdMethod.value == "nslookup" || !dualWAN_support || wans_mode != "lb" || wans_dualwan_array.indexOf("none") != -1){
+		document.getElementById("wans_ntool_unit").style.display = "none";
+		return;
+	}
+	document.getElementById("wans_ntool_unit").style.display = "";
 }
 
 
@@ -251,6 +263,15 @@ function pullLANIPList(obj){
 													<option value="nslookup">Nslookup</option>
  												</select>
 											</td>										
+										</tr>
+										<tr id="wans_ntool_unit">
+											<th width="20%"><#wan_interface#></th>
+											<td>
+												<select name="wans_ntool_unit" class="input_option" onChange="update_ntool_unit();">
+													<option class="content_input_fd" value="0" <% nvram_match("wans_ntool_unit", "0","selected"); %>><#dualwan_primary#></option>
+													<option class="content_input_fd" value="1" <% nvram_match("wans_ntool_unit", "1","selected"); %>><#dualwan_secondary#></option>
+												</select>
+											</td>
 										</tr>
 										<tr>
 											<th width="20%"><#NetworkTools_target#></th>

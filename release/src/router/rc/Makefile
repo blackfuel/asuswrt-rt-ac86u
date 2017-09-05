@@ -61,6 +61,7 @@ endif
 
 ifeq ($(RTCONFIG_LANTIQ),y)
 CFLAGS += -I$(TOP)/shared/sysdeps/lantiq -I$(TOP)/wireless_tools -I$(TOP)/fapi_wlan_common-1.0.0.1/include -I$(TOP)/libhelper-1.4.0.2/include -DPACKAGE_ID=\"fapi_wlan_common\" -DLOGGING_ID="fapi_wlan_common"
+CFLAGS  += -I$(TOP)/wlc_nt
 endif
 
 include $(SRCBASE)/.config
@@ -95,8 +96,9 @@ LDFLAGS += -L$(TOP)/libqcsapi_client_10g -lqcsapi_client
 endif
 
 ifeq ($(RTCONFIG_LANTIQ),y)
-# LDFLAGS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -L$(TOP)/libhelper-1.4.0.2 -lhelper -lrt
-LDFLAGS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi
+# LDFLAGS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lrt
+LDFLAGS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi
+LDFLAGS += -L$(TOP)/wlc_nt -lwlc_nt_client
 endif
 
 ifeq ($(RTCONFIG_HTTPS),y)
@@ -152,6 +154,7 @@ LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
 endif
 
 ifeq ($(RTCONFIG_FBWIFI),y)
+CFLAGS  += -I$(TOP)/fb_wifi
 LDFLAGS += -L$(TOP)/fb_wifi -lfbwifi
 endif
 
@@ -200,6 +203,13 @@ TARGET_MODEL = $(subst -,,$(subst +,P,$(BUILD_NAME)))
 CFLAGS += -D$(TARGET_MODEL)
 endif
 
+ifeq ($(RTCONFIG_PERMISSION_MANAGEMENT),y)
+CFLAGS += -I$(TOP)/sqlCipher
+CFLAGS += -I$(TOP)/PMS_DBapis
+LDFLAGS += -L $(TOP)/sqlCipher/.libs -lsqlcipher
+LDFLAGS += -L$(TOP)/PMS_DBapis -lpms_sql
+endif
+
 LDFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections
 ifeq ($(STATIC),1)
 LDFLAGS += -static
@@ -211,7 +221,7 @@ CFLAGS += -DRTCONFIG_TRACEROUTE
 endif
 
 ifeq ($(HND_ROUTER),y)
-CFLAGS += -DNON_P_THREAD
+CFLAGS += -DNON_P_THREAD -DWATCHDOG_PERIOD2
 endif
 
 ifeq ($(RTCONFIG_CFGSYNC),y)
@@ -221,7 +231,7 @@ endif
 
 OBJS := rc.o init.o interface.o lan.o wireless.o wan.o pppd.o auth.o services.o
 OBJS += firewall.o ppp.o services.o common.o
-OBJS += watchdog.o ntp.o btnsetup.o qos.o udhcpc.o ate.o
+OBJS += watchdog.o ntp.o btnsetup.o $(if $(RTCONFIG_MULTIWAN_CFG),qos_multiwan.o,qos.o) udhcpc.o ate.o
 OBJS += format.o
 
 ifeq ($(RTCONFIG_NETOOL),y)
@@ -251,7 +261,7 @@ OBJS += init-ralink-dsl.o
 endif
 else ifeq ($(RTCONFIG_QCA),y)
 OBJS += init-qca.o wps-qca.o qca.o ate-qca.o $(if $(wildcard sysdeps/qca/ctl.c),ctl.obj,prebuild/ctl.obj)
-ifeq ($(or $(MAPAC1300),$(MAPAC2200)),y)
+ifeq ($(or $(MAPAC1300),$(MAPAC2200),$(VRZAC1300)),y)
 OBJS += repacd.o
 endif
 else ifeq ($(RTCONFIG_ALPINE),y)
@@ -262,6 +272,9 @@ else
 OBJS += init-broadcom.o wps-broadcom.o broadcom.o ate-broadcom.o
 ifeq ($(BUILD_NAME), RT-AC68U)
 OBJS += cfe.o
+endif
+ifeq ($(RTCONFIG_ADTBW),y)
+OBJS += adtbw-broadcom.o
 endif
 ifeq ($(RTCONFIG_DSL),y)
 OBJS += init-broadcom-dsl.o
@@ -364,6 +377,7 @@ ifeq ($(RTCONFIG_BCMWL6),y)
 ifeq ($(RTCONFIG_PROXYSTA),y)
 OBJS += psta_monitor.o
 endif
+OBJS += obd.o
 endif
 
 ifeq ($(RTCONFIG_WPS),y)
@@ -411,6 +425,12 @@ endif
 
 ifeq ($(RTCONFIG_TIMEMACHINE),y)
 OBJS += timemachine.o
+endif
+
+ifeq ($(RTCONFIG_LETSENCRYPT),y)
+CFLAGS += -DRTCONFIG_CROND
+CFLAGS += -I$(TOP)/libletsencrypt
+LDFLAGS += -L$(TOP)/libletsencrypt -lletsencrypt
 endif
 
 ifeq ($(BUILD_NAME), GT-AC5300)
@@ -490,6 +510,10 @@ ifeq ($(and $(CONFIG_BCMWL5),$(RTCONFIG_DUALWAN)),y)
 ifneq ($(HND_ROUTER),y)
 OBJS += dualwan.o
 endif
+endif
+
+ifeq ($(RTCONFIG_ADTBW),y)
+OBJS += adtbw.o
 endif
 
 ifeq ($(RTCONFIG_DHCP_OVERRIDE),y)
@@ -574,8 +598,8 @@ ifeq ($(HND_ROUTER),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc hnd-erase
 	@cd $(INSTALLDIR)/sbin && ln -sf rc mtd_erase_image_update
 else
-ifeq ($(RTCONFIG_BCMARM),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc nvram_erase
+ifeq ($(RTCONFIG_BCMARM),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc gpio
 	@cd $(INSTALLDIR)/sbin && ln -sf rc mtd-write2
 	@cd $(INSTALLDIR)/sbin && ln -sf rc mtd-erase2
@@ -590,6 +614,9 @@ endif
 	@cd $(INSTALLDIR)/sbin && ln -sf rc wave_monitor
 ifeq ($(RTCONFIG_LANTIQ),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc restart_bluetoothd
+	@cd $(INSTALLDIR)/sbin && ln -sf rc set_usb3_to_usb2
+	@cd $(INSTALLDIR)/sbin && ln -sf rc set_usb2_to_usb3
+	@cd $(INSTALLDIR)/sbin && ln -sf rc update_client
 endif
 ifneq ($(RTCONFIG_QCA)$(RTCONFIG_RALINK)$(RTCONFIG_ALPINE)$(RTCONFIG_LANTIQ),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc watchdog02
@@ -607,6 +634,7 @@ ifeq ($(RTCONFIG_BCMWL6),y)
 ifeq ($(RTCONFIG_PROXYSTA),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc psta_monitor
 endif
+	@cd $(INSTALLDIR)/sbin && ln -sf rc obd
 endif
 ifeq ($(RTCONFIG_QTN),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc qtn_monitor
@@ -642,7 +670,7 @@ endif
 ifeq ($(MAPAC2200),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc dpdt_ant
 endif
-ifeq ($(MAPAC1300),y)
+ifeq ($(or $(MAPAC1300),$(VRZAC1300)),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc thermal_txpwr
 endif
 
@@ -710,7 +738,7 @@ endif
 endif
 	@cd $(INSTALLDIR)/sbin && ln -sf rc restart_wireless
 
-ifeq ($(or $(MAPAC1300),$(MAPAC2200)),y)
+ifeq ($(or $(MAPAC1300),$(MAPAC2200),$(VRZAC1300)),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc hive_cap 
 	@cd $(INSTALLDIR)/sbin && ln -sf rc hive_re
 	@cd $(INSTALLDIR)/sbin && ln -sf rc wifimon_check
@@ -810,6 +838,7 @@ endif
 ifeq ($(RTCONFIG_USB_MODEM),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc write_3g_ppp_conf
 ifeq ($(or $(RTCONFIG_JFFS2),$(RTCONFIG_BRCM_NAND_JFFS2),$(RTCONFIG_UBIFS)),y)
+	@cd $(INSTALLDIR)/sbin && ln -sf rc modem_data
 	@cd $(INSTALLDIR)/sbin && ln -sf rc lplus
 	@cd $(INSTALLDIR)/sbin && ln -sf rc lminus
 endif
@@ -852,8 +881,16 @@ ifneq ($(RTCONFIG_RALINK)$(RTCONFIG_QCA)$(RTCONFIG_REALTEK),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc erp_monitor
 endif
 
+ifeq ($(RTCONFIG_LETSENCRYPT),y)
+	@cd $(INSTALLDIR)/sbin && ln -sf rc le_acme
+endif
+
 ifeq ($(RTCONFIG_WLCSCAN_RSSI),y)
 	@cd $(INSTALLDIR)/sbin && ln -sf rc wlcscan_ssid_rssi
+endif
+
+ifeq ($(RTCONFIG_ADTBW),y)
+	@cd $(INSTALLDIR)/sbin && ln -sf rc adtbw
 endif
 
 clean:
@@ -945,6 +982,13 @@ cfe.o:
 	@-cp -f ./prebuild/cfe.o .
 endif
 endif
+ifeq ($(RTCONFIG_ADTBW),y)
+ifneq ($(wildcard ./prebuild/adtbw-broadcom.o),)
+adtbw-broadcom.o:
+	@-cp -f ./prebuild/adtbw-broadcom.o .
+endif
+
+endif
 endif
 
 ifeq ($(RTCONFIG_RALINK),y)
@@ -1031,6 +1075,11 @@ ifneq ($(wildcard ./prebuild/lantiq-wave.o),)
 lantiq-wave.o:
 	@-cp -f ./prebuild/lantiq-wave.o .
 endif
+endif
+
+ifneq ($(wildcard ./prebuild/obd.o),)
+obd.o:
+	@-cp -f ./prebuild/obd.o .
 endif
 
 %.o: %.c

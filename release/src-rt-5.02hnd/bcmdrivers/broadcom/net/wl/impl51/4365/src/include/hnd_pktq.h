@@ -1,7 +1,7 @@
 /*
  * HND generic pktq operation primitives
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -137,6 +137,59 @@ struct swpktq {
 
 /* fn(pkt, arg).  return true if pkt belongs to if */
 typedef bool (*ifpkt_cb_t)(void*, int);
+
+/** filter function return values */
+typedef enum {
+	PKT_FILTER_NOACTION = 0,    /**< restore the pkt to its position in the queue */
+	PKT_FILTER_DELETE = 1,      /**< delete the pkt */
+	PKT_FILTER_REMOVE = 2,      /**< do not restore the pkt to the queue,
+	                             *   filter fn has taken ownership of the pkt
+	                             */
+} pktq_filter_result_t;
+
+/**
+ * Caller supplied filter function to pktq_pfilter(), pktq_filter().
+ * Function filter(ctx, pkt) is called with its ctx pointer on each pkt in the
+ * pktq.  When the filter function is called, the supplied pkt will have been
+ * unlinked from the pktq.  The filter function returns a pktq_filter_result_t
+ * result specifying the action pktq_filter()/pktq_pfilter() should take for
+ * the pkt.
+ * Here are the actions taken by pktq_filter/pfilter() based on the supplied
+ * filter function's return value:
+ *
+ * PKT_FILTER_NOACTION - The filter will re-link the pkt at its
+ *     previous location.
+ * PKT_FILTER_DELETE - The filter will not relink the pkt and will
+ *     call the user supplied defer_free_pkt fn on the packet.
+ * PKT_FILTER_REMOVE - The filter will not relink the pkt. The supplied
+ *     filter fn took ownership (or deleted) the pkt.
+ *
+ * WARNING: pkts inserted by the user (in pkt_filter and/or flush callbacks
+ * and chains) in the prec queue will not be seen by the filter, and the prec
+ * queue will be temporarily be removed from the queue hence there're side
+ * effects including pktq_n_pkts_tot() on the queue won't reflect the correct
+ * number of packets in the queue.
+ */
+typedef pktq_filter_result_t (*pktq_filter_t)(void* ctx, void* pkt);
+
+/**
+ * The defer_free_pkt callback is invoked when the the pktq_filter callback
+ * returns PKT_FILTER_DELETE decision, which allows the user to deposite
+ * the packet appropriately based on the situation (free the packet or
+ * save it in a temporary queue etc.).
+ */
+typedef void (*defer_free_pkt_fn_t)(void *ctx, void *pkt);
+
+/**
+ * The flush_free_pkt callback is invoked when all packets in the pktq
+ * are processed.
+ */
+typedef void (*flush_free_pkt_fn_t)(void *ctx);
+
+/** filter a particular precedence in pktq, using the caller supplied filter function */
+extern void  pktq_pfilter(struct pktq *pq, int prec, pktq_filter_t fn,
+	void* arg, defer_free_pkt_fn_t defer, void *defer_ctx,
+	flush_free_pkt_fn_t flush, void *flush_ctx);
 
 /* operations on a specific precedence in packet queue */
 

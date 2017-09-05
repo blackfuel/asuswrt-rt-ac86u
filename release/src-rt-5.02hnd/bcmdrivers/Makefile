@@ -223,6 +223,7 @@ ifneq ($(CONFIG_BCM_WLAN_IMPL),53)
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/src/router/hnd,,))
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/src/router/hnd_emf,,))
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/src/router/hnd_igs,,))
+$(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/src/router/hnd_dpsta,,))
 ifeq ($(strip $(BUILD_HND_NIC)),)
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/src/router/hnd_dhd,,))
 endif
@@ -234,6 +235,7 @@ $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/compo
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/components/router/hnd,,))
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/components/router/hnd_emf,,))
 $(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/components/router/hnd_igs,,))
+$(eval $(call LN_RULE, $(CONFIG_BCM_WLAN), broadcom/net/wl/$(LN_NAME)/main/components/router/hnd_dpsta,,))
 endif
 endif
 

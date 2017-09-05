@@ -1,7 +1,7 @@
 # Helper makefile for building Broadcom wl device driver
 # This file maps wl driver feature flags (import) to WLFLAGS and WLFILES_SRC (export).
 #
-# Copyright (C) 2016, Broadcom. All Rights Reserved.
+# Copyright (C) 2017, Broadcom. All Rights Reserved.
 # 
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
 # OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-# $Id: wl.mk 665858 2016-10-19 08:10:58Z $
+# $Id: wl.mk 665813 2016-10-19 04:32:44Z $
 
 
 WLFLAGS += -DWL_EXPORT_CURPOWER
@@ -116,6 +116,10 @@ ifeq ($(PSPRETEND),1)
 	WLFLAGS += -DPSPRETEND
 	WLFLAGS += -DWL_CS_PKTRETRY
 	WLFLAGS += -DWL_CS_RESTRICT_RELEASE
+endif
+
+ifeq ($(CLIENT_CSA),1)
+	WLFLAGS += -DCLIENT_CSA
 endif
 
 #ifdef BCMDBG_TRAP
@@ -909,18 +913,6 @@ ifeq ($(WLNDIS),1)
 			WLFLAGS += -DBINARY_COMPATIBLE -DWIN32_LEAN_AND_MEAN=1
 		endif
 
-#ifdef WLBTAMP
-		ifeq ($(WLBTAMP),1)
-			WLFLAGS += -DWLBTAMP
-			WLFILES_SRC += src/dhd/sys/dhd_bta.c
-#ifdef WLBTWUSB
-			ifeq ($(WLBTWUSB),1)
-				WLFLAGS += -DWLBTWUSB
-				WLFILES_SRC += src/wl/ndis/src/bt_int.c
-			endif
-#endif /* WLBTWUSB */
-		endif
-#endif /* WLBTAMP */
 	endif
 endif
 #endif
@@ -1440,16 +1432,23 @@ ifeq ($(WLFBT),1)
 	WLFLAGS += -DWLFBT
 	WLFLAGS += -DBCMINTSUP
 	WLFLAGS += -DWLCAC
-	WLFILES_SRC_HI += src/wl/sys/wlc_sup.c
 	WLFILES_SRC_HI += src/wl/sys/wlc_wpapsk.c
 	WLFILES_SRC_HI += src/wl/sys/wlc_fbt.c
 	WLFILES_SRC_HI += src/bcmcrypto/aes.c
 	WLFILES_SRC_HI += src/bcmcrypto/aeskeywrap.c
 	WLFILES_SRC_HI += src/bcmcrypto/prf.c
 	WLFILES_SRC_HI += src/bcmcrypto/sha1.c
+	WLFILES_SRC_HI += src/bcmcrypto/hmac.c
 	WLFILES_SRC_HI += src/bcmcrypto/hmac_sha256.c
 	WLFILES_SRC_HI += src/bcmcrypto/sha256.c
+	WLFILES_SRC_HI += src/bcmcrypto/passhash.c
 	WLFILES_SRC_HI += src/wl/sys/wlc_cac.c
+	ifeq ($(STA),1)
+		# external supplicant: need some crypto files for fbt
+		ifneq ($(BCMSUP_PSK),1)
+			WLFILES_SRC_HI += src/wl/sys/wlc_sup.c
+		endif
+	endif
     # NetBSD 2.0 has MD5 and AES built in
 	ifneq ($(OSLBSD),1)
 		WLFILES_SRC_HI += src/bcmcrypto/md5.c
@@ -1954,24 +1953,6 @@ ifeq ($(D0_COALESCING),1)
 	WLFILES_SRC_HI += src/wl/sys/wl_d0_filter.c
 	WLMCHAN := 1
 endif
-
-ifneq ($(WLNDIS_DHD),1)
-#ifdef WLBTAMP
-	ifeq ($(AP)$(STA),11)
-	ifeq ($(WLBTAMP),1)
-		WLFLAGS += -DWLBTAMP
-		WLFILES_SRC_HI += src/wl/sys/wlc_bta.c
-#ifdef WLBTWUSB
-		ifeq ($(WLBTWUSB),1)
-			WLFLAGS += -DWLBTWUSB
-			WLFILES_SRC_HI += src/wl/ndis/src/bt_int.c
-		endif
-#endif /* WLBTWUSB */
-	endif
-	endif
-#endif /* WLBTAMP */
-endif
-
 
 
 
@@ -2945,4 +2926,13 @@ endif
 
 ifeq ($(SLAVE_RADAR),1)
 	WLFLAGS += -DSLAVE_RADAR
+endif
+
+ifeq ($(DISABLE_AMSDUTX_FOR_VI),1)
+	WLFLAGS += -DDISABLE_AMSDUTX_FOR_VI
+endif
+
+# Instead of disabling frameburst completly in dynamic frame burst logic, we enable RTS/CTS in frameburst.
+ifeq ($(FRAMEBURST_RTSCTS_PER_AMPDU),1)
+	WLFLAGS += -DFRAMEBURST_RTSCTS_PER_AMPDU
 endif

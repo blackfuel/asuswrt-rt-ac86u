@@ -174,6 +174,8 @@ void BCMFASTPATH
 wl_start_txchain_txqwork(struct wl_task *task)
 {
 	pktc_info_t *pktci = (pktc_info_t *)task->context;
+	wl_if_t *wlif = (wl_if_t *)pktci->wlif;
+	wl_info_t *wl = wlif->wl;
 	struct sk_buff *chead_tmp, *skb;
 	int chainIdx, cnt, fifo;
 	uint32 tmpChainIdxBitmap = 0;
@@ -188,7 +190,7 @@ wl_start_txchain_txqwork(struct wl_task *task)
 			chead_tmp = skb = pPktc[fifo].chain[chainIdx].chead;
 			while (skb != NULL) {
 				cnt++;
-				if (cnt >= pktci->txsbnd) {
+				if (cnt >= wl->pub->tunables->txsbnd) {
 					/* point to the next skb */
 					pPktc[fifo].chain[chainIdx].chead = PKTCLINK(skb);
 					if (pPktc[fifo].chain[chainIdx].chead == NULL)
@@ -198,8 +200,7 @@ wl_start_txchain_txqwork(struct wl_task *task)
 				}
 				skb = PKTCLINK(skb);
 			}
-
-			if ((cnt >= 0) && (cnt < pktci->txsbnd)) {
+			if ((cnt >= 0) && (cnt < wl->pub->tunables->txsbnd)) {
 				/* less than threshold */
 				pPktc[fifo].chain[chainIdx].chead =
 				pPktc[fifo].chain[chainIdx].ctail = NULL;
@@ -234,7 +235,7 @@ wl_start_txchain_txqwork(struct wl_task *task)
 }
 
 /* this is for transmit path */
-static uint32 chainidx_bitmap[MAXBANDS]={0}; /* per phy interface */
+static uint32 chainidx_bitmap[WLAN_DEVICE_MAX]={0}; /* per phy interface */
 
 inline
 void wl_txchainhandler(struct sk_buff *skb, unsigned long pktc_tbl_ptr,
@@ -445,7 +446,6 @@ wl_pktc_tbl_t *wl_pktc_attach(struct wl_info *wl, struct wl_if *wlif)
 	wl_pktc_del_hook = wl_pktc_del;
 
 	pktc_tbl = (wl_pktc_tbl_t *)wl_pktc_req(PKTC_TBL_GET_START_ADDRESS, 0, 0, 0);
-	wlif->pktci->txsbnd = wl->pub->tunables->txsbnd;
 
 #ifdef DSLCPE
 	osl_set_wlunit(wl->osh, wl->unit);

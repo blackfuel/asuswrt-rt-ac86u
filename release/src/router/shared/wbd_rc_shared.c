@@ -2,7 +2,7 @@
  * Broadcom Home Gateway Reference Design
  * Broadcom Wi-Fi Blanket shared functions
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: wbd_rc_shared.c 638919 2016-05-19 10:42:37Z $
+ * $Id: wbd_rc_shared.c 670128 2016-11-14 12:15:13Z $
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +24,6 @@
 #include <signal.h>
 #include <ctype.h>
 #include <sys/ioctl.h>
-#include <linux/ethtool.h>
 #include <linux/sockios.h>
 #include <net/if.h>
 
@@ -33,6 +32,7 @@
 #include <bcmnvram.h>
 #include <bcmutils.h>
 #include <bcmendian.h>
+#include <bcmparams.h>
 #include <proto/ethernet.h>
 #include <wlioctl.h>
 #include <wlutils.h>
@@ -57,6 +57,8 @@
 #define NVRAM_HWADDR			"hwaddr"
 #define NVRAM_IFNAME			"ifname"
 #define NVRAM_VIFS			"vifs"
+#define WBD_NVRAM_FIXED_IFNAMES		"wbd_fixed_ifnames"
+#define WBD_NVRAM_NO_DEDICATED_BACKHAUL	"wbd_no_dedicated_backhaul"
 
 /* WBD Errors */
 #define WBDE_OK			0
@@ -67,14 +69,6 @@
 #define WBDE_WBD_IFNAMES_NEXST	-33	/* wbd_ifnames NVRAM not defined */
 #define WBDE_INV_IFNAME		-81	/* Invalid interface name */
 
-/* Wi-Fi Blanket Band Types */
-#define	WBD_BAND_AUTO			WLC_BAND_AUTO	/* 0 - auto-select */
-#define	WBD_BAND_5G			WLC_BAND_5G	/* 1 - 5 Ghz */
-#define	WBD_BAND_2G			WLC_BAND_2G	/* 2 - 2.4 Ghz */
-#define	WBD_BAND_ALL			WLC_BAND_ALL	/* 3 - all bands */
-#define WBD_BAND_VALID(band) ((((band) < WBD_BAND_5G) || ((band) > WBD_BAND_2G)) ? (0) : (1))
-#define WBD_BAND_DIGIT(band) (((band) == WBD_BAND_5G) ? (5) : (2))
-
 #ifndef WBDSTRNCPY
 #define WBDSTRNCPY(dst, src, len)	 \
 	do { \
@@ -82,6 +76,13 @@
 		dst[len - 1] = '\0'; \
 	} while (0)
 #endif
+
+#ifdef WBD_RC_PRINT_ENB
+#define WBD_RC_PRINT(fmt, arg...) \
+	printf("WBD-RC-SHARED >> %s(%d) : "fmt, __FUNCTION__, __LINE__, ##arg)
+#else
+#define WBD_RC_PRINT(fmt, arg...)
+#endif /* WBD_RC_PRINT_ENB */
 
 /* Extern Declarations */
 extern char* strncpy_n(char *destination, const char *source, size_t num);
@@ -124,6 +125,28 @@ wbd_nvram_prefix_safe_get(const char *prefix, const char *nvram)
 	} else {
 		return nvram_safe_get(nvram);
 	}
+}
+
+/* Gets the config val from NVARM, if not found applies the default value */
+static uint16
+wbd_nvram_safe_get_int(char* prefix, const char *c, uint16 def)
+{
+	char *val = NULL;
+	uint16 ret = def;
+
+	if (prefix) {
+		val = wbd_nvram_prefix_safe_get(prefix, c);
+	} else {
+		val = wbd_nvram_safe_get(c);
+	}
+
+	if (val && (val[0] != '\0')) {
+		ret = strtoul(val, NULL, 0);
+	} else {
+		WBD_RC_PRINT("NVRAM[%s%s] is not defined\n", (prefix ? prefix : ""), c);
+	}
+
+	return ret;
 }
 
 /* WBD version to set the NVRAM value for specific BSS prefix */
@@ -273,7 +296,7 @@ wbd_check_dwds_sta_primif(char *ifname, char *ifname1, int len1)
 		ret = WBDE_OK;
 	} else {
 		/* Set Primary Interface ifname as actual name */
-		snprintf(ifname1, len1, "%s", ifname);
+		WBDSTRNCPY(ifname1, ifname, len1);
 	}
 
 end:
@@ -312,45 +335,14 @@ static int
 add_ifr_to_wbd_ifnames(char *wbd_ifnames, int len, char *wbd_ifnames1, int len1,
 	char *ifname, char *ifname1)
 {
-	static int flag_5g = 0, flag_2g = 0;
-	int ret = WBDE_OK, in_band = WBD_BAND_5G, add_ifr = 0;
-	char wbd_ifnames_tmp[NVRAM_MAX_VALUE_LEN];
+	int ret = WBDE_OK;
 
-	/* if 1 5G and 1 2G interface in "wbd_ifnames" are added already */
-	if (flag_5g && flag_2g) {
-		ret = WBDE_WBD_IFNAMES_FULL; /* get out, indicate to exit loop */
-		goto end;
-	}
+	/* Add ifname to wbd_ifnames */
+	add_to_list(ifname, wbd_ifnames, len);
 
-	/* Get Band from interface name */
-	ret = wl_ioctl(ifname, WLC_GET_BAND, &in_band, sizeof(in_band));
+	/* Add ifname1 to wbd_ifnames1 */
+	add_to_list(ifname1, wbd_ifnames1, len1);
 
-	/* If 5G interface not yet added, and current ifr is of 5G band, add it */
-	if ((!flag_5g) && (in_band == WBD_BAND_5G)) {
-		add_ifr = flag_5g = 1;
-	/* If 2G interface not yet added, and current ifr is of 2G band, add it */
-	} else if ((!flag_2g) && (in_band == WBD_BAND_2G)) {
-		add_ifr = flag_2g = 1;
-	}
-
-	/* Add this interface to "wbd_ifnames" */
-	if (add_ifr) {
-		if (strlen(wbd_ifnames) > 0) {
-			snprintf(wbd_ifnames_tmp, len, "%s %s", wbd_ifnames, ifname);
-			strlcpy(wbd_ifnames, wbd_ifnames_tmp, sizeof(wbd_ifnames_tmp));
-		} else {
-			snprintf(wbd_ifnames, len, "%s", ifname);
-		}
-
-		if (strlen(wbd_ifnames1) > 0) {
-			snprintf(wbd_ifnames_tmp, len1, "%s %s", wbd_ifnames1, ifname1);
-			strlcpy(wbd_ifnames1, wbd_ifnames_tmp, sizeof(wbd_ifnames_tmp));
-		} else {
-			snprintf(wbd_ifnames1, len1, "%s", ifname1);
-		}
-	}
-
-end:
 	return ret;
 }
 
@@ -360,13 +352,23 @@ end:
 int
 wbd_ifnames_fm_lan_ifnames(char *wbd_ifnames, int len, char *wbd_ifnames1, int len1)
 {
-	int ret = WBDE_OK;
+	int ret = WBDE_OK, no_dedicated_link = 0;
 	char lan_ifnames[NVRAM_MAX_VALUE_LEN] = {0};
 	char dwds_if[IFNAMSIZ] = {0}, name[IFNAMSIZ] = {0}, name1[IFNAMSIZ] = {0};
 	char *next_intf, var_intf[IFNAMSIZ] = {0};
 
 	memset(wbd_ifnames, 0, len);
 	memset(wbd_ifnames1, 0, len1);
+
+	/* Get the NVRAM which tells whether to have dedicated backhaul link or not */
+	no_dedicated_link = wbd_nvram_safe_get_int(NULL, WBD_NVRAM_NO_DEDICATED_BACKHAUL, 0);
+
+	/* If the number of interfaces is not more than two(not triband), disable dedicated
+	 * backhaul
+	 */
+	if (wbd_count_interfaces() <= 2) {
+		no_dedicated_link = 1;
+	}
 
 	/* Get NVRAM value from "lan_ifnames" and save it */
 	WBDSTRNCPY(lan_ifnames, wbd_nvram_safe_get(NVRAM_LAN_IFNAMES), sizeof(lan_ifnames) - 1);
@@ -377,8 +379,14 @@ wbd_ifnames_fm_lan_ifnames(char *wbd_ifnames, int len, char *wbd_ifnames1, int l
 		/* Remember this DWDS interface to skip for next run */
 		WBDSTRNCPY(dwds_if, name, sizeof(dwds_if) - 1);
 
-		/* Add this interface to "wbd_ifnames" */
-		add_ifr_to_wbd_ifnames(wbd_ifnames, len, wbd_ifnames1, len1, name, name1);
+		/* If dedicated link is not required, then don't add STA ifr */
+		if (no_dedicated_link) {
+			/* Add this interface to "wbd_ifnames" */
+			add_ifr_to_wbd_ifnames(wbd_ifnames, len, wbd_ifnames1, len1, name, name1);
+		} else {
+			WBD_RC_PRINT("name[%s] no_dedicated_link[%d]. So, don't add STA ifr\n",
+				name, no_dedicated_link);
+		}
 	}
 
 	/* Traverse lan_ifnames for non-DWDS Primary ifnames */
@@ -399,12 +407,6 @@ wbd_ifnames_fm_lan_ifnames(char *wbd_ifnames, int len, char *wbd_ifnames1, int l
 
 		/* Try to add this interface to "wbd_ifnames" */
 		ret = add_ifr_to_wbd_ifnames(wbd_ifnames, len, wbd_ifnames1, len1, name, name);
-
-		/* if 1 5G and 1 2G interface in "wbd_ifnames" are added already */
-		if (ret == WBDE_WBD_IFNAMES_FULL) {
-			ret = WBDE_OK;
-			break; /* exit loop */
-		}
 	}
 
 	return ret;
@@ -542,11 +544,10 @@ end:
 int
 wbd_read_actual_ifnames(char *wbd_ifnames1, int len1, bool create)
 {
-	int ret = WBDE_OK, nvram_exists = 0, dwds_sta_pif = 0;
+	int ret = WBDE_OK, nvram_exists = 0, dwds_sta_pif = 0, is_fixed_ifnames = 0;
 	char wbd_ifnames[NVRAM_MAX_VALUE_LEN] = {0};
-	char wbd_ifnames_tmp[NVRAM_MAX_VALUE_LEN] = {0};
 	char wbd_if_new[NVRAM_MAX_VALUE_LEN] = {0}, temp[NVRAM_MAX_VALUE_LEN] = {0};
-	char name[IFNAMSIZ] = {0}, var_intf[IFNAMSIZ] = {0};
+	char name[IFNAMSIZ] = {0}, var_intf[IFNAMSIZ] = {0}, outname[IFNAMSIZ];
 	char *next_intf, *val;
 
 	memset(wbd_ifnames1, 0, len1);
@@ -563,8 +564,13 @@ wbd_read_actual_ifnames(char *wbd_ifnames1, int len1, bool create)
 	{
 		/* wbd app will create it, so just get out */
 		ret = WBDE_WBD_IFNAMES_NEXST;
+		WBD_RC_PRINT("create[%d] nvram_exists[%d]. NVRAM not exists\n",
+			create, nvram_exists);
 		goto end;
 	}
+
+	/* Get NVRAM value which tells whether to recreate the NVRAM or not */
+	is_fixed_ifnames = wbd_nvram_safe_get_int(NULL, WBD_NVRAM_FIXED_IFNAMES, 0);
 
 	/* if wbd app is calling this */
 	if (create) {
@@ -573,20 +579,31 @@ wbd_read_actual_ifnames(char *wbd_ifnames1, int len1, bool create)
 		dwds_sta_pif = (ret == WBDE_DWDS_STA_PIF_NEXST) ? 0 : 1;
 		ret = WBDE_OK;
 
-		/* if NVRAM not exist OR, NVRAM exists but any DWDS STA Primary Ifr found */
-		if ((!nvram_exists) || (nvram_exists && dwds_sta_pif)) {
+		/* if NVRAM not exist OR, NVRAM exists but any DWDS STA Primary Ifr found
+		 * && if wbd_ifnames are not fixed
+		 */
+		if ((!nvram_exists) || (nvram_exists && dwds_sta_pif && (!is_fixed_ifnames))) {
 			/* prepare "wbd_ifnames"  fm "lan_ifnames" */
 			wbd_ifnames_fm_lan_ifnames(wbd_if_new, sizeof(wbd_if_new),
 				temp, sizeof(temp));
+			WBD_RC_PRINT("nvram_exists[%d] dwds_sta_pif[%d] is_fixed_ifnames[%d] "
+				"wbd_if_new[%s] temp[%s]\n",
+				nvram_exists, dwds_sta_pif, is_fixed_ifnames, wbd_if_new, temp);
 		}
 
-		/* if NVRAM not exist OR, NVRAM exists && any DWDS STA Primary Ifr found && */
-		/* Old NVRAM value and newly prepared wbd_ifnames don't match */
-		if ((!nvram_exists) || (nvram_exists && dwds_sta_pif &&
+		/* if NVRAM not exist OR, NVRAM exists && any DWDS STA Primary Ifr found
+		 * && if wbd_ifnames are not fixed && Old NVRAM value and newly prepared
+		 * wbd_ifnames don't match
+		 */
+		if ((!nvram_exists) || (nvram_exists && dwds_sta_pif && (!is_fixed_ifnames) &&
 			(strcmp(wbd_if_new, wbd_ifnames) != 0))) {
 			/* Set NVRAM value for "wbd_ifnames", commit NVRAM, rc restart */
 			nvram_set(WBD_NVRAM_IFNAMES, wbd_if_new);
 			nvram_commit();
+			WBD_RC_PRINT("nvram_exists[%d] dwds_sta_pif[%d] is_fixed_ifnames[%d] "
+				"wbd_ifnames[%s] wbd_if_new[%s]. Going to restart...\n",
+				nvram_exists, dwds_sta_pif, is_fixed_ifnames, wbd_ifnames,
+				wbd_if_new);
 			kill(1, SIGHUP);
 		}
 	}
@@ -594,25 +611,52 @@ wbd_read_actual_ifnames(char *wbd_ifnames1, int len1, bool create)
 	/* Traverse wbd_ifnames for each ifname */
 	foreach(var_intf, wbd_ifnames, next_intf) {
 
+		memset(outname, 0, sizeof(outname));
 		/* Copy interface name temporarily */
 		WBDSTRNCPY(name, var_intf, sizeof(name) - 1);
 
 		/* Check if Interface is DWDS Primary Interface, with mode = STA, Change name */
-		wbd_check_dwds_sta_primif(name, name, sizeof(name));
+		wbd_check_dwds_sta_primif(name, outname, sizeof(outname));
 
 		/* Check if Interface is DWDS Virtual Interface, if Disabled, Enable it */
 		if (create) {
-			wbd_enable_dwds_ap_vif(name);
+			wbd_enable_dwds_ap_vif(outname);
 		}
 
 		/* Add this interface to "wbd_ifnames1" */
-		if (strlen(wbd_ifnames1) > 0) {
-			snprintf(wbd_ifnames_tmp, len1, "%s %s", wbd_ifnames1, name);
-			strlcpy(wbd_ifnames1, wbd_ifnames_tmp, sizeof(wbd_ifnames_tmp));
-		} else {
-			snprintf(wbd_ifnames1, len1, "%s", name);
-		}
+		add_to_list(outname, wbd_ifnames1, len1);
+		WBD_RC_PRINT("wbd_ifnames1[%s] name[%s] outname[%s]\n", wbd_ifnames1,
+			name, outname);
 	}
+	WBD_RC_PRINT("nvram_exists[%d] dwds_sta_pif[%d] is_fixed_ifnames[%d] wbd_ifnames[%s] "
+		"wbd_ifnames1[%s]\n", nvram_exists, dwds_sta_pif, is_fixed_ifnames,
+		wbd_ifnames, wbd_ifnames1);
 end:
 	return ret;
+}
+
+/* Find Number of valid interfaces */
+int
+wbd_count_interfaces(void)
+{
+	char nvram_name[32], ifname[32];
+	int index, total = 0, unit = -1;
+
+	/* Find out the wl interface index for the specified interface. */
+	for (index = 0; index < DEV_NUMIFS; ++index) {
+
+		snprintf(nvram_name, sizeof(nvram_name), "wl%d_ifname", index);
+		WBDSTRNCPY(ifname, nvram_safe_get(nvram_name), sizeof(ifname));
+
+		WBD_RC_PRINT("nvram_name=%s, ifname=%s\n", nvram_name, ifname);
+
+		if (!wl_probe(ifname)) {
+			if (!wl_ioctl(ifname, WLC_GET_INSTANCE, &unit, sizeof(unit))) {
+				total ++;
+				WBD_RC_PRINT("unit=%d, total=%d\n", unit, total);
+			}
+		}
+	}
+
+	return total;
 }

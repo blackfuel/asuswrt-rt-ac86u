@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: linux_osl.h 638124 2016-05-16 23:23:27Z $
+ * $Id: linux_osl.h 661372 2016-09-25 01:55:55Z $
  */
 
 #ifndef _linux_osl_h_
@@ -522,9 +522,11 @@ extern void osl_writel(osl_t *osh, volatile uint32 *r, uint32 v);
 #ifdef BCMDBG_CTRACE
 #define	PKTGET(osh, len, send)		osl_pktget((osh), (len), __LINE__, __FILE__)
 #define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb), __LINE__, __FILE__)
+#define	PKTDUP_CPY(osh, skb)		osl_pktdup_cpy((osh), (skb), __LINE__, __FILE__)
 #else
 #define	PKTGET(osh, len, send)		osl_pktget((osh), (len))
 #define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb))
+#define	PKTDUP_CPY(osh, skb)		osl_pktdup_cpy((osh), (skb))
 #endif /* BCMDBG_CTRACE */
 #define PKTLIST_DUMP(osh, buf)		BCM_REFERENCE(osh)
 #define PKTDBG_TRACE(osh, pkt, bit)	BCM_REFERENCE(osh)
@@ -941,16 +943,27 @@ extern void osl_pkt_frmfwder(osl_t *osh, void *skbs, int skb_cnt);
  */
 
 /** Forwarded packets, have a GMAC_FWDER_HWRXOFF sized rx header (etc.h) */
+#if defined(BCM_DHDHDR)
+#define FWDER_HWRXOFF       (8)
+#define FWDER_HDRINS        (8) /* DHD composes SubFrame Header w/ 8B LLCSNAP */
+#else  /* ! BCM_DHDHDR */
 #define FWDER_HWRXOFF       (18)
+#define FWDER_HDRINS        (0) /* DHD does not compose SubFrame Header */
+#endif /* ! BCM_DHDHDR */
 
 /** Maximum amount of a pkt data that a downstream forwarder (GMAC) may have
  * read into the L1 cache (not dirty). This may be used in reduced cache ops.
  *
+ * BCM_DHDHDR enabled: FWDER_HDRINS[8 llcsnap]
+ * Max 42: ET HWRXOFF[8] + BRCMHdr[4] + EtherHdr[14] + LLCSNAP[8] + VlanHdr[4] + IP[4]
+ * Min 30: ET HWRXOFF[8] + EtherHdr[14] + LLCSNAP[8]
+ *
+ * BCM_DHDHDR disabled:
  * Max 44: ET HWRXOFF[18] + BRCMHdr[4] + EtherHdr[14] + VlanHdr[4] + IP[4]
- * Min 32: GMAC_FWDER_HWRXOFF[18] + EtherHdr[14]
+ * Min 32: ET HWRXOFF[18] + EtherHdr[14]
  */
-#define FWDER_MINMAPSZ      (FWDER_HWRXOFF + 14)
-#define FWDER_MAXMAPSZ      (FWDER_HWRXOFF + 4 + 14 + 4 + 4)
+#define FWDER_MINMAPSZ      (FWDER_HWRXOFF + 14 + FWDER_HDRINS)
+#define FWDER_MAXMAPSZ      (FWDER_HWRXOFF + 4 + 14 + FWDER_HDRINS + 4 + 4)
 #define FWDER_PKTMAPSZ      (FWDER_MINMAPSZ)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
@@ -1095,12 +1108,14 @@ extern void *osl_pktget(osl_t *osh, uint len, int line, char *file);
 extern void *osl_pkt_frmnative(osl_t *osh, void *skb, int line, char *file);
 extern int osl_pkt_is_frmnative(osl_t *osh, struct sk_buff *pkt);
 extern void *osl_pktdup(osl_t *osh, void *skb, int line, char *file);
+extern void *osl_pktdup_cpy(osl_t *osh, void *skb, int line, char *file);
 struct bcmstrbuf;
 extern void osl_ctrace_dump(osl_t *osh, struct bcmstrbuf *b);
 #else
 extern void *osl_pkt_frmnative(osl_t *osh, void *skb);
 extern void *osl_pktget(osl_t *osh, uint len);
 extern void *osl_pktdup(osl_t *osh, void *skb);
+extern void *osl_pktdup_cpy(osl_t *osh, void *skb);
 #endif /* BCMDBG_CTRACE */
 extern struct sk_buff *osl_pkt_tonative(osl_t *osh, void *pkt);
 #ifdef BCMDBG_CTRACE
@@ -1333,10 +1348,12 @@ extern void osl_reg_unmap(void *va);
 #ifdef BCMDBG_CTRACE
 #define	PKTGET(osh, len, send)		osl_pktget((osh), (len), __LINE__, __FILE__)
 #define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb), __LINE__, __FILE__)
+#define	PKTDUP_CPY(osh, skb)		osl_pktdup_cpy((osh), (skb), __LINE__, __FILE__)
 #define PKTFRMNATIVE(osh, skb)		osl_pkt_frmnative((osh), (skb), __LINE__, __FILE__)
 #else
 #define	PKTGET(osh, len, send)		osl_pktget((osh), (len))
 #define	PKTDUP(osh, skb)		osl_pktdup((osh), (skb))
+#define	PKTDUP_CPY(osh, skb)		osl_pktdup_cpy((osh), (skb))
 #define PKTFRMNATIVE(osh, skb)		osl_pkt_frmnative((osh), (skb))
 #endif /* BCMDBG_CTRACE */
 #define PKTLIST_DUMP(osh, buf)		({BCM_REFERENCE(osh); BCM_REFERENCE(buf);})
@@ -1368,6 +1385,7 @@ extern void osl_reg_unmap(void *va);
 
 extern void *osl_pktget(osl_t *osh, uint len);
 extern void *osl_pktdup(osl_t *osh, void *skb);
+extern void *osl_pktdup_cpy(osl_t *osh, void *skb);
 extern void *osl_pkt_frmnative(osl_t *osh, void *skb);
 extern void osl_pktfree(osl_t *osh, void *skb, bool send);
 extern uchar *osl_pktdata(osl_t *osh, void *skb);

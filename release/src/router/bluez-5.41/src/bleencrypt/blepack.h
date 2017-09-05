@@ -29,7 +29,7 @@ extern "C" {
 #define INT     int
 #endif //#ifndef  WIN32
 
-#define BLE_VERSION		0
+#define BLE_VERSION		1
 
 #define BLEPACKET_DEBUG		0
 #define MAX_PACKET_SIZE		4096
@@ -76,6 +76,8 @@ enum  BLE_COMMAND
 	BLE_COMMAND_SET_SW_MODE			= 0x16,
 	BLE_COMMAND_SET_WAN_DNS_ENABLE		= 0x17,
 	BLE_COMMAND_GET_MAC_BLE_VERSION		= 0x18,
+	BLE_COMMAND_GET_ATH1_CHAN		= 0x19,
+	BLE_COMMAND_SET_ATH1_CHAN		= 0x1a,
 	BLE_COMMAND_END				= 0xff
 };
 
@@ -150,7 +152,7 @@ typedef struct KeyData_t
 {
 	unsigned char *ku, *kp, *km, *ns, *nc, *ks, *iv;
 	size_t ku_len, kp_len, ns_len, km_len, nc_len, ks_len, iv_len;
-} KeyData_s, KeyData_c;
+} KeyData_s;
 
 struct param_handler_svr {
 	int cmdno;
@@ -159,36 +161,12 @@ struct param_handler_svr {
 	int t_type;
 };
 
-extern void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-// Server
 extern void KeyInit_S(char *public_key, char *private_key);
 extern void KeyReset_S();
 extern int UnpackBLECommandData(unsigned char *pdu, int pdulen, int *cmdno, unsigned char *data, unsigned int *datalen);
-extern void UnpackBLECommandReqPublicKey(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
+extern void UnpackBLECommandReq(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
 extern void UnpackBLECommandReqServerNonce(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandAPPLY(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandRESET(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandGetWanStatus(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandGetWifiStatus(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanType(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanPPPoEName(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanPPPoEPWD(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanIPAddr(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanSubMask(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanGateway(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanDns1(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanDns2(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanPort(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWifiName(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWifiPWD(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetGroupID(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetAdminName(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetAdminPWD(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetUserLocation(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetUserPlace(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetSWMode(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandSetWanDnsEnable(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
-extern void UnpackBLECommandGetMacBleVersion(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
+extern void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char *data, int datalen);
 
 extern void PackBLEResponseData(int cmdno, int status, unsigned char *data, int datalen, unsigned char *pdu, int *pdulen, int flag);
 extern void PackBLEResponseOnly(int cmdno, int status, unsigned char *pdu, int *pdulen);
@@ -197,43 +175,7 @@ extern void PackBLEResponseGetWifiStatus(int cmdno, int status, unsigned char *p
 extern void PackBLEResponseReqPublicKey(int cmdno, int status, unsigned char *pdu, int *pdulen);
 extern void PackBLEResponseReqServerNonce(int cmdno, int status, unsigned char *pdu, int *pdulen);
 extern void PackBLEResponseGetMacBleVersion(int cmdno, int status, unsigned char *pdu, int *pdulen);
-// Client
-extern void KeyInit_C();
-extern void KeyReset_C();
-extern void PackBLECommandData(int cmdno, unsigned char *data, int datalen, unsigned char *pdu, int *pdulen, int flag);
-extern void PackBLECommandReqPublicKey(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandReqServerNonce(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandAPPLY(unsigned char *data, int datalen, unsigned char *pdu, int *pudlen);
-extern void PackBLECommandRESET(unsigned char *data, int datalen, unsigned char *pdu, int *pudlen);
-extern void PackBLECommandGetWanStatus(unsigned char *data, int datalen, unsigned char *pdu, int *pudlen);
-extern void PackBLECommandGetWifiStatus(unsigned char *data, int datalen, unsigned char *pdu, int *pudlen);
-extern void PackBLECommandSetWanType(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanPPPoEName(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanPPPoEPWD(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanIPAddr(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanSubMask(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanGateway(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanDns1(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanDns2(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanPort(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWifiName(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWifiPWD(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetGroupID(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetAdminName(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetAdminPWD(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetUserLocation(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetUserPlace(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetSWMode(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandSetWanDnsEnable(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-extern void PackBLECommandGetMacBleVersion(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-
-extern int UnpackBLEResponseData(unsigned char *pdu, int pdulen, int *cmdno, int *status, unsigned char *data, unsigned int *datalen);
-extern void UnpackBLEResponseOnly(unsigned char *data, int datalen);
-extern void UnpackBLEResponseGetWanStatus(unsigned char *data, int datalen);
-extern void UnpackBLEResponseGetWifiStatus(unsigned char *data, int datalen);
-extern void UnpackBLEResponseReqPublicKey(unsigned char *data, int datalen);
-extern void UnpackBLEResponseReqServerNonce(unsigned char *data, int datalen);
-extern void UnpackBLEResponseGetMacBleVersion(unsigned char *data, int datalen);
+extern void PackBLEResponseGetAth1Chan(int cmdno, int status, unsigned char *pdu, int *pdulen);
 
 #ifdef __cplusplus
 }

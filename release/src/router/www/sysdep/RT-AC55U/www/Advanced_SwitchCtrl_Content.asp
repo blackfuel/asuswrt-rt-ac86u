@@ -42,6 +42,19 @@ function applyRule(){
 }
 
 function valid_form(){
+	var nat_acceleration_orig = '<% nvram_get("qca_sfe"); %>';
+	if(document.form.qca_sfe.value == "1") {
+		if(nat_acceleration_orig != "1" && check_bwdpi_engine_status()) {
+			var confirm_flag = confirm("If you turn on the NAT Acceleration option, AiProtection function will be disable. Are you sure to process?");/*untranslated*/
+			if(confirm_flag) {
+				document.form.action_script.value = "dpi_disable;restart_allnet;";
+			}
+			else {
+				return false;
+			}
+		}
+	}
+
 	return true;	
 }
 

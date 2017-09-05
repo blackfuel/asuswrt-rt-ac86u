@@ -1031,12 +1031,6 @@ void fini_wl(void)
 	if (module_loaded("rt2860v2_ap"))
 		modprobe_r("rt2860v2_ap");
 
-#if defined (RTCONFIG_WLMODULE_MT7615E_AP)
-#if !defined(RTCONFIG_CONCURRENTREPEATER)
-	if (module_loaded("mt_wifi_7615E"))
-		modprobe_r("mt_wifi_7615E");
-#endif
-#endif
 }
 
 
@@ -1820,41 +1814,6 @@ void reinit_hwnat(int unit)
 	}
 }
 
-char *get_wlifname(int unit, int subunit, int subunit_x, char *buf)
-{
-	char wifbuf[32];
-	char prefix[]="wlXXXXXX_", tmp[100];
-#if defined(RTCONFIG_WIRELESSREPEATER)
-	if (sw_mode() == SW_MODE_REPEATER
-#if !defined(RTCONFIG_CONCURRENTREPEATER)
-	 && nvram_get_int("wlc_band") == unit
-#endif
-	 && subunit==1)
-	{   
-		if(unit == 1)
-			sprintf(buf, "%s", APCLI_5G);
-		else
-			sprintf(buf, "%s", APCLI_2G);
-	}	
-	else
-#endif /* RTCONFIG_WIRELESSREPEATER */
-	{
-		memset(wifbuf, 0, sizeof(wifbuf));
-
-		if(unit==0) strncpy(wifbuf, WIF_2G, strlen(WIF_2G)-1);
-#if defined(RTCONFIG_HAS_5G)
-		else strncpy(wifbuf, WIF_5G, strlen(WIF_5G)-1);
-#endif	/* RTCONFIG_HAS_5G */
-
-		snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, subunit);
-		if (nvram_match(strcat_r(prefix, "bss_enabled", tmp), "1"))
-			sprintf(buf, "%s%d", wifbuf, subunit_x);
-		else
-			sprintf(buf, "%s", "");
-	}	
-	return buf;
-}
-
 int
 wl_exist(char *ifname, int band)
 {
@@ -1916,6 +1875,10 @@ set_wan_tag(char *interface) {
 		switch_stb = nvram_get_int("switch_stb_x");
 		if (switch_stb >= 7) {
 			system("rtkswitch 40 1");			/* admin all frames on all ports */
+#if defined(RTN56U) || defined(RTN65U)
+			/* Make sure admin all frames on all ports is applied to Realtek switch. */
+			system("rtkswitch 38 0");
+#endif
 			if(wan_vid) { /* config wan port */
 				__setup_vlan(wan_vid, 0, 0x00000210);	/* config WAN & WAN_MAC port */
 			}

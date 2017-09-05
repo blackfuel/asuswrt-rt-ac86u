@@ -2,7 +2,7 @@
  * MSDU aggregation protocol source file
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_amsdu.c 667146 2016-10-26 04:38:01Z $
+ * $Id: wlc_amsdu.c 670309 2016-11-15 09:31:21Z $
  */
 
 #include <wlc_cfg.h>
@@ -653,6 +653,11 @@ wlc_amsdu_set(amsdu_info_t *ami, bool on)
 
 	/* This controls AMSDU agg only, AMSDU deagg is on by default per spec */
 	wlc->pub->_amsdu_tx = on;
+#ifdef DISABLE_AMSDUTX_FOR_VI
+	/* Disabling amsdu for VI access category to avoid packet loss */
+	ami->amsdu_agg_allowprio[PRIO_8021D_CL] = FALSE;
+	ami->amsdu_agg_allowprio[PRIO_8021D_VI] = FALSE;
+#endif
 	wlc_update_brcm_ie(ami->wlc);
 
 	/* tx descriptors should be higher -- AMPDU max when both AMSDU and AMPDU set */
@@ -1131,6 +1136,15 @@ wlc_amsdu_dotxstatus(amsdu_info_t *ami, struct scb *scb, void* p)
 	}
 }
 
+#ifdef DISABLE_AMSDUTX_FOR_VI
+/* Check if AMSDU is enabled for given tid */
+bool
+wlc_amsdu_chk_priority_enable(amsdu_info_t *ami, uint8 tid)
+{
+	return ami->amsdu_agg_allowprio[tid];
+}
+#endif
+
 /* centralize A-MSDU tx policy */
 void
 wlc_amsdu_txpolicy_upd(amsdu_info_t *ami)
@@ -1224,12 +1238,52 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
 	/* Padding of A-MSDU sub-frame to 4 bytes */
 	pad = (uint)((-(int)(p_len)) & 3);
 
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* For first msdu init ether header (amsdu header) */
+	if (PKTISTXFRAG(wlc->osh, p) && !PKTISTXPKTFETCHED(wlc->osh, p)) {
+		/* When BCM_DHDHDR enabled the DHD host driver will prepare the
+		 * dot3_mac_llc_snap_header, now we adjust ETHER_HDR_LEN bytes
+		 * in host data addr to include the ether header 14B part.
+		 * The ether header 14B in dongle D3_BUFFER is going to be used as
+		 * amsdu header.
+		 * Now, first msdu has all DHDHDR 22B in host.
+		 */
+		PKTSETFRAGDATA_LO(wlc->osh, p, 1,
+			PKTFRAGDATA_LO(wlc->osh, p, 1) - ETHER_HDR_LEN);
+		PKTSETFRAGLEN(wlc->osh, p, 1,
+			PKTFRAGLEN(wlc->osh, p, 1) + ETHER_HDR_LEN);
+		PKTSETFRAGTOTLEN(wlc->osh, p,
+			PKTFRAGTOTLEN(wlc->osh, p) + ETHER_HDR_LEN);
 
-	/* Init ether header */
-	eh = (struct ether_header *)PKTPUSH(wlc->osh, p, ETHER_HDR_LEN);
+		/* use ether header 14B space in D3_BUFFER to save the amsdu header */
+		eh = (struct ether_header *)PKTDATA(wlc->osh, p);
+	}
+	else
+#endif /* BCM_DHDHDR && DONGLEBUILD */
+		eh = (struct ether_header *)PKTPUSH(wlc->osh, p, ETHER_HDR_LEN);
+
 	eacopy(&scb->ea, eh->ether_dhost);
 	eacopy(&(SCB_BSSCFG(scb)->cur_etheraddr), eh->ether_shost);
 	WLPKTTAG(p)->flags |= WLF_AMSDU;
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* For second msdu */
+	if (PKTISTXFRAG(wlc->osh, n) && !PKTISTXPKTFETCHED(wlc->osh, n)) {
+		/* Before we free the second msdu D3_BUFFER we have to include the
+		 * ether header 14B part in host.
+		 * Now, second msdu has all DHDHDR 22B in host.
+		 */
+		PKTSETFRAGDATA_LO(wlc->osh, n, 1,
+			PKTFRAGDATA_LO(wlc->osh, n, 1) - ETHER_HDR_LEN);
+		PKTSETFRAGLEN(wlc->osh, n, 1,
+			PKTFRAGLEN(wlc->osh, n, 1) + ETHER_HDR_LEN);
+		PKTSETFRAGTOTLEN(wlc->osh, n,
+			PKTFRAGTOTLEN(wlc->osh, n) + ETHER_HDR_LEN);
+
+		/* Free the second msdu D3_BUFFER, we don't need it */
+		PKTBUFEARLYFREE(wlc->osh, n);
+	}
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 
 	/* Append msdu p1 to p */
 	p1 = n;
@@ -1241,9 +1295,18 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
 		wlc_pktc_sdu_prep(wlc, scb, p1, n, lifetime);
 
 	if (pad) {
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+		if (PKTISTXFRAG(wlc->osh, p) && !PKTISTXPKTFETCHED(wlc->osh, p)) {
+			/* pad data will be the garbage at the end of host data */
+			PKTSETFRAGLEN(wlc->osh, p, 1, PKTFRAGLEN(wlc->osh, p, 1) + pad);
+			PKTSETFRAGTOTLEN(wlc->osh, p, PKTFRAGTOTLEN(wlc->osh, p) + pad);
+		}
+		else
+#endif
 		/* If a padding was required for the previous packet, apply it here */
 		PKTPUSH(wlc->osh, p1, pad);
 	}
+
 	totlen = n_len + p_len + pad;
 	eh->ether_type = HTON16(totlen);
 

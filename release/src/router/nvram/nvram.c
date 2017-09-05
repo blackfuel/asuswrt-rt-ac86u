@@ -37,9 +37,11 @@
 
 #include <unistd.h>	// for sleep()
 #include <typedefs.h>
+#include <stdint.h>
 
 #include <rtconfig.h>
 #include <bcmnvram.h>
+#include <shared.h>
 
 #include "nvram_mode.h"
 
@@ -118,6 +120,52 @@ static int export_mode(char* mode, char* buf_ap, char* buf)
 				}
 			}
 		}
+	}
+
+	return 0;
+}
+
+static int nvram_dec_all(char* buf_ap, char* buf)
+{
+	struct nvram_tuple *t;
+	extern struct nvram_tuple router_defaults[];
+	char *ptr, *item, *value;
+	char name[128], nv[128];
+	int len;
+	char output[1024];
+	memset(output, 0, sizeof(output));
+
+
+	if (!buf_ap || !buf)
+		return -1;
+
+	ptr = buf_ap;
+
+	for (item = buf; *item; item += strlen(item) + 1) {
+		value = strchr(item, '=');
+		if (!value)
+			continue;
+		len = value - item;
+		if (len < 0 || len > sizeof(name) - 1)
+			continue;
+
+		strncpy(name, item, len);
+		name[len] = '\0';
+		value++;
+
+		for (t = router_defaults; t->name; t++)
+		{
+			if (strcmp(name, t->name) == 0 && t->enc == 1) {
+				dec_nvram(t->name, value, output);
+				value = output;
+			}
+		}
+
+		snprintf(nv, sizeof(nv), "%s=%s", name, value);
+		ptr = stpcpy(ptr, nv) + 1;
+#ifdef ASUS_DEBUG
+				puts(nv);
+#endif
 	}
 
 	return 0;
@@ -286,7 +334,7 @@ static void
 usage(void)
 {
 	fprintf(stderr, 
-		"usage: nvram [get name] [set name=value] [unset name] [show] [save file] [restore file] [fb_save file]\n"
+		"usage: nvram [get name] [set name=value] [unset name] [erase] [show] [save file] [restore file] [fb_save file]\n"
 		"usage: nvram [save_ap file] [save_rp_2g file] [save_rp_5g file]\n");
 	exit(0);
 }
@@ -351,6 +399,9 @@ int nvram_save_new(char *file, char *buf)
 {
 	FILE *fp;
 	char *name;
+#if defined(RTCONFIG_SAVEJFFS)
+	uint32_t filelen_le32;
+#endif
 	unsigned long count, filelen, i;
 	unsigned char rand = 0, temp;
 
@@ -376,7 +427,12 @@ int nvram_save_new(char *file, char *buf)
 	fprintf(stderr, "random number: %x\n", rand);
 #endif
 	fwrite(PROFILE_HEADER_NEW, 1, 4, fp);
+#if defined(RTCONFIG_SAVEJFFS)
+	filelen_le32 = cpu_to_le32(filelen);
+	fwrite(&filelen_le32, 1, 3, fp);
+#else
 	fwrite(&filelen, 1, 3, fp);
+#endif
 	fwrite(&rand, 1, 1, fp);
 #ifdef ASUS_DEBUG
 	for (i = 0; i < 4; i++)
@@ -486,7 +542,8 @@ int nvram_restore_new(char *file, char *buf)
 {
 	FILE *fp;
 	char header[8], *p, *v;
-	unsigned long count, filelen, *filelenptr, i;
+	uint32_t *filelenptr;
+	unsigned long count, filelen, i;
 	unsigned char rand, *randptr;
 
 	if ((fp = fopen(file, "r+")) == NULL) return -1;
@@ -494,7 +551,7 @@ int nvram_restore_new(char *file, char *buf)
 	count = fread(header, 1, 8, fp);
 	if (count>=8 && strncmp(header, PROFILE_HEADER, 4) == 0)
 	{
-		filelenptr = (unsigned long *)(header + 4);
+		filelenptr = (uint32_t *)(header + 4);
 #ifdef ASUS_DEBUG
 		fprintf(stderr, "restoring original text cfg of length %x\n", *filelenptr);
 #endif
@@ -502,8 +559,12 @@ int nvram_restore_new(char *file, char *buf)
 	}
 	else if (count>=8 && strncmp(header, PROFILE_HEADER_NEW, 4) == 0)
 	{
-		filelenptr = (unsigned long *)(header + 4);
+		filelenptr = (uint32_t *)(header + 4);
+#if defined(RTCONFIG_SAVEJFFS)
+		filelen = le32_to_cpu(*filelenptr) & 0xffffff;
+#else
 		filelen = *filelenptr & 0xffffff;
+#endif
 #ifdef ASUS_DEBUG
 		fprintf(stderr, "restoring non-text cfg of length %x\n", filelen);
 #endif
@@ -642,7 +703,19 @@ main(int argc, char **argv)
 			if (*++argv)
 			{
 				nvram_getall(buf, MAX_NVRAM_SPACE);
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+				char *tmp_dnv = malloc(MAX_NVRAM_SPACE);
+				if (!tmp_dnv) {
+					fprintf(stderr, "Can NOT alloc memory!!!");
+					return 0;
+				}
+				memset(tmp_dnv, 0, MAX_NVRAM_SPACE);
+				nvram_dec_all(tmp_dnv, buf);
+				nvram_save_new(*argv, tmp_dnv);
+				free(tmp_dnv);
+#else
 				nvram_save_new(*argv, buf);
+#endif
 			}
 		}
 		else if (!strncmp(*argv, "save_ap", 7) ||
@@ -657,7 +730,19 @@ main(int argc, char **argv)
 				}
 				memset(tmp_export, 0, MAX_NVRAM_SPACE);
 				nvram_getall(buf, NVRAM_SPACE);
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+				char *tmp_dnv = malloc(MAX_NVRAM_SPACE);
+				if (!tmp_dnv) {
+					fprintf(stderr, "Can NOT alloc memory!!!");
+					return 0;
+				}
+				memset(tmp_dnv, 0, MAX_NVRAM_SPACE);
+				nvram_dec_all(tmp_dnv, buf);
+				export_mode(mode, tmp_export, tmp_dnv);
+				free(tmp_dnv);
+#else
 				export_mode(mode, tmp_export, buf);
+#endif
 				nvram_save_new(*argv, tmp_export);
 				free(tmp_export);
 			}
@@ -685,6 +770,10 @@ main(int argc, char **argv)
 				nvram_restore_new(*argv, buf);
 			}
 			
+		}
+		else if (!strcmp(*argv, "erase"))
+		{
+			system("nvram_erase");
 		}
 		else if (!strncmp(*argv, "show", 4) || !strncmp(*argv, "getall", 6)) {
 			nvram_getall(buf, MAX_NVRAM_SPACE);

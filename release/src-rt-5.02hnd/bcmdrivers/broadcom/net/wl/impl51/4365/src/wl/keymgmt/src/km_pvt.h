@@ -1,7 +1,7 @@
 /*
  * Key Management Module Implementation
  * Copyright (c) 2012-2013 Broadcom Corporation, All rights reserved.
- * $Id: km_pvt.h 660275 2016-09-20 01:45:29Z $
+ * $Id: km_pvt.h 672672 2016-11-29 10:58:39Z $
  */
 
 /* This header file is private to keymgmt implementation */
@@ -260,6 +260,7 @@ enum {
 #define KM_MCNX(km) (km)->wlc->mcnx
 #define KM_PSTA(km) (km)->wlc->psta
 #define KM_PCB(km) (km)->wlc->pcb
+#define KM_WLC(km) ((km)->wlc)
 
 #ifndef BCM_OL_DEV
 #define KM_COREREV(_km) KM_PUB(_km)->corerev

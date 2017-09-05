@@ -27,7 +27,7 @@ all: .conf apps
 
 apps: .conf
 	mkdir -p $(srcdir)/bin
-	$(MAKE) -C $(srcdir) all
+	$(MAKE) -C $(srcdir) include/proto.h && $(MAKE) -j 8 -C $(srcdir) all
 
 ifeq ($(HND_ROUTER),y)
 LIB_RESOLV="yes"

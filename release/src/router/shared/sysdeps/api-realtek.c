@@ -43,11 +43,10 @@ const char WIF_5G[]	= "wl1";
 const char WIF_2G[]	= "wl0";
 const char VXD_5G[]	= "wl1-vxd";
 const char VXD_2G[]	= "wl0-vxd";
-#define TXPWR_THRESHOLD_1	15
-#define TXPWR_THRESHOLD_2	35
-#define TXPWR_THRESHOLD_3	50
-#define TXPWR_THRESHOLD_4	75
-#define TXPWR_THRESHOLD_5	100
+#define TXPWR_THRESHOLD_1	25
+#define TXPWR_THRESHOLD_2	50
+#define TXPWR_THRESHOLD_3	88
+#define TXPWR_THRESHOLD_4	100
 
 #define CONFIG_RTL_11AC_SUPPORT
 #define CONFIG_RTL_92D_SUPPORT
@@ -501,21 +500,23 @@ int set_tx_calibration(HW_WLAN_SETTING_Tp phw,char* interface,int txpower)
 {
 	char tmpbuff[1024],p[MAX_5G_CHANNEL_NUM_MIB*2+1];
 	int intVal = 0;
-	int setValue =0;
+	int i = 0;
 
 	if(!phw)
 		return -1;
 	
-	if(txpower == TXPWR_THRESHOLD_5)
+	if(txpower == TXPWR_THRESHOLD_4)
 		intVal = 0;
-	else if(txpower >= TXPWR_THRESHOLD_4)
-		intVal = 3;
 	else if(txpower >= TXPWR_THRESHOLD_3)
-		intVal = 6;
+		intVal = 1;
 	else if(txpower >= TXPWR_THRESHOLD_2)
-		intVal = 9;
+		intVal = 6;
 	else if(txpower >= TXPWR_THRESHOLD_1)
+		intVal = 12;
+	else if (txpower >= 1)
 		intVal = 17;
+	else
+		intVal = 99; // Special case. Reduce txpower to 1.
 	
 	sprintf(tmpbuff,"iwpriv %s set_mib ther=%d",interface,phw->Ther);
  	system(tmpbuff);
@@ -579,81 +580,143 @@ int set_tx_calibration(HW_WLAN_SETTING_Tp phw,char* interface,int txpower)
 	rtk_printf("%s\n",tmpbuff);
 #endif
 
-	if(intVal){	
-		setValue = (phw->pwrlevelCCK_A - intVal > 1) ? (phw->pwrlevelCCK_A - intVal):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelCCK_A=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
+	if (intVal && access_point_mode()) {
+		for (i = 0; i < MAX_2G_CHANNEL_NUM_MIB; i++) {
+			if (phw->pwrlevelCCK_A[i] != 0)
+				if ((phw->pwrlevelCCK_A[i] - intVal) >= 1)
+					phw->pwrlevelCCK_A[i] -= intVal;
+				else
+					phw->pwrlevelCCK_A[i] = 1;
 
-		setValue = (phw->pwrlevelCCK_B - intVal > 1) ? (phw->pwrlevelCCK_B - intVal):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelCCK_B=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-
+			if (phw->pwrlevelCCK_B[i] != 0)
+				if ((phw->pwrlevelCCK_B[i] - intVal) >= 1)
+					phw->pwrlevelCCK_B[i] -= intVal;
+				else
+					phw->pwrlevelCCK_B[i] = 1;
 #if defined(RPAC68U)
-		setValue = (phw->pwrlevelCCK_C - intVal > 1) ? (phw->pwrlevelCCK_C - intVal):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelCCK_C=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
+			if (phw->pwrlevelCCK_C[i] != 0)
+				if ((phw->pwrlevelCCK_C[i] - intVal) >= 1)
+					phw->pwrlevelCCK_C[i] -= intVal;
+				else
+					phw->pwrlevelCCK_C[i] = 1;
 
-		setValue = (phw->pwrlevelCCK_D - intVal > 1) ? (phw->pwrlevelCCK_D - intVal):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelCCK_D=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-#endif
-		setValue = (phw->pwrlevelHT40_1S_A - intVal > 1) ? (phw->pwrlevelHT40_1S_A - intVal ):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelHT40_1S_A=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-	
-		setValue = (phw->pwrlevelHT40_1S_B - intVal > 1) ? (phw->pwrlevelHT40_1S_B - intVal):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelHT40_1S_B=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-#if defined(RPAC68U)
-		setValue = (phw->pwrlevelHT40_1S_C - intVal > 1) ? (phw->pwrlevelHT40_1S_C - intVal ):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelHT40_1S_C=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-	
-		setValue = (phw->pwrlevelHT40_1S_D - intVal > 1) ? (phw->pwrlevelHT40_1S_D - intVal):1;
-		hex_to_string(setValue,p,MAX_2G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevelHT40_1S_D=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-#endif
-		setValue = (phw->pwrlevel5GHT40_1S_A - intVal > 1) ? (phw->pwrlevel5GHT40_1S_A - intVal ):1;
-		hex_to_string(setValue,p,MAX_5G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevel5GHT40_1S_A=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-	
-		setValue = (phw->pwrlevel5GHT40_1S_B - intVal > 1) ? (phw->pwrlevel5GHT40_1S_B - intVal ):1;
-		hex_to_string(setValue,p,MAX_5G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevel5GHT40_1S_B=%s",interface,p);
-		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
+			if (phw->pwrlevelCCK_D[i] != 0)
+				if ((phw->pwrlevelCCK_D[i] - intVal) >= 1)
+					phw->pwrlevelCCK_D[i] -= intVal;
+				else
+					phw->pwrlevelCCK_D[i] = 1;
+#endif				
+			if (phw->pwrlevelHT40_1S_A[i] != 0)
+				if ((phw->pwrlevelHT40_1S_A[i] - intVal) >= 1)
+					phw->pwrlevelHT40_1S_A[i] -= intVal;
+				else
+					phw->pwrlevelHT40_1S_A[i] = 1;
 
+			if (phw->pwrlevelHT40_1S_B[i] != 0)
+				if ((phw->pwrlevelHT40_1S_B[i] - intVal) >= 1)
+					phw->pwrlevelHT40_1S_B[i] -= intVal;
+				else
+					phw->pwrlevelHT40_1S_B[i] = 1;
 #if defined(RPAC68U)
-		setValue = (phw->pwrlevel5GHT40_1S_C - intVal > 1) ? (phw->pwrlevel5GHT40_1S_C - intVal ):1;
-		hex_to_string(setValue,p,MAX_5G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevel5GHT40_1S_C=%s",interface,p);
+			if (phw->pwrlevelHT40_1S_C[i] != 0)
+				if ((phw->pwrlevelHT40_1S_C[i] - intVal) >= 1)
+					phw->pwrlevelHT40_1S_C[i] -= intVal;
+				else
+					phw->pwrlevelHT40_1S_C[i] = 1;
+
+			if (phw->pwrlevelHT40_1S_D[i] != 0)
+				if ((phw->pwrlevelHT40_1S_D[i] - intVal) >= 1)
+					phw->pwrlevelHT40_1S_D[i] -= intVal;
+				else
+					phw->pwrlevelHT40_1S_D[i] = 1;
+#endif				
+		}		
+		hex_to_string(phw->pwrlevelCCK_A, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelCCK_A=%s", interface, p);
 		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
-	
-		setValue = (phw->pwrlevel5GHT40_1S_D - intVal > 1) ? (phw->pwrlevel5GHT40_1S_D - intVal ):1;
-		hex_to_string(setValue,p,MAX_5G_CHANNEL_NUM_MIB);
-		sprintf(tmpbuff,"iwpriv %s set_mib pwrlevel5GHT40_1S_D=%s",interface,p);
+		rtk_printf("%s\n", tmpbuff);
+
+		hex_to_string(phw->pwrlevelCCK_B, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelCCK_B=%s", interface, p);
 		system(tmpbuff);
-		rtk_printf("%s\n",tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+#if defined(RPAC68U)		
+		hex_to_string(phw->pwrlevelCCK_C, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelCCK_C=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+
+		hex_to_string(phw->pwrlevelCCK_D, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelCCK_D=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
 #endif
+		hex_to_string(phw->pwrlevelHT40_1S_A, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelHT40_1S_A=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+
+		hex_to_string(phw->pwrlevelHT40_1S_B, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelHT40_1S_B=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+#if defined(RPAC68U)		
+		hex_to_string(phw->pwrlevelHT40_1S_C, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelHT40_1S_C=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+
+		hex_to_string(phw->pwrlevelHT40_1S_D, p, MAX_2G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevelHT40_1S_D=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+#endif
+		for (i = 0; i < MAX_5G_CHANNEL_NUM_MIB; i++) {
+			if (phw->pwrlevel5GHT40_1S_A[i] != 0)
+				if ((phw->pwrlevel5GHT40_1S_A[i] - intVal) >= 1)
+					phw->pwrlevel5GHT40_1S_A[i] -= intVal;
+				else
+					phw->pwrlevel5GHT40_1S_A[i] = 1;
+
+			if (phw->pwrlevel5GHT40_1S_B[i] != 0)
+				if ((phw->pwrlevel5GHT40_1S_B[i] - intVal) >= 1)
+					phw->pwrlevel5GHT40_1S_B[i] -= intVal;
+				else
+					phw->pwrlevel5GHT40_1S_B[i] = 1;
+#if defined(RPAC68U)
+			if (phw->pwrlevel5GHT40_1S_C[i] != 0)
+				if ((phw->pwrlevel5GHT40_1S_C[i] - intVal) >= 1)
+					phw->pwrlevel5GHT40_1S_C[i] -= intVal;
+				else
+					phw->pwrlevel5GHT40_1S_C[i] = 1;
+
+			if (phw->pwrlevel5GHT40_1S_D[i] != 0)
+				if ((phw->pwrlevel5GHT40_1S_D[i] - intVal) >= 1)
+					phw->pwrlevel5GHT40_1S_D[i] -= intVal;
+				else
+					phw->pwrlevel5GHT40_1S_D[i] = 1;
+#endif
+		}
+		hex_to_string(phw->pwrlevel5GHT40_1S_A, p, MAX_5G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevel5GHT40_1S_A=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+
+		hex_to_string(phw->pwrlevel5GHT40_1S_B, p, MAX_5G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevel5GHT40_1S_B=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+#if defined(RPAC68U)
+		hex_to_string(phw->pwrlevel5GHT40_1S_C, p, MAX_5G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevel5GHT40_1S_C=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+
+		hex_to_string(phw->pwrlevel5GHT40_1S_D, p, MAX_5G_CHANNEL_NUM_MIB);
+		sprintf(tmpbuff, "iwpriv %s set_mib pwrlevel5GHT40_1S_D=%s", interface, p);
+		system(tmpbuff);
+		rtk_printf("%s\n", tmpbuff);
+#endif		
 	}
 	else{
 		hex_to_string(phw->pwrlevelCCK_A - intVal,p,MAX_2G_CHANNEL_NUM_MIB);
@@ -2220,6 +2283,67 @@ wl_ioctl(char *name, int cmd, void *buf, int len)
 			return -1;
 	}
 	return 0;
+}
+
+/**
+ * Generate interface name based on @band and @subunit. (@subunit is NOT y in wlX.Y)
+ * @band:
+ * @subunit:
+ * @buf:
+ * @return:
+ */
+char *__get_wlifname(int band, int subunit, char *buf)
+{
+	if (!buf)
+		return buf;
+
+	strcpy(buf, (!band) ? WIF_2G : WIF_5G);
+	if (subunit) {
+		sprintf(buf + strlen(buf), ".%d", subunit);
+	}
+
+	return buf;
+}
+
+/**
+ * Generate VAP interface name of wlX.Y for Guest network, Free Wi-Fi, and Facebook Wi-Fi
+ * @x:		X of wlX.Y, aka unit
+ * @y:		Y of wlX.Y
+ * @buf:	Pointer to buffer of VAP interface name. Must greater than or equal to IFNAMSIZ
+ * @return:
+ * 	NULL	Invalid @buf
+ * 	""	Invalid parameters
+ *  otherwise	VAP interface name of wlX.Y
+ */
+char *get_wlxy_ifname(int x, int y, char *buf)
+{
+	int i, sidx;
+	char prefix[sizeof("wlX.Yxxx")];
+
+	if (!buf)
+		return buf;
+
+	if (x < 0 || y < 0 || y >= MAX_NO_MSSID)
+		return "";
+
+	if (y == 0) {
+		__get_wlifname(x, 0, buf);
+		return buf;
+	}
+
+	*buf = '\0';
+	for (i = 1, sidx = 1; i < MAX_NO_MSSID; ++i) {
+		if (i == y) {
+			__get_wlifname(x, sidx, buf);
+			break;
+		}
+
+		snprintf(prefix, sizeof(prefix), "wl%d.%d_", x, i);
+		if (nvram_pf_match(prefix, "bss_enabled", "1"))
+			sidx++;
+	}
+
+	return buf;
 }
 
 int psta_exist_except(int unit)

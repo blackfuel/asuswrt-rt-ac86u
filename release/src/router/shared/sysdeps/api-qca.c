@@ -74,6 +74,9 @@ ieee80211_mhz2ieee(u_int freq)
             return 15 + ((freq - 2512) / 20);
         }
     }
+    if (freq >= 58320 && freq <= 69120) {	/* 802.11ad Wigig */
+	    return (freq - 58320) / 2160 + 1;
+    }
     return (freq - 5000) / 5;
 }
 /////////////
@@ -94,6 +97,14 @@ const char STA_5G[] = "sta0";
 const char STA_2G[] = "sta1";
 const char VPHY_5G[] = "wifi0";
 const char VPHY_2G[] = "wifi1";
+#elif defined(RTAD7200)
+/* RTAD7200 */
+const char WIF_5G[] = "ath1";
+const char WIF_2G[] = "ath0";
+const char STA_5G[] = "sta1";
+const char STA_2G[] = "sta0";
+const char VPHY_5G[] = "wifi1";
+const char VPHY_2G[] = "wifi0";
 #else
 /* BRT-AC828, RT-AC88S */
 const char WIF_5G[] = "ath1";
@@ -118,6 +129,18 @@ const char STA_5G2[] = "xxx";
 const char VPHY_5G2[] = "xxx";
 #endif
 
+#if defined(RTCONFIG_WIGIG)
+const char WIF_60G[] = "wlan0";
+const char STA_60G[] = "wlan0";
+const char VPHY_60G[] = "phy0";
+const char WSUP_DRV_60G[] = "nl80211";
+#else
+const char WIF_60G[] = "xxx";
+const char STA_60G[] = "xxx";
+const char VPHY_60G[] = "xxx";
+const char WSUP_DRV_60G[] = "xxx";
+#endif
+
 #define GPIOLIB_DIR	"/sys/class/gpio"
 
 /* Export specified GPIO
@@ -133,12 +156,12 @@ static int __export_gpio(uint32_t gpio)
 		_dprintf("%s does not exist!\n", __func__);
 		return -1;
 	}
-	sprintf(gpio_path, "%s/gpio%d", GPIOLIB_DIR, gpio);
+	snprintf(gpio_path, sizeof(gpio_path),"%s/gpio%d", GPIOLIB_DIR, gpio);
 	if (d_exists(gpio_path))
 		return 0;
 
-	sprintf(export_path, "%s/export", GPIOLIB_DIR);
-	sprintf(gpio_str, "%d", gpio);
+	snprintf(export_path, sizeof(export_path), "%s/export", GPIOLIB_DIR);
+	snprintf(gpio_str, sizeof(gpio_str), "%d", gpio);
 	f_write_string(export_path, gpio_str, 0, 0);
 
 	return 0;
@@ -151,13 +174,13 @@ uint32_t gpio_dir(uint32_t gpio, int dir)
 	if (dir == GPIO_DIR_OUT) {
 		dir_str = "out";		/* output, low voltage */
 		*v = '\0';
-		sprintf(path, "%s/gpio%d/value", GPIOLIB_DIR, gpio);
-		if (f_read_string(path, v, sizeof(v)) > 0 && atoi(v) == 1)
+		snprintf(path, sizeof(path), "%s/gpio%d/value", GPIOLIB_DIR, gpio);
+		if (f_read_string(path, v, sizeof(v)) > 0 && safe_atoi(v) == 1)
 			dir_str = "high";	/* output, high voltage */
 	}
 
 	__export_gpio(gpio);
-	sprintf(path, "%s/gpio%d/direction", GPIOLIB_DIR, gpio);
+	snprintf(path, sizeof(path), "%s/gpio%d/direction", GPIOLIB_DIR, gpio);
 	f_write_string(path, dir_str, 0, 0);
 
 	return 0;
@@ -167,18 +190,18 @@ uint32_t get_gpio(uint32_t gpio)
 {
 	char path[PATH_MAX], value[10];
 
-	sprintf(path, "%s/gpio%d/value", GPIOLIB_DIR, gpio);
+	snprintf(path, sizeof(path), "%s/gpio%d/value", GPIOLIB_DIR, gpio);
 	f_read_string(path, value, sizeof(value));
 
-	return atoi(value);
+	return safe_atoi(value);
 }
 
 uint32_t set_gpio(uint32_t gpio, uint32_t value)
 {
 	char path[PATH_MAX], val_str[10];
 
-	sprintf(val_str, "%d", !!value);
-	sprintf(path, "%s/gpio%d/value", GPIOLIB_DIR, gpio);
+	snprintf(val_str, sizeof(val_str), "%d", !!value);
+	snprintf(path, sizeof(path), "%s/gpio%d/value", GPIOLIB_DIR, gpio);
 	f_write_string(path, val_str, 0, 0);
 
 	return 0;
@@ -250,6 +273,30 @@ unsigned int get_radio_status(char *ifname)
 	return 0;
 }
 
+int match_radio_status(int unit, int status)
+{
+	int sub = 0, rs = status;
+	char tmp[100], prefix[] = "wlXXXXXXXXXXXXXX", athfix[]="athXXXXXX";
+
+	do {
+		if (sub > 0)
+			snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, sub);
+		else
+			snprintf(prefix, sizeof(prefix), "wl%d_", unit);
+		strcpy(athfix, nvram_safe_get(strcat_r(prefix, "ifname", tmp)));
+
+		if (*athfix != '\0') {
+			if (status)
+				rs &= get_radio_status(athfix);
+			else
+				rs |= get_radio_status(athfix);
+		}
+		sub++;
+	} while (sub <= 3);
+
+	return (status == rs);
+}
+
 int get_radio(int unit, int subunit)
 {
 	char tmp[100], prefix[] = "wlXXXXXXXXXXXXXX";
@@ -267,30 +314,71 @@ int get_radio(int unit, int subunit)
 
 void set_radio(int on, int unit, int subunit)
 {
-	int led = (!unit)? LED_2G:LED_5G, onoff = (!on)? LED_OFF:LED_ON;
+	int onoff = (!on)? LED_OFF:LED_ON;
+	int led = get_wl_led_id(unit);
+	int sub = (subunit >= 0) ? subunit : 0;
 	char tmp[100], prefix[] = "wlXXXXXXXXXXXXXX", athfix[]="athXXXXXX";
-	char path[sizeof(NAWDS_SH_FMT) + 6];
+	char path[sizeof(NAWDS_SH_FMT) + 6], wds_iface[IFNAMSIZ] = "";
+#if defined(RTCONFIG_WIGIG)
+	char conf_path[sizeof("/etc/Wireless/conf/hostapd_athXXX.confYYYYYY")];
+	char pid_path[sizeof("/var/run/hostapd_athXXX.pidYYYYYY")];
+	char entropy_path[sizeof("/var/run/entropy_athXXX.binYYYYYY")];
+#endif
 
-	if (subunit > 0)
-	{   
-		snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, subunit);
-	}	
-	else
-	{   
-		snprintf(prefix, sizeof(prefix), "wl%d_", unit);
+	switch (unit) {
+		case WL_2G_BAND:
+			strlcpy(wds_iface, WIF_2G, sizeof(wds_iface));
+			break;
+#if defined(RTCONFIG_HAS_5G)
+		case WL_5G_BAND:
+			strlcpy(wds_iface, WIF_5G, sizeof(wds_iface));
+			break;
+#endif
+#if defined(RTCONFIG_HAS_5G_2)
+		case WL_5G_2_BAND:
+			strlcpy(wds_iface, WIF_5G2, sizeof(wds_iface));
+			break;
+#endif
+#if defined(RTCONFIG_WIGIG)
+		case WL_60G_BAND:
+			strlcpy(wds_iface, WIF_60G, sizeof(wds_iface));
+			snprintf(pid_path, sizeof(pid_path), "/var/run/hostapd_%s.pid", WIF_60G);
+			if (on) {
+				snprintf(conf_path, sizeof(conf_path), "/etc/Wireless/conf/hostapd_%s.conf", WIF_60G);
+				snprintf(entropy_path, sizeof(entropy_path), "/var/run/entropy_%s.bin", WIF_60G);
+				eval("hostapd", "-d", "-B", conf_path, "-P", pid_path, "-e", entropy_path);
+			} else {
+				kill_pidfile(pid_path);
+			}
+			break;
+#endif
+		default:
+			dbg("%s: wl%d is not supported!\n", __func__, unit);
 	}
-	strcpy(athfix, nvram_safe_get(strcat_r(prefix, "ifname", tmp)));
 
-	if (*athfix != '\0' && strncmp(athfix, "sta", 3)) {
-		/* all lan-interfaces except sta when running repeater mode */
-		_dprintf("%s: unit %d-%d, on %d\n", __func__, unit, subunit);
-		eval("ifconfig", athfix, on? "up":"down");
+	do {
+		if (sub > 0)
+			snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, sub);
+		else
+			snprintf(prefix, sizeof(prefix), "wl%d_", unit);
+		strcpy(athfix, nvram_safe_get(strcat_r(prefix, "ifname", tmp)));
 
-		/* Reconnect to peer WDS AP */
-		sprintf(path, NAWDS_SH_FMT, unit? WIF_5G : WIF_2G);
-		if (!subunit && !nvram_match(strcat_r(prefix, "mode_x", tmp), "0") && f_exists(path))
-			doSystem(path);
-	}
+		if (*athfix != '\0' && strncmp(athfix, "sta", 3)) {
+			/* all lan-interfaces except sta when running repeater mode */
+			_dprintf("%s: unit %d-%d, %s\n", __func__, unit, sub, (on?"on":"off"));
+			if (unit != WL_60G_BAND) {
+				eval("ifconfig", athfix, on? "up":"down");
+			}
+
+			/* Reconnect to peer WDS AP */
+			if (!sub) {
+				snprintf(path, sizeof(path), NAWDS_SH_FMT, wds_iface);
+				if (!nvram_match(strcat_r(prefix, "mode_x", tmp), "0") && f_exists(path))
+					doSystem(path);
+			}
+		}
+		sub++;
+	} while (subunit < 0 && sub <= 3);
 
 	led_control(led, onoff);
 }
@@ -303,12 +391,13 @@ char *wif_to_vif(char *wif)
 
 	vif[0] = '\0';
 
-	for (unit = 0; unit < 2; unit++) {
+	for (unit = 0; unit < MAX_NR_WL_IF; unit++) {
+		SKIP_ABSENT_BAND(unit);
 		for (subunit = 1; subunit < MAX_NO_MSSID; subunit++) {
 			snprintf(prefix, sizeof(prefix), "wl%d.%d", unit, subunit);
 
 			if (nvram_match(strcat_r(prefix, "_ifname", tmp), wif)) {
-				sprintf(vif, "%s", prefix);
+				snprintf(vif, sizeof(vif), "%s", prefix);
 				goto RETURN_VIF;
 			}
 		}
@@ -318,16 +407,77 @@ RETURN_VIF:
 	return vif;
 }
 
-/* get channel list via currently setting in wifi driver */
-int get_channel_list_via_driver(int unit, char *buffer, int len)
+/* get channel list via iw utility */
+static int __get_channel_list_via_iw(int unit, char *buffer, int len)
+{
+	int l, r, found, freq, first = 1;
+	FILE *fp;
+	char *p = buffer, line[256], cmd[sizeof("iw phy0 infoXXXXXXXXXXXX")];
+
+	if (buffer == NULL || len <= 0 || unit < 0 || unit >= MAX_NR_WL_IF)
+		return -1;
+
+	memset(buffer, 0, len);
+	snprintf(cmd, sizeof(cmd), "iw %s info", get_vphyifname(unit));
+	fp = popen(cmd, "r");
+	if (!fp)
+		return 0;
+
+	/* Example:
+	 * Wiphy phy0
+	 *       Band 1:
+	 *               Capabilities: 0x00
+	 *                       HT20
+	 *                       Static SM Power Save
+	 *                       No RX STBC
+	 *                       Max AMSDU length: 3839 bytes
+	 *                       No DSSS/CCK HT40
+	 *               Maximum RX AMPDU length 65535 bytes (exponent: 0x003)
+	 *               Minimum RX AMPDU time spacing: 8 usec (0x06)
+	 *               HT TX/RX MCS rate indexes supported: 1-12
+	 *               Frequencies:
+	 *                       * 58320 MHz [1] (0.0 dBm)
+	 *                       * 60480 MHz [2] (0.0 dBm)
+	 *                       * 62640 MHz [3] (0.0 dBm)
+	 *               Bitrates (non-HT):
+	 */
+	r = found = 0;
+	while (len > 0 && fgets(line, sizeof(line), fp)) {
+		if (!found) {
+			if (!strstr(line, "Frequencies:")) {
+				continue;
+			} else {
+				found = 1;
+				continue;
+			}
+		} else {
+			if (strstr(line, "disabled"))
+				continue;
+			if (!strstr(line, "MHz") || (r = sscanf(line, "%*[^0-9]%d Mhz%*[^\n]", &freq)) != 1) {
+				found = 0;
+				continue;
+			}
+			l = snprintf(p, len, "%s%u", first? "" : ",", ieee80211_mhz2ieee(freq));
+			p += l;
+			len -= l;
+			first = 0;
+		}
+	}
+	pclose(fp);
+
+	return (p - buffer);
+}
+
+/* get channel list via getchaninfo ioctl */
+static int __get_channel_list_via_getchaninfo(int unit, char *buffer, int len)
 {
 	struct ieee80211req_chaninfo chans;
 	struct iwreq wrq;
 	char tmp[128], prefix[] = "wlXXXXXXXXXX_", *ifname;
-	int i;
+	int i, l = len;
 	char *p;
 
-	if (buffer == NULL || len <= 0)
+	if (buffer == NULL || len <= 0 || unit < 0 || unit >= MAX_NR_WL_IF)
 		return -1;
 
 	memset(buffer, 0, len);
@@ -340,13 +490,48 @@ int get_channel_list_via_driver(int unit, char *buffer, int len)
 	if (wl_ioctl(ifname, IEEE80211_IOCTL_GETCHANINFO, &wrq) < 0)
 		return -1;
 
-	for (i = 0, p=buffer; i < chans.ic_nchans ; i++) {
+	for (i = 0, p=buffer; len > 0 && i < chans.ic_nchans ; i++) {
 		if (i == 0)
-			p += sprintf(p, "%u", ieee80211_mhz2ieee(chans.ic_chans[i].ic_freq));
+			l = snprintf(p, len, "%u", ieee80211_mhz2ieee(chans.ic_chans[i].ic_freq));
 		else
-			p += sprintf(p, ",%u", ieee80211_mhz2ieee(chans.ic_chans[i].ic_freq));
+			l = snprintf(p, len, ",%u", ieee80211_mhz2ieee(chans.ic_chans[i].ic_freq));
+		p += l;
+		len -= l;
 	}
 	return (p - buffer);
+}
+
+/* get channel list via currently setting in wifi driver */
+int get_channel_list_via_driver(int unit, char *buffer, int len)
+{
+	int r = 0;
+
+#if !defined(RTCONFIG_HAS_5G_2)
+	if (unit == 2)
+		return 0;
+#endif
+#if !defined(RTCONFIG_WIGIG)
+	if (unit == 3)
+		return 0;
+#endif
+
+	if (buffer == NULL || len <= 0 || unit < 0 || unit >= MAX_NR_WL_IF)
+		return -1;
+
+	switch (unit) {
+	case WL_2G_BAND:	/* fall-through */
+	case WL_5G_BAND:	/* fall-through */
+	case WL_5G_2_BAND:
+		r = __get_channel_list_via_getchaninfo(unit, buffer, len);
+		break;
+	case WL_60G_BAND:
+		r = __get_channel_list_via_iw(unit, buffer, len);
+		break;
+	default:
+		dbg("%s: Unknown wl%d band!\n", __func__, unit);
+	}
+
+	return r;
 }
 
 int qc98xx_verify_checksum(void *eeprom)
@@ -450,6 +635,10 @@ unsigned char G_BAND_REGION_1_CHANNEL_LIST[] =
     { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
 unsigned char G_BAND_REGION_5_CHANNEL_LIST[] =
     { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+
+/* Temporarilly workaround. */
+unsigned char AD_BAND_TMP_REGION_CHANNEL_LIST[] =
+    { 1, 2, 3, };
 
 #define A_BAND_REGION_0				0
 #define A_BAND_REGION_1				1
@@ -678,13 +867,13 @@ int get_channel_list_via_country(int unit, const char *country_code,
 	unsigned char *pChannelListTemp = NULL;
 	int index, num, i;
 	char *p = buffer;
-	int band = unit;
+	int band = unit, l = len;
 
 	if (buffer == NULL || len <= 0)
 		return -1;
 
 	memset(buffer, 0, len);
-	if (band != 0 && band != 1)
+	if (band < 0 || band >= MAX_NR_WL_IF)
 		return -1;
 
 	for (index = 0; index < NUM_OF_COUNTRIES; index++) {
@@ -696,7 +885,10 @@ int get_channel_list_via_country(int unit, const char *country_code,
 	if (index >= NUM_OF_COUNTRIES)
 		return 0;
 
-	if (band == 1)
+	if (band == WL_60G_BAND) {
+		num = ARRAY_SIZE(AD_BAND_TMP_REGION_CHANNEL_LIST);
+		pChannelListTemp = AD_BAND_TMP_REGION_CHANNEL_LIST;
+	} else if (band == 1)
 		switch (allCountry[index].RegDomainNum11A) {
 		case A_BAND_REGION_0:
 			num =
@@ -861,19 +1053,21 @@ int get_channel_list_via_country(int unit, const char *country_code,
 		}
 
 	if (pChannelListTemp != NULL) {
-		for (i = 0; i < num; i++) {
+		for (i = 0; len > 0 && i < num; i++) {
 #if 0
 			if (i == 0)
-				p += sprintf(p, "\"%d\"", pChannelListTemp[i]);
+				l = snprintf(p, len, "\"%d\"", pChannelListTemp[i]);
 			else
-				p += sprintf(p, ", \"%d\"",
+				l = snprintf(p, len, ", \"%d\"",
 					     pChannelListTemp[i]);
 #else
 			if (i == 0)
-				p += sprintf(p, "%d", pChannelListTemp[i]);
+				l = snprintf(p, len, "%d", pChannelListTemp[i]);
 			else
-				p += sprintf(p, ",%d", pChannelListTemp[i]);
+				l = snprintf(p, len, ",%d", pChannelListTemp[i]);
 #endif
+			p += l;
+			len -= l;
 		}
 	}
 
@@ -958,7 +1152,7 @@ static void set_nss_power_save_mode(void)
 	}
 
 	nss_min_freq = 110 * 1000000;
-	if (atoi(buf) == 1400000) {
+	if (safe_atoi(buf) == 1400000) {
 		nss_max_freq = 733 * 1000000;	/* IPQ8064 */
 	} else {
 		nss_max_freq = 800 * 1000000;	/* IPQ8065 */
@@ -1019,10 +1213,12 @@ char *get_lan_mac_name(void)
 	case MODEL_RTAC55UHP:	/* fall-through */
 	case MODEL_RT4GAC55U:	/* fall-through */
 	case MODEL_BRTAC828:	/* fall-through */
+	case MODEL_RTAD7200:	/* fall-through */
 	case MODEL_RTAC88S:	/* fall-through */
 	case MODEL_RTAC88N:	/* fall-through */
 	case MODEL_RPAC51:	/* fall-through */
         case MODEL_MAPAC1300:
+        case MODEL_VRZAC1300:
         case MODEL_MAPAC2200:
 		/* Use 5G MAC address as LAN MAC address. */
 		mac_name = "et1macaddr";
@@ -1052,6 +1248,7 @@ char *get_wan_mac_name(void)
 	case MODEL_RTAC55UHP:	/* fall-through */
 	case MODEL_RT4GAC55U:	/* fall-through */
 	case MODEL_BRTAC828:	/* fall-through */
+	case MODEL_RTAD7200:	/* fall-through */
 	case MODEL_RTAC88S:	/* fall-through */
 	case MODEL_RTAC88N:	/* fall-through */
 	case MODEL_RPAC51:	/* fall-through */
@@ -1196,25 +1393,31 @@ char *get_wlxy_ifname(int x, int y, char *buf)
 
 char *get_wififname(int band)
 {
-	const char *wif[] = { WIF_2G, WIF_5G, WIF_5G2 };
-	if(band <0 || band >= ARRAY_SIZE(wif))
+	const char *wif[] = { WIF_2G, WIF_5G, WIF_5G2, WIF_60G };
+	if (band < 0 || band >= ARRAY_SIZE(wif)) {
+		dbg("%s: Invalid wl%d band!\n", __func__, band);
 		band = 0;
+	}
 	return (char*) wif[band];
 }
 
 char *get_staifname(int band)
 {
-	const char *sta[] = { STA_2G, STA_5G, STA_5G2 };
-	if(band <0 || band >= ARRAY_SIZE(sta))
+	const char *sta[] = { STA_2G, STA_5G, STA_5G2, STA_60G };
+	if (band < 0 || band >= ARRAY_SIZE(sta)) {
+		dbg("%s: Invalid wl%d band!\n", __func__, band);
 		band = 0;
+	}
 	return (char*) sta[band];
 }
 
 char *get_vphyifname(int band)
 {
-	const char *vphy[] = { VPHY_2G, VPHY_5G, VPHY_5G2 };
-	if(band <0 || band >= ARRAY_SIZE(vphy))
+	const char *vphy[] = { VPHY_2G, VPHY_5G, VPHY_5G2, VPHY_60G };
+	if (band < 0 || band >= ARRAY_SIZE(vphy)) {
+		dbg("%s: Invalid wl%d band!\n", __func__, band);
 		band = 0;
+	}
 	return (char *) vphy[band];
 }
 

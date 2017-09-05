@@ -1,7 +1,7 @@
 /*
  * HND generic packet operation primitives
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -32,6 +32,12 @@
 void * hnd_pkt_frag_get(osl_t *osh, uint len, enum lbuf_type lbuf_type);
 #define PKTGET(osh, len, send)		(void *)hnd_pkt_get(osh, len)
 void * hnd_pkt_get(osl_t *osh, uint len);
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+#define PKTSWAPD11BUF(osh, p) lfbufpool_swap_d11_buf(osh, p)
+int lfbufpool_swap_d11_buf(osl_t *osh, void *p);
+#define PKTBUFEARLYFREE(osh, p) lfbufpool_early_free_buf(osh, p)
+void lfbufpool_early_free_buf(osl_t *osh, void *p);
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 #else
 #define PKTGETLF(osh, len, send, lbuf_type)	\
 	(void *)hnd_pkt_alloc(osh, len, lbuf_type)
@@ -238,6 +244,14 @@ void * hnd_pkt_get(osl_t *osh, uint len);
 
 #define PKTSETTXSPROCESSED(osh, lb)	({BCM_REFERENCE(osh); LBFP(lb)->flist.finfo\
 				[LB_FRAG_CTX].ctx.lfrag_flags |= LB_TXS_PROCESSED;})
+#ifdef BCM_DHDHDR
+#define PKTISTXPKTFETCHED(osh, lb)	({BCM_REFERENCE(osh); ((LBFP(lb)->flist.finfo \
+			[LB_FRAG_CTX].ctx.lfrag_flags & LB_TXP_FETCHED) ? 1 : 0);})
+#define PKTRESETTXPKTFETCHED(osh, lb)	({BCM_REFERENCE(osh); LBFP(lb)->flist.finfo \
+			[LB_FRAG_CTX].ctx.lfrag_flags &= ~LB_TXP_FETCHED;})
+#define PKTSETTXPKTFETCHED(osh, lb)	({BCM_REFERENCE(osh); LBFP(lb)->flist.finfo \
+			[LB_FRAG_CTX].ctx.lfrag_flags |= LB_TXP_FETCHED;})
+#endif /* BCM_DHDHDR */
 
 /* TX FRAG */
 #define PKTISTXFRAG(osh, lb)		({BCM_REFERENCE(osh); lb_is_txfrag(LBP(lb));})
@@ -271,6 +285,22 @@ void * hnd_pkt_get(osl_t *osh, uint len);
 	({BCM_REFERENCE(osh); lb_set_has_metadata((struct lbuf *)lb);})
 #define PKTRESETHASMETADATA(osh, lb)\
 	({BCM_REFERENCE(osh); lb_reset_has_metadata((struct lbuf *)lb);})
+
+#ifdef BCM_DHDHDR
+#define PKTSETBUF(osh, lb, buf, n) \
+	({BCM_REFERENCE(osh); lb_set_buf((struct lbuf *)lb, buf, n);})
+#define PKTHEAD(osh, lb) \
+	({BCM_REFERENCE(osh); lb_head(LBP(lb));})
+#define PKTFRAGSETTXSTATUS(osh, lb, txs) \
+	({BCM_REFERENCE(osh); \
+	((LBFP(lb)->flist.finfo[LB_FRAG_MAX].scb_cache.txstatus) = (txs));})
+#define PKTFRAGTXSTATUS(osh, lb)  ((LBFP(lb)->flist.finfo[LB_FRAG_MAX].scb_cache.txstatus))
+#define PKTSETWLFCSEQ(osh, lb, seq) ({BCM_REFERENCE(osh); ((LBP(lb)->fcseq) = (seq));})
+#define PKTWLFCSEQ(osh, lb)  ((LBP(lb)->fcseq))
+#define PKTFRAGFCTLV(osh, lb) \
+	({BCM_REFERENCE(osh); (LBFP(lb)->flist.finfo[LB_FRAG_MAX].fc_tlv);})
+#endif /* BCM_DHDHDR */
+
 
 #ifdef PKTC_DONGLE
 #define	PKTCSETATTR(s, f, p, b)	BCM_REFERENCE(s)

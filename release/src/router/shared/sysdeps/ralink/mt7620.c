@@ -100,7 +100,7 @@ enum {
 	CPU_PORT=6,
 	P7_PORT=7,
 };
-#elif defined(RTN56UB1) || defined(RTN56UB2)
+#elif defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC65U)
 enum {
 	WAN_PORT=4,
 	LAN1_PORT=3,
@@ -645,7 +645,7 @@ int mt7621_vlan_unset(int vid)
 }
 
 
-#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC54U) || defined(RTAC1200GA1)  || defined(RTAC1200GU) || defined(RPAC87) || defined(RTAC85U)
+#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC54U) || defined(RTAC1200GA1)  || defined(RTAC1200GU) || defined(RPAC87) || defined(RTAC85U) || defined(RTAC65U)
 /**
  * Get TX or RX byte count of WAN and WANS_LAN
  * @unit:	WAN unit.

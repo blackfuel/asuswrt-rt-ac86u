@@ -3,7 +3,7 @@
  *
  * Common transmit datapath components
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -11,7 +11,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_tx.c 658900 2016-09-10 11:23:22Z $
+ * $Id: wlc_tx.c 682548 2017-02-02 09:15:49Z $
  *
  */
 
@@ -285,6 +285,7 @@ struct txq_info {
 	wlc_pub_t *pub;
 	osl_t *osh;
 	txq_t *txq_list;
+	struct spktq *delq;     /* delete queue holding pkts-to-delete temporarily */
 #ifdef TXQ_LOG
 	uint16 log_len;
 	uint16 log_idx;
@@ -404,7 +405,7 @@ static const char *fifo_names[] = { "AC_BK", "AC_BE", "AC_VI", "AC_VO", "BCMC", 
 #endif
 
 static void wlc_pdu_txhdr(wlc_info_t *wlc, void *p, struct scb *scb, wlc_txh_info_t *txh_info);
-static void wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
+static int wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 	wlc_key_t *key, const wlc_key_info_t *key_info);
 static void wlc_update_txpktsuccess_stats(wlc_info_t *wlc, struct scb *scb, uint pkt_len,
 	uint8 prio);
@@ -466,6 +467,58 @@ static void *wlc_hdr_proc_safemode(wlc_info_t *wlc, void *sdu);
 
 int wlc_scb_peek_txfifo(wlc_info_t *wlc, struct scb *scb, void *sdu, uint *fifo);
 int wlc_scb_txfifo(wlc_info_t *wlc, struct scb *scb, void *sdu, uint *fifo);
+
+/* enqueue the packet to delete queue */
+static void
+wlc_txq_delq_enq(void *ctx, void *pkt)
+{
+	txq_info_t *txqi = ctx;
+	pktenq(txqi->delq, pkt);
+}
+
+/* flush the delete queue/free all the packet */
+static void
+wlc_txq_delq_flush(void *ctx)
+{
+	txq_info_t *txqi = ctx;
+	pktqflush(txqi->osh, txqi->delq);
+}
+
+/** * pktq filter function to delete pkts associated with an SCB */
+static pktq_filter_result_t
+wlc_txq_scb_free_filter(void* ctx, void* pkt)
+{
+	struct scb *scb = (struct scb *)ctx;
+	return (WLPKTTAGSCBGET(pkt) == scb) ? PKT_FILTER_DELETE: PKT_FILTER_NOACTION;
+}
+
+/** free all pkts asscoated with the given scb on a pktq for a prec */
+void
+wlc_txq_pktq_scb_pfilter(wlc_info_t *wlc, int prec, struct pktq *pq, struct scb *scb)
+{
+	pktq_pfilter(pq, prec, wlc_txq_scb_free_filter, scb,
+		wlc_txq_delq_enq, wlc->txqi, wlc_txq_delq_flush, wlc->txqi);
+}
+
+
+/** free all pkts asscoated with the given scb on a pktq for given precedences */
+void
+wlc_txq_pktq_scb_filter(wlc_info_t *wlc, uint prec_bmp, struct pktq *pq, struct scb *scb)
+{
+	uint prec;
+	int prec_cnt = PKTQ_MAX_PREC-1; // PKTQ_MAX_PREC is 16.
+
+	/* Loop over all precedences set in the bitmap */
+	while (prec_cnt >= 0) {
+		prec = (prec_bmp & (1 << prec_cnt));
+		if ((prec) && (!pktq_pempty(pq, prec_cnt))) {
+			WL_PRINT(("wl%d: filter %d packets of prec=%d for scb:0x%p\n",
+				wlc->pub->unit, pktq_plen(pq, prec_cnt), prec_cnt, scb));
+			wlc_txq_pktq_scb_pfilter(wlc, prec_cnt, pq, scb);
+		}
+		prec_cnt--;
+	}
+}
 
 /*
  * Clean up and fixups from wlc_txfifo()
@@ -690,6 +743,7 @@ wlc_tx_dma_timer(void *arg)
 	wlc_bmac_sched_aqm_fifo(wlc->hw);
 }
 #endif /* defined(BCM_DMA_CT) && defined(WLC_LOW) */
+
 static void BCMFASTPATH
 txq_hw_fill(txq_info_t *txqi, txq_t *txq, uint fifo_idx)
 {
@@ -2268,7 +2322,7 @@ wlc_scb_txfifo(wlc_info_t *wlc, struct scb *scb, void *pkt, uint *pfifo)
 		*pfifo = prio2fifo[prio];
 
 #ifdef WL_MU_TX
-		if (BSSCFG_AP(cfg) && SCB_MU(scb) && MU_TX_ENAB(wlc)) {
+		if (BSSCFG_AP(cfg) && MU_TX_ENAB(wlc)) {
 			wlc_mutx_sta_txfifo(wlc->mutx, scb, pfifo);
 		}
 #endif
@@ -2347,10 +2401,14 @@ wlc_pull_q(void *ctx, uint ac, int requested_time, struct spktq *output_q, uint 
 	/* find out how much room (measured in time) in this fifo of txq */
 	requested_time = txq_space(qi->low_txq, fifo);
 
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	requested_time = MIN(requested_time, lfbufpool_avail(D11_LFRAG_BUF_POOL));
+#endif
+
 	/* Send all the enq'd pkts that we can.
 	 * Dequeue packets with precedence with empty HW fifo only
 	 */
-	while (supplied_time < requested_time && prec_map &&
+	while ((supplied_time < requested_time) && prec_map &&
 		(pkt[0] = pktq_mdeq(q, prec_map, &prec))) {
 		/* Send AMPDU using wlc_sendampdu (calls wlc_txfifo() also),
 		 * SDU using wlc_prep_sdu and PDU using wlc_prep_pdu followed by
@@ -2562,6 +2620,13 @@ BCMATTACHFN(wlc_txq_attach)(wlc_info_t *wlc)
 	txqi->pub = wlc->pub;
 	txqi->osh = wlc->osh;
 
+	if ((txqi->delq = MALLOC(wlc->osh, sizeof(*(txqi->delq)))) == NULL) {
+		WL_ERROR(("wl%d: %s: MALLOC failed, malloced %d bytes\n",
+		          wlc->pub->unit, __FUNCTION__, MALLOCED(wlc->pub->osh)));
+		goto fail;
+	}
+	pktqinit(txqi->delq, PKTQ_LEN_MAX);
+
 	/* Register module entries. */
 	err = wlc_module_register(wlc->pub,
 	                          NULL /* txq_iovars */,
@@ -2627,6 +2692,11 @@ BCMATTACHFN(wlc_txq_detach)(txq_info_t *txqi)
 		txqi->log = NULL;
 	}
 #endif /* TXQ_LOG */
+
+	if (txqi->delq != NULL) {
+		pktqdeinit(txqi->delq);
+		MFREE(osh, txqi->delq, sizeof(*(txqi->delq)));
+	}
 
 	MFREE(osh, txqi, sizeof(txq_info_t));
 }
@@ -2694,6 +2764,39 @@ wlc_block_datafifo(wlc_info_t *wlc, uint32 mask, uint32 val)
 	}
 #endif  /* defined(NEW_TXQ) && defined(NEW_SCB_TXQ) */
 
+}
+
+/* This function will check if the packet has to be fragmeted or not
+ * and based on this for TKIp, pktdfetch will be done
+ */
+
+bool
+wlc_is_packet_fragmented(wlc_info_t *wlc, struct scb *scb,
+		wlc_bsscfg_t *bsscfg, void *lb)
+{
+	osl_t *osh = wlc->osh;
+	int btc_mode;
+	uint thresh, pkt_length, bt_thresh = 0;
+	uint8 prio = 0;
+
+	if (SCB_QOS(scb))
+		prio = (uint8)PKTPRIO((void *)lb);
+	thresh = wlc->fragthresh[WME_PRIO2AC(prio)];
+
+	btc_mode = wlc_btc_mode_get(wlc);
+	if (IS_BTCX_FULLTDM(btc_mode))
+		bt_thresh = wlc_btc_frag_threshold(wlc, scb);
+	if (bt_thresh)
+		thresh = thresh > bt_thresh ? bt_thresh : thresh;
+
+	pkt_length = pkttotlen(osh, (void *)lb);
+	pkt_length -= ETHER_HDR_LEN;
+	if (pkt_length < (thresh - (DOT11_A4_HDR_LEN + DOT11_QOS_LEN +
+			DOT11_FCS_LEN + ETHER_ADDR_LEN + TKIP_MIC_SIZE))) {
+		return (0);
+	}
+
+	return (1);
 }
 
 #ifdef NEW_TXQ
@@ -2974,9 +3077,6 @@ wlc_sendpkt(wlc_info_t *wlc, void *sdu, struct wlc_if *wlcif)
 #ifdef WLTDLS
 	struct scb *tdls_scb = NULL;
 #endif
-#ifdef WLNAR
-	bool nar_agg = 0;
-#endif
 	void *pkt, *n;
 	int8 bsscfgidx = -1;
 	uint32 lifetime = 0;
@@ -3012,8 +3112,7 @@ uint8 ret_cac = 0;
 	ASSERT(sdu != NULL);
 	ASSERT(PKTLEN(wlc->osh, sdu) >= ETHER_HDR_LEN);
 
-	if (PKTLEN(wlc->osh, sdu) < ETHER_HDR_LEN)
-	{
+	if (PKTLEN(wlc->osh, sdu) < ETHER_HDR_LEN) {
 		PKTCFREE(wlc->osh, sdu, TRUE);
 		return TRUE;
 	}
@@ -3308,6 +3407,11 @@ uint8 ret_cac = 0;
 	/* per-port code must keep track of WDS cookies */
 	ASSERT(!wds || SCB_WDS(scb));
 
+	/* Discard frame if wds link is down */
+	if (SCB_LEGACY_WDS(scb) && !(scb->flags & SCB_WDS_LINKUP)) {
+		WLCNTINCR(wlc->pub->_cnt->txnoassoc);
+		goto toss;
+	}
 
 #if defined(WLTDLS)
 	if (TDLS_SUPPORT(wlc->pub))
@@ -3484,22 +3588,11 @@ if (SCB_ISMULTI(scb))
 #if defined(PKTC) || defined(PKTC_TX_DONGLE)
 	prec = WLC_PRIO_TO_PREC(PKTPRIO(sdu));
 	next_fid = SCB_TXMOD_NEXT_FID(scb, TXMOD_START);
-#ifdef WLNAR
-	if (next_fid == TXMOD_NAR) {
-		WL_TRACE(("%s: nar mod for sdu %p chained %d\n",
-		          __FUNCTION__, sdu, PKTISCHAINED(sdu)));
-		nar_agg = nar_check_aggregation(scb, sdu, prec);
-
-		if (nar_agg) {
-			next_fid = SCB_TXMOD_NEXT_FID(scb, TXMOD_NAR);
-		}
-	}
-#endif
 
 #ifdef WLAMSDU_TX
-	if (AMSDU_TX_ENAB(wlc->pub) && PKTC_ENAB(wlc->pub) &&
-	    (next_fid == TXMOD_AMSDU) &&
-	    (SCB_TXMOD_NEXT_FID(scb, TXMOD_AMSDU) == TXMOD_AMPDU)) {
+	if (AMSDU_TX_ENAB(wlc->pub) &&	AMSDU_TX_AC_ENAB(wlc->ami, PKTPRIO(sdu)) &&
+			PKTC_ENAB(wlc->pub) && (next_fid == TXMOD_AMSDU) &&
+			(SCB_TXMOD_NEXT_FID(scb, TXMOD_AMSDU) == TXMOD_AMPDU)) {
 		/* When chaining and amsdu tx are enabled try doing AMSDU agg
 		 * while queing the frames to per scb queues.
 		 */
@@ -3508,29 +3601,16 @@ if (SCB_ISMULTI(scb))
 		SCB_TX_NEXT(TXMOD_AMSDU, scb, sdu, prec);
 	} else
 #endif
-	if (next_fid == TXMOD_AMPDU) {
+	if ((next_fid == TXMOD_AMPDU) || (next_fid == TXMOD_NAR)) {
 		WL_TRACE(("%s: ampdu mod for sdu %p chained %d\n",
 		          __FUNCTION__, sdu, PKTISCHAINED(sdu)));
-		/*
-		 * Corresponding to AMPDU module in chain,
-		 * the corresponding function call will be made
-		 * by refering to TXMOD_NAR in case NAR is enabled
-		 * or by refering to TXMOD_START otherwise
-		 */
-#ifdef WLNAR
-		if (nar_agg) {
-			SCB_TX_NEXT(TXMOD_NAR, scb, sdu, prec);
-		} else {
-#endif
+
 #if defined(BCMPCIEDEV)
 		if (BCMPCIEDEV_ENAB()) {
 			wlc_upd_flr_weight(wlc, scb, sdu);
 		}
 #endif /* BCMPCIEDEV */
 		SCB_TX_NEXT(TXMOD_START, scb, sdu, prec);
-#ifdef WLNAR
-		}
-#endif
 	} else {
 #if defined(BCMPCIEDEV)
 		if (BCMPCIEDEV_ENAB()) {
@@ -3538,7 +3618,8 @@ if (SCB_ISMULTI(scb))
 			cur_rspec = wlc_ravg_get_scb_cur_rspec(wlc, scb);
 		}
 #endif /* BCMPCIEDEV */
-		/* Modules other than ampdu are not aware of chaining */
+
+		/* Modules other than ampdu and NAR are not aware of chaining */
 		FOREACH_CHAINED_PKT(sdu, n) {
 			PKTCLRCHAINED(osh, sdu);
 			if (n != NULL)
@@ -3554,6 +3635,7 @@ if (SCB_ISMULTI(scb))
 #endif /* BCMPCIEDEV */
 			SCB_TX_NEXT(TXMOD_START, scb, sdu, prec);
 		}
+
 #if defined(BCMPCIEDEV)
 		if (BCMPCIEDEV_ENAB())
 			/* adding weight into the moving average buffer */
@@ -4149,9 +4231,14 @@ wlc_prep_sdu(wlc_info_t *wlc, struct scb *scb, void **pkts, int *npkts, uint *fi
 						((is_tkip && WLC_KEY_MIC_IN_HW(&key_info)) ?
 						(pkt_length - TKIP_MIC_SIZE) : pkt_length),
 						fifo, prio)) {
-						wlc_txfast(wlc, scb, sdu, pkt_length,
-							key, &key_info);
+						int err;
+
 						WLCNTINCR(wlc->pub->_cnt->txchit);
+						err = wlc_txfast(wlc, scb, sdu, pkt_length,
+							key, &key_info);
+						if (err != BCME_OK)
+							return err;
+
 						*npkts = 1;
 						goto done;
 					}
@@ -4160,6 +4247,13 @@ wlc_prep_sdu(wlc_info_t *wlc, struct scb *scb, void **pkts, int *npkts, uint *fi
 				}
 			}
 			ASSERT(i == 0);
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+			/* It's time to swap to use D11_BUFFER to construct mpdu */
+			if (PKTISTXFRAG(osh, sdu) && !PKTISTXPKTFETCHED(osh, sdu) &&
+				(PKTSWAPD11BUF(osh, sdu) != BCME_OK))
+				return BCME_BUSY;
+#endif
 			pkts[0] = sdu;
 		} else {
 			/* before fragmentation make sure the frame contents are valid */
@@ -4203,8 +4297,17 @@ wlc_prep_sdu(wlc_info_t *wlc, struct scb *scb, void **pkts, int *npkts, uint *fi
 						cur_len + SMS4_WPI_CBC_MAC_LEN);
 				}
 #endif /* BCMWAPI_WPI */
+
+				/* Copy the ETH in sdu to each pkts[i] fragment */
 				PKTPUSH(osh, pkts[i], ETHER_HDR_LEN);
 				bcopy((char*)eh, (char*)PKTDATA(osh, pkts[i]), ETHER_HDR_LEN);
+
+				/* Slow path, when BCM_DHDHDR is enabled,
+				 * each pkts[] has ether header 14B in dongle and host data addr
+				 * points to llc snap 8B in DHDHDR for first pkts[].
+				 * The others host data addr point to data partion in different
+				 * offest.
+				 */
 
 				/* Transfer SDU's pkttag info to the last fragment */
 				if (i == (nfrags - 1)) {
@@ -4283,7 +4386,7 @@ toss:
 /* driver fast path to send sdu using cached tx d11-phy-mac header (before llc/snap)
  *  doesn't support wsec and eap_restrict for now
  */
-static void BCMFASTPATH
+static int BCMFASTPATH
 wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 	wlc_key_t *key, const wlc_key_info_t *key_info)
 {
@@ -4309,6 +4412,13 @@ wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 
 	pkttag = WLPKTTAG(sdu);
 
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* It's time to swap to use D11_BUFFER to construct mpdu */
+	if (PKTISTXFRAG(wlc->osh, sdu) && !PKTISTXPKTFETCHED(wlc->osh, sdu) &&
+		(PKTSWAPD11BUF(wlc->osh, sdu) != BCME_OK))
+		return BCME_BUSY;
+#endif
+
 	/* headroom has been allocated, may have llc/snap header already */
 	/* uncomment after fixing osl_vx port
 	 * ASSERT(PKTHEADROOM(osh, sdu) >= (TXOFF - DOT11_LLC_SNAP_HDR_LEN - ETHER_HDR_LEN));
@@ -4321,6 +4431,7 @@ wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 
 	/* strip off ether header, copy cached tx header onto the front of the frame */
 	PKTPULL(osh, sdu, ETHER_HDR_LEN);
+
 	ASSERT(WLC_TXC_ENAB(wlc));
 
 	txh = (uint8*)wlc_txc_cp(wlc->txc, scb, sdu, &flags);
@@ -4360,10 +4471,11 @@ wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 
 #ifdef WLAMSDU_TX
 	/* fixup qos control field to indicate it is an AMSDU frame */
-	if (AMSDU_TX_ENAB(wlc->pub) && SCB_QOS(scb)) {
+	if (AMSDU_TX_ENAB(wlc->pub) &&	AMSDU_TX_AC_ENAB(wlc->ami, PKTPRIO(sdu)) &&
+			SCB_QOS(scb)) {
 		uint16 *qos;
 		qos = (uint16 *)((uint8 *)h + ((SCB_WDS(scb) || SCB_DWDS(scb)) ? DOT11_A4_HDR_LEN :
-		                                              DOT11_A3_HDR_LEN));
+				DOT11_A3_HDR_LEN));
 		/* set or clear the A-MSDU bit */
 		if (WLPKTFLAG_AMSDU(pkttag))
 			*qos |= htol16(QOS_AMSDU_MASK);
@@ -4464,8 +4576,11 @@ wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 	}
 
 	if (CAC_ENAB(wlc->pub) && (fifo != TX_BCMC_FIFO)) {
-		/* update cac used time with cached value */
-		if (wlc_cac_update_used_time(wlc->cac, WME_PRIO2AC(PKTPRIO(sdu)), -1, scb))
+		/* Request the usage of cached value for duration in CAC
+		 * update cac used time with cached value.
+		 */
+		if (wlc_cac_use_dur_cache(wlc->cac, WME_PRIO2AC(PKTPRIO(sdu)), PKTPRIO(sdu), scb,
+				(ltoh16(((d11actxh_t *)txh)->PktInfo.FrameLen))))
 			WL_ERROR(("wl%d: ac %d: txop exceeded allocated TS time\n",
 			          wlc->pub->unit, WME_PRIO2AC(PKTPRIO(sdu))));
 	}
@@ -4502,6 +4617,8 @@ wlc_txfast(wlc_info_t *wlc, struct scb *scb, void *sdu, uint pktlen,
 		pkttag->rspec = scb->scb_stats.tx_rate;
 #endif
 #endif /* PROP_TXSTATUS & WLFCTS */
+
+	return BCME_OK;
 }
 
 int BCMFASTPATH
@@ -4514,6 +4631,7 @@ wlc_prep_sdu_fast(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, struct scb *scb, void *
 #endif /* NEW_TXQ */
 	uint32 fifo;
 	uint8 prio = 0;
+	int err = BCME_OK;
 
 	ASSERT(SCB_AMPDU(scb));
 	ASSERT(!SCB_ISMULTI(scb));
@@ -4530,7 +4648,7 @@ wlc_prep_sdu_fast(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, struct scb *scb, void *
 	else
 		fifo = TX_AC_BE_FIFO;
 #ifdef WL_MU_TX
-	if (BSSCFG_AP(bsscfg) && SCB_MU(scb) && MU_TX_ENAB(wlc))
+	if (BSSCFG_AP(bsscfg) && MU_TX_ENAB(wlc))
 		wlc_mutx_sta_txfifo(wlc->mutx, scb, &fifo);
 #endif
 
@@ -4597,7 +4715,10 @@ wlc_prep_sdu_fast(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, struct scb *scb, void *
 			ASSERT((WLPKTTAG(sdu)->flags & WLF_TXCMISS) == 0);
 			if (wlc_txc_hit(txc, scb, sdu, pktlen, fifo, prio)) {
 				WLCNTINCR(wlc->pub->_cnt->txchit);
-				wlc_txfast(wlc, scb, sdu, pktlen, key, key_info);
+				err = wlc_txfast(wlc, scb, sdu, pktlen, key, key_info);
+				if (err != BCME_OK)
+					return err;
+
 				goto done;
 			}
 			WLPKTTAG(sdu)->flags |= WLF_TXCMISS;
@@ -4720,7 +4841,7 @@ wlc_txfifo_complete(wlc_info_t *wlc, uint fifo, uint16 txpktpend)
 	if (cfg == NULL)
 		return;
 
-	if (cfg->assoc == NULL)	{
+	if (cfg->assoc == NULL) {
 		WL_ERROR(("%s: cfg->assoc == NULL (assertion)\n", __FUNCTION__));
 		return;
 	}
@@ -5114,13 +5235,23 @@ wlc_allocfrag_txfrag(osl_t *osh, void *sdu, uint offset, uint frag_length,
 
 	/* Need 202 bytes of headroom for TXOFF, 22 bytes for amsdu path */
 	/* TXOFF + amsdu headroom */
-
-	if ((p1 = pktpool_get(SHARED_FRAG_POOL)) == NULL)
+	if ((p1 = pktpool_lfrag_get(SHARED_FRAG_POOL, D11_LFRAG_BUF_POOL)) == NULL)
 		return (NULL);
 
 	PKTPULL(osh, p1, 224);
 	PKTSETLEN(osh, p1, 0);
 
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* The sdu packet it has ETH 14B in DNG and 8B LSH in BCM_DHDHDR.
+	 * The first fragment pkts[0], it must have 8B LSH in BCM_DHDHDR as well
+	 * we don't generate it in DNG, so pkt[0] has same data address as sdu.
+	 * So don't PKTPUSH DOT11_LLC_SNAP_HDR_LEN in DNG and don't subtract
+	 * DOT11_LLC_SNAP_HDR_LEN from plen.
+	 * So for BCM_DHDHDR we get new txlfrag with D11_BUFFER and setup HOST
+	 * data_address len .etc for each fragment pkt.  Now in this function each pkts[]'s
+	 * length is 0, the caller will push ETH 14B and copy it from sdu to each pkts[].
+	 */
+#else
 	/* If first fragment, copy LLC/SNAP header
 	 * Host fragment length in this case, becomes plen - DOT11_LLC_SNAP hdr len
 	 */
@@ -5135,6 +5266,7 @@ wlc_allocfrag_txfrag(osl_t *osh, void *sdu, uint offset, uint frag_length,
 		 */
 		offset -= DOT11_LLC_SNAP_HDR_LEN;
 	}
+#endif /* BCM_DHDHDR && DONGLEBUILD */
 
 	/* Set calculated address offsets for Host data */
 	PKTSETFRAGDATA_HI(osh, p1, 1, PKTFRAGDATA_HI(osh, sdu, 1));
@@ -5357,6 +5489,8 @@ wlc_dofrag(wlc_info_t *wlc, void *p, uint frag, uint nfrags,
 		if (TXC_CACHE_ENAB(txc) && (nfrags == 1) &&
 		    !(WLPKTTAG(p)->flags & WLF_BYPASS_TXC) &&
 		    !BSSCFG_SAFEMODE(cfg)) {
+			wlc_cac_update_dur_cache(wlc->cac, WME_PRIO2AC(PKTPRIO(p)), PKTPRIO(p),
+					scb, 0, 0, WLC_CAC_DUR_CACHE_REFRESH);
 			wlc_txc_add(txc, scb, p, txc_hdr_len, fifo, prio, txh_off, d11hdr_len);
 		}
 	}
@@ -5448,8 +5582,18 @@ wlc_hdr_proc(wlc_info_t *wlc, void *sdu, struct scb *scb)
 	void *pkt, *phdr;
 	int prio, use_phdr;
 	uint16 ether_type;
+	uint headroom = TXOFF;
 
 	osh = wlc->osh;
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+	/* When BCM_DHDHDR enabled dongle uses D3_BUFFER by default,
+	* it doesn't have extra headroom to construct 802.3 or 802.11 header.
+	* The DHD host driver will prepare the 802.3 header for dongle.
+	*/
+	if (PKTISTXFRAG(osh, sdu) && !PKTISTXPKTFETCHED(osh, sdu))
+		headroom = 0;
+#endif
 
 	/* allocate enough room once for all cases */
 	prio = PKTPRIO(sdu);
@@ -5464,7 +5608,7 @@ wlc_hdr_proc(wlc_info_t *wlc, void *sdu, struct scb *scb)
 
 #endif /* WLC_LOW */
 
-	if ((uint)PKTHEADROOM(osh, sdu) < TXOFF || PKTSHARED(sdu) || (use_phdr && phdr)) {
+	if ((uint)PKTHEADROOM(osh, sdu) < headroom || PKTSHARED(sdu) || (use_phdr && phdr)) {
 		if (use_phdr && phdr)
 			pkt = phdr;
 		else
@@ -5532,7 +5676,8 @@ wlc_hdr_proc(wlc_info_t *wlc, void *sdu, struct scb *scb)
 	eh = (struct ether_header *)PKTDATA(osh, sdu);
 
 	if (prio && !SCB_QOS(scb)) {
-		if ((wlc->vlan_mode != OFF) && (ntoh16(eh->ether_type) != ETHER_TYPE_8021Q)) {
+		if (headroom != 0 && (wlc->vlan_mode != OFF) &&
+			(ntoh16(eh->ether_type) != ETHER_TYPE_8021Q)) {
 			struct ethervlan_header *vh;
 			struct ether_header da_sa;
 
@@ -5582,7 +5727,23 @@ wlc_hdr_proc(wlc_info_t *wlc, void *sdu, struct scb *scb)
 
 		/* save original type in pkt tag */
 		WLPKTTAG(sdu)->flags |= WLF_NON8023;
-		wlc_ether_8023hdr(wlc, osh, eh, sdu);
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+		/* When BCM_DHDHDR enabled, dongle just need to adjust the host data addr to
+		 * include llc snal 8B in host.
+		 */
+		if (headroom == 0) {
+			PKTSETFRAGDATA_LO(wlc->osh, sdu, 1,
+				PKTFRAGDATA_LO(wlc->osh, sdu, 1) - DOT11_LLC_SNAP_HDR_LEN);
+			PKTSETFRAGLEN(wlc->osh, sdu, 1,
+				PKTFRAGLEN(wlc->osh, sdu, 1) + DOT11_LLC_SNAP_HDR_LEN);
+			PKTSETFRAGTOTLEN(wlc->osh, sdu,
+				PKTFRAGTOTLEN(wlc->osh, sdu) + DOT11_LLC_SNAP_HDR_LEN);
+		} else
+#endif /* BCM_DHDHDR && DONGLEBUILD */
+		{
+			wlc_ether_8023hdr(wlc, osh, eh, sdu);
+		}
 	}
 
 	return sdu;
@@ -5706,6 +5867,8 @@ wlc_d11n_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, ui
 	uint8 sgi_tx;
 	wlc_ht_info_t *hti = wlc->hti;
 #endif /* WL11N */
+	uint keyinfo_len = 0;
+
 	ASSERT(scb != NULL);
 	ASSERT(queue < NFIFO);
 
@@ -5741,17 +5904,18 @@ wlc_d11n_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, ui
 	 */
 	if (key_info != NULL) {
 		if (WLC_KEY_IS_MGMT_GROUP(key_info))
-			phylen += WLC_KEY_MMIC_IE_LEN(key_info);
+			keyinfo_len = WLC_KEY_MMIC_IE_LEN(key_info);
 		else
-			phylen += key_info->icv_len;
+			keyinfo_len = key_info->icv_len;
 
 		/* external crypto adds iv to the pkt, include it in phylen */
 		if (WLC_KEY_IS_LINUX_CRYPTO(key_info))
-			phylen += key_info->iv_len;
+			keyinfo_len += key_info->iv_len;
 
 		if (WLC_KEY_FRAG_HAS_TKIP_MIC(p, key_info, frag, nfrags))
-			phylen += TKIP_MIC_SIZE;
+			keyinfo_len += TKIP_MIC_SIZE;
 	}
+	phylen += keyinfo_len;
 
 	WL_NONE(("wl%d: %s: len %d, phylen %d\n", WLCWLUNIT(wlc), __FUNCTION__, len, phylen));
 
@@ -6629,6 +6793,8 @@ wlc_d11n_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, ui
 
 			if (CAC_ENAB(wlc->pub) &&
 				queue <= TX_AC_VO_FIFO) {
+				wlc_cac_update_dur_cache(wlc->cac, ac, PKTPRIO(p), scb, dur,
+					(phylen - keyinfo_len), WLC_CAC_DUR_CACHE_PREP);
 				/* update cac used time */
 				if (wlc_cac_update_used_time(wlc->cac, ac, dur, scb))
 					WL_ERROR(("wl%d: ac %d: txop exceeded allocated TS time\n",
@@ -6654,6 +6820,8 @@ wlc_d11n_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, ui
 		}
 
 		/* update cac used time */
+		wlc_cac_update_dur_cache(wlc->cac, ac, PKTPRIO(p), scb, dur,
+				(phylen - keyinfo_len), WLC_CAC_DUR_CACHE_PREP);
 		if (wlc_cac_update_used_time(wlc->cac, ac, dur, scb))
 			WL_ERROR(("wl%d: ac %d: txop exceeded allocated TS time\n",
 				wlc->pub->unit, ac));
@@ -6799,7 +6967,7 @@ wlc_d11ac_hdrs_rts_cts(struct scb *scb /* [in] */, wlc_bsscfg_t *bsscfg /* [in] 
 
 		/* RTS/CTS Rate index - Bits 3-0 of plcp byte0	*/
 		phy_rate = rate_info[rts_rate] & 0xf;
-		rate_hdr->RtsCtsControl |= htol16((phy_rate << 8));
+		rate_hdr->RtsCtsControl |= htol16((phy_rate << D11AC_RTSCTS_RATE_SHIFT));
 	} else {
 		rate_hdr->RtsCtsControl = 0;
 	}
@@ -6868,7 +7036,6 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 #if defined(WL_BEAMFORMING)
 	uint8 bf_shm_index = BF_SHM_IDX_INV, bf_shmx_idx = BF_SHM_IDX_INV;
 	bool bfen = FALSE, fbw_bfen = FALSE;
-	bool mutx_en = FALSE, mutx_on = FALSE;
 #endif /* WL_BEAMFORMING */
 	uint8 fbw = FBW_BW_INVALID; /* fallback bw */
 	txpwr204080_t txpwrs;
@@ -6878,6 +7045,7 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 	bool mutx_pkteng_on = FALSE;
 	wl_tx_chains_t txbf_chains = 0;
 	uint8	bfe_sts_cap = 0, txbf_uidx = 0;
+	uint keyinfo_len = 0;
 #if defined(WL_PROT_OBSS) && !defined(WL_PROT_OBSS_DISABLED)
 	ratespec_t phybw = (CHSPEC_IS8080(wlc->chanspec) || CHSPEC_IS160(wlc->chanspec)) ?
 		RSPEC_BW_160MHZ :
@@ -6926,17 +7094,18 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 	 */
 	if (key_info != NULL) {
 		if (WLC_KEY_IS_MGMT_GROUP(key_info))
-			phylen += WLC_KEY_MMIC_IE_LEN(key_info);
+			keyinfo_len = WLC_KEY_MMIC_IE_LEN(key_info);
 		else
-			phylen += key_info->icv_len;
+			keyinfo_len = key_info->icv_len;
 
 		/* external crypto adds iv to the pkt, include it in phylen */
 		if (WLC_KEY_IS_LINUX_CRYPTO(key_info))
-			phylen += key_info->iv_len;
+			keyinfo_len += key_info->iv_len;
 
 		if (WLC_KEY_FRAG_HAS_TKIP_MIC(p, key_info, frag, nfrags))
-			phylen += TKIP_MIC_SIZE;
+			keyinfo_len += TKIP_MIC_SIZE;
 	}
+	phylen += keyinfo_len;
 
 	WL_NONE(("wl%d: %s: len %d, phylen %d\n", WLCWLUNIT(wlc), __FUNCTION__, len, phylen));
 
@@ -7137,18 +7306,23 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 #endif
 
 #ifdef WL_MU_TX
-	if (SCB_MU(scb)) {
-		bf_shmx_idx = wlc_txbf_get_mubfi_idx(wlc->txbf, scb);
-	}
+	bf_shmx_idx = wlc_txbf_get_mubfi_idx(wlc->txbf, scb);
 	if (bf_shmx_idx != BF_SHM_IDX_INV) {
-		/* link is capable of mutx and has been enabled to do mutx */
-		mutx_en = TRUE;
-		if (WLPKTFLAG_AMPDU(pkttag) &&
+		/* link is capable of using mu sounding enabled in shmx bfi interface  */
+		mch |= D11AC_TXC_BFIX;
+		if (SCB_MU(scb) && WLPKTFLAG_AMPDU(pkttag) &&
 #if defined(BCMDBG) || defined(BCMDBG_MU)
 		wlc_mutx_on(wlc->mutx) &&
 #endif
 		TRUE) {
-			mutx_on = TRUE;
+			/* link is capable of mutx and has been enabled to do mutx */
+			mch |= D11AC_TXC_MU;
+#ifdef WL_MUPKTENG
+			if (mutx_pkteng_on) {
+				mcl |=  D11AC_TXC_AMPDU;
+				mch &= ~D11AC_TXC_SVHT;
+			}
+#endif
 		}
 	}
 #endif /* WL_MU_TX */
@@ -7416,7 +7590,7 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 			(wlc->allow_txbf) &&
 			(preamble_type != WLC_GF_PREAMBLE) &&
 			!SCB_ISMULTI(scb) &&
-			(type == FC_TYPE_DATA) && !mutx_en &&
+			(type == FC_TYPE_DATA) &&
 			!WLC_PHY_AS_80P80(wlc, wlc->chanspec)) {
 			ratespec_t fbw_rspec;
 			uint16 txpwr_mask, stbc_val;
@@ -7441,6 +7615,8 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 					RSPEC_BW_SHIFT) - BW_20MHZ][TXBF_OFF_IDX])) & txpwr_mask;
 				rate_hdr->Bfm0 |=
 					(uint16)(RSPEC_ISSTBC(rspec) ? stbc_val : 0);
+
+				rate_hdr->Bfm0 = htol16(rate_hdr->Bfm0);
 			}
 
 			txpwr_bfsel = bfen ? 1 : 0;
@@ -7564,24 +7740,33 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 		                       &rts_preamble_type, &mcl);
 #ifdef WL_BEAMFORMING
 		if (TXBF_ENAB(wlc->pub)) {
-			if (bfen) {
+			bool mutx_on = ((k == 0) && (mch & D11AC_TXC_MU));
+			if (bfen || mutx_on) {
 				if (bf_shm_index != BF_SHM_IDX_INV) {
 					rate_hdr->RtsCtsControl |= htol16((bf_shm_index <<
 						D11AC_RTSCTS_BF_IDX_SHIFT));
+				}
+				else if (mutx_on) {
+					/* Allow MU txbf even if SU explicit txbf is not allowed.
+					 * If still implicit SU txbf capable and if we end up
+					 * doing it, we won't have its index in the header
+					 * but it is okay as ucode correctly calculates it.
+					 */
+					rate_hdr->RtsCtsControl |= htol16((bf_shmx_idx <<
+						D11AC_RTSCTS_BF_IDX_SHIFT));
+					WL_TXBF(("wl:%d %s MU txbf capable with %s SU txbf\n",
+						wlc->pub->unit, __FUNCTION__,
+						(bfen ? "IMPLICIT" : "NO")));
 				} else {
 					rate_hdr->RtsCtsControl |= htol16(D11AC_RTSCTS_IMBF);
 				}
-			} else if (mutx_on && (k == 0)) {
-				rate_hdr->RtsCtsControl |= htol16((bf_shmx_idx <<
-						D11AC_RTSCTS_BF_IDX_SHIFT));
-			}
-			/* Move wlc_txbf_fix_rspec_plcp() here to remove RSPEC_STBC
-			 * from rspec before wlc_acphy_txctl0_calc_ex().
-			 * rate_hdr->PhyTxControlWord_0 will not set D11AC2_PHY_TXC_STBC
-			 * if this rate enable txbf.
-			 */
-			if (bfen || mutx_on)
+				/* Move wlc_txbf_fix_rspec_plcp() here to remove RSPEC_STBC
+				 * from rspec before wlc_acphy_txctl0_calc_ex().
+				 * rate_hdr->PhyTxControlWord_0 will not set D11AC2_PHY_TXC_STBC
+				 * if this rate enable txbf.
+				 */
 				wlc_txbf_fix_rspec_plcp(wlc->txbf, &rspec, plcp, txbf_chains);
+			}
 		}
 #endif /* WL_BEAMFORMING */
 		/* PhyTxControlWord_0 */
@@ -7601,7 +7786,7 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 		}
 #endif
 #ifdef WL_BEAMFORMING
-		if (bfen && !mutx_en) {
+		if (bfen) {
 			phyctl |= (D11AC_PHY_TXC_BFM);
 		} else {
 			if (wlc_txbf_bfmspexp_enable(wlc->txbf) &&
@@ -7714,6 +7899,8 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 
 				if (CAC_ENAB(wlc->pub) &&
 					queue <= TX_AC_VO_FIFO) {
+					wlc_cac_update_dur_cache(wlc->cac, ac, PKTPRIO(p), scb, dur,
+						(phylen - keyinfo_len), WLC_CAC_DUR_CACHE_PREP);
 					/* update cac used time */
 					if (wlc_cac_update_used_time(wlc->cac, ac, dur, scb))
 						WL_ERROR(("wl%d: ac %d: txop exceeded allocated TS"
@@ -7738,6 +7925,8 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 				dur = wlc_calc_frame_time(wlc, rspec, preamble_type, phylen);
 				dur += wlc_compute_frame_dur(wlc, rspec, preamble_type, 0);
 			}
+			wlc_cac_update_dur_cache(wlc->cac, ac, PKTPRIO(p), scb, dur,
+				(phylen - keyinfo_len), WLC_CAC_DUR_CACHE_PREP);
 			/* update cac used time */
 			if (wlc_cac_update_used_time(wlc->cac, ac, dur, scb))
 				WL_ERROR(("wl%d: ac %d: txop exceeded allocated TS time\n",
@@ -7749,17 +7938,6 @@ wlc_d11ac_hdrs(wlc_info_t *wlc, void *p, struct scb *scb, uint txparams_flags, u
 
 	/* Mark last rate */
 	rate_blk[cur_rate.num-1].RtsCtsControl |= htol16(D11AC_RTSCTS_LAST_RATE);
-#ifdef WL_BEAMFORMING
-	if (mutx_on) {
-		mch |= D11AC_TXC_MU;
-#ifdef WL_MUPKTENG
-		if (mutx_pkteng_on) {
-			mcl |=  D11AC_TXC_AMPDU;
-			mch &= ~D11AC_TXC_SVHT;
-		}
-#endif
-	}
-#endif /* WL_BEAMFORMING */
 	txh->PktInfo.MacTxControlLow = htol16(mcl);
 	txh->PktInfo.MacTxControlHigh = htol16(mch);
 
@@ -8501,6 +8679,42 @@ wlc_txq_freed_pkt_time(wlc_info_t *wlc, void *pkt, uint16 *time_adj)
 #endif /* TXQ_MUX */
 }
 
+#ifdef AP
+/**
+ * This function is used to 'reset' bcmc administration for all applicable bsscfgs to prevent bcmc
+ * fifo lockup.
+ * Should only be called when there is no more bcmc traffic pending due to flush.
+ */
+void
+wlc_tx_fifo_sync_bcmc_reset(wlc_info_t *wlc)
+{
+	uint i;
+
+	if (MBSS_ENAB(wlc->pub)) {
+		wlc_bsscfg_t *cfg = NULL;
+		FOREACH_AP(wlc, i, cfg) {
+			if (cfg->bcmc_fid_shm != INVALIDFID) {
+				WL_INFORM(("%s: cfg(%p) bcmc_fid = 0x%x bcmc_fid_shm = 0x%x,"
+						"resetting bcmc_fids mc_pkts %d\n", __FUNCTION__,
+						cfg, cfg->bcmc_fid, cfg->bcmc_fid_shm,
+						TXPKTPENDGET(wlc, TX_BCMC_FIFO)));
+			}
+			/* Let's reset the FIDs since we have completed flush */
+			wlc_mbss_bcmc_reset(wlc, cfg);
+		}
+	} else if (wlc->cfg != NULL) {
+		struct scb *bcmc_scb = WLC_BCMCSCB_GET(wlc, wlc->cfg);
+		if (bcmc_scb != NULL) {
+			BCMCFID(wlc, INVALIDFID);
+			if ((SCB_PS(bcmc_scb) == TRUE) &&
+				(!BSSCFG_IBSS(wlc->cfg) || !AIBSS_ENAB(wlc->pub))) {
+				bcmc_scb->PS = FALSE;
+			}
+		}
+	}
+}
+#endif /* AP */
+
 #ifdef WL_MULTIQUEUE
 static void
 wlc_attach_queue(wlc_info_t *wlc, wlc_txq_info_t *qi)
@@ -8754,7 +8968,7 @@ int
 wlc_tx_fifo_hold_set(wlc_info_t *wlc, uint fifo_bitmap)
 {
 	uint i, fbmp;
-	uint txpktpendtot = 0;
+	uint flush_fbmp = 0;
 
 	if ((wlc->txfifo_detach_pending) || (wlc->excursion_active)) {
 		return BCME_NOTREADY;
@@ -8763,7 +8977,10 @@ wlc_tx_fifo_hold_set(wlc_info_t *wlc, uint fifo_bitmap)
 	for (i = 0, fbmp = fifo_bitmap; fbmp; i++, fbmp = fbmp >> 1) {
 		if ((fbmp & 0x01) == 0)
 			continue;
-		txpktpendtot += TXPKTPENDGET(wlc, i);
+		if (TXPKTPENDGET(wlc, i) > 0) {
+			/* flush only fifos with pending pkts */
+			flush_fbmp |= (1 << i);
+		}
 
 		/* Do not allow any new packets to flow to the fifo from the active_queue
 		 * while we are synchronizing the fifo for the active_queue.
@@ -8780,10 +8997,10 @@ wlc_tx_fifo_hold_set(wlc_info_t *wlc, uint fifo_bitmap)
 	 * packets' txstatus have been processed. The call may be done
 	 * before wlc_bmac_tx_fifo_sync() returns, or after in a split driver.
 	 */
-	if (txpktpendtot) {
+	if (flush_fbmp) {
 		wlc->txfifo_detach_pending = TRUE;
 		wlc->txfifo_detach_transition_queue = wlc->active_queue;
-		wlc_bmac_tx_fifo_sync(wlc->hw, fifo_bitmap, SYNCFIFO);
+		wlc_bmac_tx_fifo_sync(wlc->hw, flush_fbmp, FLUSHFIFO);
 	}
 
 	return BCME_OK;
@@ -8950,10 +9167,10 @@ wlc_low_txq_account(wlc_info_t *wlc, txq_t *low_txq, uint fifo_idx,
 	void *pkt;
 	struct swpktq *swq;
 	struct spktq pkt_list;
-#if defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS)
+#if defined(WLAMPDU_MAC)
 	uint8 flipEpoch = 0;
 	uint8 lastEpoch = HEAD_PKT_FLUSHED;
-#endif /* defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS) */
+#endif /* defined(WLAMPDU_MAC) */
 
 	pktqinit(&pkt_list, -1);
 	swq = low_txq->swq;
@@ -8963,9 +9180,9 @@ wlc_low_txq_account(wlc_info_t *wlc, txq_t *low_txq, uint fifo_idx,
 		wlc_get_txh_info(wlc, pkt, &txh_info);
 
 		if (!wlc_recover_pkt_scb(wlc, pkt, &txh_info)) {
-#if defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS)
+#if defined(WLAMPDU_MAC)
 			flipEpoch |= TXQ_PKT_DEL;
-#endif /* defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS) */
+#endif /* defined(WLAMPDU_MAC) */
 			wlc_txq_free_pkt(wlc, pkt, time_adj);
 			continue;
 		}
@@ -8977,80 +9194,57 @@ wlc_low_txq_account(wlc_info_t *wlc, txq_t *low_txq, uint fifo_idx,
 			WL_INFORM(("MQ: %s: cancel TxQ short-lived pkt %p"
 				" during chsw...\n",
 				__FUNCTION__, pkt));
-#if defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS)
+#if defined(WLAMPDU_MAC)
 			flipEpoch |= TXQ_PKT_DEL;
-#endif /* defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS) */
+#endif /* defined(WLAMPDU_MAC) */
 
 			wlc_txq_free_pkt(wlc, pkt, time_adj);
 			continue;
 		}
 
-		if (flag == SYNCFIFO) {
+		/* For the following cases, pkt is freed here:
+		 * 1. flag is FLUSHFIFO and all packets should be freed.
+		 * 2. flag is FLUSHFIFO_FLUSHID and the flowring ID matches.
+		 * 3. flag is FLUSHFIFO_FLUSHSCB and the scb pointer matches.
+		 */
+		if ((flag == FLUSHFIFO) ||
 #ifdef PROP_TXSTATUS
-			if (wlc_proptxstatus_process_pkt(wlc, pkt, time_adj) == NULL) {
-#ifdef WLAMPDU_MAC
-				flipEpoch |= TXQ_PKT_DEL;
-				continue;
-#endif /* WLAMPDU_MAC */
-			}
-			else
-			{
-				/* not a host packet or pktfree not allowed
-				* enqueue it back
-				*/
-#ifdef WLAMPDU_MAC
-				wlc_epoch_upd(wlc, pkt, &flipEpoch, &lastEpoch);
-				/* clear pkt delete condition */
-				flipEpoch &= ~TXQ_PKT_DEL;
-#endif /* WLAMPDU_MAC */
-				pktenq(&pkt_list, pkt);
-			}
-#else
-				pktenq(&pkt_list, pkt);
+			((flag == FLUSHFIFO_FLUSHID) &&
+				(wlc->fifoflush_id == PKTFRAGFLOWRINGID(wlc->osh, pkt))) ||
 #endif /* PROP_TXSTATUS */
-		}
-#ifdef PROP_TXSTATUS
-		else if (flag == FLUSHFIFO_FLUSHID) {
-			if (wlc->fifoflush_id == PKTFRAGFLOWRINGID(wlc->osh, pkt)) {
+			((flag == FLUSHFIFO_FLUSHSCB) &&
+				(wlc->fifoflush_scb == WLPKTTAGSCBGET(pkt)))) {
 #if defined(WLAMPDU_MAC)
-				flipEpoch |= TXQ_PKT_DEL;
+			flipEpoch |= TXQ_PKT_DEL;
 #endif /* defined(WLAMPDU_MAC) */
-				wlc_txq_free_pkt(wlc, pkt, time_adj);
-				continue;
-			}
-			else {
-				/* sync the remaining packets */
-				if (wlc_proptxstatus_process_pkt(wlc, pkt, time_adj) == NULL) {
-					/* epcho flip ? */
-#if defined(WLAMPDU_MAC)
-					flipEpoch |= TXQ_PKT_DEL;
-#endif /* defined(WLAMPDU_MAC) */
-				} else {
-					/* not a host packet or pktfree not allowed
-					* enqueue it back
-					*/
-#ifdef WLAMPDU_MAC
-					wlc_epoch_upd(wlc, pkt, &flipEpoch, &lastEpoch);
-					/* clear pkt delete condition */
-					flipEpoch &= ~TXQ_PKT_DEL;
-#endif /* WLAMPDU_MAC */
-					pktenq(&pkt_list, pkt);
-				}
-			}
-		}
-#endif /* PROP_TXSTATUS */
-		/* Add new flag like FLUSHFIFO_FLUSHID
-		* above this else block in an else-if {}
-		*/
-		else {
-			/* FLUSHFIFO should be fallback mode of operation
-			* FOR ASSERT builds, FW must TRAP if incorrect flag
-			* for sync/flush is passed. For non-ASSERT builds,
-			* it's perhaps best to just FLUSH the packets.
-			*/
-			ASSERT(flag == FLUSHFIFO);
 			wlc_txq_free_pkt(wlc, pkt, time_adj);
+			continue;
 		}
+
+		/* For the following cases, pkt needs to be queued back:
+		 * 1. flag is SYNCFIFO and packets are supposed to be queued back.
+		 * 2. flag is FLUSHFIFO_FLUSHID but the flowring ID doesn't match.
+		 * 3. flag is FLUSHFIFO_FLUSHSCB but the scb pointer doesn't match.
+		 */
+#ifdef PROP_TXSTATUS
+		/* Go through the proptxstatus process before queuing back */
+		if (wlc_proptxstatus_process_pkt(wlc, pkt, time_adj) == NULL) {
+#ifdef WLAMPDU_MAC
+			flipEpoch |= TXQ_PKT_DEL;
+#endif /* WLAMPDU_MAC */
+			continue;
+		}
+#endif /* PROP_TXSTATUS */
+
+		/* not a host packet or pktfree not allowed
+		 * enqueue it back
+		 */
+#ifdef WLAMPDU_MAC
+		wlc_epoch_upd(wlc, pkt, &flipEpoch, &lastEpoch);
+		/* clear pkt delete condition */
+		flipEpoch &= ~TXQ_PKT_DEL;
+#endif /* WLAMPDU_MAC */
+		pktenq(&pkt_list, pkt);
 	}
 	pktq_sw_prepend(swq, fifo_idx, &pkt_list);
 }
@@ -9138,6 +9332,15 @@ wlc_tx_fifo_sync_complete(wlc_info_t *wlc, uint fifo_bitmap, uint8 flag)
 		if ((TXPKTPENDGET(wlc, i) > 0) && (time_adj > 0)) {
 			WLC_TXFIFO_COMPLETE(wlc, i, time_adj,
 				wlc_txq_buffered_time(low_txq, i));
+		}
+
+		/**
+		 * Rather than checking fids on a per-packet basis using wlc_mbss_dotxstatus_mcmx
+		 * for each freed bcmc packet in wlc_low_txq_account, simply 'reset' the bcmc
+		 * administration. (a speed optimization)
+		 */
+		if ((i == TX_BCMC_FIFO) && (TXPKTPENDGET(wlc, i) == 0)) {
+			wlc_tx_fifo_sync_bcmc_reset(wlc);
 		}
 
 #ifdef WLAMPDU_MAC
@@ -9248,6 +9451,49 @@ wlc_tx_fifo_attach_complete(wlc_info_t *wlc)
 	       counts[3].pend, counts[3].pkt, counts[3].txp,
 	       counts[4].pend, counts[4].pkt, counts[4].txp,
 	       counts[5].pend, counts[5].pkt, counts[5].txp));
+}
+
+void
+wlc_tx_fifo_scb_flush(wlc_info_t *wlc, struct scb *remove)
+{
+	wlc_txq_info_t *active_queue;
+	uint i, fbmp, fifo_bitmap = 0x0F;
+
+	/* Flush packets in HW FIFO. */
+	if (!wlc->txfifo_detach_pending) {
+		if (wlc->excursion_active == FALSE)
+			active_queue = wlc->active_queue;
+		else
+			active_queue = wlc->excursion_queue;
+
+#ifdef WL_MU_TX
+		if (wlc_mutx_sta_client_index(wlc->mutx, remove) != MU_CLIENT_INDEX_NONE) {
+			fifo_bitmap = 0;
+			wlc_mutx_sta_fifo_bitmap(wlc->mutx, remove, &fifo_bitmap);
+		}
+#endif
+		for (i = 0, fbmp = fifo_bitmap; fbmp; i++, fbmp = fbmp >> 1) {
+			if ((fbmp & 0x01) == 0)
+				continue;
+			if (TXPKTPENDGET(wlc, i) <= 0)
+				fifo_bitmap &= ~(1 << i);
+			else
+				txq_hw_hold_set(active_queue->low_txq, i);
+		}
+
+		if (fifo_bitmap != 0) {
+			wlc->txfifo_detach_transition_queue = active_queue;
+			wlc->txfifo_detach_pending = TRUE;
+			wlc->fifoflush_scb = remove;
+			wlc_bmac_tx_fifo_sync(wlc->hw, fifo_bitmap, FLUSHFIFO_FLUSHSCB);
+		}
+
+		for (i = 0, fbmp = fifo_bitmap; fbmp; i++, fbmp = fbmp >> 1) {
+			if ((fbmp & 0x01) == 0)
+				continue;
+			txq_hw_hold_clr(active_queue->low_txq, i);
+		}
+	}
 }
 #else /* NEW_TXQ */
 void

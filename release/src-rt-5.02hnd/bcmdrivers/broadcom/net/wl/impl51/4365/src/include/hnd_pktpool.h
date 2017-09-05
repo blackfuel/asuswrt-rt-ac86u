@@ -1,7 +1,7 @@
 /*
  * HND generic packet pool operation primitives
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -123,6 +123,26 @@ typedef struct pktpool {
 	pktpool_cbinfo_t dmarxfill;
 } pktpool_t;
 
+#ifdef BCM_DHDHDR
+typedef struct lfrag_buf_pool {
+	bool inited;            /* lfrag_buf_pool_init was successful */
+	void *freelist;         /* free list: see PKTNEXTFREE(), PKTSETNEXTFREE() */
+	uint16 avail;           /* number of buffers in pool's free list */
+	uint16 len;             /* number of buffers managed by pool */
+	uint16 maxlen;          /* maximum size of pool <= PKTPOOL_LEN_MAX */
+	uint16 buflen;          /* size of buffer, excluding lfrag_buf_t */
+	HND_PKTPOOL_MUTEX_DECL(mutex)	/* thread-safe mutex */
+} lfrag_buf_pool_t;
+
+typedef struct lfrag_buf {
+	union {
+		lfrag_buf_pool_t *lfbufp; /* Lfrag buf pool pointer when buffer be allocated */
+		void *freelist;	/* Free list link when buffer back to the pool */
+	};
+} lfrag_buf_t;
+
+#define LFBUFSZ		((int)sizeof(lfrag_buf_t))
+#endif /* BCM_DHDHDR */
 
 pktpool_t *get_pktpools_registry(int id);
 
@@ -133,7 +153,7 @@ extern int pktpool_dettach(osl_t *osh); /* Relinquish registry */
 extern int pktpool_init(osl_t *osh, pktpool_t *pktp, int *pktplen, int plen, bool istx, uint8 type);
 extern int pktpool_deinit(osl_t *osh, pktpool_t *pktp);
 extern int pktpool_fill(osl_t *osh, pktpool_t *pktp, bool minimal);
-extern void* pktpool_get(pktpool_t *pktp);
+extern void* _pktpool_get(pktpool_t *pktp, void *bufp);
 extern void pktpool_free(pktpool_t *pktp, void *p);
 extern int pktpool_add(pktpool_t *pktp, void *p);
 extern int pktpool_avail_notify_normal(osl_t *osh, pktpool_t *pktp);
@@ -148,6 +168,22 @@ extern int pktpool_hostaddr_fill_register(pktpool_t *pktp, pktpool_cb_extn_t cb,
 extern int pktpool_rxcplid_fill_register(pktpool_t *pktp, pktpool_cb_extn_t cb, void *arg);
 extern void pktpool_invoke_dmarxfill(pktpool_t *pktp);
 extern int pkpool_haddr_avail_register_cb(pktpool_t *pktp, pktpool_cb_t cb, void *arg);
+
+#define pktpool_get(pp)			_pktpool_get(pp, NULL)
+#define pktpool_lfrag_get(pp, bp)	_pktpool_get(pp, bp)
+
+#ifdef BCM_DHDHDR
+extern int lfbufpool_init(osl_t *osh, lfrag_buf_pool_t *pktp, int *pplen, int plen);
+extern int lfbufpool_deinit(osl_t *osh, lfrag_buf_pool_t *pktp);
+extern int lfbufpool_fill(osl_t *osh, lfrag_buf_pool_t *pktp, bool minimal);
+extern void *lfbufpool_get(lfrag_buf_pool_t *pktp);
+extern void lfbufpool_free(void *d);
+extern int lfbufpool_setmaxlen(lfrag_buf_pool_t *pktp, uint16 maxlen);
+
+#define LFBUFPOOLPTR(pp)	((lfrag_buf_pool_t *)(pp))
+#define lfbufpool_avail(pp)	(LFBUFPOOLPTR(pp)->avail)
+#define lfbufpool_maxlen(pp)	(LFBUFPOOLPTR(pp)->maxlen)
+#endif /* BCM_DHDHDR */
 
 #define POOLPTR(pp)         ((pktpool_t *)(pp))
 #define POOLID(pp)          (POOLPTR(pp)->id)
@@ -198,6 +234,16 @@ extern pktpool_t *pktpool_shared_lfrag;
 #endif
 #define SHARED_RXFRAG_POOL	(pktpool_shared_rxlfrag)
 extern pktpool_t *pktpool_shared_rxlfrag;
+
+#if defined(BCM_DHDHDR) && defined(DONGLEBUILD)
+#define D3_LFRAG_BUF_POOL	(d3_lfrag_buf_pool)
+extern lfrag_buf_pool_t *d3_lfrag_buf_pool;
+#define D11_LFRAG_BUF_POOL	(d11_lfrag_buf_pool)
+extern lfrag_buf_pool_t *d11_lfrag_buf_pool;
+#else
+#define D3_LFRAG_BUF_POOL	(NULL)
+#define D11_LFRAG_BUF_POOL	(NULL)
+#endif /* BCM_DHDHDR */
 
 void hnd_pktpool_init(osl_t *osh);
 void hnd_pktpool_fill(pktpool_t *pktpool, bool minimal);

@@ -193,11 +193,6 @@ config RTCONFIG_IPSEC
 	bool "IPsec Support"
 	default n
 
-config RTCONFIG_OPENSWAN
-	bool "OpenSwan IPSec Support"
-	depends on RTCONFIG_IPSEC
-	default n
-
 config RTCONFIG_QUICKSEC
 	bool "InsideSecure QuickSec Support"
 	depends on RTCONFIG_IPSEC
@@ -245,6 +240,10 @@ config RTCONFIG_BCMDCS
 
 config RTCONFIG_TOAD
 	bool "Traffic Ordering Agent Daemon"
+	default n
+
+config RTCONFIG_BCM_APPEVENTD
+	bool "bcm appeventd"
 	default n
 
 config RTCONFIG_HSPOT
@@ -1013,6 +1012,10 @@ config RTCONFIG_YAFFS
 	bool "Yet Another Flash File-System"
 	default n
 
+config RTCONFIG_SAVEJFFS
+	bool "Save/Restore /jffs to/from configuration file."
+	default n
+
 config RTCONFIG_OPTIMIZE_XBOX
 	bool "OPTIMIZE_XBOX"
 	default n
@@ -1130,6 +1133,10 @@ config RTCONFIG_M2_SSD
 	bool "M.2 SSD support"
 	default n
 
+config RTCONFIG_WIGIG
+	bool "Wigig (11ad) support"
+	default n
+
 config RTCONFIG_CFE_NVRAM_CHK
 	bool "CFE_NVRAM_CHK"
 	default n
@@ -1145,6 +1152,10 @@ config RTCONFIG_LLDP
 config RTCONFIG_HAS_5G
 	bool "has 5G band"
 	default y
+
+config RTCONFIG_HAS_5G_2
+	bool "has 2-nd 5G band"
+	default n
 
 config RTCONFIG_TFTP
 	bool "TFTP server or client"
@@ -1307,6 +1318,10 @@ config RTCONFIG_WTFAST
 	bool "WTFast support"
 	default n
 
+config RTCONFIG_ALEXA
+	bool "ALEXA support"
+	default n
+
 config RTCONFIG_IFTTT
 	bool "IFTTT support"
 	default n
@@ -1321,6 +1336,18 @@ config RTCONFIG_REBOOT_SCHEDULE
 
 config RTCONFIG_IPSEC
 	bool "IPSEC support"
+	default n
+	
+config RTCONFIG_CAPTIVE_PORTAL
+	bool "Captive Portal support"
+	default n
+
+config RTCONFIG_CP_FREEWIFI
+	bool "Free Wi-Fi support"
+	default n
+
+config RTCONFIG_CP_ADVANCED
+	bool "Captive Portal Advanced support"
 	default n
 
 config RTCONFIG_UPNPC
@@ -1339,12 +1366,28 @@ config RTCONFIG_FORCE_AUTO_UPGRADE
 	bool "Force auto update"
 	default n
 
+config RTCONFIG_CHILLISPOT
+	bool "chillispot Support"
+	default n
+
+config RTCONFIG_COOVACHILLI
+	bool "coovachilli Support"
+	default n
+
+config RTCONFIG_FREERADIUS
+	bool "freeradius Support"
+	default n
+
 config RTCONFIG_TUXERA_SMBD
 	bool "tuxera smbd"
 	default n
 
 config RTCONFIG_BCMASPMD
 	bool "bcm aspmd"
+	default n
+
+config RTCONFIG_FBT
+	bool "bcm fbt"
 	default n
 
 config RTCONFIG_WLCLMLOAD
@@ -1465,8 +1508,13 @@ config RTCONFIG_MUMIMO_5G
 	bool "5G MU-MIMO support"
 	default n
 
-config RTCONFIG_COOVACHILLI
-	bool "coovachilli Support"
+config RTCONFIG_PERMISSION_MANAGEMENT
+	bool "Permission management support"
+	default n
+
+config RTCONFIG_LETSENCRYPT
+	bool "Let's Encrypt"
+	depends on RTCONFIG_HTTPS && (RTCONFIG_JFFS2 || RTCONFIG_BRCM_NAND_JFFS2 || RTCONFIG_UBIFS)
 	default n
 
 config RTCONFIG_DETWAN
@@ -1496,23 +1544,6 @@ config RTCONFIG_CSU2_2
 config RTCONFIG_DUAL_BACKHAUL
 	bool "version csu2.2"
 	default n
-
-config RTCONFIG_FREERADIUS
-	bool "freeradius Support"
-	default n
-
-config RTCONFIG_CAPTIVE_PORTAL
-	bool "Captive Portal support"
-	default n
-
-config RTCONFIG_CP_FREEWIFI
-	bool "Free Wi-Fi support"
-	default n
-
-config RTCONFIG_CP_ADVANCED
-	bool "Captive Portal Advanced support"
-	default n
-
 config RTCONFIG_FBWIFI
 	bool "enable FBWIFI for FaceBook"
 	default n
@@ -1557,6 +1588,31 @@ config RTCONFIG_LYRA_HIDE
 	bool "Hide UI item for Lyra"
 	default n
 
+config RTCONFIG_NVRAM_ENCRYPT
+	bool "nvram encrypt support"
+	default n
+
 config RTCONFIG_WIFI_PROXY
 	bool "Enable WiFi Proxy."
 	default n
+
+config RTCONFIG_FBT
+	bool "FAST BSS Transition (802.11r FBT) support"
+	default n
+
+config RTCONFIG_HD_SPINDOWN
+	bool "Enable harddisk spindown"
+	default n
+
+config RTCONFIG_MASTER_DET
+        bool "Master detection"
+        default n
+
+config RTCONFIG_ADTBW
+	bool "ADTBW"
+	default n
+
+config RTCONFIG_TXBF_BAND3ONLY
+	bool "Tx beamforming works only in BAND3."
+	default n
+

@@ -8,7 +8,7 @@
  *
  * Supported protocol families: IPV4
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -16,7 +16,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_wmf.c 545289 2015-03-31 09:20:10Z $
+ * $Id: wlc_wmf.c 665544 2016-10-18 08:37:33Z $
  */
 
 /**
@@ -792,6 +792,8 @@ wlc_wmf_packets_handle(wlc_bsscfg_t *bsscfg, struct scb *scb, void *p, bool from
 	bool ucast_convert = FALSE;
 	uint32 dest_ip;
 #endif /* WL_IGMP_UCQUERY */
+	int ret;
+	bool skb_adjust;
 
 	/* If the WMF instance is not yet created return */
 	if (!bsscfg->wmf_instance)
@@ -845,7 +847,21 @@ wlc_wmf_packets_handle(wlc_bsscfg_t *bsscfg, struct scb *scb, void *p, bool from
 	}
 #endif /* defined(WL_IGMP_UCQUERY) || defined(WL_UCAST_UPNP) */
 
-	return (emfc_input(bsscfg->wmf_instance->emfci, p, scb, iph, !frombss));
+	/* EMF push skb data by 14 bytes for NON IGMP packet.
+	 * So adjusting skb before giving it to EMF
+	 */
+	skb_adjust = frombss && (IPV4_PROT(iph) != IP_PROT_IGMP);
+
+	if (skb_adjust)
+		PKTPULL(bsscfg->wlc->osh, p, ETH_HLEN);
+
+	ret = emfc_input(bsscfg->wmf_instance->emfci, p, scb, iph, !frombss);
+
+	/* Readjust skb pointer if EMF is not taken it */
+	if (skb_adjust && (ret != WMF_TAKEN))
+		PKTPUSH(bsscfg->wlc->osh, p, ETH_HLEN);
+
+	return ret;
 }
 
 /*

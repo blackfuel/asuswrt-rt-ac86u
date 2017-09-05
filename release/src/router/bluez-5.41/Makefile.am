@@ -151,7 +151,7 @@ builtin_nodist =
 bleencrypt_source = src/bleencrypt/gatt-amap.h src/bleencrypt/gatt-amap.c \
 			src/bleencrypt/bleencrypt.h src/bleencrypt/bleencrypt.c \
 			src/bleencrypt/encrypt.h src/bleencrypt/encrypt.c \
-			src/bleencrypt/blepack.h src/bleencrypt/blepack-client.c src/bleencrypt/blepack-server.c \
+			src/bleencrypt/blepack.h src/bleencrypt/blepack-server.c \
 			src/bleencrypt/utility.h
 
 include Makefile.plugins

@@ -138,8 +138,8 @@ var networkmap_fullscan = '<% nvram_get("networkmap_fullscan"); %>';
 
 var originDataTmp;
 var originData = {
-	fromNetworkmapd: <% get_clientlist(); %>,
-	nmpClient: <% get_clientlist_from_json_database(); %>, //Record the client connected to the router before.
+	fromNetworkmapd : [<% get_clientlist(); %>],
+	nmpClient : [<% get_clientlist_from_json_database(); %>], //Record the client connected to the router before.
 	amasClient : [<% get_cfg_clientlist(); %>], //Record AMAS Cap and RE
 	amasREClient : [<% get_wclientlist(); %>], //Record AMAS RE device each band client
 	amasREClientDetail : [<% get_allclientlist(); %>], //Record AMAS RE device each band client detail
@@ -201,113 +201,117 @@ function genClientList(){
 	totalClientNum.wireless = 0;
 	for(var i=0; i<wl_nband_title.length; i++) totalClientNum.wireless_ifnames[i] = 0;
 
-	for(var i=0; i<originData.fromNetworkmapd.maclist.length; i++){
-		var thisClient = originData.fromNetworkmapd[originData.fromNetworkmapd.maclist[i]];
-		var thisClientMacAddr = (typeof thisClient.mac == "undefined") ? false : thisClient.mac.toUpperCase();
+	if(originData.fromNetworkmapd.length > 0) {
+		for(var i=0; i<originData.fromNetworkmapd[0].maclist.length; i++){
+			var thisClient = originData.fromNetworkmapd[0][originData.fromNetworkmapd[0].maclist[i]];
+			var thisClientMacAddr = (typeof thisClient.mac == "undefined") ? false : thisClient.mac.toUpperCase();
 
-		if(!thisClientMacAddr){
-			continue;
-		}
+			if(!thisClientMacAddr){
+				continue;
+			}
 
-		if(typeof clientList[thisClientMacAddr] == "undefined"){
-			clientList.push(thisClientMacAddr);
-			clientList[thisClientMacAddr] = new setClientAttr();
-			clientList[thisClientMacAddr].from = "networkmapd";
-		}
-		else{
-			clientList[thisClientMacAddr].macRepeat++;
+			if(typeof clientList[thisClientMacAddr] == "undefined"){
+				clientList.push(thisClientMacAddr);
+				clientList[thisClientMacAddr] = new setClientAttr();
+				clientList[thisClientMacAddr].from = "networkmapd";
+			}
+			else{
+				clientList[thisClientMacAddr].macRepeat++;
+				totalClientNum.online++;
+				continue;
+			}
+
+			if(!downsize_4m_support) {
+				clientList[thisClientMacAddr].type = thisClient.type;
+				clientList[thisClientMacAddr].defaultType = thisClient.defaultType;
+			}
+			
+			clientList[thisClientMacAddr].ip = thisClient.ip;
+			clientList[thisClientMacAddr].mac = thisClient.mac.toUpperCase();
+
+			clientList[thisClientMacAddr].name = thisClient.name.trim();
+			if(clientList[thisClientMacAddr].name == ""){
+				clientList[thisClientMacAddr].name = clientList[thisClientMacAddr].mac;
+			}
+			clientList[thisClientMacAddr].nickName = thisClient.nickName.trim();
+			clientList[thisClientMacAddr].isGateway = (thisClient.isGateway == "1");
+			clientList[thisClientMacAddr].isWebServer = (thisClient.isWebServer == "1");
+			clientList[thisClientMacAddr].isPrinter = (thisClient.isPrinter == "1");
+			clientList[thisClientMacAddr].isITunes = (thisClient.isITunes == "1");
+			clientList[thisClientMacAddr].dpiDevice = ( thisClient.dpiDevice == "undefined") ? "" : thisClient.dpiDevice;
+			clientList[thisClientMacAddr].vendor = thisClient.vendor;
+			clientList[thisClientMacAddr].rssi = parseInt(thisClient.rssi);
+			clientList[thisClientMacAddr].isWL = parseInt(thisClient.isWL);
+			if(clientList[thisClientMacAddr].isWL > 0) {
+				totalClientNum.wireless += clientList[thisClientMacAddr].macRepeat;
+				totalClientNum.wireless_ifnames[clientList[thisClientMacAddr].isWL-1] += clientList[thisClientMacAddr].macRepeat;
+			}
+			else {
+				totalClientNum.wired += clientList[thisClientMacAddr].macRepeat;
+			}
+
+			clientList[thisClientMacAddr].opMode = parseInt(thisClient.opMode); //0:unknow, 1: router, 2: repeater, 3: AP, 4: Media Bridge
+			if(clientList[thisClientMacAddr].opMode == 2 && !downsize_4m_support) {
+				clientList[thisClientMacAddr].type = "24";
+				clientList[thisClientMacAddr].defaultType = "24";
+			}
+
+			clientList[thisClientMacAddr].isLogin = (thisClient.isLogin == "1");
+
+			clientList[thisClientMacAddr].isOnline = true;
 			totalClientNum.online++;
-			continue;
-		}
 
-		if(!downsize_4m_support) {
-			clientList[thisClientMacAddr].type = thisClient.type;
-			clientList[thisClientMacAddr].defaultType = thisClient.defaultType;
-		}
-		
-		clientList[thisClientMacAddr].ip = thisClient.ip;
-		clientList[thisClientMacAddr].mac = thisClient.mac.toUpperCase();
+			clientList[thisClientMacAddr].group = thisClient.group;
+			clientList[thisClientMacAddr].callback = thisClient.callback;
+			clientList[thisClientMacAddr].keeparp = thisClient.keeparp;
 
-		clientList[thisClientMacAddr].name = thisClient.name.trim();
-		if(clientList[thisClientMacAddr].name == ""){
-			clientList[thisClientMacAddr].name = clientList[thisClientMacAddr].mac;
-		}
-		clientList[thisClientMacAddr].nickName = thisClient.nickName.trim();
-		clientList[thisClientMacAddr].isGateway = (thisClient.isGateway == "1");
-		clientList[thisClientMacAddr].isWebServer = (thisClient.isWebServer == "1");
-		clientList[thisClientMacAddr].isPrinter = (thisClient.isPrinter == "1");
-		clientList[thisClientMacAddr].isITunes = (thisClient.isITunes == "1");
-		clientList[thisClientMacAddr].dpiDevice = ( thisClient.dpiDevice == "undefined") ? "" : thisClient.dpiDevice;
-		clientList[thisClientMacAddr].vendor = thisClient.vendor;
-		clientList[thisClientMacAddr].rssi = parseInt(thisClient.rssi);
-		clientList[thisClientMacAddr].isWL = parseInt(thisClient.isWL);
-		if(clientList[thisClientMacAddr].isWL > 0) {
-			totalClientNum.wireless += clientList[thisClientMacAddr].macRepeat;
-			totalClientNum.wireless_ifnames[clientList[thisClientMacAddr].isWL-1] += clientList[thisClientMacAddr].macRepeat;
-		}
-		else {
-			totalClientNum.wired += clientList[thisClientMacAddr].macRepeat;
-		}
+			clientList[thisClientMacAddr].ipMethod = thisClient.ipMethod;
 
-		clientList[thisClientMacAddr].opMode = parseInt(thisClient.opMode); //0:unknow, 1: router, 2: repeater, 3: AP, 4: Media Bridge
-		if(clientList[thisClientMacAddr].opMode == 2 && !downsize_4m_support) {
-			clientList[thisClientMacAddr].type = "24";
-			clientList[thisClientMacAddr].defaultType = "24";
-		}
+			clientList[thisClientMacAddr].qosLevel = thisClient.qosLevel;
 
-		clientList[thisClientMacAddr].isLogin = (thisClient.isLogin == "1");
-
-		clientList[thisClientMacAddr].isOnline = true;
-		totalClientNum.online++;
-
-		clientList[thisClientMacAddr].group = thisClient.group;
-		clientList[thisClientMacAddr].callback = thisClient.callback;
-		clientList[thisClientMacAddr].keeparp = thisClient.keeparp;
-
-		clientList[thisClientMacAddr].ipMethod = thisClient.ipMethod;
-
-		clientList[thisClientMacAddr].qosLevel = thisClient.qosLevel;
-
-		clientList[thisClientMacAddr].wtfast = parseInt(thisClient.wtfast);
-		clientList[thisClientMacAddr].internetMode = thisClient.internetMode;
-		clientList[thisClientMacAddr].internetState = thisClient.internetState;
-		if(stainfo_support) {
-			clientList[thisClientMacAddr].curTx = (thisClient.curTx == "") ? "": thisClient.curTx;
-			clientList[thisClientMacAddr].curRx = (thisClient.curRx == "") ? "": thisClient.curRx;
-			clientList[thisClientMacAddr].wlConnectTime = thisClient.wlConnectTime;
+			clientList[thisClientMacAddr].wtfast = parseInt(thisClient.wtfast);
+			clientList[thisClientMacAddr].internetMode = thisClient.internetMode;
+			clientList[thisClientMacAddr].internetState = thisClient.internetState;
+			if(stainfo_support) {
+				clientList[thisClientMacAddr].curTx = (thisClient.curTx == "") ? "": thisClient.curTx;
+				clientList[thisClientMacAddr].curRx = (thisClient.curRx == "") ? "": thisClient.curRx;
+				clientList[thisClientMacAddr].wlConnectTime = thisClient.wlConnectTime;
+			}
 		}
 	}
 
 	var nmpCount = 0;
-	for(var i=0; i<originData.nmpClient.maclist.length; i++){
-		var thisClient = originData.nmpClient[originData.nmpClient.maclist[i]];
-		var thisClientMacAddr = (typeof thisClient.mac == "undefined") ? false : thisClient.mac.toUpperCase();
-		if(!thisClientMacAddr){
-			continue;
-		}
-
-		if(nmpCount > 100)
-			break;
-
-		if(typeof clientList[thisClientMacAddr] == "undefined") {
-			var thisClientType = (typeof thisClient.type == "undefined") ? "0" : thisClient.type;
-			var thisClientName = (typeof thisClient.name == "undefined") ? thisClientMacAddr : (thisClient.name.trim() == "") ? thisClientMacAddr : thisClient.name.trim();
-
-			clientList.push(thisClientMacAddr);
-			clientList[thisClientMacAddr] = new setClientAttr();
-			clientList[thisClientMacAddr].from = "nmpClient";
-			if(!downsize_4m_support) {
-				clientList[thisClientMacAddr].type = thisClientType;
-				clientList[thisClientMacAddr].defaultType = thisClientType;
+	if(originData.nmpClient.length > 0) {
+		for(var i=0; i<originData.nmpClient[0].maclist.length; i++){
+			var thisClient = originData.nmpClient[0][originData.nmpClient[0].maclist[i]];
+			var thisClientMacAddr = (typeof thisClient.mac == "undefined") ? false : thisClient.mac.toUpperCase();
+			if(!thisClientMacAddr){
+				continue;
 			}
-			clientList[thisClientMacAddr].mac = thisClientMacAddr;
-			clientList[thisClientMacAddr].name = thisClientName;
-			clientList[thisClientMacAddr].vendor = thisClient.vendor.trim();
-			nmpCount++;
-		}
-		else if(!clientList[thisClientMacAddr].isOnline) {
-			clientList[thisClientMacAddr].from = "nmpClient";
-			nmpCount++;
+
+			if(nmpCount > 100)
+				break;
+
+			if(typeof clientList[thisClientMacAddr] == "undefined") {
+				var thisClientType = (typeof thisClient.type == "undefined") ? "0" : thisClient.type;
+				var thisClientName = (typeof thisClient.name == "undefined") ? thisClientMacAddr : (thisClient.name.trim() == "") ? thisClientMacAddr : thisClient.name.trim();
+
+				clientList.push(thisClientMacAddr);
+				clientList[thisClientMacAddr] = new setClientAttr();
+				clientList[thisClientMacAddr].from = "nmpClient";
+				if(!downsize_4m_support) {
+					clientList[thisClientMacAddr].type = thisClientType;
+					clientList[thisClientMacAddr].defaultType = thisClientType;
+				}
+				clientList[thisClientMacAddr].mac = thisClientMacAddr;
+				clientList[thisClientMacAddr].name = thisClientName;
+				clientList[thisClientMacAddr].vendor = thisClient.vendor.trim();
+				nmpCount++;
+			}
+			else if(!clientList[thisClientMacAddr].isOnline) {
+				clientList[thisClientMacAddr].from = "nmpClient";
+				nmpCount++;
+			}
 		}
 	}
 
@@ -1093,12 +1097,13 @@ function card_confirm(callBack) {
 								showDropdownClientList('setClientIP', 'mac', 'all', 'ClientList_Block_PC', 'pull_arrow', 'all');
 								genMain_table();
 								break;
+							case "ATF" :
+								showDropdownClientList('setClientmac', 'mac', 'wl', 'WL_MAC_List_Block', 'pull_arrow', 'all');
+								show_wl_atf_by_client();
+								break;
 							case "WTFast" :
 								showDropdownClientList('setClientmac', 'mac', 'all', 'ClientList_Block_PC', 'pull_arrow', 'all');
 								show_rulelist();
-							case "ATF" :
-								showWLMACList();
-								show_wl_atf_by_client();
 								break;
 							default :
 								refreshpage();
@@ -1735,7 +1740,7 @@ function pop_clientlist_listview() {
 }
 
 function exportClientListLog() {
-	var data = [["Internet access state", "Device Type", "Clients Name", "Clients IP Address", "IP Method", "Clients MAC Address", "Interface", "Tx Rate", "Rx Rate", "Access time"]];
+	var data = [["Internet access state", "Device Type", "<#Client_Name#>", "<#vpn_client_ip#>", "IP Method", "<#ParentalCtrl_hwaddr#>", "<#wan_interface#>", "Tx Rate", "Rx Rate", "Access time"]];
 	var tempArray = new Array();
 	var ipStateExport = new Array();
 	ipStateExport["Static"] =  "Static IP";
@@ -1864,7 +1869,7 @@ function create_clientlist_listview() {
 			drawSwitchModeHtml += "<div class='block_filter_name' style='color:#93A9B1;'><#All#></div>";
 			drawSwitchModeHtml += "</div>";
 			drawSwitchModeHtml += "<div class='block_filter clientlist_ByInterface' style='cursor:pointer'>";
-			drawSwitchModeHtml += "<div class='block_filter_name' onclick='changeClientListViewMode();'>By interface</div>";/*untranslated*/
+			drawSwitchModeHtml += "<div class='block_filter_name' onclick='changeClientListViewMode();'><#wan_interface#></div>";
 			drawSwitchModeHtml += "</div>";
 		}
 		else {							
@@ -1872,7 +1877,7 @@ function create_clientlist_listview() {
 			drawSwitchModeHtml += "<div class='block_filter_name' onclick='changeClientListViewMode();'><#All#></div>";
 			drawSwitchModeHtml += "</div>";
 			drawSwitchModeHtml += "<div class='block_filter_pressed clientlist_ByInterface'>";
-			drawSwitchModeHtml += "<div class='block_filter_name' style='color:#93A9B1;'>By interface</div>";/*untranslated*/
+			drawSwitchModeHtml += "<div class='block_filter_name' style='color:#93A9B1;'><#wan_interface#></div>";
 			drawSwitchModeHtml += "</div>";
 		}
 		drawSwitchModeHtml += "</div>";
@@ -1892,9 +1897,9 @@ function create_clientlist_listview() {
 			code += "</td></tr></thead>";
 			code += "<tr id='tr_all_title' height='40px'>";
 			code += "<th class='IE8HACK' width=" + obj_width[0] + "><#Internet#></th>";
-			code += "<th class='IE8HACK' width=" + obj_width[1] + ">Icon</th>";/*untranslated*/
+			code += "<th class='IE8HACK' width=" + obj_width[1] + "><#Client_Icon#></th>";
 			code += "<th width=" + obj_width[2] + " onclick='sorter.addBorder(this);sorter.doSorter(2, \"str\", \"all_list\");' style='cursor:pointer;'><#ParentalCtrl_username#></th>";
-			code += "<th width=" + obj_width[3] + " onclick='sorter.addBorder(this);sorter.doSorter(3, \"num\", \"all_list\");' style='cursor:pointer;'>Clients IP Address</th>";/*untranslated*/
+			code += "<th width=" + obj_width[3] + " onclick='sorter.addBorder(this);sorter.doSorter(3, \"num\", \"all_list\");' style='cursor:pointer;'><#vpn_client_ip#></th>";/*untranslated*/
 			code += "<th width=" + obj_width[4] + " onclick='sorter.addBorder(this);sorter.doSorter(4, \"str\", \"all_list\");' style='cursor:pointer;'><#ParentalCtrl_hwaddr#></th>";
 			if(!(isSwMode('mb') || isSwMode('ew')))
 				code += "<th width=" + obj_width[5] + " onclick='sorter.addBorder(this);sorter.doSorter(5, \"num\", \"all_list\");' style='cursor:pointer;'><#wan_interface#></th>";
@@ -1914,9 +1919,9 @@ function create_clientlist_listview() {
 			code += "</td></tr></thead>";
 			code += "<tr id='tr_wired_title' height='40px'>";
 			code += "<th class='IE8HACK' width=" + obj_width[0] + "><#Internet#></th>";
-			code += "<th class='IE8HACK' width=" + obj_width[1] + ">Icon</th>";/*untranslated*/
+			code += "<th class='IE8HACK' width=" + obj_width[1] + "><#Client_Icon#></th>";
 			code += "<th width=" + obj_width[2] + " onclick='sorter.addBorder(this);sorter.doSorter(2, \"str\", \"wired_list\");' style='cursor:pointer;'><#ParentalCtrl_username#></th>";
-			code += "<th width=" + obj_width[3] + " onclick='sorter.addBorder(this);sorter.doSorter(3, \"num\", \"wired_list\");' style='cursor:pointer;'>Clients IP Address</th>";/*untranslated*/
+			code += "<th width=" + obj_width[3] + " onclick='sorter.addBorder(this);sorter.doSorter(3, \"num\", \"wired_list\");' style='cursor:pointer;'><#vpn_client_ip#></th>";/*untranslated*/
 			code += "<th width=" + obj_width[4] + " onclick='sorter.addBorder(this);sorter.doSorter(4, \"str\", \"wired_list\");' style='cursor:pointer;'><#ParentalCtrl_hwaddr#></th>";
 			if(!(isSwMode('mb') || isSwMode('ew')))
 				code += "<th width=" + obj_width[5] + " ><#wan_interface#></th>";
@@ -1938,9 +1943,9 @@ function create_clientlist_listview() {
 				code += "</td></tr></thead>";
 				code += "<tr id='tr_wl" + wl_map[wl_nband_title[i]] + "_title' height='40px'>";
 				code += "<th class='IE8HACK' width=" + obj_width[0] + "><#Internet#></th>";
-				code += "<th class='IE8HACK' width=" + obj_width[1] + ">Icon</th>";/*untranslated*/
+				code += "<th class='IE8HACK' width=" + obj_width[1] + "><#Client_Icon#></th>";
 				code += "<th width=" + obj_width[2] + " onclick='sorter.addBorder(this);sorter.doSorter(2, \"str\", \"wl"+wl_map[wl_nband_title[i]]+"_list\");' style='cursor:pointer;'><#ParentalCtrl_username#></th>";
-				code += "<th width=" + obj_width[3] + " onclick='sorter.addBorder(this);sorter.doSorter(3, \"num\", \"wl"+wl_map[wl_nband_title[i]]+"_list\");' style='cursor:pointer;'>Clients IP Address</th>";
+				code += "<th width=" + obj_width[3] + " onclick='sorter.addBorder(this);sorter.doSorter(3, \"num\", \"wl"+wl_map[wl_nband_title[i]]+"_list\");' style='cursor:pointer;'><#vpn_client_ip#></th>";
 				code += "<th width=" + obj_width[4] + " onclick='sorter.addBorder(this);sorter.doSorter(4, \"str\", \"wl"+wl_map[wl_nband_title[i]]+"_list\");' style='cursor:pointer;'><#ParentalCtrl_hwaddr#></th>";
 				if(!(isSwMode('mb') || isSwMode('ew')))
 					code += "<th width=" + obj_width[5] + " onclick='sorter.addBorder(this);sorter.doSorter(5, \"num\", \"wl"+wl_map[wl_nband_title[i]]+"_list\");' style='cursor:pointer;'><#wan_interface#></th>";

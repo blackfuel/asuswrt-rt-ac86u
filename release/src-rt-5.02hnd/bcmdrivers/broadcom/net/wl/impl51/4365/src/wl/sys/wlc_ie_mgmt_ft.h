@@ -3,7 +3,7 @@
  *
  * Used to communicate between IE management module users (caller and callbacks).
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -11,7 +11,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_ie_mgmt_ft.h 467328 2014-04-03 01:23:40Z $
+ * $Id: wlc_ie_mgmt_ft.h 664112 2016-10-10 13:27:40Z $
  */
 
 #ifndef _wlc_ie_mgmt_ft_h_
@@ -58,6 +58,10 @@ union wlc_iem_ft_cbparm {
 		wlc_rateset_t *sup;	/* Supported Rates */
 		wlc_rateset_t *ext;	/* Extended Supported Rates */
 		uint status;
+#ifdef WLFBT
+		uint8 *md_ie;		/* Mobility Domain IE */
+		uint8 *wpa2_ie;		/* WPA2 IE */
+#endif /* WLFBT */
 	} assocresp;
 	/* for prbreq calc/build */
 	struct {
@@ -102,6 +106,10 @@ union wlc_iem_ft_cbparm {
 		int rde_count;	/* RDE IE count in RIC */
 		int ts_count;	/* WME TSPEC IE count in RIC */
 		uint8 *ts;	/* TSPEC list */
+#ifdef WLFBT
+		uint8 rde_id;   /* RDE Identifier from station */
+		uint16 status;  /* status code for each TSPEC. AP Mode only */
+#endif /* WLFBT */
 	} fbtric;
 };
 
@@ -132,6 +140,11 @@ union wlc_iem_ft_pparm {
 		uint8 vht_ratemask;	/* Output: VHT BRCM Ratemask */
 		uint8 *wps_ie;	/* Output: WPS IE */
 		uint16 status;	/* Output: Status Code */
+#ifdef WLFBT
+		uint8 *md_ie;		/* Mobility Domain IE */
+		uint8 *wpa2_ie;		/* WPA2 IE */
+		uint8 *ft_ie;		/* FBT FT IE */
+#endif /* WLFBT */
 	} assocreq;
 	/* for (re)assocresp parse */
 	struct {

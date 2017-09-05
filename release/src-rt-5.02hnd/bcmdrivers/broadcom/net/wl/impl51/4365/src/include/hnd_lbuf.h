@@ -1,7 +1,7 @@
 /*
  * HND generic packet buffer definitions.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: hnd_lbuf.h 577632 2015-08-07 05:36:30Z $
+ * $Id: hnd_lbuf.h 670309 2016-11-15 09:31:21Z $
  */
 
 
@@ -75,7 +75,7 @@ struct lbuf {
 	uchar		*data;		/* variable start of data */
 
 	uint16		len;		/* nbytes of data */
-	uint16		PAD;
+	uint16		fcseq;		/* WLFC SEQ */
 	uint32		flags;		/* private flags; don't touch */
 
 	/* ----- following fields explicitly bzeroed in lb_resetpool ----- */
@@ -204,10 +204,11 @@ struct lbuf_clone {
  */
 #define LB_FRAG_MAX		2	/* Maximum number of fragments */
 #define LB_FRAG_CTX		0	/* Index 0 in lbuf_flist saves context */
-#define LB_FIFO0_INT	0x1
-#define LB_FIFO1_INT	0x2
 
-#define	LB_TXS_PROCESSED	0x8	/* Indicate lbuf is txs processed */
+#define LB_FIFO0_INT		0x01
+#define LB_FIFO1_INT		0x02
+#define LB_TXS_PROCESSED	0x08	/* Indicate lbuf is txs processed */
+#define LB_TXP_FETCHED		0x80
 
 /* LB_FRAB_MAX needs to be an even number, so please make sure that is the case */
 #if (LB_FRAG_MAX & 1)
@@ -228,6 +229,14 @@ struct lbuf_finfo {
 			uint32 data_lo;
 			uint32 data_hi;
 		} frag;
+
+		struct {
+			uint8 bandidx;
+			uint8 txstatus;
+			uint8 RA[6];
+		} scb_cache;
+
+		uint8 fc_tlv[8];	/* storage for WLFC TLV */
 	};
 };
 
@@ -280,6 +289,34 @@ extern void lbuf_free_register(lbuf_free_cb_t cb, void* arg);
 
 typedef void (*lbuf_free_global_cb_t)(struct lbuf *lb);
 extern void lbuf_free_cb_set(lbuf_free_global_cb_t lbuf_free_cb);
+
+#ifdef BCM_DHDHDR
+/**
+ * DHD may register a memory region for use as a lbuf extension.
+ * Each lbuf may be extended in host memory, for instance to save the dongle
+ * constructed Txhdr+D11Hdr (aka D11_BUFFER). Dongle advertizes to host to
+ * reserve contiguous host memory for N number of D11_BUFFERs. Number of
+ * D11_BUFFERs and size of D11_BUFFERS is defined in bcmpcie.h
+ *
+ * In Dongle, a pktpool registry maintains a maximum number of dongle packets
+ * that may be instantiated and a unique pktid is assigned. For each dongle's
+ * packet, a corresponding region in the host is reserved.
+ *
+ * Given an Lbuf, the pktid in the lbuf will be used to uniquely fetch a region
+ * on host, to serve as an extension for the lbuf.
+ */
+
+/** Register the host memory region configuration */
+extern void lbuf_dhdhdr_memory_register(uint32 ext_buf_size, uint32 ext_num_bufs,
+	void *mem_base_addr);
+
+/** Return the host memory extension region's addr corresponding to an lbuf */
+extern void lbuf_dhdhdr_memory_extension(struct lbuf *lb,
+	void *rtn_buf_base_addr);
+
+/* Attach data buffer to lbuf */
+extern void lb_set_buf(struct lbuf *lb, void *buf, uint size);
+#endif /* BCM_DHDHDR */
 
 #ifdef HNDLBUF_USE_MACROS
 

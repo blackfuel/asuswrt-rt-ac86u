@@ -1,7 +1,7 @@
 /*
  * Key Management Module Implementation - scb support
  * Copyright (c) 2012-2013 Broadcom Corporation, All rights reserved.
- * $Id: km_scb.c 660275 2016-09-20 01:45:29Z $
+ * $Id: km_scb.c 672672 2016-11-29 10:58:39Z $
  */
 
 #include "km_pvt.h"
@@ -712,6 +712,14 @@ upd_amt:
 	amt_attr = wlc_clear_addrmatch(km->wlc, amt_idx);
 	if (!(amt_attr & AMT_ATTR_VALID))
 		amt_attr = 0;
+#ifdef PSTA
+	// for psta wpa-psk issue
+	if (BSSCFG_STA(bsscfg) && PSTA_ENAB(KM_PUB(km)))
+	{
+		amt_attr |= AMT_ATTR_A1;
+	}
+#endif
+
 	amt_attr |= (AMT_ATTR_VALID | AMT_ATTR_A2);
 	wlc_set_addrmatch(km->wlc, amt_idx, ea, amt_attr);
 
@@ -790,7 +798,7 @@ done:
 	return err;
 }
 
-#ifdef ACKSUPR_MAC_FILTER
+#if defined(ACKSUPR_MAC_FILTER) || defined(PSTA)
 bool wlc_keymgmt_amt_idx_isset(wlc_keymgmt_t *km, int amt_idx)
 {
 	return km_hw_amt_idx_isset(km->hw, amt_idx);

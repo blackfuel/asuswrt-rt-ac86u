@@ -374,7 +374,7 @@ function gen_bsd_steering_div(flag){
 		code +='<td width="27%" align="center" >2.4GHz</td><td width="27%" align="center" >5GHz-1</td><td width="27%" align="center" >5GHz-2</td>';
 	code +='</tr>';
 
-	code +='<tr><th>Enable Load Balance</th>';
+	code +='<tr><th><#enable_Load_Balance#></th>';
 	for(i = start_band_idx; i < wl_info.wl_if_total; i++){
 		code +='<td>';
 		code +='<input onclick="change_lb(1,'+i+');" type="radio" name="wl'+i+'_bsd_steering_balance" value="1"><#checkbox_Yes#>';
@@ -398,15 +398,15 @@ function gen_bsd_steering_div(flag){
 	for(i = start_band_idx; i < wl_info.wl_if_total; i++){
 		code +='<td><span class="steering_on_'+i+'"><div><table><tr><td style="border:0px; padding-left:0px">';
 		code +='<select class="input_option" name="wl'+i+'_bsd_steering_rssi_s">';
-		code +='<option selected="" value="0" class="content_input_fd">Less</option>';
-		code +='<option value="1" class="content_input_fd">Greater</option>';
+		code +='<option selected="" value="0" class="content_input_fd"><#option_less#></option>';
+		code +='<option value="1" class="content_input_fd"><#option_greater#></option>';
 		code +='</select></td>';
 		code +='<td style="border:0px; padding-left:0px">';
 		code +='<input type="text" onkeypress="return validator.isNegativeNumber(this,event)" value="100" class="input_3_table" id="wl'+i+'_bsd_steering_rssi" name="wl'+i+'_bsd_steering_rssi" maxlength="4">';
 		code +='<label style="margin-left:5px;">dBm</label></td></tr></table></div></span><span class="steering_unuse_off_'+i+'">- -</span></td>';
 	}
 	code +='</tr>';
-		code +='<tr><th>PHY Rate Less</th>';
+		code +='<tr><th><#PHY_Rate_Less#></th>';
 	for(i = start_band_idx; i < wl_info.wl_if_total; i++){
 		code +='<td><span class="steering_on_'+i+'"><div><table><tr><td style="border:0px;width:35px; padding-left:0px">';
 		code +='<div id="slider_wl'+i+'_bsd_steering_phy_l" style="width:80px;"></div></td>';
@@ -417,7 +417,7 @@ function gen_bsd_steering_div(flag){
 	}
 	code +='</tr>';
 
-	code +='<tr><th>PHY Rate Greater</th>';
+	code +='<tr><th><#PHY_Rate_Greater#></th>';
 	for(i = start_band_idx; i < wl_info.wl_if_total; i++){
 		code +='<td><span class="steering_on_'+i+'"><div><table><tr>';
 		code +='<td style="border:0px;width:35px; padding-left:0px">';
@@ -459,8 +459,8 @@ function gen_bsd_sta_select_div(){
 			code +='<td width="27%"><div><table><tr>';
 		code +='<td style="border:0px; padding-left:0px;">';
 		code +='<select class="input_option" name="wl'+i+'_bsd_sta_select_policy_rssi_s">';
-		code +='<option selected="" value="0" class="content_input_fd">Less</option>';
-		code +='<option value="1" class="content_input_fd">Greater</option>';
+		code +='<option selected="" value="0" class="content_input_fd"><#option_less#></option>';
+		code +='<option value="1" class="content_input_fd"><#option_greater#></option>';
 		code +='</select></td>';
 		code +='<td style="border:0px; padding-left:0px">';
 		code +='<input type="text" onkeypress="return validator.isNegativeNumber(this,event)" value="100" class="input_3_table" id="wl'+i+'_bsd_sta_select_policy_rssi" name="wl'+i+'_bsd_sta_select_policy_rssi" maxlength="4">';
@@ -469,7 +469,7 @@ function gen_bsd_sta_select_div(){
 	}
 	code +='</tr>';
 
-	code +='<tr><th>PHY Rate Less</th>';
+	code +='<tr><th><#PHY_Rate_Less#></th>';
 	for(i = start_band_idx; i < wl_info.wl_if_total; i++){
 		code +='<td><div><table><tr>';
 		code +='<td style="border:0px;width:35px; padding-left:0px">';
@@ -481,7 +481,7 @@ function gen_bsd_sta_select_div(){
 	}
 	code +='</tr>';
 
-	code +='<tr><th>PHY Rate Greater</th>';
+	code +='<tr><th><#PHY_Rate_Greater#></th>';
 	for(i = start_band_idx; i < wl_info.wl_if_total; i++){
 		code +='<td><div><table><tr>';
 		code +='<td style="border:0px;width:35px; padding-left:0px">';

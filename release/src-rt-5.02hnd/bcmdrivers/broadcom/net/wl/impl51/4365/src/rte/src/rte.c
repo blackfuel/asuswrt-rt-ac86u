@@ -2,7 +2,7 @@
  * HND RTE misc. service routines.
  * compressed image.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: rte.c 580528 2015-08-19 11:48:07Z $
+ * $Id: rte.c 675320 2016-12-15 07:49:24Z $
  */
 
 #include <typedefs.h>
@@ -190,7 +190,9 @@ BCMATTACHFN(hnd_debug_info_init)(void)
 	/* Initialize the debug area */
 	hnd_debug_info_ptr->magic = HND_DEBUG_MAGIC;
 	hnd_debug_info_ptr->version = HND_DEBUG_VERSION;
-	strcpy(hnd_debug_info_ptr->epivers, EPI_VERSION_STR);
+	strncpy(hnd_debug_info_ptr->epivers, EPI_VERSION_STR, HND_DEBUG_EPIVERS_MAX_STR_LEN - 1);
+	/* Force a null terminator at the end */
+	hnd_debug_info_ptr->epivers[HND_DEBUG_EPIVERS_MAX_STR_LEN - 1] = '\0';
 
 #if defined(RAMBASE)
 	hnd_debug_info_ptr->ram_base = RAMBASE;

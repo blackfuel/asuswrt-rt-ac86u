@@ -28,8 +28,8 @@ vpath %.c $(SRCBASE)/nt_center/
 
 ifeq ($(wildcard $(SRCBASE)/router/nt_center/lib/*.c),)
 all: 
-	-cp -f prebuilt/libnt.so libnt.so
-	-cp -f prebuilt/nt_db nt_db
+	-cp -f prebuild/libnt.so libnt.so
+	-cp -f prebuild/nt_db nt_db
 else
 all: libnt.so libnt.a nt_db
 endif
@@ -47,7 +47,7 @@ libnt.a: $(OBJS)
 
 nt_db: nt_db.o nt_utility.o nt_db_stat.o linklist.o
 	@echo " [$@] CC $@"
-	@$(CC) -o $@ $^ $(LD_BINARY)
+	@$(CC) -o $@ $^ $(LD_BINARY) -lm
 	@$(STRIP) $@
 
 nt_db_test: nt_db_test.o nt_utility.o nt_db_stat.o linklist.o nt_share.o

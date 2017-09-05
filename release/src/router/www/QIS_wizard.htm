@@ -160,6 +160,15 @@ var rebootTime = eval("<% get_default_reboot_time(); %>");
 var wan_autodet_state = "";
 var usb_connected = 0;
 
+var wans_dualwan = '<% nvram_get("wans_dualwan"); %>'.split(" ");
+if(wans_dualwan[0].indexOf("wan") != -1  && wans_dualwan[1].indexOf("wan") != -1)
+	var dual_ewan = true;
+else
+	var dual_ewan = false;
+
+var cur_wan_unit = 0;
+
+
 var htmlEnDeCode = (function() {
 	var charToEntityRegex,
 		entityToCharRegex,
@@ -363,7 +372,50 @@ function QIS_load_body(){
 			document.QKform.sw_mode.value = 4;
 	}
 
-	if(based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200"){
+	if(dual_ewan){
+		document.QKform.wan_proto.disabled = true;
+		document.QKform.wan_dhcpenable_x.disabled = true;
+		document.QKform.wan_ipaddr_x.disabled = true;
+		document.QKform.wan_netmask_x.disabled = true;
+		document.QKform.wan_gateway_x.disabled = true;
+		document.QKform.wan_heartbeat_x.disabled = true;
+		document.QKform.wan_dnsenable_x.disabled = true;
+		document.QKform.wan_dns1_x.disabled = true;
+		document.QKform.wan_dns2_x.disabled = true;
+		document.QKform.wan_hostname.disabled = true;
+		document.QKform.wan_hwaddr_x.disabled = true;
+		document.QKform.wan_pppoe_username.disabled = true;
+		document.QKform.wan_pppoe_passwd.disabled = true;
+	}
+	else{
+		document.QKform.wan0_proto.disabled = true;
+		document.QKform.wan0_dhcpenable_x.disabled = true;
+		document.QKform.wan0_ipaddr_x.disabled = true;
+		document.QKform.wan0_netmask_x.disabled = true;
+		document.QKform.wan0_gateway_x.disabled = true;
+		document.QKform.wan0_heartbeat_x.disabled = true;
+		document.QKform.wan0_dnsenable_x.disabled = true;
+		document.QKform.wan0_dns1_x.disabled = true;
+		document.QKform.wan0_dns2_x.disabled = true;
+		document.QKform.wan0_hostname.disabled = true;
+		document.QKform.wan0_hwaddr_x.disabled = true;
+		document.QKform.wan0_pppoe_username.disabled = true;
+		document.QKform.wan0_pppoe_passwd.disabled = true;
+		document.QKform.wan1_proto.disabled = true;
+		document.QKform.wan1_dhcpenable_x.disabled = true;
+		document.QKform.wan1_ipaddr_x.disabled = true;
+		document.QKform.wan1_netmask_x.disabled = true;
+		document.QKform.wan1_gateway_x.disabled = true;
+		document.QKform.wan1_heartbeat_x.disabled = true;
+		document.QKform.wan1_dnsenable_x.disabled = true;
+		document.QKform.wan1_dns1_x.disabled = true;
+		document.QKform.wan1_dns2_x.disabled = true;
+		document.QKform.wan1_hostname.disabled = true;
+		document.QKform.wan1_hwaddr_x.disabled = true;
+		document.QKform.wan1_pppoe_username.disabled = true;
+		document.QKform.wan1_pppoe_passwd.disabled = true;
+	}
+	if(based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VRZ-AC1300"){
 		document.getElementById("QIS_wizard_menu").style.display = "none";
 		document.getElementById("qis_menu").style.marginTop = "-160px";
 	}
@@ -391,34 +443,62 @@ function QIS_load_body(){
 				action = "/qis/QIS_internet_ip.htm";
 				flag.value = showCase;
 				submit();
-				break;				
+				break;
 			case "verify_detect":
 				action = "/qis/QIS_verify_detect.htm";
 				flag.value = showCase;
 				submit();
-				break;				
+				break;
 			case "adv_ap_mode":
 				document.QKform.sw_mode.value = "3";
 				action = "/qis/QIS_lanip.htm";
 				submit();
-				break;				
+				break;
 			case "pppoe":
-				document.QKform.wan_proto.value = "pppoe";			
+				if(dual_ewan){
+					if(cur_wan_unit == 0)
+						document.QKform.wan0_proto.value = "pppoe";
+					else
+						document.QKform.wan1_proto.value = "pppoe";
+				}
+				else
+					document.QKform.wan_proto.value = "pppoe";
 				action = "/qis/QIS_internet_account.htm";
 				submit();
-				break;				
+				break;
 			case "pptp":
-				document.QKform.wan_proto.value = "pptp";			
+				if(dual_ewan){
+					if(cur_wan_unit == 0)
+						document.QKform.wan0_proto.value = "pptp";
+					else
+						document.QKform.wan1_proto.value = "pptp";
+				}
+				else
+					document.QKform.wan_proto.value = "pptp";
 				action = "/qis/QIS_internet_account.htm";
 				submit();
-				break;				
+				break;
 			case "l2tp":
-				document.QKform.wan_proto.value = "l2tp";
+				if(dual_ewan){
+					if(cur_wan_unit == 0)
+						document.QKform.wan0_proto.value = "l2tp";
+					else
+						document.QKform.wan1_proto.value = "l2tp";
+				}
+				else
+					document.QKform.wan_proto.value = "l2tp";
 				action = "/qis/QIS_internet_account.htm";
 				submit();
-				break;				
+				break;
 			case "account":
-				document.QKform.wan_proto.value = "pptp";
+				if(dual_ewan){
+					if(cur_wan_unit == 0)
+						document.QKform.wan0_proto.value = "pptp";
+					else
+						document.QKform.wan1_proto.value = "pptp";
+				}
+				else
+					document.QKform.wan_proto.value = "pptp";
 				action = "/qis/QIS_internet_account.htm";
 				submit();
 				break;
@@ -444,7 +524,7 @@ function QIS_load_body(){
 				else
 					action = "/qis/QIS_" + showCase.split("?")[0] + ".htm?" + showCase.split("?")[1];
 				submit();
-				break;					
+				break;
 		}
 	}
 }
@@ -757,6 +837,45 @@ function detect_httpd(){
 	<!-- internet Account -->
 	<input type="hidden" name="wan_pppoe_username" value="<% nvram_get("wan_pppoe_username"); %>">
 	<input type="hidden" name="wan_pppoe_passwd" value="<% nvram_get("wan_pppoe_passwd"); %>">
+
+	<!-- WAN1 -->
+	<!-- detect -->
+	<input type="hidden" name="wan0_proto" value="<% nvram_get("wan0_proto"); %>">
+	<!-- internet IP -->
+	<input type="hidden" name="wan0_dhcpenable_x" value="<% nvram_get("wan0_dhcpenable_x"); %>">
+	<input type="hidden" name="wan0_ipaddr_x" value="<% nvram_get("wan0_ipaddr_x"); %>">
+	<input type="hidden" name="wan0_netmask_x" value="<% nvram_get("wan0_netmask_x"); %>">
+	<input type="hidden" name="wan0_gateway_x" value="<% nvram_get("wan0_gateway_x"); %>">
+	<input type="hidden" name="wan0_heartbeat_x" value="<% nvram_get("wan0_heartbeat_x"); %>">
+	<input type="hidden" name="wan0_dnsenable_x" value="<% nvram_get("wan0_dnsenable_x"); %>">
+	<input type="hidden" name="wan0_dns1_x" value="<% nvram_get("wan0_dns1_x"); %>"> 
+	<input type="hidden" name="wan0_dns2_x" value="<% nvram_get("wan0_dns2_x"); %>"> 
+	<!-- internet ISP -->
+	<input type="hidden" name="wan0_hostname" value="<% nvram_get("wan0_hostname"); %>">
+	<input type="hidden" name="wan0_hwaddr_x" value="<% nvram_get("wan0_hwaddr_x"); %>">
+	<!-- internet Account -->
+	<input type="hidden" name="wan0_pppoe_username" value="<% nvram_get("wan0_pppoe_username"); %>">
+	<input type="hidden" name="wan0_pppoe_passwd" value="<% nvram_get("wan0_pppoe_passwd"); %>">
+
+	<!-- WAN2 -->
+	<!-- detect -->
+	<input type="hidden" name="wan1_proto" value="<% nvram_get("wan1_proto"); %>">
+	<!-- internet IP -->
+	<input type="hidden" name="wan1_dhcpenable_x" value="<% nvram_get("wan1_dhcpenable_x"); %>">
+	<input type="hidden" name="wan1_ipaddr_x" value="<% nvram_get("wan1_ipaddr_x"); %>">
+	<input type="hidden" name="wan1_netmask_x" value="<% nvram_get("wan1_netmask_x"); %>">
+	<input type="hidden" name="wan1_gateway_x" value="<% nvram_get("wan1_gateway_x"); %>">
+	<input type="hidden" name="wan1_heartbeat_x" value="<% nvram_get("wan1_heartbeat_x"); %>">
+	<input type="hidden" name="wan1_dnsenable_x" value="<% nvram_get("wan1_dnsenable_x"); %>">
+	<input type="hidden" name="wan1_dns1_x" value="<% nvram_get("wan1_dns1_x"); %>"> 
+	<input type="hidden" name="wan1_dns2_x" value="<% nvram_get("wan1_dns2_x"); %>"> 
+	<!-- internet ISP -->
+	<input type="hidden" name="wan1_hostname" value="<% nvram_get("wan1_hostname"); %>">
+	<input type="hidden" name="wan1_hwaddr_x" value="<% nvram_get("wan1_hwaddr_x"); %>">
+	<!-- internet Account -->
+	<input type="hidden" name="wan1_pppoe_username" value="<% nvram_get("wan1_pppoe_username"); %>">
+	<input type="hidden" name="wan1_pppoe_passwd" value="<% nvram_get("wan1_pppoe_passwd"); %>">
+
 	<!-- ap lan -->
 	<input type="hidden" name="lan_proto" value="<% nvram_get("lan_proto"); %>">
 	<input type="hidden" name="lan_ipaddr" value="<% nvram_get("lan_ipaddr"); %>">

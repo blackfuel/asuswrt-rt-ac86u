@@ -1,7 +1,7 @@
 /*
  * Site survey statistics for visualization tool
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_wl.c 611403 2016-01-11 06:30:12Z $
+ * $Id: vis_wl.c 672659 2016-11-29 10:24:01Z $
  */
 
 
@@ -522,7 +522,7 @@ wl_get_scan(void *wl, int opc, char *scan_buf, uint buf_len)
 
 /* Gets the scan result */
 networks_list_t*
-wl_dump_networks(void *wl)
+wl_dump_networks(void *wl, uint32 *errinfo)
 {
 	int ret;
 	char *dump_buf, *dump_buf_orig;
@@ -539,6 +539,7 @@ wl_dump_networks(void *wl)
 
 	if (ret == 0) {
 		tmp_network = dump_networks(wl, dump_buf);
+		VIS_CLEAR_BIT(*errinfo, VIS_SCAN_ERROR);
 	}
 
 	free(dump_buf_orig);

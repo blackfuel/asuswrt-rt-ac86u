@@ -4,7 +4,7 @@
  *
  * The external functions should match wlc_bmac.c
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_bmac_stubs.c 633077 2016-04-21 09:59:45Z $
+ * $Id: wlc_bmac_stubs.c 682548 2017-02-02 09:15:49Z $
  */
 
 
@@ -671,7 +671,12 @@ wlc_rpc_high_dispatch(wlc_rpc_ctx_t *rpc_ctx, struct rpc_buf* buf)
 			}
 			break;
 		}
-
+#ifdef AP
+		case WLRPC_WLC_BMAC_TX_FIFO_SYNC_BCMC_RESET_ID: {
+			wlc_tx_fifo_sync_bcmc_reset(wlc);
+			break;
+		}
+#endif /* AP */
 		case WLRPC_WLC_BMAC_TX_FIFO_SYNC_COMPLETE_ID: {
 #ifdef WL_MULTIQUEUE
 			uint32 val32;

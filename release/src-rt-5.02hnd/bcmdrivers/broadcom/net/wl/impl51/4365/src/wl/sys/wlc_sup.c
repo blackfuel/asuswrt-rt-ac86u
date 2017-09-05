@@ -1,7 +1,7 @@
 /*
  * wlc_sup.c -- driver-resident supplicants.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_sup.c 497220 2014-08-18 13:32:15Z $
+ * $Id: wlc_sup.c 668704 2016-11-04 14:59:35Z $
  */
 
 /**
@@ -616,7 +616,7 @@ wlc_wpa_sup_prepeapol(supplicant_t *sup, uint16 flags, wpa_msg_t msg)
 		if (wpa->sup_wpaie == NULL)
 			break;
 #ifdef WLFBT
-		if (WLFBT_ENAB(sup->pub) && (wpa->WPA_auth & WPA2_AUTH_FT) &&
+		if (BSSCFG_IS_FBT(sup->cfg) && (wpa->WPA_auth & WPA2_AUTH_FT) &&
 			BSS_FBT_INI_FBT(sup->wlc->fbt, sup->cfg))
 			fbt_len = wlc_fbt_getlen_eapol(sup->wlc->fbt, sup->cfg);
 #endif /* WLFBT */
@@ -635,7 +635,7 @@ wlc_wpa_sup_prepeapol(supplicant_t *sup, uint16 flags, wpa_msg_t msg)
 		wpa_key->data_len = hton16(wpa->sup_wpaie_len + fbt_len);
 		bcopy(wpa->sup_wpaie, wpa_key->data, wpa->sup_wpaie_len);
 #ifdef WLFBT
-		if ((WLFBT_ENAB(sup->pub)) && (wpa->WPA_auth & WPA2_AUTH_FT) &&
+		if (BSSCFG_IS_FBT(sup->cfg) && (wpa->WPA_auth & WPA2_AUTH_FT) &&
 			BSS_FBT_INI_FBT(sup->wlc->fbt, sup->cfg)) {
 			wlc_fbt_addies(sup->wlc->fbt, sup->cfg, wpa_key);
 		}
@@ -966,7 +966,7 @@ wlc_wpa_sup_eapol(supplicant_t *sup, eapol_header_t *eapol, bool encrypted)
 
 			if ((wpa->WPA_auth & WPA2_AUTH_UNSPECIFIED) &&
 #ifdef WLFBT
-				(!WLFBT_ENAB(sup->pub) || !(wpa->WPA_auth & WPA2_AUTH_FT)) &&
+				(!BSSCFG_IS_FBT(sup->cfg) || !(wpa->WPA_auth & WPA2_AUTH_FT)) &&
 #endif /* WLFBT */
 				TRUE) {
 				eapol_wpa2_encap_data_t *data_encap;
@@ -1031,7 +1031,7 @@ wlc_wpa_sup_eapol(supplicant_t *sup, eapol_header_t *eapol, bool encrypted)
 #endif /* BCMCCX || BCMEXTCCX */
 			{
 #if defined(WLFBT)
-				if (WLFBT_ENAB(sup->pub) && (wpa->WPA_auth & WPA2_AUTH_FT) &&
+				if (BSSCFG_IS_FBT(sup->cfg) && (wpa->WPA_auth & WPA2_AUTH_FT) &&
 					(BSS_FBT_INI_FBT(sup->wlc->fbt, sup->cfg)))
 					wlc_fbt_calc_fbt_ptk(sup->wlc->fbt, sup->cfg);
 				else
@@ -1130,7 +1130,7 @@ wlc_wpa_sup_eapol(supplicant_t *sup, eapol_header_t *eapol, bool encrypted)
 					/* verify RSN IE */
 					/* wpa2ie for initial FBT has an extra pmkr1name in msg3 */
 #ifdef WLFBT
-					if (WLFBT_ENAB(sup->pub) &&
+					if (BSSCFG_IS_FBT(sup->cfg) &&
 						(wpa->WPA_auth & WPA2_AUTH_FT) &&
 						(BSS_FBT_INI_FBT(sup->wlc->fbt, sup->cfg)))
 						wpa2ie_len =
@@ -1259,7 +1259,7 @@ wlc_wpa_sup_eapol(supplicant_t *sup, eapol_header_t *eapol, bool encrypted)
 					&PEER_EA(sup), ETHER_ADDR_LEN, sup->cfg->wlcif);
 
 #ifdef WLFBT
-				if (WLFBT_ENAB(sup->pub))
+				if (BSSCFG_IS_FBT(sup->cfg))
 					BSS_FBT_INI_FBT(sup->wlc->fbt, sup->cfg) = FALSE;
 #endif /* WLFBT */
 
@@ -1600,7 +1600,7 @@ wlc_set_pmk(wlc_info_t *wlc, wpapsk_info_t *info, wpapsk_t *wpa,
 							NULL);
 #endif /* BCMSUP_PSK */
 #ifdef WLFBT
-					if (WLFBT_ENAB(wlc->pub) && (ret == BCME_OK) &&
+					if (BSSCFG_IS_FBT(cfg) && (ret == BCME_OK) &&
 						(cfg->WPA_auth & WPA2_AUTH_FT))
 						wlc_fbt_calc_fbt_ptk(wlc->fbt, cfg);
 #endif
@@ -1666,7 +1666,7 @@ wlc_set_pmk(wlc_info_t *wlc, wpapsk_info_t *info, wpapsk_t *wpa,
 			&cfg->BSSID, NULL);
 #endif
 #ifdef WLFBT
-	if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT))
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT))
 		wlc_fbt_calc_fbt_ptk(wlc->fbt, cfg);
 #endif
 
@@ -2372,7 +2372,7 @@ wlc_sup_handle_joindone(wlc_sup_info_t *sup_info, wlc_bsscfg_t *cfg)
 #endif
 		{
 #if defined(WLFBT)
-			if (WLFBT_ENAB(wlc->pub) && (cfg->auth_atmptd == DOT11_FAST_BSS)) {
+			if (BSSCFG_IS_FBT(cfg) && (cfg->auth_atmptd == DOT11_FAST_BSS)) {
 				fast_reassoc = TRUE;
 			}
 #endif /* WLFBT */

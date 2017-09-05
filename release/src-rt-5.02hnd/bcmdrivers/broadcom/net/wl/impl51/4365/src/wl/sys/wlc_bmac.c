@@ -4,7 +4,7 @@
  *
  * BMAC portion of common driver. The external functions should match wlc_bmac_stubs.c
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_bmac.c 655712 2016-08-23 08:32:44Z $
+ * $Id: wlc_bmac.c 682548 2017-02-02 09:15:49Z $
  */
 
 /**
@@ -6578,6 +6578,12 @@ wlc_clkctl_clk(wlc_hw_info_t *wlc_hw, uint mode)
 				OR_REG(wlc_hw->osh, &wlc_hw->regs->clk_ctl_st, CCS_FORCEHT);
 
 				OSL_DELAY(64);
+
+				if (wlc_hw->sih->pmurev >= 0x1c)
+					/* Need one more ILP clock cycle do forceht after a
+					 * d11 reset.
+					 */
+					OSL_DELAY(32);
 
 				SPINWAIT(((R_REG(wlc_hw->osh, &wlc_hw->regs->clk_ctl_st) &
 				           CCS_HTAVAIL) == 0), PMU_MAX_TRANSITION_DLY);
@@ -13621,6 +13627,11 @@ wlc_flushqueues(wlc_hw_info_t *wlc_hw)
 			PKTFREE(wlc_hw->osh, p, FALSE);
 		}
 #endif
+
+#ifdef AP
+		wlc_tx_fifo_sync_bcmc_reset(wlc);
+#endif
+
 		/* free any posted rx packets */
 		for (i = 0; i < MAX_RX_FIFO; i++) {
 			if ((wlc_hw->di[i] != NULL) && wlc_bmac_rxfifo_enab(i)) {

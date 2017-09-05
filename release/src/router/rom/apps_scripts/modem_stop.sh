@@ -15,10 +15,15 @@ modem_pid=`nvram get ${prefix}act_pid`
 modem_dev=`nvram get ${prefix}act_dev`
 modem_reg_time=`nvram get modem_reg_time`
 wandog_interval=`nvram get wandog_interval`
+modem_step_orig=`nvram get modem_step_orig`
 atcmd=`nvram get modem_atcmd`
 
 usb_gobi2=`nvram get usb_gobi2`
 kernel_version=`uname -r`
+
+if [ "$wandog_interval" == "" -o "$wandog_interval" == "0" ]; then
+	wandog_interval=5
+fi
 
 
 # $1: ifname.
@@ -104,7 +109,10 @@ if [ "$modem_type" == "gobi" ]; then
 		qcqmi=`_get_qcqmi_by_usbnet $modem_dev`
 		echo "Got qcqmi: $qcqmi."
 
-		gobi_api $qcqmi SetEnhancedAutoconnect 2 1
+		gobi_api $qcqmi SetEnhancedAutoconnect 0 1
+		if [ "$modem_step_orig" != "1" ]; then
+			killall gobi_api
+		fi
 
 		wait_time1=`expr $wandog_interval + $wandog_interval`
 		wait_time=`expr $wait_time1 + $modem_reg_time`

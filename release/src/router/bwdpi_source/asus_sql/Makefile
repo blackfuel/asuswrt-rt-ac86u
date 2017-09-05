@@ -22,6 +22,15 @@ CFLAGS += -I$(HND_SRC)/userspace/public/include -I$(HND_SRC)/userspace/public/in
 LDFLAGS += -L$(TOP)/wlcsm -lwlcsm -L$(TOP)/bcm_flashutil -lbcm_flashutil -L$(TOP)/bcm_util -lbcm_crc -L$(TOP)/bcm_boardctl -lbcm_boardctl
 endif
 
+ifeq ($(RTCONFIG_PERMISSION_MANAGEMENT),y)
+CFLAGS += -I$(TOP)/sqlCipher
+CFLAGS += -I$(TOP)/PMS_DBapis
+CFLAGS += -I$(TOP)/openssl/include/openssl
+LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
+LDFLAGS += -L $(TOP)/sqlCipher/.libs -lsqlcipher
+LDFLAGS += -L$(TOP)/PMS_DBapis -lpms_sql
+endif
+
 # for QCA toolchain compile issue, xxxx-ld has no pthead and dl in openwrt-toolchain
 ifeq ($(RTCONFIG_QCA),y)
 EXTRACC = -lpthread -ldl
@@ -43,8 +52,8 @@ endif
 
 ifeq ($(wildcard $(SRCBASE)/router/bwdpi_source/asus_sql/*.c),)
 all:
-	-cp -f prebuilt/bwdpi_sqlite bwdpi_sqlite
-	-cp -f prebuilt/libbwdpi_sql.so libbwdpi_sql.so
+	-cp -f prebuild/bwdpi_sqlite bwdpi_sqlite
+	-cp -f prebuild/libbwdpi_sql.so libbwdpi_sql.so
 else
 all: bwdpi_sqlite libbwdpi_sql.so
 endif

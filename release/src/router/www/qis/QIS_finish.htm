@@ -218,6 +218,25 @@ function yadns_change(need_apply){
 	yadns_update.submit();
 }
 
+var get_protocol = function() {
+	var protocol = "http:";
+	if(window.location.protocol == "http:" || window.location.protocol == "https:") {
+		protocol = window.location.protocol;
+		return protocol;
+	}
+
+	return protocol;
+};
+var header_info = [<% get_header_info(); %>];
+var location_org = get_protocol() + "//" + header_info[0].host;
+
+function yadns_change(need_apply){
+	var enable = document.getElementById("yadns_enable").checked;
+
+	parent.yadns_stage = need_apply ? 1 : 0;
+	document.getElementById("yadns_defmode").disabled = !enable;
+}
+
 /* Live update */
 function doLiveUpdate(_do){
 	if(_do){
@@ -312,11 +331,6 @@ function showLoadingUpdate(){
 	}
 	
 	progressBar++;	
-}
-
-/* Find device (callback) */
-function repage(){
-	top.location.href = "http://" + parent.staticIP;
 }
 
 /* Restart service (run automatically) */
@@ -431,6 +445,11 @@ function checkIsNewFirmware(){
 			document.restartForm.action_script.value = "restart_subnet";
 			document.getElementById('loadingIcon').style.display = '';
 			document.restartForm.submit();
+		}
+		else if(parent.yadns_support && parent.yadns_stage == 1) {
+			parent.yadns_stage++;
+			yadns_apply();
+			setTimeout("parent.location.href='/index.asp'", 10000);
 		}
 		else{
 			document.getElementById('loadingIcon').style.display = '';
@@ -1306,24 +1325,7 @@ function QKfinish_load_body(){
 				$("#lanip")[0].innerHTML = parent.staticIP;
 				document.getElementById("applyBtn").innerHTML = "<div style='text-align:left;margin-left:70px;'><br/><br/><#SAVE_restart_desc#><br><#LAN_IP_changed_suggedtion1#>&nbsp;" + parent.staticIP + "&nbsp;<#LAN_IP_changed_suggedtion2#></div>";
 				
-				var startQuery = function(){
-					$.ajax({ 
-						url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
-						dataType: 'jsonp',
-						timeout: 2000,
-
-						error: function(){
-							setTimeout(function(){
-								startQuery();
-							}, 1000);
-						}
-					});
-
-				}
-
-				setTimeout(function(){
-					startQuery();
-				}, 80000);
+				setTimeout(startQuery, 80000);
 			}
 			else{
 				$("#lanip")[0].innerHTML = "<#BOP_ctype_title1#>";
@@ -1379,6 +1381,20 @@ function QKfinish_load_body(){
 		restartService();
 	}, 1000);
 }
+
+var startQuery = function(){
+	$.ajax({ 
+		url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
+		dataType: "script",
+		timeout: 5000,
+		error: function(){
+			setTimeout(startQuery, 1000);
+		},
+		success: function(){
+			top.location.href = location_org.replace(header_info[0].host, parent.staticIP);
+		}
+	});
+};
 </script>
 </head>
 

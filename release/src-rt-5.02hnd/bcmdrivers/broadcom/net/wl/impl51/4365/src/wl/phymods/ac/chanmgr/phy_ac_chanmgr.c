@@ -1,7 +1,7 @@
 /*
  * ACPHY Channel Manager module implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -6228,14 +6228,14 @@ wlc_phy_set_regtbl_on_chan_change_acphy(phy_info_t *pi, uint8 ch, int fc)
 		}
 	}
 
+	// Set lesi before calling desense_apply
+	wlc_phy_lesi_acphy(pi, TRUE);
+
 	/* if it's 2x2 or 3x3 design, populate the reciprocity compensation coeff */
 	if (ACMAJORREV_0(pi->pubpi.phy_rev) || ACMAJORREV_2(pi->pubpi.phy_rev) ||
 	    ACMAJORREV_5(pi->pubpi.phy_rev) || ACMAJORREV_32(pi->pubpi.phy_rev) ||
 	    ACMAJORREV_33(pi->pubpi.phy_rev)) {
-		if (!(ACMAJORREV_33(pi->pubpi.phy_rev) &&
-				PHY_AS_80P80(pi, pi->radio_chanspec))) {
-			wlc_phy_populate_recipcoeffs_acphy(pi);
-		}
+		wlc_phy_populate_recipcoeffs_acphy(pi);
 	}
 
 	/* 4335c0 wlipa 2GHz xtal spur war */
@@ -10120,8 +10120,6 @@ wlc_phy_chanspec_set_acphy(phy_info_t *pi, chanspec_t chanspec)
 		wlc_phy_spurwar_nvshp_acphy(pi, bw_changed, TRUE, FALSE);
 	}
 
-	wlc_phy_lesi_acphy(pi, TRUE);
-
 	/* Spur war for 4335 Ax/Bx IPA */
 	if (ACMAJORREV_1(pi->pubpi.phy_rev) && PHY_ILNA(pi) &&
 	   (ACMINORREV_0(pi) || ACMINORREV_1(pi))) {
@@ -10262,7 +10260,6 @@ wlc_phy_chanspec_set_acphy(phy_info_t *pi, chanspec_t chanspec)
 		wlc_phy_ac_core2core_sync_setup(pi, TRUE);
 	}
 
-	wlc_phy_lesi_acphy(pi, TRUE);
 	if (ACMAJORREV_33(pi->pubpi.phy_rev)) {
 		if (PHY_AS_80P80(pi, pi->radio_chanspec)) {
 			/* Disable MRC SIG QUAL for BW80p80 for abnormal RTL behavior */
@@ -11047,13 +11044,20 @@ wlc_phy_populate_recipcoeffs_acphy(phy_info_t *pi)
 	uint32 packed;
 	uint16 nwords_start = 12, nwords_pad = 4, nwords_recip;
 	uint8  stall_val;
+	uint8 bands[NUM_CHANS_IN_CHAN_BONDING];
 
 	if (pi->sh->hw_phytxchain <= 1) {
 		return;
 	}
 
 	/* 1. obtain angles from SROM */
-	subband_idx = wlc_phy_get_chan_freq_range_acphy(pi, 0);
+	if (PHY_AS_80P80(pi, pi->radio_chanspec)) {
+		wlc_phy_get_chan_freq_range_80p80_acphy(pi, 0, bands);
+		subband_idx = bands[0];
+	} else {
+		subband_idx = wlc_phy_get_chan_freq_range_acphy(pi, 0);
+	}
+
 	switch (subband_idx) {
 	case WL_CHAN_FREQ_RANGE_2G:
 #ifdef WLTXBF_2G_DISABLED

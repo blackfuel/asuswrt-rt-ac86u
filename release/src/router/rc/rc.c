@@ -42,6 +42,8 @@ wbd_restore_defaults(void)
 		"wbd_mode",
 		"wbd_msglevel",
 		"wbd_ignr_maclst",
+		"wbd_fixed_ifnames",
+		"wbd_no_dedicated_backhaul",
 		/* NVRAMs for Target BSS Identification Configuration */
 		"wbd_tbss_wght_idx",
 		"wbd_tbss_wght",
@@ -99,6 +101,127 @@ wbd_restore_defaults(void)
 }
 #endif /* __CONFIG_WBD__ */
 
+#ifdef WLHOSTFBT
+
+/* Clear FBT_APs NVRAMS based on prefix */
+static void
+fbt_aps_restore_defaults(char *prefix)
+{
+	char tmp_prefix[] = "wlXXXXXXXXXXXXXXXXXXXXXXXXXXXX_mssid_";
+	char *fbt_aps, *next;
+	char tmp[100], fbt_ap[100], tmp_fbt_ap[100];
+	int iter_param, i, j;
+
+	/* List of FBT_AP NVRAMs */
+	char* fbt_ap_nvrams[] = {
+		"addr",
+		"r1kh_id",
+		"r0kh_id",
+		"r0kh_id_len",
+		"br_addr",
+		"r0kh_key",
+		"r1kh_key",
+	};
+
+	/* Get fbt_all_gen_aps NVRAM */
+	fbt_aps = nvram_safe_get(strcat_r(prefix, "fbt_all_gen_aps", tmp));
+	/* If no values, no need to restore those */
+	if (strlen(fbt_aps) <= 0) {
+		goto fbt_all_aps;
+	}
+	/* For each fbt_all_gen_aps, clear the fbt_ap_nvrams */
+	foreach(fbt_ap, fbt_aps, next) {
+		/* Traverse through all FBT_AP NVRAMs */
+		for (iter_param = 0; iter_param < ARRAYSIZE(fbt_ap_nvrams); iter_param++) {
+			snprintf(tmp_fbt_ap, sizeof(tmp_fbt_ap), "%s_%s", fbt_ap,
+				fbt_ap_nvrams[iter_param]);
+			nvram_unset(tmp_fbt_ap);
+		}
+	}
+
+fbt_all_aps:
+	/* Get fbt_all_aps NVRAM to clear the fbt_bssid NVRAM*/
+	fbt_aps = nvram_safe_get(strcat_r(prefix, "fbt_all_aps", tmp));
+	/* If no values, no need to restore those */
+	if (strlen(fbt_aps) <= 0) {
+		return;
+	}
+
+	/* For each fbt_aps, clear the fbt_bssid nvrams */
+	foreach(fbt_ap, fbt_aps, next) {
+		/* Traverse through all Primary Prefix to restore fbt_aps NVRAMs */
+		for (i = 0; i < MAX_NVPARSE; i++) {
+			sprintf(tmp_prefix, "wl%d_", i);
+			snprintf(tmp_fbt_ap, sizeof(tmp_fbt_ap), "%s%s_fbt_bssid",
+				tmp_prefix, fbt_ap);
+			nvram_unset(tmp_fbt_ap);
+
+			/* Traverse through all Virtual Prefix */
+			for (j = 0; j < MAX_NVPARSE; j++) {
+				sprintf(tmp_prefix, "wl%d.%d_", i, j);
+				snprintf(tmp_fbt_ap, sizeof(tmp_fbt_ap), "%s%s_fbt_bssid",
+					tmp_prefix, fbt_ap);
+				nvram_unset(tmp_fbt_ap);
+			}
+		}
+	}
+}
+
+/* Clear all the FBT NVRAMs */
+static void
+fbt_restore_defaults(void)
+{
+	char tmp[100], prefix[] = "wlXXXXXXXXXXXXXXXXXXXXXXXXXXXX_mssid_";
+	int i, j, iter_param;
+
+	/* List of FBT NVRAMs */
+	char* fbt_nvrams[] = {
+		"fbt",
+		"fbt_mdid",
+		"fbtoverds",
+		"fbt_reassoc_time",
+		"fbt_ap",
+		"r0kh_id",
+		"r1kh_id",
+		"r0kh_key",
+		"fbt_aps",
+		"fbt_all_aps",
+		"fbt_all_gen_aps"
+	};
+
+	/* Traverse through all Primary Prefix to restore fbt_aps NVRAMs */
+	for (i = 0; i < MAX_NVPARSE; i++) {
+		sprintf(prefix, "wl%d_", i);
+		fbt_aps_restore_defaults(prefix);
+
+		/* Traverse through all Virtual Prefix */
+		for (j = 0; j < MAX_NVPARSE; j++) {
+			sprintf(prefix, "wl%d.%d_", i, j);
+			fbt_aps_restore_defaults(prefix);
+		}
+	}
+
+	/* Traverse through all FBT NVRAMs */
+	for (iter_param = 0; iter_param < ARRAYSIZE(fbt_nvrams); iter_param++) {
+		/* Traverse through all Primary Prefix */
+		for (i = 0; i < MAX_NVPARSE; i++) {
+			sprintf(prefix, "wl%d_", i);
+
+			/* Clear NVRAMs with Primary Prefix */
+			nvram_unset(strcat_r(prefix, fbt_nvrams[iter_param], tmp));
+
+			/* Traverse through all Virtual Prefix */
+			for (j = 0; j < MAX_NVPARSE; j++) {
+				sprintf(prefix, "wl%d.%d_", i, j);
+
+				/* Clear NVRAMs with Virtual Prefix */
+				nvram_unset(strcat_r(prefix, fbt_nvrams[iter_param], tmp));
+			}
+		}
+	}
+}
+#endif /* WLHOSTFBT */
+
 #ifdef LINUX_2_6_36
 static int
 coma_uevent(void)
@@ -139,6 +262,11 @@ static int rctest_main(int argc, char *argv[])
 #ifdef RTCONFIG_BCM_7114
 	else if (strcmp(argv[1], "spect")==0) {
 		start_dfs();
+	}
+#endif
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+	else if (strcmp(argv[1], "permission") == 0) {
+		setup_passwd();
 	}
 #endif
 	else if (strcmp(argv[1], "GetPhyStatus")==0) {
@@ -290,6 +418,12 @@ static int rctest_main(int argc, char *argv[])
 		else if (strcmp(argv[1], "psta_monitor") == 0) {
 			if (on) start_psta_monitor();
 			else stop_psta_monitor();
+		}
+#endif
+#if defined(AMAS) && defined(RTCONFIG_BCMWL6)
+		else if (strcmp(argv[1], "obd") == 0) {
+			if (on) start_obd();
+			else stop_obd();
 		}
 #endif
 #ifdef RTCONFIG_IPERF
@@ -477,7 +611,8 @@ static int hotplug_firmware(void)
 	sprintf(sysfs_path, "%s/%s/loading", sysfs_root, devpath);
 	f_loading = fopen(sysfs_path, "w");
 	if (!f_loading) {
-		_dprintf("[%s] Open %s fail\n", __func__,f_loading);
+		_dprintf("Open %s/%s/loading fail, errno %d (%s)\n",
+			sysfs_root, devpath, errno, strerror(errno));
 		goto err_exit1;
 	}
 	sprintf(sysfs_path, "%s/%s/data", sysfs_root, devpath);
@@ -625,6 +760,9 @@ static const applets_t applets[] = {
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 	{ "psta_monitor",		psta_monitor_main		},
 #endif
+#if defined(AMAS) && defined(RTCONFIG_BCMWL6)
+	{ "obd",			obd_main			},
+#endif
 #ifdef RTCONFIG_IPERF
 	{ "monitor",			monitor_main			},
 #endif
@@ -710,7 +848,7 @@ static const applets_t applets[] = {
 #ifdef RTCONFIG_SPEEDTEST
 	{ "speedtest",			speedtest_main			},
 #endif
-#ifdef RTCONFIG_BWDPI
+#if defined(RTCONFIG_BWDPI)
 	{ "bwdpi",			bwdpi_main			},
 	{ "bwdpi_check",		bwdpi_check_main		},
 	{ "bwdpi_wred_alive",		bwdpi_wred_alive_main		},
@@ -718,8 +856,13 @@ static const applets_t applets[] = {
 	{ "rsasign_sig_check",		rsasign_sig_check_main		},
 #endif
 	{ "hour_monitor",		hour_monitor_main		},
+#ifdef RTCONFIG_USB_MODEM
 #ifdef RTCONFIG_INTERNAL_GOBI
 	{ "lteled",			lteled_main			},
+#if defined(RTCONFIG_JFFS2) || defined(RTCONFIG_BRCM_NAND_JFFS2) || defined(RTCONFIG_UBIFS)
+	{ "modem_data",			modem_data_main			},
+#endif
+#endif
 #endif
 #ifdef RTCONFIG_TR069
 	{ "dhcpc_lease",		dhcpc_lease_main		},
@@ -733,15 +876,21 @@ static const applets_t applets[] = {
 #if defined(RTCONFIG_KEY_GUARD)
 	{ "keyguard",			keyguard_main			},
 #endif
+#ifdef RTCONFIG_LETSENCRYPT
+	{ "le_acme",				le_acme_main			},
+#endif
 #if !(defined(RTCONFIG_QCA) || defined(RTCONFIG_RALINK) || defined(RTCONFIG_REALTEK))
 	{ "erp_monitor",		erp_monitor_main		},
 #endif
 #if defined(MAPAC2200)
 	{ "dpdt_ant",			dpdt_ant_main		},
 #endif
-#if defined(MAPAC1300)
+#if defined(MAPAC1300) || defined(VRZAC1300)
 	{ "thermal_txpwr",		thermal_txpwr_main		},
-#endif	/* MAPAC1300 */
+#endif	/* MAPAC1300 VRZAC1300 */
+#ifdef RTCONFIG_ADTBW
+	{ "adtbw",			adtbw_main		},
+#endif
 	{NULL, NULL}
 };
 
@@ -829,7 +978,7 @@ int main(int argc, char **argv)
 	}
 
 
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
         if(!strcmp(base, "hive_cap")){
                 if(nvram_get_int("sw_mode")==SW_MODE_ROUTER) {
                         printf("start central ap...\n");
@@ -1297,6 +1446,14 @@ int main(int argc, char **argv)
 #endif
 #endif
 #ifdef RTCONFIG_LANTIQ
+	else if(!strcmp(base, "update_client")) {
+		_dprintf("update_client\n");
+		if(argc == 4)
+			update_client_event(argv[1], argv[2], atoi(argv[3]));
+		return 0;
+	}
+#endif
+#ifdef RTCONFIG_LANTIQ
 	else if(!strcmp(base, "restart_bluetoothd")) {
 		system("killall bluetoothd");
 		system("hciconfig hci0 down");
@@ -1304,6 +1461,16 @@ int main(int argc, char **argv)
 		system("hciconfig hci0 up");
 		system("hciconfig hci0 leadv 0");
 		system("bluetoothd -n &");
+		return 0;
+	}
+	else if(!strcmp(base, "set_usb3_to_usb2")) {
+		set_usb3_to_usb2();
+		puts("1");
+		return 0;
+	}
+	else if(!strcmp(base, "set_usb2_to_usb3")) {
+		set_usb2_to_usb3();
+		puts("1");
 		return 0;
 	}
 #endif
@@ -1481,7 +1648,6 @@ int main(int argc, char **argv)
 	else if (!strcmp(base, "led_ctrl")) {
 		return(led_control(atoi(argv[1]), atoi(argv[2])));
 	}
-#ifdef RTCONFIG_BCMARM
 #ifdef HND_ROUTER
 	else if (!strcmp(base, "hnd-erase")) {
 		if (argv[1] && (!strcmp(argv[1], "nvram"))) {
@@ -1509,6 +1675,7 @@ int main(int argc, char **argv)
 		erase_nvram();
 		return 0;
 	}
+#ifdef RTCONFIG_BCMARM
 #if defined(RTAC1200G) || defined(RTAC1200GP)
 	/* mtd-erase2 [device] */
 	else if (!strcmp(base, "mtd-erase2")) {

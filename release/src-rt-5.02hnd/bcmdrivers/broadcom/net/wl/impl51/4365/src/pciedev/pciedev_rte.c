@@ -1,7 +1,7 @@
 /*
  * RTE layer for pcie device
  * hnd_dev_ops_t & dngl_bus_ops for pciedev are defined here
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -479,7 +479,6 @@ pciedev_ioctl(hnd_dev_t *rtedev, uint32 cmd, void *buf, int len, int *used, int 
 
 		pciedev_set_copycount_bytes(drv->pciedev, copycount, d11rxoffset);
 		break;
-
 	default:
 		ret = BCME_ERROR;
 	}

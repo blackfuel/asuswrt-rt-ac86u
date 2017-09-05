@@ -40,6 +40,7 @@ struct nvram_tuple {
 	unsigned short len;
 	unsigned short type;
 	unsigned short acc_level;
+	unsigned short enc;
 	struct nvram_tuple *next;
 };
 

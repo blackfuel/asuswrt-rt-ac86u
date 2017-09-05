@@ -104,13 +104,14 @@ var modem_act_imsi = '<% nvram_get("usb_modem_act_imsi"); %>';
 var modem_act_iccid = '<% nvram_get("usb_modem_act_iccid"); %>';
 var modem_operation ='<% nvram_get("usb_modem_act_operation"); %>';
 var modem_act_rssi = '<% nvram_get("usb_modem_act_rssi"); %>';
+var modem_act_sinr = '<% nvram_get("usb_modem_act_sinr"); %>';
 var modem_act_rsrp = '<% nvram_get("usb_modem_act_rsrp"); %>';
 var modem_act_rsrq = '<% nvram_get("usb_modem_act_rsrq"); %>';
 var modem_act_cellid = '<% nvram_get("usb_modem_act_cellid"); %>';
 var modem_act_lac = '<% nvram_get("usb_modem_act_lac"); %>';
 var orig_modem_lte_band = '<% nvram_get("modem_lte_band"); %>';
 var modem_isp = '<% nvram_get("modem_isp"); %>';
-var modem_spn = '<% nvram_get("modem_spn"); %>';
+var modem_spn = '<% nvram_get("usb_modem_auto_spn"); %>';
 var modem_act_provider = '<% nvram_get("usb_modem_act_provider"); %>';
 var g3err_pin = '<% nvram_get("g3err_pin"); %>';
 var pin_remaining_count = '<% nvram_get("usb_modem_act_auth_pin"); %>';
@@ -957,6 +958,12 @@ function check_sim_details(){
 				show_wstatus = 1;
 			}
 
+			if(modem_operation == "LTE" && modem_act_sinr.length > 0 && !isNaN(modem_act_sinr) && modem_act_sinr != "0"){
+				document.getElementById("sinr_tr").style.display = "";
+				document.getElementById("modem_sinr").innerHTML = modem_act_sinr;
+				show_wstatus = 1;
+			}
+
 			if(modem_act_rsrp.length > 0 && !isNaN(modem_act_rsrp) && modem_act_rsrp != "0"){
 				document.getElementById("rsrp_tr").style.display = "";
 				document.getElementById("modem_rsrp").innerHTML = modem_act_rsrp;
@@ -1778,6 +1785,7 @@ function update_lte_fw(){
 					</thead>
 					<tr id="cellid_tr" style="display:none;"><th>Cell ID</th><td><div id="modem_cellid"><% nvram_get("usb_modem_act_cellid"); %></div></td></tr>
 		  			<tr id="rssi_tr" style="display:none;"><th>RSSI</th><td><span id="modem_rssi" style="color:#FFF;"><% nvram_get("usb_modem_act_rssi"); %></span>&nbsp;dBm</td></tr>
+					<tr id="sinr_tr" style="display:none;"><th>SINR</th><td><span id="modem_sinr" style="color:#FFF;"><% nvram_get("usb_modem_act_sinr"); %></span>&nbsp;dB</td></tr>
 		  			<tr id="rsrp_tr" style="display:none;"><th>RSRP</th><td><span id="modem_rsrp" style="color:#FFF;"><% nvram_get("usb_modem_act_rsrp"); %></span>&nbsp;dBm</td></tr>
 					<tr id="rsrq_tr" style="display:none;"><th>RSRQ</th><td><span id="modem_rsrq" style="color:#FFF;"><% nvram_get("usb_modem_act_rsrq"); %></span>&nbsp;dBm</td></tr>
 					<tr id="lac_tr" style="display:none;"><th>LAC</th><td><div id="modem_lac"><% nvram_get("usb_modem_act_lac"); %></div></td></tr>
@@ -1958,7 +1966,7 @@ function update_lte_fw(){
 								<option value="0" <% nvram_match("modem_pdp", "0", "selected"); %>>IPv4</option>
 								<option value="1" <% nvram_match("modem_pdp", "1", "selected"); %>>PPP</option>
 								<option value="2" <% nvram_match("modem_pdp", "2", "selected"); %>>IPv6</option>
-								<option value="3" <% nvram_match("modem_pdp", "3", "selected"); %>>IPv4tov6</option>
+								<option value="3" <% nvram_match("modem_pdp", "3", "selected"); %>>IPv4&IPv6</option>
 							</select>
 						</td>
 					</tr>

@@ -2,7 +2,7 @@
  * Decode base functions which provides decoding of basic data types
  * and provides bounds checking on the buffer to be decoded.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

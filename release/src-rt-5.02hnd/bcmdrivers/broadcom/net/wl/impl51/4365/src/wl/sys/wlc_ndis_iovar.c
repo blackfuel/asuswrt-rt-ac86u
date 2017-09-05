@@ -4,7 +4,7 @@
  * WLC NDIS IOVAR module (iovars/ioctls that are used in between wlc and per port) of
  * Broadcom 802.11bang Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

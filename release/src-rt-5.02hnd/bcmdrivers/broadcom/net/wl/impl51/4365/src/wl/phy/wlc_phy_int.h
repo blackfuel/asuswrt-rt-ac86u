@@ -1,7 +1,7 @@
 /*
  * PHY module internal interface crossing different PHY types
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_phy_int.h 654130 2016-08-11 06:59:54Z $
+ * $Id: wlc_phy_int.h 680493 2017-01-20 05:44:09Z $
  */
 
 
@@ -3070,6 +3070,7 @@ struct phy_info
 	phy_mu_info_t*mui;		/* MU-MIMO module */
 	aci_reg_list_entry *hwaci_phyreg_list;
 	aci_tbl_list_entry *hwaci_phytbl_list;
+	bool	lesi_mode;	/*  set when lesidisab nvram variable set through nvram file  */
 };
 
 

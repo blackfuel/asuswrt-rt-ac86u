@@ -92,6 +92,10 @@ function initial(){
 		document.getElementById("guest_table5_2").style.display = "";
 	}
 
+	if(wl_info.band60g_support) {
+		document.getElementById("guest_table60").style.display = "";
+	}
+
 	if(radio_2 != 1){
 		document.getElementById('2g_radio_hint').style.display ="";
 	}
@@ -126,6 +130,10 @@ function initial(){
 
 	if(lyra_hide_support)
 		document.getElementById("gn_index_tr").style.display = "none";
+
+	if(ifttt_support){
+		$("#smart_home").show();
+	}
 }
 
 function change_wl_expire_radio(){
@@ -346,6 +354,10 @@ function gen_gntable_tr(unit, gn_array, slicesb){
 					htmlcode += '<tr><td align="center" class="gninfo_table_bottom"></td></tr>';
 					htmlcode += '<tfoot><tr><td align="center"><input type="button" class="button_gen" value="<#btn_remove#>" onclick="close_guest_unit('+ unit +','+ subunit +');"></td></tr></tfoot>';
 			}
+
+			if(unit == 0 && i == (gn_array_length-1)){
+				htmlcode += '<tfoot><tr><td align="center"><div id="smart_home" style="font-size: 13px;font-weight:bolder;color:rgb(255, 204, 0);position:absolute;margin:33px 0px 0px -12px;display:none">Alexa/IFTTT Configured</div></td></tr></tfoot>';
+			}
 			htmlcode += '</table></td>';		
 	}	
 
@@ -368,12 +380,15 @@ function gen_gntable(){
 	var htmlcode = ""; 
 	var htmlcode5 = ""; 
 	var htmlcode5_2 = ""; 
+	var htmlcode60 = "";
 	var gn_array_2g_tmp = gn_array_2g;
 	var gn_array_5g_tmp = gn_array_5g;
 	var gn_array_5g_2_tmp = gn_array_5g_2;
+	var gn_array_60g_tmp = gn_array_60g;
 	var band2sb = 0;
 	var band5sb = 0;
 	var band5sb_2 = 0;
+	var band60sb = 0;
 
 	if(gn_array_2g_tmp.length > 0){
 		htmlcode += '<table style="margin-left:20px;margin-top:25px;" width="95%" align="center" cellpadding="4" cellspacing="0" class="gninfo_head_table" id="gninfo_table_2g">';
@@ -435,6 +450,14 @@ function gen_gntable(){
 		htmlcode5_2 += '</td></tr>';
 		htmlcode5_2 += '</table>';
 		document.getElementById("guest_table5_2").innerHTML = htmlcode5_2;
+	}
+
+	if(wl_info.band60g_support) {
+		htmlcode60 += '<table style="margin-left:20px;margin-top:25px;" width="95%" align="center" cellpadding="4" cellspacing="0" class="gninfo_head_table" id="gninfo_table_60g">';
+		htmlcode60 += '<tr id="60g_title"><td align="left" style="color:#5AD; font-size:16px; border-bottom:1px dashed #AAA;"><span>60GHz</span></td></tr>';
+		htmlcode60 += '<tr><td><span style="font-size: 14px;color:#FC0;"><#CTL_nonsupported#></span></td></tr>';
+		htmlcode60 += '</table>';
+		document.getElementById("guest_table60").innerHTML = htmlcode60;
 	}
 }
 
@@ -621,7 +644,10 @@ function guest_divctrl(flag){
 		
 		if(wl_info.band5g_2_support)
 			document.getElementById("guest_table5_2").style.display = "none";
-		
+
+		if(wl_info.band60g_support)
+			document.getElementById("guest_table60").style.display = "none";
+
 		if(fbwifi_support) {
 			document.getElementById("guest_tableFBWiFi").style.display = "none";
 		}
@@ -645,6 +671,11 @@ function guest_divctrl(flag){
 		
 		if(wl_info.band5g_2_support)
 			document.getElementById("guest_table5_2").style.display = "";
+
+		if(wl_info.band60g_support)
+			document.getElementById("guest_table60").style.display = "";
+		else
+			document.getElementById("guest_table60").style.display = "none";
 
 		if(!fbwifi_support) {
 			document.getElementById("guest_tableFBWiFi").style.display = "none";
@@ -674,6 +705,8 @@ function mbss_display_ctrl(){
 			document.getElementById("guest_table5").style.display = "none";
 		if(wl_info.band5g_2_support)
 			document.getElementById("guest_table5_2").style.display = "none";
+		if(wl_info.band60g_support)
+			document.getElementById("guest_table60").style.display = "none";
 		if(fbwifi_support) {
 			document.getElementById("guest_tableFBWiFi").style.display = "none";
 		}
@@ -723,6 +756,11 @@ function change_guest_unit(_unit, _subunit){
 			edit_unit=2;
 			gn_array = gn_array_5g_2;
 			document.form.wl_nmode_x.value = wl2_nmode_x;
+			break;
+		case 3:
+			edit_unit=3;
+			gn_array = gn_array_60g;
+			document.form.wl_nmode_x.value = wl3_nmode_x;
 			break;
 	}
 	
@@ -788,6 +826,9 @@ function create_guest_unit(_unit, _subunit){
 		case 2:
 			gn_array = gn_array_5g_2;
 			break;						
+		case 3:
+			gn_array = gn_array_60g;
+			break;
 	}
 	
 	if(gn_array[_subunit-1][15] != "1"){
@@ -1048,25 +1089,6 @@ function show_bandwidth(flag){
 		inputCtrl(document.form.wl_bw_ul_x, 0);		
 	}	
 }
-
-function bandwidth_code(o,event){
-	var keyPressed = event.keyCode ? event.keyCode : event.which;
-	var target = o.value.split(".");
-	
-	if (validator.isFunctionButton(event))
-		return true;	
-		
-	if((keyPressed == 46) && (target.length > 1))
-		return false;
-
-	if((target.length > 1) && (target[1].length > 0))
-		return false;	
-		
-	if ((keyPressed == 46) || (keyPressed > 47 && keyPressed < 58))
-		return true;
-	else
-		return false;		
-}
 </script>
 </head>
 
@@ -1179,6 +1201,7 @@ function bandwidth_code(o,event){
 						<div id="guest_table2"></div>			
 						<div id="guest_table5"></div>
 						<div id="guest_table5_2"></div>
+						<div id="guest_table60"></div>
 						<div id="guest_tableFBWiFi">
 							<table style="margin-left:20px;margin-top:25px;" width="95%" align="center" cellpadding="4" cellspacing="0" class="gninfo_head_table" id="gninfo_table_FBWiFi">
 								<tr id="FBWiFi_title">
@@ -1377,9 +1400,9 @@ function bandwidth_code(o,event){
 							<tr>
 								<th><#Bandwidth_Limiter#></th>
 								<td>
-										Download <input type="text" id="wl_bw_dl_x" name="wl_bw_dl_x" maxlength="12" onkeypress="return bandwidth_code(this, event);" class="input_12_table" value=""><label style="margin-left:2px;">Mb/s</label>
+										Download <input type="text" id="wl_bw_dl_x" name="wl_bw_dl_x" maxlength="12" onkeypress="return validator.bandwidth_code(this, event);" class="input_12_table" value=""><label style="margin-left:2px;">Mb/s</label>
 										&nbsp;&nbsp;&nbsp;
-										Upload <input type="text" id="wl_bw_ul_x" name="wl_bw_ul_x" maxlength="12" onkeypress="return bandwidth_code(this, event);" class="input_12_table" value=""><label style="margin-left:2px;">Mb/s</label>
+										Upload <input type="text" id="wl_bw_ul_x" name="wl_bw_ul_x" maxlength="12" onkeypress="return validator.bandwidth_code(this, event);" class="input_12_table" value=""><label style="margin-left:2px;">Mb/s</label>
 								</td>
 							</tr>
 							

@@ -1,7 +1,7 @@
 /*
  * Wireless interface translation utility functions
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: wlif_utils.c 652100 2016-07-29 14:34:24Z $
+ * $Id: wlif_utils.c 669471 2016-11-09 17:01:43Z $
  */
 
 #include <typedefs.h>
@@ -364,6 +364,27 @@ wl_wlif_is_dwds(char *ifname)
 #endif
 }
 
+bool
+wl_wlif_is_psr_ap(char *ifname)
+{
+	int32 psta = FALSE;
+	int32 psta_mode = 0;
+
+	if (wl_probe(ifname) < 0)
+		return FALSE;
+
+	wl_iovar_getint(ifname, "psta", &psta_mode);
+	if (psta_mode == 2) {
+		wl_iovar_getint(ifname, "psta_if", &psta);
+		if (!psta) {
+			return strncmp(ifname, "wl", 2) ? FALSE : TRUE;
+		}
+	} else
+		return FALSE;
+
+	return FALSE;
+}
+
 /*
  * Get LAN or WAN ifname by wl mac
  * NOTE: We pass ifname in case of same mac in vifs (like URE TR mode)
@@ -371,7 +392,8 @@ wl_wlif_is_dwds(char *ifname)
 char *
 get_ifname_by_wlmac(unsigned char *mac, char *name)
 {
-	char nv_name[16], os_name[16], if_name[16];
+	char nv_name[16], os_name[16];
+	static char if_name[16];
 	char tmptr[] = "lanXX_ifnames";
 	char *ifnames, *ifname;
 	int i;
@@ -390,6 +412,28 @@ get_ifname_by_wlmac(unsigned char *mac, char *name)
 
 	if (osifname_to_nvifname(os_name, nv_name, sizeof(nv_name)) < 0)
 		return 0;
+
+	/* find for dpsta */
+	if (wl_wlif_is_psta(os_name))
+		return name;
+
+	ifnames = nvram_get("dpsta_ifnames");
+	if (ifnames && (find_in_list(ifnames, nv_name) || find_in_list(ifnames, os_name))) {
+		/* find dpsta in which bridge */
+		for (i = 0; i < WLIFU_MAX_NO_BRIDGE; i++) {
+			sprintf(tmptr, "br%d_ifnames", i);
+			sprintf(if_name, "br%d", i);
+			ifnames = nvram_get(tmptr);
+			ifname = if_name;
+
+			if (ifnames) {
+				/* the name in ifnames may nvifname or osifname */
+				if (find_in_list(ifnames, nv_name) ||
+					find_in_list(ifnames, os_name))
+					return ifname;
+			}
+		}
+	}
 
 	/* find for lan */
 	for (i = 0; i < WLIFU_MAX_NO_BRIDGE; i++) {
@@ -428,9 +472,16 @@ get_ifname_by_wlmac(unsigned char *mac, char *name)
 	return 0;
 }
 
+#if defined(HND_ROUTER)
+#define CHECK_NAS(mode) ((mode) & (WPA_AUTH_UNSPECIFIED | WPA_AUTH_PSK | \
+			 	   WPA2_AUTH_UNSPECIFIED | WPA2_AUTH_PSK | WPA2_AUTH_FT))
+#define CHECK_PSK(mode) ((mode) & (WPA_AUTH_PSK | WPA2_AUTH_PSK | WPA2_AUTH_FT))
+#else
 #define CHECK_NAS(mode) ((mode) & (WPA_AUTH_UNSPECIFIED | WPA_AUTH_PSK | \
 				   WPA2_AUTH_UNSPECIFIED | WPA2_AUTH_PSK))
 #define CHECK_PSK(mode) ((mode) & (WPA_AUTH_PSK | WPA2_AUTH_PSK))
+
+#endif
 #define CHECK_RADIUS(mode) ((mode) & (WPA_AUTH_UNSPECIFIED | WLIFU_AUTH_RADIUS | \
 				      WPA2_AUTH_UNSPECIFIED))
 
@@ -535,6 +586,10 @@ get_wsec(wsec_info_t *info, unsigned char *mac, char *osifname)
 			info->akm |= WPA2_AUTH_UNSPECIFIED;
 		if (!strcmp(akm, "psk2"))
 			info->akm |= WPA2_AUTH_PSK;
+#ifdef HND_ROUTER
+		if (!strcmp(akm, "psk2ft"))
+			info->akm |= WPA2_AUTH_PSK | WPA2_AUTH_FT;
+#endif
 	}
 	/* wsec encryption */
 	value = nvram_safe_get(strcat_r(wl_prefix, "wep", comb));

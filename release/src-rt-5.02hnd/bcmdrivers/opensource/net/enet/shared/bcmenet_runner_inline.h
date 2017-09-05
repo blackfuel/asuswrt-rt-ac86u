@@ -68,6 +68,7 @@ static inline int bcmeapi_alloc_skb(BcmEnet_devctrl *pDevCtrl, struct sk_buff **
 #ifdef CATHY_SKBLIST_LOCK_PATCH
     ENET_SKBLIST_LOCK();
 #endif /* CATHY_SKBLIST_LOCK_PATCH */
+
 #if 1
     if (pDevCtrl->freeSkbList) {
         *skb = pDevCtrl->freeSkbList;

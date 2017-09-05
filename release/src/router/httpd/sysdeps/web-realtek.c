@@ -3540,8 +3540,6 @@ ej_wl_scan_5g(int eid, webs_t wp, int argc, char_t **argv)
 	return wl_scan(eid, wp, argc, argv, 1);
 }
 
-
-
 #ifdef RTCONFIG_PROXYSTA
 int
 ej_wl_auth_psta(int eid, webs_t wp, int argc, char_t **argv)

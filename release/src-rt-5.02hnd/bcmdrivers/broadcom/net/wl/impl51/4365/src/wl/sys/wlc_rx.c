@@ -3,7 +3,7 @@
  *
  * Common receive datapath components
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -5037,6 +5037,19 @@ wlc_recv_mgmtact(wlc_info_t *wlc, struct scb *scb, struct dot11_management_heade
 			break;
 		if (body_len < DOT11_ACTION_HDR_LEN)
 			goto rxbadproto;
+#ifdef CLIENT_CSA
+		if ((body[DOT11_ACTION_ACT_OFF] == DOT11_SM_ACTION_CHANNEL_SWITCH) &&
+			scb) {
+			if (!SCB_DWDS(scb)) {
+				WL_TRACE(("Received CSA frame from NON DWDS STA "MACF"",
+					"not processing\n", ETHERP_TO_MACF(&scb->ea)));
+				break;
+			} else {
+				WL_TRACE(("Received CSA from DWDS STA "MACF"\n",
+					ETHERP_TO_MACF(&scb->ea)));
+			}
+		}
+#endif /* CLIENT_CSA */
 		wlc_recv_frameaction_specmgmt(wlc->m11h, hdr, body, body_len, rssi, rspec);
 		break;
 	case DOT11_ACTION_NOTIFICATION:
@@ -5100,27 +5113,42 @@ wlc_recv_mgmtact(wlc_info_t *wlc, struct scb *scb, struct dot11_management_heade
 		wlc_dls_recv_process_dls(wlc->dls, action_id, hdr, body, body_len);
 		break;
 #endif
-#ifdef STA
 #ifdef WLFBT
 	case DOT11_ACTION_CAT_FBT:
-		if (WLFBT_ENAB(wlc->pub)) {
-			WL_ASSOC(("wl%d: %s: FT_RES\n", WLCWLUNIT(wlc), __FUNCTION__));
+		if (bsscfg && BSSCFG_IS_FBT(bsscfg) && wlc_fbt_enabled(wlc->fbt, bsscfg)) {
+			dot11_ft_req_t *ftreq;
+			WL_FBT(("wl%d: %s: FB ACTION \n", WLCWLUNIT(wlc), __FUNCTION__));
 
-			if (bsscfg == NULL) {
-				WL_ASSOC(("wl%d: %s: FT_RES: no bsscfg for BSS %s\n",
-					WLCWLUNIT(wlc), __FUNCTION__,
-					bcm_ether_ntoa(&hdr->bssid, bss_buf)));
-				break;  /* we couldn't match the incoming frame to a BSS config */
+			ftreq = (dot11_ft_req_t*)body;
+#ifdef AP
+			if (ftreq->action == DOT11_FT_ACTION_FT_REQ)
+			{
+				if (body_len < DOT11_FT_REQ_FIXED_LEN)
+					goto rxbadproto;
+				wlc_fbt_recv_overds_req(wlc->fbt, bsscfg, hdr, body, body_len);
 			}
-
-			if (body_len < DOT11_FT_RES_FIXED_LEN)
+			else
+#endif /* AP */
+#if defined(STA) && defined(FBT_STA)
+			if (ftreq->action == DOT11_FT_ACTION_FT_RES)
+			{
+				if (body_len < DOT11_FT_RES_FIXED_LEN)
+					goto rxbadproto;
+				wlc_fbt_recv_overds_resp(wlc->fbt, bsscfg, hdr, body, body_len);
+			}
+			else
+#endif /* STA && FBT_STA */
 				goto rxbadproto;
 
-			wlc_fbt_recv_overds_resp(wlc->fbt, bsscfg, hdr, body, body_len);
+			break;
+		} else if (!bsscfg) {
+			WL_ASSOC(("wl%d: %s: FT_RES: no bsscfg for BSS %s\n",
+				WLCWLUNIT(wlc), __FUNCTION__,
+				bcm_ether_ntoa(&hdr->bssid, bss_buf)));
+			/* we couldn't match the incoming frame to a BSS config */
 		}
 		break;
 #endif /* WLFBT */
-#endif /* STA */
 
 	case DOT11_ACTION_CAT_HT:
 		/* Process HT Management */

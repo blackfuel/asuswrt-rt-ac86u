@@ -134,8 +134,13 @@ void start_ubifs(void)
 #endif
 
 #ifndef RTCONFIG_NVRAM_FILE
+#if defined(RTCONFIG_LANTIQ)
+	if (!wait_action_idle(1))
+		return;
+#else
 	if (!wait_action_idle(10))
 		return;
+#endif
 #endif
 
 #ifndef RTCONFIG_NVRAM_FILE

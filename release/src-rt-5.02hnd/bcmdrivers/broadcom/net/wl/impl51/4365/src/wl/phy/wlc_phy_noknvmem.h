@@ -1,7 +1,7 @@
 /*
  * PHY and RADIO specific portion of Broadcom BCM43XX 802.11 Networking Device Driver.
  * code to handle the Nokia nvmem speciifc details
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

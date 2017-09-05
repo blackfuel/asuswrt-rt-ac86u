@@ -400,6 +400,7 @@ ej_wl_status(int eid, webs_t wp, int argc, char_t **argv, int unit)
 	char word[256], *next;
 
 	foreach (word, nvram_safe_get("wl_ifnames"), next) {
+		SKIP_ABSENT_BAND_AND_INC_UNIT(ii);
 		retval += wl_status(eid, wp, argc, argv, ii);
 		retval += websWrite(wp, "\n");
 
@@ -438,7 +439,7 @@ wl_status(int eid, webs_t wp, int argc, char_t **argv, int unit)
 	if (nvram_match(strcat_r(prefix, "radio", tmp), "0"))
 	{
 		ret+=websWrite(wp, "%s radio is disabled\n",
-			nvram_match(strcat_r(prefix, "nband", tmp), "1") ? "5 GHz" : "2.4 GHz");
+			wl_nband_name(nvram_pf_get(prefix, "nband")));
 		return ret;
 	}
 #else
@@ -448,7 +449,7 @@ wl_status(int eid, webs_t wp, int argc, char_t **argv, int unit)
 		ret+=websWrite(wp, "2.4 GHz radio is disabled\n");
 #else
 		ret+=websWrite(wp, "%s radio is disabled\n",
-			nvram_match(strcat_r(prefix, "nband", tmp), "1") ? "5 GHz" : "2.4 GHz");
+			wl_nband_name(nvram_pf_get(prefix, "nband")));
 #endif
 		return ret;
 	}
@@ -460,7 +461,7 @@ wl_status(int eid, webs_t wp, int argc, char_t **argv, int unit)
 		ret+=websWrite(wp, "2.4 GHz radio is disabled\n");
 #else
 		ret+=websWrite(wp, "%s radio is disabled\n",
-			nvram_match(strcat_r(prefix, "nband", tmp), "1") ? "5 GHz" : "2.4 GHz");
+			wl_nband_name(nvram_pf_get(prefix, "nband")));
 #endif
 		return ret;
 	}
@@ -873,10 +874,24 @@ wl_wps_info(int eid, webs_t wp, int argc, char_t **argv, int unit)
 
 #if defined(RTCONFIG_WPSMULTIBAND)
 	for (j = -1; j < MAX_NR_WL_IF; ++j) {
+#if !defined(RTCONFIG_HAS_5G)
+		if (unit == 1)
+			continue;
+#endif
+#if !defined(RTCONFIG_HAS_5G_2)
+		if (unit == 2)
+			continue;
+#endif
+#if !defined(RTCONFIG_WIGIG)
+		if (unit == 3)
+			continue;
+#endif
 #endif
 		switch (j) {
 		case 0: /* fall through */
-		case 1:
+		case 1: /* fall through */
+		case 2: /* fall through */
+		case 3: /* fall through */
 			u = j;
 			snprintf(tag1, sizeof(tag1), "<wps_info%d>", j);
 			snprintf(tag2, sizeof(tag2), "</wps_info%d>", j);
@@ -1232,6 +1247,7 @@ int ej_get_wlstainfo_list(int eid, webs_t wp, int argc, char_t **argv)
 		int rssi, cnt;
 		char alias[16];
 
+		SKIP_ABSENT_BAND_AND_INC_UNIT(unit);
 		snprintf(prefix, sizeof(prefix), "wl%d_", unit);
 		name = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
 
@@ -1711,6 +1727,18 @@ ej_wl_channel_list_5g(int eid, webs_t wp, int argc, char_t **argv)
 	return ej_wl_channel_list(eid, wp, argc, argv, 1);
 }
 
+int
+ej_wl_channel_list_5g_2(int eid, webs_t wp, int argc, char_t **argv)
+{
+	return ej_wl_channel_list(eid, wp, argc, argv, 2);
+}
+
+int
+ej_wl_channel_list_60g(int eid, webs_t wp, int argc, char_t **argv)
+{
+	return ej_wl_channel_list(eid, wp, argc, argv, 3);
+}
+
 
 static int ej_wl_rate(int eid, webs_t wp, int argc, char_t **argv, int unit)
 {
@@ -1719,7 +1747,7 @@ static int ej_wl_rate(int eid, webs_t wp, int argc, char_t **argv, int unit)
 	char tmp[256], prefix[] = "wlXXXXXXXXXX_";
 	char *name;
 	char word[256], *next;
-	int unit_max = 0;
+	int unit_max = MAX_NR_WL_IF;
 	int rate=0;
 	int status;
 	char rate_buf[32];
@@ -1734,11 +1762,13 @@ static int ej_wl_rate(int eid, webs_t wp, int argc, char_t **argv, int unit)
 #else
 	strlcpy(rate_buf, "0 Mbps", sizeof(rate_buf));	
 #endif
-	foreach (word, nvram_safe_get("wl_ifnames"), next)
-		unit_max++;
 
 	if (unit > (unit_max - 1))
 		goto ERROR;
+#if !defined(RTCONFIG_HAS_5G_2)
+	if (unit == 2)
+		goto ERROR;
+#endif
 #ifdef RTCONFIG_CONCURRENTREPEATER
 	if (sw_mode == SW_MODE_REPEATER || sw_mode == SW_MODE_HOTSPOT)
 #else	

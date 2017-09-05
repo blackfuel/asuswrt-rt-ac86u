@@ -1,7 +1,7 @@
 /*
  * Misc system wide parameters.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: bcmparams.h 241182 2011-02-17 21:50:03Z $
+ * $Id: bcmparams.h 672623 2016-11-29 07:56:55Z $
  */
 
 #ifndef	_bcmparams_h_
@@ -24,8 +24,12 @@
 
 #define VLAN_NUMPRIS	8	/* # of prio, start from 0 */
 
+#ifdef BCA_HNDROUTER
+#define DEV_NUMIFS	32	/* Max. # of devices/interfaces supported */
+#else
 #define DEV_NUMIFS	16	/* Max. # of devices/interfaces supported */
+#endif /* BCA_HNDROUTER */
 
 #define WL_MAXBSSCFG	16	/* maximum number of BSS Configs we can configure */
 
-#endif
+#endif /* _bcmparams_h_ */

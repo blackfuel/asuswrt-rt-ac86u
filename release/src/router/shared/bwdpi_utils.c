@@ -20,7 +20,7 @@
 #include "shutils.h"
 #include "shared.h"
 
-#ifdef RTCONFIG_BWDPI
+#if defined(RTCONFIG_BWDPI)
 /*
 	WRS (web reputation system) checking
 	return:
@@ -74,6 +74,23 @@ int check_bwdpi_nvram_setting()
 	if(debug) dbg("[check_bwdpi_nvram_setting] enabled= %d\n", enabled);
 
 	return enabled;
+}
+
+void disable_dpi_engine_setting(void)
+{
+	nvram_set_int("wrs_protect_enable", 0);
+	nvram_set_int("wrs_mals_enable", 0);
+	nvram_set_int("wrs_cc_enable", 0);
+	nvram_set_int("wrs_vp_enable", 0);
+	nvram_set_int("wrs_enable", 0);
+	nvram_set_int("wrs_app_enable", 0);
+	nvram_set_int("bwdpi_db_enable", 0);
+	nvram_set_int("apps_analysis", 0);
+	nvram_set_int("bwdpi_wh_enable", 0);
+
+	// only for adaptive qos
+	if (nvram_get_int("qos_enable") == 1 && nvram_get_int("qos_type") == 1)
+		nvram_set_int("qos_enable", 0);
 }
 #endif
 
@@ -181,51 +198,4 @@ time_t get_last_month_timestamp()
 	t_t = mktime(&t);
 
 	return t_t;
-}
-
-/*
-	sql injection checking function
-
-	***NOTE***
-	Need to do more checking, if any lost, keep adding new rule here to protect database from SQL injcetion
-	rule1: isprint()
-	rule2: only allow the nums of " and '
-		(", ') = (0/0), (0/2), (2/0)
-*/
-static int num_check(int a, int b)
-{
-	// only allow the nums of " and '
-	// (", ') = (0/0), (0/2), (2/0)
-	if ((a == 0 && b == 0) || (a == 2 && b == 0) || (a == 0 && b == 2))
-		return 1;
-	else
-		return 0;
-}
-
-int sql_injection_check(char *c)
-{
-	int ret = 0;
-	int a = 0; // the nums of "
-	int b = 0; // the nums of '
-
-	if (c == NULL)
-		return ret;
-
-	for (; *c; c++)
-	{
-		if (isprint(*c))
-		{
-			ret = 1;
-			break;
-		}
-		
-		// check the nums of ' and "
-		if (*c == 0x22) a++; // "
-		if (*c == 0x27) b++; // '
-	}
-
-	if (num_check(a, b) == 0)
-		ret = 1;
-
-	return ret;
 }

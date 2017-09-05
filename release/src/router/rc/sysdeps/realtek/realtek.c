@@ -739,11 +739,11 @@ static int updateWscConf(char *in, char *out, int genpin, char *wlanif_name,int 
     {
         //Ethernet(0x2)+Label(0x4)+PushButton(0x80) Bitwise OR
         if (intVal == 1) //Pin+Ethernet
-            intVal = (CONFIG_METHOD_ETH | CONFIG_METHOD_PIN);
+            intVal = (CONFIG_METHOD_KEYPAD | CONFIG_METHOD_VIRTUAL_PIN);
         else if (intVal == 2) //PBC+Ethernet
-            intVal = (CONFIG_METHOD_ETH | CONFIG_METHOD_PBC);
+            intVal = (CONFIG_METHOD_KEYPAD | CONFIG_METHOD_PHYSICAL_PBC | CONFIG_METHOD_VIRTUAL_PBC);
         if (intVal == 3) //Pin+PBC+Ethernet
-            intVal = (CONFIG_METHOD_ETH | CONFIG_METHOD_PIN | CONFIG_METHOD_PBC);
+            intVal = (CONFIG_METHOD_KEYPAD | CONFIG_METHOD_VIRTUAL_PIN | CONFIG_METHOD_PHYSICAL_PBC | CONFIG_METHOD_VIRTUAL_PBC);
     }
 	WRITE_WSC_PARAM(ptr, tmpbuf, "config_method = %d\n", intVal);
 
@@ -2087,17 +2087,6 @@ int gen_realtek_config(int band, int val)
 	}else{
 		rtk_printf("NVRAM: %s%s not set!!\n", prefix, suf);
 		pmib->dot11StationConfigEntry.dot11DTIMPeriod = 1;
-	}
-
-	//TxPower
-	NVRAM_GET(str, "txpower"){
-		if (nvram_match(strcat_r(prefix, "radio", tmp), "0")){
-			pmib->dot11RFEntry.power_percent = 0;
-		}
-		pmib->dot11RFEntry.power_percent = atoi(str);
-	}else{
-		rtk_printf("NVRAM: %s%s not set!!\n", prefix, suf);
-		pmib->dot11RFEntry.power_percent = 100;
 	}
 
 	//radio

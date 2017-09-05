@@ -1,7 +1,7 @@
 /*
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wl_rte.c 652006 2016-07-29 06:55:44Z $
+ * $Id: wl_rte.c 677428 2017-01-03 06:16:57Z $
  */
 
 
@@ -115,6 +115,7 @@
 #ifdef BCMPCIEDEV
 #include <wlc_scb.h>
 #include <wlc_key.h>
+#include <wlc_tx.h>
 
 #if defined(BCMWAPI_WPI) || defined(BCMWAPI_WAI)
 #include <wlc_wapi.h>
@@ -885,7 +886,10 @@ wl_alloc_if(wl_info_t *wl, int iftype, uint subunit, struct wlc_if *wlcif, bool 
 	dev->ops = get_wl_funcs();
 	dev->softc = wl;
 	if (iftype == WL_IFTYPE_WDS) {
-		snprintf(dev->name, HND_DEV_NAME_MAX, "wds%d.%d", wl->pub->unit, subunit);
+		wlc_bsscfg_t *cfg = wlc_bsscfg_find_by_wlcif(wl->wlc, wlcif);
+		ASSERT(cfg != NULL);
+		snprintf(dev->name, HND_DEV_NAME_MAX, "wds%d.%d.%d", wl->pub->unit,
+				WLC_BSSCFG_IDX(cfg), subunit);
 	} else {
 		snprintf(dev->name, HND_DEV_NAME_MAX, "wl%d.%d", wl->pub->unit, subunit);
 	}
@@ -1979,7 +1983,7 @@ wlfc_state_get(struct wl_info *wl)
 /** PROP_TXSTATUS specific */
 int
 wlfc_psmode_request(struct wl_info *wl, uint8 mac_handle, uint8 count,
-	uint8 precedence_bitmap, uint8 request_type)
+	uint8 ac_bitmap, uint8 request_type)
 {
 	/* space for type(1), length(1) and value */
 	uint8	results[1+1+WLFC_CTL_VALUE_LEN_REQUEST_CREDIT];
@@ -1992,7 +1996,7 @@ wlfc_psmode_request(struct wl_info *wl, uint8 mac_handle, uint8 count,
 		results[1] = WLFC_CTL_VALUE_LEN_REQUEST_CREDIT;
 	results[2] = count;
 	results[3] = mac_handle;
-	results[4] = precedence_bitmap;
+	results[4] = ac_bitmap;
 	ret = wlfc_push_signal_data(wl, results, sizeof(results), FALSE);
 
 	if (ret == BCME_OK)
@@ -2314,6 +2318,10 @@ wlfc_process_wlhdr_complete_txstatus(struct wl_info *wl, uint8 status_flag, void
 	uint16	seq;
 	bool metadatabuf_avial = TRUE;
 	bool short_status = TRUE;
+#ifdef BCM_DHDHDR
+	BCM_REFERENCE(short_status);
+#endif /* BCM_DHDHDR */
+
 #if defined(DMATXRC)
 	if (DMATXRC_ENAB(wlc->pub) && (WLPKTTAG(p)->flags & WLF_PHDR)) {
 		txrc_ctxt_t *rctxt;
@@ -2379,6 +2387,21 @@ wlfc_process_wlhdr_complete_txstatus(struct wl_info *wl, uint8 status_flag, void
 						wlfc_push_credit_data(wl, p);
 					}
 				}
+
+				/* When BCM_DHDHDR enabled, save txs and seq info at
+				 * latest 2B, 4B od pkttag, because we may not have the
+				 * data buffer for the packet.
+				 */
+#ifdef BCM_DHDHDR
+				ASSERT(!metadatabuf_avial);
+
+				/* Save txstatus */
+				PKTFRAGSETTXSTATUS(wlc->osh, p, status_flag);
+
+				/* Save seq */
+				PKTSETWLFCSEQ(wlc->osh, p, 0);
+#endif /* BCM_DHDHDR */
+
 				while (pushdata) {
 					if (metadatabuf_avial) {
 						results[TLV_TAG_OFF] = WLFC_CTL_TYPE_TXSTATUS;
@@ -2462,6 +2485,7 @@ wlfc_process_wlhdr_complete_txstatus(struct wl_info *wl, uint8 status_flag, void
 						/* If we could not populate txstatus, but need to
 						* update, then do it now
 						*/
+#ifndef BCM_DHDHDR /* We did above to save txstatus already */
 						if ((seq && WLFC_INFO_TO_BUS_ENAB(wlc->pub)) &&
 							!metadatabuf_avial) {
 							results[TLV_TAG_OFF] =
@@ -2473,27 +2497,41 @@ wlfc_process_wlhdr_complete_txstatus(struct wl_info *wl, uint8 status_flag, void
 							memcpy(&results[TLV_BODY_OFF],
 								&statusdata, sizeof(uint32));
 							short_status = FALSE;
-							}
+						}
+#endif /* !BCM_DHDHDR */
 						if (metadatabuf_avial ||
 							(seq && WLFC_INFO_TO_BUS_ENAB(wlc->pub))) {
+#ifdef BCM_DHDHDR
+							/* Updata seq if needed */
+							PKTSETWLFCSEQ(wlc->osh, p, seq);
+#else
 							memcpy(&results[TLV_HDR_LEN +
 								WLFC_CTL_VALUE_LEN_TXSTATUS],
 								&seq, WLFC_CTL_VALUE_LEN_SEQ);
 							results[TLV_LEN_OFF] +=
 								WLFC_CTL_VALUE_LEN_SEQ;
 							statussize = results[TLV_LEN_OFF];
-							}
+#endif /* BCM_DHDHDR */
 						}
+					}
 					statussize += TLV_HDR_LEN;
 					send_shortstatus :
-						if (short_status) {
-							results[0] = status_flag;
-							statussize = 1;
-						}
+#ifndef BCM_DHDHDR
+					if (short_status) {
+						results[0] = status_flag;
+						statussize = 1;
+					}
+#endif /* !BCM_DHDHDR */
 #ifdef BCMPCIEDEV
-					if (!WLFC_CONTROL_SIGNALS_TO_HOST_ENAB(wlc->pub))
+					if (!WLFC_CONTROL_SIGNALS_TO_HOST_ENAB(wlc->pub)) {
+#ifdef BCM_DHDHDR
+						/* Set state to TXstatus processed */
+						PKTSETTXSPROCESSED(wlc->osh, p);
+#else
 						wlfc_push_pkt_txstatus(wl, p, results,
 							statussize);
+#endif /* BCM_DHDHDR */
+					}
 					else
 #endif /* BCMPCIEDEV  */
 						wlfc_push_signal_data(wl, results,
@@ -2828,7 +2866,13 @@ wl_pkt_header_pull(wl_info_t *wl, void *p)
 	/* Currently this is a placeholder function. We don't process wl header
 	   on Tx side as no meaningful fields defined for tx currently.
 	 */
+
+#ifdef BCM_DHDHDR
+	bzero(PKTFRAGFCTLV(wl->pub->osh, p), PKTDATAOFFSET(p) << 2);
+#else
 	PKTPULL(wl->pub->osh, p, PKTDATAOFFSET(p));
+#endif /* BCM_DHDHDR */
+
 	return;
 }
 
@@ -3176,52 +3220,57 @@ static int
 wl_send_txstatus(wl_info_t *wl, void *p)
 {
 	uint8* wlhdrtodev;
-	wlc_pkttag_t *pkttag;
+	wlc_pkttag_t *wlpkttag;
 	uint8 wlhdrlen;
 	uint8 processed = 0;
+	uint32 wl_hdr_information = 0;
+	uint16 seq = 0;
+#ifdef WLFCTS
+	uint32 tx_entry_tstamp = 0;
+#endif
 
 	ASSERT(wl != NULL);
-
-	pkttag = WLPKTTAG(p);
-	pkttag->wl_hdr_information = 0;
-	pkttag->seq = 0;
 
 	wlhdrlen = PKTDATAOFFSET(p) << 2;
 
 #ifdef BCMPCIEDEV
 	if (BCMPCIEDEV_ENAB()) {
 		/* We do not expect host to set BDC and wl header on PCIEDEV path, So set it now */
-		WL_TXSTATUS_SET_FLAGS(pkttag->wl_hdr_information, WLFC_PKTFLAG_PKTFROMHOST);
+		WL_TXSTATUS_SET_FLAGS(wl_hdr_information, WLFC_PKTFLAG_PKTFROMHOST);
 	}
 #endif
 	if (wlhdrlen != 0) {
+#ifdef BCM_DHDHDR
+		wlhdrtodev = PKTFRAGFCTLV(wl->pub->osh, p);
+#else
 		wlhdrtodev = (uint8*)PKTDATA(wl->pub->osh, p);
+#endif /* BCM_DHDHDR */
 
 		while (processed < wlhdrlen) {
 			if (wlhdrtodev[processed] == WLFC_CTL_TYPE_PKTTAG) {
-				pkttag->wl_hdr_information |=
+				wl_hdr_information |=
 					ltoh32_ua(&wlhdrtodev[processed + TLV_HDR_LEN]);
 
 				if (WLFC_GET_REUSESEQ(wl->wlfc_mode))
 				{
-					uint16 seq = ltoh16_ua(&wlhdrtodev[processed +
+					uint16 reuseseq = ltoh16_ua(&wlhdrtodev[processed +
 						TLV_HDR_LEN + WLFC_CTL_VALUE_LEN_TXSTATUS]);
-					if (WL_SEQ_GET_FROMDRV(seq)) {
-						pkttag->seq = seq;
+					if (WL_SEQ_GET_FROMDRV(reuseseq)) {
+						seq = reuseseq;
 					}
 				}
 
 				if (WLFC_CONTROL_SIGNALS_TO_HOST_ENAB(wl->pub) &&
-					!(WL_TXSTATUS_GET_FLAGS(pkttag->wl_hdr_information) &
+					!(WL_TXSTATUS_GET_FLAGS(wl_hdr_information) &
 					WLFC_PKTFLAG_PKT_REQUESTED)) {
 						uint8 ac = WL_TXSTATUS_GET_FIFO
-							(pkttag->wl_hdr_information);
+							(wl_hdr_information);
 						wl->wlfc_info->fifo_credit_in[ac]++;
 				}
 #ifdef WLFCTS
 				if (WLFCTS_ENAB(wl->pub)) {
 					/* Send a timestamp back to host only if enabled */
-					if ((WL_TXSTATUS_GET_FLAGS(pkttag->wl_hdr_information) &
+					if ((WL_TXSTATUS_GET_FLAGS(wl_hdr_information) &
 						WLFC_PKTFLAG_PKTFROMHOST) &&
 					    (((wlc_info_t *)(wl->wlc))->wlfc_flags &
 						WLFC_FLAGS_PKT_STAMP_SIGNALS)) {
@@ -3244,7 +3293,11 @@ wl_send_txstatus(wl_info_t *wl, void *p)
 				processed += TLV_HDR_LEN + wlhdrtodev[processed + TLV_LEN_OFF];
 			}
 		}
+#ifdef BCM_DHDHDR
+		bzero(PKTFRAGFCTLV(wl->pub->osh, p), wlhdrlen);
+#else
 		PKTPULL(wl->pub->osh, p, wlhdrlen);
+#endif /* BCM_DHDHDR */
 		/* Reset DataOffset to 0, since we have consumed the wlhdr */
 		PKTSETDATAOFFSET(p, 0);
 	} else {
@@ -3256,7 +3309,7 @@ wl_send_txstatus(wl_info_t *wl, void *p)
 				wlc_info_t *wlc = (wlc_info_t *)wl->wlc;
 				if (wlc->wlfc_flags & WLFC_FLAGS_PKT_STAMP_SIGNALS) {
 					if (si_iscoreup(wlc->pub->sih)) {
-						pkttag->shared.tx_entry_tstamp =
+						tx_entry_tstamp =
 							R_REG(wlc->osh, &wlc->regs->tsf_timerlow);
 					}
 				}
@@ -3266,6 +3319,14 @@ wl_send_txstatus(wl_info_t *wl, void *p)
 			WL_INFORM(("No pkttag from host.\n"));
 		}
 	}
+
+	/* update pkttag */
+	wlpkttag = WLPKTTAG(p);
+	wlpkttag->wl_hdr_information = wl_hdr_information;
+	wlpkttag->seq = seq;
+#ifdef WLFCTS
+	wlpkttag->shared.tx_entry_tstamp = tx_entry_tstamp;
+#endif
 
 	if (wl->wlfc_info != NULL) {
 		((wlfc_info_state_t*)wl->wlfc_info)->stats.packets_from_host++;
@@ -3281,8 +3342,8 @@ wl_send_txstatus(wl_info_t *wl, void *p)
 	}
 
 #ifdef PROP_TXSTATUS_DEBUG
-	if ((WL_TXSTATUS_GET_FLAGS(pkttag->wl_hdr_information) & WLFC_PKTFLAG_PKTFROMHOST) &&
-	    (!(WL_TXSTATUS_GET_FLAGS(pkttag->wl_hdr_information) & WLFC_PKTFLAG_PKT_REQUESTED))) {
+	if ((WL_TXSTATUS_GET_FLAGS(wlpkttag->wl_hdr_information) & WLFC_PKTFLAG_PKTFROMHOST) &&
+	    (!(WL_TXSTATUS_GET_FLAGS(wlpkttag->wl_hdr_information) & WLFC_PKTFLAG_PKT_REQUESTED))) {
 		((wlfc_info_state_t*)wl->wlfc_info)->dbgstats->creditin++;
 	} else {
 		((wlfc_info_state_t*)wl->wlfc_info)->dbgstats->nost_from_host++;
@@ -3321,6 +3382,12 @@ wl_txframe_chainable(wl_info_t *wl, wlc_bsscfg_t *bsscfg, void *p, void *head)
 	bool chainable = FALSE;
 	struct ether_header *eh, *head_eh;
 	void *iph;
+
+#if defined(BCM_DHDHDR)
+	/* pktfetch packets are not chainable */
+	if (PKTISTXPKTFETCHED(wlc->osh, p))
+		goto exit;
+#endif /* BCM_DHDHDR */
 
 	eh = (struct ether_header *) PKTDATA(wlc->osh, p);
 	iph = (void *)(eh + 1);
@@ -3389,6 +3456,16 @@ wl_tx_pktfetch(wl_info_t *wl, struct lbuf *lb, hnd_dev_t *src, hnd_dev_t *dev)
 		goto error;
 	}
 
+#ifdef BCM_DHDHDR
+	/* We always use D11 BUF for any Tx packets that need to be fetched */
+	if (lfbufpool_avail(D11_LFRAG_BUF_POOL) == 0 ||
+		PKTSWAPD11BUF(wl->pub->osh, lb) != BCME_OK) {
+		WL_ERROR(("%s: Out of D11 buffer for pktfetch!\n", __FUNCTION__));
+		goto error;
+	}
+	PKTSETTXPKTFETCHED(wl->pub->osh, lb);
+#endif /* BCM_DHDHDR */
+
 	/* Fill up context */
 	pctx->ctx_count = ctx_count;
 	pctx->ctx[0] = (void *)wl;
@@ -3444,12 +3521,27 @@ wl_send_cb(void *lbuf, void *orig_lfrag, void *ctx, bool cancelled)
 	PKTSETNEXT(wl->pub->osh, orig_lfrag, lbuf);
 	PKTSETFRAGTOTLEN(wl->pub->osh, orig_lfrag, 0);
 	PKTSETFRAGLEN(wl->pub->osh, orig_lfrag, 1, 0);
+
+	/* When BCM_DHDHDR is enabled, all tx packets that need to be fetched will
+	 * do D11 buffer swapping first in wl_tx_pktfetch.  Then these packets go
+	 * through original TX path (non-DHDHDR path).  So we still need to clear the
+	 * frag total number by PKTSETFRAGTOTNUM.
+	 */
 	PKTSETFRAGTOTNUM(wl->pub->osh, orig_lfrag, 0);
 
 	/* Free the original pktfetch_info and generic ctx  */
 	MFREE(wl->pub->osh, pinfo, sizeof(struct pktfetch_info));
 	MFREE(wl->pub->osh, pctx, sizeof(struct pktfetch_generic_ctx)
 		+ pctx->ctx_count*sizeof(void *));
+
+	/* The hnd_pktfetch_dispatch may get lbuf from PKTALLOC and the pktalloced counter
+	 * will be increased by 1, later in the wl_send the PKTFROMNATIVE will increase 1 again
+	 * for !lb_pool lbuf. (dobule increment)
+	 * Here do PKTTONATIVE to decrease it before wl_send.
+	 */
+	if (!PKTPOOL(wl->pub->osh, lbuf)) {
+		PKTTONATIVE(wl->pub->osh, lbuf);
+	}
 
 	wl_send(src, dev, orig_lfrag);
 }
@@ -3532,11 +3624,14 @@ wl_sw_tkip_mic_enab(wl_info_t *wl, struct wlc_if *wlcif, wlc_bsscfg_t *bsscfg, s
 		WL_ERROR(("wl%d: %s: key is NULL!\n", wl->unit, __FUNCTION__));
 
 	/* If security algo is TKIP and MIC key is in HW, or PMF */
-	if (key_info.algo == CRYPTO_ALGO_TKIP && !WLC_KEY_MIC_IN_HW(&key_info))
+	if (((key_info.algo == CRYPTO_ALGO_TKIP) && (ETHER_ISMULTI(dst) ||
+		!(WLC_KEY_MIC_IN_HW(&key_info)) ||
+		(scb && wlc_is_packet_fragmented(wlc, scb, bsscfg, (void *)lb)))) ||
+		WLC_KEY_SW_ONLY(&key_info)) {
 		tkip_enab = TRUE;
-
+	}
 	return tkip_enab;
-} /* wl_sw_tkip_mic_enab */
+}
 
 /** BCMPCIEDEV specific */
 static bool
@@ -4580,7 +4675,7 @@ static int wlfc_push_signal_bus_data(struct wl_info *wl, void* data, uint8 len)
 			break;
 		case WLFC_CTL_TYPE_MAC_REQUEST_PACKET:
 			op_data.handle = ((uint8*)data)[3];
-			op_data.tid = ((uint8*)data)[4]; /* precedence bit map */
+			op_data.tid = ((uint8*)data)[4]; /* ac bit map */
 			op_data.minpkts = ((uint8*)data)[2];
 			break;
 		default :
@@ -4597,6 +4692,13 @@ static int wlfc_push_signal_bus_data(struct wl_info *wl, void* data, uint8 len)
  */
 void wlfc_push_pkt_txstatus(struct wl_info *wl, void* p, void *txs, uint32 sz)
 {
+#ifdef BCM_DHDHDR
+	/* Caller has handled what this function will do,
+	 * So when BCM_DHDHDR enabled we should run into here
+	 */
+	ASSERT(0);
+#endif
+
 	/* Set state to TXstatus processed */
 	PKTSETTXSPROCESSED(wl->pub->osh, p);
 
@@ -4784,5 +4886,4 @@ wl_set_copycount_bytes(struct wl_info *wl, uint16 copycount, uint16 d11rxoffset)
 	wl_busioctl(wl, BUS_SET_COPY_COUNT, buf,
 		2 * sizeof(uint32), NULL, NULL, FALSE);
 }
-
 #endif /* DONGLEBUILD */

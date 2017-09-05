@@ -1,7 +1,7 @@
 /*
  * Security and Key Management WLC Module Public Interface
  * Copyright (c) 2012-2013 Broadcom Corporation. All rights reserved.
- * $Id: wlc_keymgmt.h 601787 2015-11-24 06:12:37Z $
+ * $Id: wlc_keymgmt.h 672672 2016-11-29 10:58:39Z $
  */
 
 /* This file is the interface to WLC key management fucntionality
@@ -258,7 +258,7 @@ const char *wlc_keymgmt_get_hw_algo_name(wlc_keymgmt_t *km, wlc_key_hw_algo_t al
 /* ivtw support */
 int wlc_keymgmt_ivtw_enable(wlc_keymgmt_t *km, scb_t *scb, bool enable);
 #endif /* BRCMAPIVTW */
-#ifdef ACKSUPR_MAC_FILTER
+#if defined(ACKSUPR_MAC_FILTER) || defined(PSTA)
 bool wlc_keymgmt_amt_idx_isset(wlc_keymgmt_t *km, int amt_idx);
 #endif /* ACKSUPR_MAC_FILTER */
 #endif /* _wlc_keymgmt_h_ */

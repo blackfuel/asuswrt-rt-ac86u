@@ -40,6 +40,10 @@
 #include <dhd_flowring.h>
 #endif
 
+#if defined(DSLCPE) && defined(PKTC_TBL)
+#include <wl_pktc.h>
+#endif
+
 int
 dhd_handle_blog_sinit(struct dhd_pub *dhdp, int ifidx, struct sk_buff *skb)
 {
@@ -148,13 +152,13 @@ int fdb_check_expired_dhd(unsigned char *addr)
 	DHD_INFO(("%s: check addr [%02x:%02x:%02x:%02x:%02x:%02x]\n", __FUNCTION__,
 		addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]));
 
-#if defined(DSLCPE) && defined(PKTC)
+#if defined(DSLCPE) && defined(PKTC_TBL)
 {
-	ctf_brc_hot_t *brc_hot;
+	wl_pktc_tbl_t *pt;
 	
-	brc_hot = (ctf_brc_hot_t *)dhd_pktc_req(BRC_HOT_GET_BY_DA, (unsigned long)addr, 0, 0);
-	if (brc_hot && brc_hot->hits) {
-		brc_hot->hits = 0;
+	pt = (wl_pktc_tbl_t *)dhd_pktc_req(PKTC_TBL_GET_BY_DA, (unsigned long)addr, 0, 0);
+	if (pt && pt->hits) {
+		pt->hits = 0;
 		return 0; /* packet is going through, not expired */
 	}
 }

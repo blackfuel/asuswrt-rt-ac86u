@@ -1,6 +1,6 @@
 /*
  * PCIEDEV private data structures and macro definitions
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -1057,6 +1057,9 @@ struct dngl_bus {
 	uint32 _ffsched_saturated; /* make sure each ring can get max lfrags */
 	uint32 schedcxt_fl_max_w; /* Max weight among tx flowring weighting */
 #endif /* FFSHCED_SATURATED_MODE */
+#ifdef BCM_DHDHDR
+	lfrag_buf_pool_t *d3_lfbufpool;
+#endif /* BCM_DHDHDR */
 };
 
 #endif /* _pciedev_priv_h */

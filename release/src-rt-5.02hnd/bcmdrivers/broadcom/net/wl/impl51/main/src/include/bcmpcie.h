@@ -2,7 +2,7 @@
  * Broadcom PCIE
  * Software-specific definitions shared between device and host side
  * Explains the shared area between host and dongle
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -60,6 +60,14 @@ typedef struct {
 #define PCIE_SHARED_D2H_SYNC_XORCSUM    0x40000
 #define PCIE_SHARED_D2H_SYNC_MODE_MASK \
 	(PCIE_SHARED_D2H_SYNC_SEQNUM | PCIE_SHARED_D2H_SYNC_XORCSUM)
+#define PCIE_SHARED_IDLE_FLOW_RING      0x80000
+#define PCIE_SHARED_2BYTE_INDICES       0x100000
+#define PCIE_SHARED_DHDHDR              0x200000 /* BCM_DHDHDR */
+
+/* BCM_DHDHDR: DHD can offload a maximum of 3072 * 256 Byte Txheaders. */
+#define BCM_DHDHDR_MAXIMUM          3072
+#define BCM_DHDHDR_SIZE             256
+
 
 #define PCIE_SHARED_D2H_MAGIC		0xFEDCBA09
 #define PCIE_SHARED_H2D_MAGIC		0x12345678

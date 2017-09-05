@@ -2,7 +2,7 @@
  * WiFi multi channel source file
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_mchan.c 630085 2016-04-07 09:25:06Z $
+ * $Id: wlc_mchan.c 675568 2016-12-16 07:15:34Z $
  */
 
 
@@ -2841,6 +2841,7 @@ _wlc_mchan_delete_bss_chan_context(wlc_info_t *wlc, wlc_bsscfg_t *cfg, uint *old
 		 */
 		wlc_mchan_cancel_pm_mode(mchan, chan_ctxt);
 		wlc_mchan_context_free(mchan, chan_ctxt);
+		chan_ctxt = NULL;
 	}
 
 	/* restore cfg associated state */
@@ -2894,7 +2895,8 @@ _wlc_mchan_delete_bss_chan_context(wlc_info_t *wlc, wlc_bsscfg_t *cfg, uint *old
 				selected_idx = bsscfg->_idx;
 				break;
 			}
-			if (_wlc_mchan_shared_chanctx(mchan, cfg, chan_ctxt)) {
+			if (chan_ctxt &&
+				_wlc_mchan_shared_chanctx(mchan, cfg, chan_ctxt)) {
 				selected_idx = bsscfg->_idx;
 				break;
 			}

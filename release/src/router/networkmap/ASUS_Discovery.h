@@ -44,6 +44,11 @@ typedef struct _SearchRouterInfoStruct
 	char tunnelAppAPILevel;
 	char tunnelEnableAAE;
 	char tunnelAAEDeviceID[64];
+
+#if defined(RTCONFIG_CFGSYNC) && defined(RTCONFIG_MASTER_DET)
+	// master/slave
+	char isMaster;
+#endif
 	
 } SearchRouterInfoStruct;
 

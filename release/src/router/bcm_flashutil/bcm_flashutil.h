@@ -67,11 +67,11 @@ int nandWriteBlk(mtd_info_t *mtd, int blk_addr, int data_len, unsigned char *dat
 char *getCferamName(void);
 int getSequenceNumber(int imageNumber);
 int flashCferam(mtd_info_t *mtd, int mtd_fd, int rsrvd_for_cferam,
-  unsigned char *cferam_ptr);
+  unsigned char *cferam_ptr, unsigned char *cferam_ptr2);
 int readNvramData(void *pNvramData);
 int handleCferom(mtd_info_t *mtd0, char *image_ptr, unsigned int wfiFlags,
   void *inMemNvramData_buf);
-int flashCferom(unsigned char *image_ptr, int btrmFlag, int ofs, int *cferom_offset);
+int flashCferom(unsigned char *image_ptr, int size);
 int validateWfiTag(void *wt, int blksize, uint32_t btrmEnabled);
 
 unsigned int otp_is_btrm_boot(void);

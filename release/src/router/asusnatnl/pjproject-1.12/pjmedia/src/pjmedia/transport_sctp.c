@@ -17,7 +17,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA 
  */
-
 #include <pjmedia/natnl_stream.h>
 #include <pjmedia/transport_sctp.h>
 #include <pjmedia/endpoint.h>
@@ -41,11 +40,13 @@
 #include <sys/socket.h>
 #endif
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 /* 
  * Include libusrsctp headers 
  */
 #include <usrsctp.h>
 #include <netinet/sctp_constants.h>
+#endif
 
 //#define BYPASS 1
 //#define DUMP_PACKET 1
@@ -55,7 +56,9 @@
 
 //#define USE_GLOBAL_LOCK
 //#define USE_GLOBAL_CTX
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 #define USE_OUTPUT_THREAD
+#endif
 
 //#define ENABLE_DELAYED_SEND 0
 
@@ -442,6 +445,7 @@ static int is_sctp_init_packet(void *data, size_t datalen)
 
 static void sctp_server_create(pjmedia_transport *tp)
 {
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	int mode, rc;
 	pj_status_t status;
 	char *openssl_ver;
@@ -598,6 +602,9 @@ static void sctp_server_create(pjmedia_transport *tp)
 error_cleanup:
 	usrsctp_close(sctp->sctp_server_sock);
 	return;
+#else
+	return;
+#endif
 }
 
 static void sctp_debug_printf(const char *format, ...)
@@ -611,6 +618,7 @@ static void sctp_debug_printf(const char *format, ...)
 	va_end(arg);
 }
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 void handle_assoc_change_event(transport_sctp *sctp, const struct sctp_assoc_change *sac)
 {
 	uint32_t i, n;
@@ -787,6 +795,7 @@ void HandleNotification(transport_sctp *sctp, const union sctp_notification *not
 	  break;
 	}
 }
+#endif
 
 #ifdef USE_OUTPUT_THREAD
 static int sctp_output_thread(void *arg) {
@@ -856,6 +865,7 @@ static int sctp_output_thread(void *arg) {
 }
 #endif
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 /************************************************************************/
 /* SCTP data output callback                                            */
 /************************************************************************/
@@ -952,6 +962,7 @@ static int sctp_data_input(struct socket* sock, union sctp_sockstore addr,
 	// usrsctp defines the callback as returning an int, but doesn't use it
 	return 1;
 }
+#endif
 
 /* Initialize usrsctp library*/
 PJ_DEF(pj_status_t) init_usrsctp(pj_pool_t *pool)
@@ -967,6 +978,7 @@ PJ_DEF(pj_status_t) init_usrsctp(pj_pool_t *pool)
 	MUTEX_SETUP(global_mutex);
 #endif
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	// Init usrsctp
 	usrsctp_init(0, sctp_data_output, sctp_debug_printf);
 
@@ -974,6 +986,7 @@ PJ_DEF(pj_status_t) init_usrsctp(pj_pool_t *pool)
 
 	usrsctp_sysctl_set_sctp_blackhole(2);
 	usrsctp_sysctl_set_sctp_ecn_enable(0);
+#endif
 
 #if 0
 	/* Register error subsystem */
@@ -992,7 +1005,9 @@ PJ_DEF(void) shutdown_usrsctp(void)
 	if (--usrsctp_init_count) // Flag for calling usrsctp_finish only one time.
 		return;
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	usrsctp_finish();
+#endif
 
 #ifdef USE_GLOBAL_LOCK
 	MUTEX_CLEANUP(global_mutex);
@@ -1002,8 +1017,9 @@ PJ_DEF(void) shutdown_usrsctp(void)
 /* Create and initialize usrsctp and instance */
 static pj_status_t create_sctp(transport_sctp *sctp)
 {
+	pj_status_t status;
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
     int mode, rc;
-    pj_status_t status;
 	char *openssl_ver;
 	struct sctp_initmsg initmsg;
 	struct linger l;
@@ -1025,7 +1041,6 @@ static pj_status_t create_sctp(transport_sctp *sctp)
 
     /* Make sure usrsctp library has been initialized */
 	/*init_usrsctp(sctp->pool);*/
-
 	usrsctp_register_address(sctp);
 	PJ_LOG(4, (THIS_FILE, "create_sctp Registered %p within the SCTP stack.", sctp));
 
@@ -1123,12 +1138,16 @@ error_cleanup:
 	usrsctp_close(sctp->sctp_sock);
 	sctp->sctp_sock = NULL;
 	return PJ_EUNKNOWN;
+#else
+	return PJ_SUCCESS;
+#endif
 }
 
 
 /* Destroy usrsctp */
 static void destroy_sctp(transport_sctp *sctp)
 {
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	if (sctp && sctp->sctp_sock) {
 		usrsctp_close(sctp->sctp_sock);
 		sctp->sctp_sock = NULL;
@@ -1138,6 +1157,7 @@ static void destroy_sctp(transport_sctp *sctp)
 		usrsctp_close(sctp->sctp_server_sock);
 		sctp->sctp_server_sock = NULL;
 	}
+#endif
 
 #ifdef USE_OUTPUT_THREAD
 	if (sctp) {
@@ -1176,8 +1196,10 @@ static void destroy_sctp(transport_sctp *sctp)
 		sctp->sbuff_sem = NULL;
 	}
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	if (sctp)
 		usrsctp_deregister_address(sctp);
+#endif
 }
 /*
  *******************************************************************
@@ -1223,6 +1245,7 @@ static void pjmedia_sctp_deinit_lib(pjmedia_endpt *endpt);
 
 static int sctp_accept_thread(void *arg)
 {
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	transport_sctp *sctp = (transport_sctp *)arg;
 	struct sockaddr_conn addr;
 	int r = 0;
@@ -1278,6 +1301,7 @@ static int sctp_accept_thread(void *arg)
 		PJ_LOG(4, (THIS_FILE, "HandleAssocChangeEvent SCTP connected."));
 		sctp->state = SCTP_STATE_CONNECTED;
 		sctp->session_inited = PJ_TRUE;
+
 		usrsctp_register_address(sctp);
 		usrsctp_set_ulpinfo(sctp->sctp_sock, sctp);
 
@@ -1307,6 +1331,7 @@ static int sctp_accept_thread(void *arg)
 				}
 			}
 		}
+
 	}
 	if (r < 0) {
 		if (errno == EINPROGRESS) {
@@ -1324,12 +1349,16 @@ static int sctp_accept_thread(void *arg)
 on_return:
 	PJ_LOG(4, (THIS_FILE, "sctp_accept_thread terminated."));
 	return 0;
+#else
+	return 0;
+#endif
 }
 
 PJ_DEF(void) pjmedia_sctp_session_create(pjmedia_transport *tp,
 										 pj_sockaddr *turn_mapped_addr)
 {
 	transport_sctp *sctp = (transport_sctp *)tp;
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	struct sockaddr_conn addr;
 	int r;
 
@@ -1406,6 +1435,9 @@ PJ_DEF(void) pjmedia_sctp_session_create(pjmedia_transport *tp,
 			}
 		}
 	}
+#else
+	return;
+#endif
 }
 
 PJ_DEF(pj_status_t) pjmedia_sctp_init_lib(pjmedia_endpt *endpt)
@@ -1787,7 +1819,8 @@ static pj_status_t transport_send_rtp( pjmedia_transport *tp,
 				       const void *pkt,
 				       pj_size_t size)
 {
-    pj_status_t status = PJ_SUCCESS;
+	pj_status_t status = PJ_SUCCESS;
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
     transport_sctp *sctp = (transport_sctp*) tp;
     char *data = (char *)pkt;
 	struct sctp_sendv_spa spa;
@@ -1850,7 +1883,10 @@ static pj_status_t transport_send_rtp( pjmedia_transport *tp,
 		//dump_bin(data, size, 1);
 	}
 on_return:
-    return status;
+	return status;
+#else
+	return status;
+#endif
 }
 
 static pj_status_t transport_send_rtcp(pjmedia_transport *tp,
@@ -1977,11 +2013,13 @@ static void sctp_rtp_cb( void *user_data, void *pkt, pj_ssize_t size)
 
 	PJ_LOG(6, (THIS_FILE, "sctp_rtp_cb() size=[%d], sctp=[%p]", size, sctp));
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP==0)
 	/* Socket error or closed */
 	if (data && size > 0) {
 		// Pass the data to usrsctp
 		usrsctp_conninput(sctp, data, size, 0);
 	}
+#endif
 
 	//MUTEX_UNLOCK(sctp->mutex);
 
@@ -2192,5 +2230,3 @@ static pj_status_t transport_media_stop(pjmedia_transport *tp)
 
     return pjmedia_transport_sctp_stop(tp);
 }
-
-

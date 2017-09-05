@@ -313,11 +313,6 @@ function showLoadingUpdate(){
 	progressBar++;	
 }
 
-/* Find device (callback) */
-function repage(){
-	top.location.href = "http://" + parent.staticIP;
-}
-
 /* Restart service (run automatically) */
 function restartService(){
 	document.restartForm.force_change.value++;
@@ -1319,25 +1314,8 @@ function QKfinish_load_body(){
 			if(parent.isStatic){
 				$("#lanip")[0].innerHTML = parent.staticIP;
 				document.getElementById("applyBtn").innerHTML = "<div style='text-align:left;margin-left:70px;'><br/><br/><#SAVE_restart_desc#><br><#LAN_IP_changed_suggedtion1#>&nbsp;" + parent.staticIP + "&nbsp;<#LAN_IP_changed_suggedtion2#></div>";
-				
-				var startQuery = function(){
-					$.ajax({ 
-						url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
-						dataType: 'jsonp',
-						timeout: 2000,
 
-						error: function(){
-							setTimeout(function(){
-								startQuery();
-							}, 1000);
-						}
-					});
-
-				}
-
-				setTimeout(function(){
-					startQuery();
-				}, 80000);
+				setTimeout(startQuery, 80000);
 			}
 			else{
 				$("#lanip")[0].innerHTML = "<#BOP_ctype_title1#>";
@@ -1399,6 +1377,20 @@ function QKfinish_load_body(){
 	}
 }
 
+var startQuery = function(){
+	$.ajax({ 
+		url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
+		dataType: "script",
+		timeout: 5000,
+		success: function(){
+			top.location.href = location_org.replace(header_info[0].host, parent.staticIP);
+		},
+		error: function(){
+			setTimeout(startQuery, 1000);
+		}
+	});
+};
+
 var intro_flag = 0;
 function show_rog_feature(){
 	intro_flag = 1;
@@ -1442,9 +1434,16 @@ function game_wifi_next(){
 }
 
 function bandwidth_utilzation_next(){
-	$("#rog_ssid_0").html(decodeURIComponent(document.form.wl0_ssid2.value));
-	$("#rog_ssid_1").html(decodeURIComponent(document.form.wl1_ssid2.value));
-	$("#rog_ssid_2").html(decodeURIComponent(document.form.wl2_ssid2.value));
+	var wl0_ssid2 = decodeURIComponent(document.form.wl0_ssid2.value);
+	var wl1_ssid2 = decodeURIComponent(document.form.wl1_ssid2.value);
+	var wl2_ssid2 = decodeURIComponent(document.form.wl2_ssid2.value);
+	var _wl0_ssid2 = wl0_ssid2.replace(/\</g, "&lt;").replace(/\>/g, "&gt;");   //replace < to &lt and > to &gt
+	var _wl1_ssid2 = wl1_ssid2.replace(/\</g, "&lt;").replace(/\>/g, "&gt;");   //replace < to &lt and > to &gt
+	var _wl2_ssid2 = wl2_ssid2.replace(/\</g, "&lt;").replace(/\>/g, "&gt;");   //replace < to &lt and > to &gt
+
+	$("#rog_ssid_0").html(_wl0_ssid2);
+	$("#rog_ssid_1").html(_wl1_ssid2);
+	$("#rog_ssid_2").html(_wl2_ssid2);
 	$("#rog_password_0").html(decodeURIComponent(document.form.wl0_wpa_psk.value));
 	$("#rog_password_1").html(decodeURIComponent(document.form.wl1_wpa_psk.value));
 	$("#rog_password_2").html(decodeURIComponent(document.form.wl2_wpa_psk.value));
@@ -1479,37 +1478,37 @@ function check_eula(obj){
 var TM_eula_ori = '<% nvram_get("TM_EULA"); %>';
 function show_tm_eula(){
 	if(document.form.preferred_lang.value == "JP"){
-		$.get("JP_tm_eula.htm", function(data){
+		$.get("../JP_tm_eula.htm", function(data){
 			document.getElementById('agreement_panel').innerHTML= data;
 			adjust_TM_eula_height("agreement_panel");
 		});
 	}
 	else if(document.form.preferred_lang.value == "TW"){
-		$.get("tm_eula_TC.htm", function(data){
+		$.get("../tm_eula_TC.htm", function(data){
 			document.getElementById('agreement_panel').innerHTML= data;
 			adjust_TM_eula_height("agreement_panel");
 		});
 	}
 	else if(document.form.preferred_lang.value == "CN"){
-		$.get("tm_eula_SC.htm", function(data){
+		$.get("../tm_eula_SC.htm", function(data){
 			document.getElementById('agreement_panel').innerHTML= data;
 			adjust_TM_eula_height("agreement_panel");
 		});
 	}
 	else if(document.form.preferred_lang.value == "FR"){
-		$.get("tm_eula_FR.htm", function(data){
+		$.get("../tm_eula_FR.htm", function(data){
 			document.getElementById('agreement_panel').innerHTML= data;
 			adjust_TM_eula_height("agreement_panel");
 		});
 	}
 	else if(document.form.preferred_lang.value == "RU"){
-		$.get("tm_eula_RU.htm", function(data){
+		$.get("../tm_eula_RU.htm", function(data){
 			document.getElementById('agreement_panel').innerHTML= data;
 			adjust_TM_eula_height("agreement_panel");
 		});
 	}																			
 	else{
-		$.get("tm_eula.htm", function(data){
+		$.get("../tm_eula.htm", function(data){
 			document.getElementById('agreement_panel').innerHTML= data;
 			adjust_TM_eula_height("agreement_panel");
 		});
@@ -1957,8 +1956,8 @@ function cancel(){
 	<!-- END Stage Game Protection -->	
 	<!-- Stage VR -->
 	<div id="vr_field" style="display:none">
-		<div style="font-size: 32px;color:rgb(207,10,44); margin: 60px 0 0 70px;"><#AiProtection_title_VR#></div>
-		<div style="display:inline-flex;margin:310px 0 0 70px;">
+		<div style="font-size: 32px;color:#FFF; margin: 60px 0 0 70px;"><#AiProtection_title_VR#></div>
+		<div style="display:inline-flex;margin:273px 0 0 70px;">
 			<div style="font-size: 18px;width:500px;"><#AiProtection_title_VR_desc#></div>
 			<div>
 				<div class="qis_button" style="text-align: center;width:150px;height:36px;line-height: 36px;font-size: 16px;margin: 0 auto;border-radius:4px;cursor:pointer;" onclick="vr_next();"><#CTL_next#></div>

@@ -4,7 +4,7 @@
  * Support bcm_gas 802.11u GAS (Generic Advertisement Service) state machine in the driver.
  * See bcm_gas for the API.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

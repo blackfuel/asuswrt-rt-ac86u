@@ -2,7 +2,7 @@
  * MU-MIMO private header file. Includes things that are needed by
  * both wlc_murx.h and wlc_mutx.h.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

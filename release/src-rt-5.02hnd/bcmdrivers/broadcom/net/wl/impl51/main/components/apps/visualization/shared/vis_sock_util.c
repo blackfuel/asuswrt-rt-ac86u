@@ -1,7 +1,7 @@
 /*
  * Linux Visualization System common socket utility implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_sock_util.c 555336 2015-05-08 09:52:04Z $
+ * $Id: vis_sock_util.c 658107 2016-09-06 11:19:00Z $
  */
 
 #include "vis_sock_util.h"
@@ -91,7 +91,7 @@ add_length_and_send_data(int sockfd, const char *data, unsigned int len)
 static int
 send_data(int sockfd, char *data, unsigned int len)
 {
-	int	nret = 0;
+	int	nret = 0, ret = 0;
 	int	totalsize = len, totalsent = 0;
 
 	while (totalsent < totalsize) {
@@ -101,24 +101,35 @@ send_data(int sockfd, char *data, unsigned int len)
 		FD_ZERO(&WriteFDs);
 		FD_ZERO(&ExceptFDs);
 
-		if (sockfd == INVALID_SOCKET)
-			return INVALID_SOCKET;
+		if (sockfd == INVALID_SOCKET) {
+			VIS_SOCK("sockfd[%d]. Invalid socket\n", sockfd);
+			goto error;
+		}
 
 		FD_SET(sockfd, &WriteFDs);
 
 		tv.tv_sec = VIS_SOCKET_WAIT_TIMEOUT;
 		tv.tv_usec = 0;
-		if (select(sockfd+1, NULL, &WriteFDs, &ExceptFDs, &tv) > 0) {
-			if (FD_ISSET(sockfd, &WriteFDs))
+		if ((ret = select(sockfd+1, NULL, &WriteFDs, &ExceptFDs, &tv)) > 0) {
+			if (FD_ISSET(sockfd, &WriteFDs)) {
 				;
-			else
-				return INVALID_SOCKET;
+			} else {
+				VIS_SOCK("sockfd[%d]. Exception occured\n", sockfd);
+				goto error;
+			}
+		} else {
+			if (ret == 0) {
+				VIS_SOCK("sockfd[%d]. Timeout occured\n", sockfd);
+			} else {
+				VIS_SOCK("sockfd[%d]. Error : %s\n", sockfd, strerror(errno));
+			}
+			goto error;
 		}
 
 		nret = send(sockfd, &(data[totalsent]), len, 0);
 		if (nret < 0) {
-			print_error("send");
-			return INVALID_SOCKET;
+			VIS_SOCK("send error is = %s\n", strerror(errno));
+			goto error;
 		}
 		totalsent += nret;
 		len -= nret;
@@ -126,6 +137,9 @@ send_data(int sockfd, char *data, unsigned int len)
 	}
 
 	return totalsent;
+
+error:
+	return INVALID_SOCKET;
 }
 
 /* return value contains the number of bytes read or -1 for error
@@ -181,32 +195,41 @@ on_receive(int sockfd, unsigned char **data)
 static int
 recv_data(int sockfd, unsigned char *read_buf, uint32 size)
 {
-	uint32		nbytes, totalread = 0;
+	uint32		nbytes, totalread = 0, ret = 0;
 	struct timeval	tv;
 	fd_set		ReadFDs, ExceptFDs;
 
-	FD_ZERO(&ReadFDs);
-	FD_ZERO(&ExceptFDs);
-	FD_SET(sockfd, &ReadFDs);
-	FD_SET(sockfd, &ExceptFDs);
-	tv.tv_sec = VIS_SOCKET_WAIT_TIMEOUT;
-	tv.tv_usec = 0;
-
 	while (totalread < size) {
-		if (select(sockfd+1, &ReadFDs, NULL, &ExceptFDs, &tv) > 0) {
+		FD_ZERO(&ReadFDs);
+		FD_ZERO(&ExceptFDs);
+		FD_SET(sockfd, &ReadFDs);
+		FD_SET(sockfd, &ExceptFDs);
+		tv.tv_sec = VIS_SOCKET_WAIT_TIMEOUT;
+		tv.tv_usec = 0;
+
+		if ((ret = select(sockfd+1, &ReadFDs, NULL, &ExceptFDs, &tv)) > 0) {
 			if (FD_ISSET(sockfd, &ReadFDs)) {
 				/* fprintf(stdout, "SOCKET : Data is ready to read\n"); */;
 			} else {
-				return INVALID_SOCKET;
+				VIS_SOCK("sockfd[%d]. Exception Occured\n", sockfd);
+				goto error;
 			}
+		} else {
+			if (ret == 0) {
+				VIS_SOCK("sockfd[%d]. Timeout occured\n", sockfd);
+			} else {
+				VIS_SOCK("sockfd[%d]. Error : %s\n", sockfd, strerror(errno));
+			}
+
+			goto error;
 		}
 
 		nbytes = read(sockfd, &(read_buf[totalread]), size);
-		VIS_SOCK("Read bytes  = %d\n\n", nbytes);
+		VIS_SOCK("sockfd[%d]. Read bytes  = %d\n\n", sockfd, nbytes);
 
 		if (nbytes <= 0) {
-			print_error("Read Error");
-			return INVALID_SOCKET;
+			VIS_SOCK("sockfd[%d]. Read Error : %s\n", sockfd, strerror(errno));
+			goto error;
 		}
 
 		totalread += nbytes;
@@ -215,6 +238,9 @@ recv_data(int sockfd, unsigned char *read_buf, uint32 size)
 	read_buf[totalread] = '\0';
 
 	return totalread;
+
+error:
+	return INVALID_SOCKET;
 }
 
 /* Gets the socket error code */

@@ -10,7 +10,7 @@ include $(SRCBASE)/.config
 
 ifeq ($(wildcard $(SRCBASE)/router/aura_sw/*.c),)
 all: 
-	-cp -f prebuilt/sb_flash_update sb_flash_update
+	-cp -f prebuild/sb_flash_update sb_flash_update
 else
 all: sb_flash_update
 endif

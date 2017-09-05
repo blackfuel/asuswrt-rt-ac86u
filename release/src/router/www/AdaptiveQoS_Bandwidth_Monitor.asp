@@ -1163,8 +1163,15 @@ function regen_qos_rule(obj, priority){
 }
 
 function applyRule(){
-	document.form.qos_rulelist.value = qos_rulelist;
-	document.form.submit();
+	if(reset_wan_and_nat(document.form, document.form.apps_analysis.value)) {
+		document.form.qos_rulelist.value = qos_rulelist;
+		document.form.submit();
+	}
+	else {
+		curState = 0;
+		document.form.apps_analysis.value = 0;
+		$('#apps_analysis_enable').find('.iphone_switch').animate({backgroundPosition: -37}, "slow");
+	}
 }
 
 function eula_confirm(){
@@ -1433,7 +1440,7 @@ function cancel(){
 							<td>
 								<div style=" *width:136px;margin:5px 0px 0px 300px;" class="titlebtn" align="center" onClick="applyRule();">
 									<span><#CTL_apply#></span>
-									<div style="margin:-30px 0 0px -480px;"><a style="text-decoration:underline;" href="http://www.asus.com/support/FAQ/1008717/" target="_blank"><#Bandwidth_monitor_WANLAN#> FAQ</a></div>
+									<div style="margin:-30px 0 0px -290px;width:200px;"><a style="text-decoration:underline;" href="http://www.asus.com/support/FAQ/1008717/" target="_blank"><#Bandwidth_monitor_WANLAN#> FAQ</a></div>
 								</div>
 							</td>
 						</tr>		

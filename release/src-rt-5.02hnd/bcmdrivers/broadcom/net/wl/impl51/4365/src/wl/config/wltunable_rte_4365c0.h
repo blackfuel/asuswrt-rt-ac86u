@@ -1,7 +1,7 @@
 /*
  * Broadcom 802.11 Networking Device Driver Configuration file for 4365c0
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -35,9 +35,9 @@
 #define WLC_MAXDPT	1
 #define WLC_MAXTDLS	5
 #ifdef MINPKTPOOL
-#define MAXSCB		50
+#define MAXSCB		64
 #else
-#define MAXSCB		50 /* (WLC_MAXBSSCFG + WLC_MAXDPT + WLC_MAXTDLS), NIC:128 */
+#define MAXSCB		64 /* (WLC_MAXBSSCFG + WLC_MAXDPT + WLC_MAXTDLS), NIC:128 */
 #endif
 #define AIDMAPSZ	32
 

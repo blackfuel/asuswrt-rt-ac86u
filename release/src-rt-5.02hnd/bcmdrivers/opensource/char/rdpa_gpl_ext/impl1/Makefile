@@ -6,7 +6,7 @@
 obj-$(CONFIG_BCM_RDPA_GPL_EXT)	 := rdpa_gpl_ext.o
 SRCS     := $(subst rdpa_gpl_ext.mod.c,,$(notdir $(shell ls $(src)/*.c)))
 ifeq ($(PREBUILT_EXTRAMOD),1)
-OBJS	 := rdpa_gpl_ext_preb.o
+OBJS     := rdpa_gpl_ext_preb.o
 else
 OBJS 	 := $(SRCS:.c=.o)
 endif

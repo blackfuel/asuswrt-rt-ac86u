@@ -991,7 +991,7 @@ function regen_auto_option(obj){
 						<span id="dfs_checkbox" style="display:none"><input type="checkbox" onClick="check_DFS_support(this);" name="acs_dfs_checkbox" <% nvram_match("acs_dfs", "1", "checked"); %>><#WLANConfig11b_EChannel_dfs#></input></span>
 						<span id="acs_band1_checkbox" style="display:none;"><input type="checkbox" onClick="check_acs_band1_support(this);" <% nvram_match("acs_band1", "1", "checked"); %>><#WLANConfig11b_EChannel_band1#></input></span>
 						<span id="acs_band3_checkbox" style="display:none;"><input type="checkbox" onClick="check_acs_band3_support(this);" <% nvram_match("acs_band3", "1", "checked"); %>><#WLANConfig11b_EChannel_band3#></input></span>
-						<span id="acs_ch13_checkbox" style="display:none;"><input type="checkbox" onClick="check_acs_ch13_support(this);" <% nvram_match("acs_ch13", "1", "checked"); %>>Auto select channel including channel 12, 13</input></span>
+						<span id="acs_ch13_checkbox" style="display:none;"><input type="checkbox" onClick="check_acs_ch13_support(this);" <% nvram_match("acs_ch13", "1", "checked"); %>><#WLANConfig11b_EChannel_acs_ch13#></input></span>
 					</td>
 			  </tr> 
 		  	<!-- end -->
@@ -1089,6 +1089,33 @@ function regen_auto_option(obj){
 				  		<input type="text" name="wl_phrase_x" maxlength="64" class="input_32_table" value="<% nvram_get("wl_phrase_x"); %>" onKeyUp="return is_wlphrase('WLANConfig11b', 'wl_phrase_x', this);" autocorrect="off" autocapitalize="off">
 					</td>
 			  	</tr>
+				<tr >
+					<th>
+						<a class="hintstyle" href="javascript:void(0);"  onClick="openHint(2,1);">
+					  	<#WLANAuthentication11a_ExAuthDBIPAddr_itemname#></a>
+					</th>
+					<td>
+						<input type="text" maxlength="39" class="input_32_table" name="wl_radius_ipaddr" value='<% nvram_get("wl_radius_ipaddr"); %>' onKeyPress="return validator.isIPAddr(this, event)" autocorrect="off" autocapitalize="off">
+					</td>
+				</tr>
+				<tr>
+					<th>
+						<a class="hintstyle" href="javascript:void(0);"  onClick="openHint(2,2);">
+					  	<#WLANAuthentication11a_ExAuthDBPortNumber_itemname#></a>
+					</th>
+					<td>
+						<input type="text" maxlength="5" class="input_6_table" name="wl_radius_port" value='<% nvram_get("wl_radius_port"); %>' onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
+					</td>
+				</tr>
+				<tr>
+					<th >
+						<a class="hintstyle" href="javascript:void(0);"  onClick="openHint(2,3);">
+						<#WLANAuthentication11a_ExAuthDBPassword_itemname#></a>
+					</th>
+					<td>
+						<input type="password" maxlength="64" class="input_32_table" name="wl_radius_key" value="<% nvram_get("wl_radius_key"); %>" autocorrect="off" autocapitalize="off">
+					</td>
+				</tr>			  	
 			  
 				<tr style="display:none">
 					<th><#WLANConfig11b_x_mfp#></th>

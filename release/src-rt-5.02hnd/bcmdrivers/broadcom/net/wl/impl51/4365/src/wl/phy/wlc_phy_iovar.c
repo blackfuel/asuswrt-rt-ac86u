@@ -3,7 +3,7 @@
  * PHY iovar processing of Broadcom BCM43XX 802.11abg
  * Networking Device Driver.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

@@ -112,6 +112,9 @@ emf_br_pre_hook(
 	int32 (*okfn)(struct sk_buff *))
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
+	int ret;
+	uint8_t *iph;
+	struct ether_header *eh;
 	struct sk_buff **pskb = &skb;
 #endif
 	emf_info_t *emfi;
@@ -136,10 +139,39 @@ emf_br_pre_hook(
 		return (NF_ACCEPT);
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
+	iph = PKTDATA(NULL, skb);
+
+	/* Unicast packet received from LAN port is returned back to
+	 * bridge.
+	 */ 
+	eh = (struct ether_header *)(iph - ETH_HLEN);
+	if (!ETHER_ISMULTI(eh->ether_dhost))
+	{
+		EMF_DEBUG("Ignoring Unicast packets from LAN ports\n");
+		return (NF_ACCEPT);
+	}
+
+	/* Push ethernet header fields for packets received
+	 * from LAN ports.
+	 */
+	skb_push(skb, ETH_HLEN);
+
+	EMF_DUMP_PKT(skb->data);
+
+	ret = emfc_input(emfi->emfci, skb, skb->dev, iph, FALSE);
+
+	/* Revert skb pointer if EMF has not taken it */
+	if (ret != EMF_TAKEN)
+		__skb_pull(skb, ETH_HLEN);
+
+	return (ret);
+#else
 	EMF_DUMP_PKT((*pskb)->data);
 
 	return (emfc_input(emfi->emfci, *pskb, (*pskb)->dev,
 	                   PKTDATA(NULL, *pskb), FALSE));
+#endif
 }
 
 /*
@@ -374,7 +406,9 @@ emf_sendup(emf_info_t *emfi, struct sk_buff *skb)
 	skb->dev = emfi->br_dev;
 	skb->pkt_type = PACKET_HOST;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
 	skb_push(skb, ETH_HLEN);
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22)
 	skb_reset_mac_header(skb);
 #else
@@ -431,7 +465,14 @@ emf_forward(emf_info_t *emfi, struct sk_buff *skb, uint32 mgrp_ip,
 
 		memcpy(eh->ether_shost, skb->dev->dev_addr, skb->dev->addr_len);
 	} else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 		eh = (struct ether_header *)skb->data;
+#else
+		/* Push ethernet header fields for packets received
+		 * from LAN ports.
+		 */
+		eh = (struct ether_header *)skb_push(skb, ETH_HLEN);
+#endif
 	}
 
 	EMF_INFO("Group Addr: %02x:%02x:%02x:%02x:%02x:%02x\n",

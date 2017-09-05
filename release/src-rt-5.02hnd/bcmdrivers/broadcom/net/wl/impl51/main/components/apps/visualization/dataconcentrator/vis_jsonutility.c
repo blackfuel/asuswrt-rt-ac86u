@@ -1,7 +1,7 @@
 /*
  * Linux Visualization Data Concentrator json utility implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_jsonutility.c 606349 2015-12-15 07:15:11Z $
+ * $Id: vis_jsonutility.c 672659 2016-11-29 10:24:01Z $
  */
 
 #include "vis_jsonutility.h"
@@ -124,6 +124,8 @@ add_dut_to_json_object(dut_info_t *dut_info, json_object **object)
 		json_object_new_string(dut_info->bssid));
 	json_object_object_add(*object, "IsCurrent",
 		json_object_new_int(1));
+	json_object_object_add(*object, "ErrorInfo",
+		json_object_new_int(dut_info->errinfo));
 }
 
 /* creates json for site survey tab and sends to server */

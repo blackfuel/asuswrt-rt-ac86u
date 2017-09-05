@@ -308,7 +308,7 @@ struct sk_buff;                         /* linux/skbuff.h                     */
 struct fkbuff;                          /* linux/nbuff.h                      */
 
 /* See RFC 4008 */
-#define BLOG_NAT_TCP_DEFAULT_IDLE_TIMEOUT (1200 *HZ)
+#define BLOG_NAT_TCP_DEFAULT_IDLE_TIMEOUT (2400 *HZ)
 #define BLOG_NAT_UDP_DEFAULT_IDLE_TIMEOUT (300 *HZ)
 
 extern uint32_t blog_nat_tcp_def_idle_timeout;

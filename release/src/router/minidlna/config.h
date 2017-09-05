@@ -106,7 +106,11 @@
 
 /* Define to 1 if you have the `getifaddrs' function. */
 #ifndef MS_IPK
+#if defined RPAC68U
+/* #undef HAVE_GETIFADDRS */
+#else
 #define HAVE_GETIFADDRS 1
+#endif
 #endif
 
 /* Define if the GNU gettext() function is already present or preinstalled. */

@@ -119,6 +119,9 @@ struct param_mapping_s param_mapping_list[] = {
 	{ "wl0_wpa_psk",	FT_WIRELESS,		SUBFT_BASIC_2G},
 	{ "wl0_auth_mode_x",	FT_WIRELESS,		SUBFT_BASIC_2G},
 	{ "wl0_crypto",		FT_WIRELESS,		SUBFT_BASIC_2G},
+	{ "wl0_wep_x",		FT_WIRELESS,		SUBFT_BASIC_2G},
+	{ "wl0_key",		FT_WIRELESS,		SUBFT_BASIC_2G},
+	{ "wl0_wep_key",	FT_WIRELESS,		SUBFT_BASIC_2G},
 	{ "wl0_bw",		FT_WIRELESS,		SUBFT_CHANNEL_2G},
 #ifdef RTCONFIG_BCMWL6
 	{ "wl0_chanspec",	FT_WIRELESS,		SUBFT_CHANNEL_2G},
@@ -130,6 +133,9 @@ struct param_mapping_s param_mapping_list[] = {
 	{ "wl1_wpa_psk",	FT_WIRELESS,		SUBFT_BASIC_5G},
 	{ "wl1_auth_mode_x",	FT_WIRELESS,		SUBFT_BASIC_5G},
 	{ "wl1_crypto",		FT_WIRELESS,		SUBFT_BASIC_5G},
+	{ "wl1_wep_x",		FT_WIRELESS,		SUBFT_BASIC_5G},
+	{ "wl1_key",		FT_WIRELESS,		SUBFT_BASIC_5G},
+	{ "wl1_wep_key",	FT_WIRELESS,		SUBFT_BASIC_5G},
 	{ "wl1_bw",		FT_WIRELESS,		SUBFT_CHANNEL_5G},
 #ifdef RTCONFIG_BCMWL6
 	{ "wl1_chanspec",	FT_WIRELESS,		SUBFT_CHANNEL_5G},
@@ -141,6 +147,9 @@ struct param_mapping_s param_mapping_list[] = {
 	{ "wl2_wpa_psk",	FT_WIRELESS,		SUBFT_BASIC_5G1},
 	{ "wl2_auth_mode_x",	FT_WIRELESS,		SUBFT_BASIC_5G1},
 	{ "wl2_crypto",		FT_WIRELESS,		SUBFT_BASIC_5G1},
+	{ "wl2_wep_x",		FT_WIRELESS,		SUBFT_BASIC_5G1},
+	{ "wl2_key",		FT_WIRELESS,		SUBFT_BASIC_5G1},
+	{ "wl2_wep_key",	FT_WIRELESS,		SUBFT_BASIC_5G1},
 	{ "wl2_bw",		FT_WIRELESS,		SUBFT_CHANNEL_5G1},
 #ifdef RTCONFIG_BCMWL6
 	{ "wl2_chanspec",	FT_WIRELESS,		SUBFT_CHANNEL_5G1},
@@ -236,6 +245,22 @@ struct param_mapping_s param_mapping_list[] = {
 	{ "ntp_server1", 	FT_TIME,		SUBFT_NTP_SERVER},
 	/* END */
 	{ NULL, 0, 0 }
+};
+
+struct wlcsuffix_mapping_s {
+	char *name;
+	char *converted_name;
+};
+
+struct wlcsuffix_mapping_s wlcsuffix_mapping_list[] = {
+	{ "ssid",		NULL },
+	{ "wpa_psk",	NULL },
+	{ "crypto",	NULL },
+	{ "auth_mode_x",	"auth_mode" },
+	{ "wep_x",		"wep" },
+	{ "key",		NULL },
+	{ "wep_key",	NULL },
+	{ NULL, 		NULL }
 };
 
 #endif /* __CFG_PARAM_H__ */

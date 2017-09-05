@@ -2,7 +2,7 @@
  * A-MPDU Rx (with extended Block Ack protocol) source file
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_ampdu_rx.c 635565 2016-05-04 09:35:47Z $
+ * $Id: wlc_ampdu_rx.c 675496 2016-12-16 02:42:16Z $
  */
 
 /**
@@ -2058,21 +2058,26 @@ wlc_ampdu_recv_addba_req_resp(ampdu_rx_info_t *ampdu_rx, struct scb *scb,
 	ASSERT(scb_ampdu_rx->resp[tid] == NULL);
 
 	resp = MALLOCZ(ampdu_rx->wlc->osh, sizeof(scb_ampdu_tid_resp_t));
-
-#ifdef WLAMPDU_HOSTREORDER
-	if (AMPDU_HOST_REORDER_ENAB(ampdu_rx->wlc->pub) && !BCMPCIEDEV_ENAB())
-		tohost_ctrlpkt = PKTGET(ampdu_rx->wlc->osh, TXOFF, FALSE);
-	if ((resp == NULL) || (AMPDU_HOST_REORDER_ENAB(ampdu_rx->wlc->pub) &&
-		!BCMPCIEDEV_ENAB() && (tohost_ctrlpkt == NULL)))
-#else /* WLAMPDU_HOSTREORDER */
-	if (resp == NULL)
-#endif /* WLAMPDU_HOSTREORDER */
-	{
+	if (resp == NULL) {
 		wlc_send_addba_resp(ampdu_rx->wlc, scb, DOT11_SC_FAILURE,
 			addba_req->token, timeout, param_set);
 		WLCNTINCR(ampdu_rx->cnt->txaddbaresp);
 		return;
 	}
+
+#ifdef WLAMPDU_HOSTREORDER
+	if (AMPDU_HOST_REORDER_ENAB(ampdu_rx->wlc->pub) && !BCMPCIEDEV_ENAB()) {
+		tohost_ctrlpkt = PKTGET(ampdu_rx->wlc->osh, TXOFF, FALSE);
+		if (tohost_ctrlpkt == NULL) {
+			wlc_send_addba_resp(ampdu_rx->wlc, scb, DOT11_SC_FAILURE,
+				addba_req->token, timeout, param_set);
+			WLCNTINCR(ampdu_rx->cnt->txaddbaresp);
+
+			MFREE(ampdu_rx->wlc->osh, resp, sizeof(scb_ampdu_tid_resp_t));
+			return;
+		}
+	}
+#endif /* WLAMPDU_HOSTREORDER */
 
 #ifdef WLAMPDU_HOSTREORDER
 	if (AMPDU_HOST_REORDER_ENAB(ampdu_rx->wlc->pub) && !BCMPCIEDEV_ENAB())

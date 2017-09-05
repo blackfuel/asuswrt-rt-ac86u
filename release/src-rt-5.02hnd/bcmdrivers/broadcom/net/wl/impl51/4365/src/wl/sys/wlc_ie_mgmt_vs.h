@@ -1,7 +1,7 @@
 /*
  * IE management module Vendor Specific IE utilities
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_ie_mgmt_vs.h 580000 2015-08-17 22:08:34Z $
+ * $Id: wlc_ie_mgmt_vs.h 664112 2016-10-10 13:27:40Z $
  */
 
 #ifndef _wlc_ie_mgmt_vs_h_
@@ -57,6 +57,9 @@
 #define WLC_IEM_VS_IE_PRIO_WME_TS	176
 #ifdef BCMCCX
 #define WLC_IEM_VS_IE_PRIO_CCX_TS_RS	178
+#endif
+#ifdef WLFBT
+#define WLC_IEM_VS_IE_PRIO_CCX_EXT_CAP  179
 #endif
 #define WLC_IEM_VS_IE_PRIO_HS20		190
 #define WLC_IEM_VS_IE_PRIO_P2P		192

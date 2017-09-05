@@ -23,7 +23,6 @@ var flag = '<% get_parameter("flag"); %>';
 var smart_connect_flag_t;
 var wl_unit = '<% nvram_get("wl_unit"); %>';
 
-
 if(yadns_support){
 	var yadns_enable = '<% nvram_get("yadns_enable_x"); %>';
 	var yadns_mode = '<% nvram_get("yadns_mode"); %>';
@@ -32,6 +31,9 @@ if(yadns_support){
 
 function initial(){
 	var wl_subunit = '<% nvram_get("wl_subunit"); %>';
+	if(lantiq_support){
+		checkWLReady();
+	}
 
 	if(lyra_hide_support){
 		document.getElementById("t0").style.display = "";
@@ -39,7 +41,7 @@ function initial(){
 		document.getElementById("t0").className = "tabclick_NW";
 		inputCtrl(document.form.wl_auth_mode_x, 0);
 		document.getElementById("wl_wpa_psk_title").innerHTML = "<#Network_key#>";
-		document.getElementById("t3").style.display = "none";
+		document.getElementById("t_status").style.display = "none";
 	}
 	else{
 		if(band5g_support){
@@ -47,6 +49,10 @@ function initial(){
 			document.getElementById("t1").style.display = "";
 			if(wl_info.band5g_2_support){
 				document.getElementById("t2").style.display = "";
+				tab_reset(0);
+			}
+			if(wl_info.band60g_support) {
+				document.getElementById("t3").style.display = "";
 				tab_reset(0);
 			}
 
@@ -198,21 +204,16 @@ function initial(){
 	flash_button();	
 
 	if(history.pushState != undefined) history.pushState("", document.title, window.location.pathname);
+
+	set_NM_height();
 }
 
 function change_tabclick(){
-	switch(wl_unit){
-		case '0': document.getElementById("t0").className = "tabclick_NW";
-				break;
-		case '1': document.getElementById("t1").className = "tabclick_NW";
-				break;
-		case '2': document.getElementById("t2").className = "tabclick_NW";
-				break;
-	}
+	document.getElementById("t" + wl_unit + "").className = "tabclick_NW";
 }
 
 function tabclickhandler(wl_unit){
-	if(wl_unit == '3'){
+	if(wl_unit == 'status'){
 		location.href = "router_status.asp";
 	}
 	else{
@@ -421,17 +422,21 @@ function show_LAN_info(v){
 		showtext(document.getElementById("MAC_wl5"), '<% nvram_get("wl1_hwaddr"); %>');
 	else if(document.form.wl_unit.value == '2')
 		showtext(document.getElementById("MAC_wl5_2"), '<% nvram_get("wl2_hwaddr"); %>');
+	else if(document.form.wl_unit.value == '3')
+		showtext(document.getElementById("MAC_wl60"), '<% nvram_get("wl3_hwaddr"); %>');
 
 	if(document.form.wl_unit.value == '0'){
 		document.getElementById("macaddr_wl5").style.display = "none";
 		if(wl_info.band5g_2_support)
 			document.getElementById("macaddr_wl5_2").style.display = "none";	
+		document.getElementById("macaddr_wl60").style.display = "none";
 		if(!band5g_support)
 			document.getElementById("macaddr_wl2_title").style.display = "none";
 	}
 	else if (document.form.wl_unit.value == '1'){
 		document.getElementById("macaddr_wl2").style.display = "none";
 		document.getElementById("macaddr_wl5_2").style.display = "none";
+		document.getElementById("macaddr_wl60").style.display = "none";
 		if(wl_info.band5g_2_support)
 			document.getElementById("macaddr_wl5_title").innerHTML = "5GHz-1 ";
 
@@ -440,6 +445,13 @@ function show_LAN_info(v){
 		document.getElementById("macaddr_wl2").style.display = "none";
 		document.getElementById("macaddr_wl5").style.display = "none";
 		document.getElementById("macaddr_wl5_2").style.display = "";
+		document.getElementById("macaddr_wl60").style.display = "none";
+	}
+	else if (document.form.wl_unit.value == '3'){
+		document.getElementById("macaddr_wl2").style.display = "none";
+		document.getElementById("macaddr_wl5").style.display = "none";
+		document.getElementById("macaddr_wl5_2").style.display = "none";
+		document.getElementById("macaddr_wl60").style.display = "";
 	}
 	if(smart_connect_support && (parent.isSwMode("rt") || parent.isSwMode("ap"))){
 		if(v == '1'){
@@ -479,6 +491,11 @@ function detect_qtn_ready(){
 }
 
 function submitForm(){
+	if(lantiq_support && wave_ready != 1){
+		alert("Please wait a minute for wireless ready");
+		return false;
+	}
+
 	var auth_mode = document.form.wl_auth_mode_x.value;
 
 	if(document.form.wl_wpa_psk.value == "<#wireless_psk_fillin#>")
@@ -589,6 +606,10 @@ function tab_reset(v){
 			document.getElementById("span1").innerHTML = "5GHz";
 			document.getElementById("t2").style.display = "none";
 		}
+
+		if(!wl_info.band60g_support){
+			document.getElementById("t3").style.display = "none";
+		}
 	}else if(v == 1){	//Smart Connect
 		if(based_modelid == "RT-AC5300" || based_modelid == "RT-AC3200" || based_modelid == "GT-AC5300")
 			document.getElementById("span0").innerHTML = "2.4GHz, 5GHz-1 and 5GHz-2";
@@ -632,6 +653,25 @@ function change_smart_connect(v){
 				break;
 	}
 }
+
+function checkWLReady(){
+	$.ajax({
+	    url: '/ajax_wl_ready.asp',
+	    dataType: 'script',	
+	    error: function(xhr) {
+			setTimeout("checkWLReady();", 1000);
+	    },
+	    success: function(response){
+	    	if(wave_ready != 1){
+	    		$("#lantiq_ready").show();
+	    		setTimeout("checkWLReady();", 1000);
+	    	}
+	    	else{
+	    		$("#lantiq_ready").hide();
+	    	}
+	    }
+  	});
+}
 </script>
 </head>
 <body class="statusbody" onload="initial();">
@@ -668,7 +708,7 @@ function change_smart_connect(v){
 <input type="hidden" name="wl_txbf" value="<% nvram_get("wl_txbf"); %>">
 <input type="hidden" name="smart_connect_x" value="<% nvram_get("smart_connect_x"); %>">
 
-<table border="0" cellpadding="0" cellspacing="0">
+<table border="0" cellpadding="0" cellspacing="0" id="rt_table">
 <tr>
 	<td>		
 		<table width="100px" border="0" align="left" style="margin-left:8px;" cellpadding="0" cellspacing="0">
@@ -688,8 +728,13 @@ function change_smart_connect(v){
 				</div>
 			</td>
 			<td>
-				<div id="t3" class="tab_NW" align="center" style="font-weight: bolder; margin-right:2px; width:90px;" onclick="tabclickhandler(3)">
-					<span id="span3" style="cursor:pointer;font-weight: bolder;">Status</span>
+				<div id="t3" class="tab_NW" align="center" style="font-weight: bolder;display:none; margin-right:2px; width:90px;" onclick="tabclickhandler(3)">
+					<span id="span3" style="cursor:pointer;font-weight: bolder;">60GHz</span>
+				</div>
+			</td>
+			<td>
+				<div id="t_status" class="tab_NW" align="center" style="font-weight: bolder; margin-right:2px; width:90px;" onclick="tabclickhandler('status')">
+					<span id="span_status" style="cursor:pointer;font-weight: bolder;"><#Status_Str#></span>
 				</div>
 			</td>
 		</table>
@@ -756,6 +801,7 @@ function change_smart_connect(v){
   		<tr id="smartcon_enable_line" style="display:none"><td><img style="margin-top:-2px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png"></td></tr>
   		<tr>
     			<td style="padding:5px 10px 0px 10px; ">
+    			<div id="lantiq_ready" style="display:none;color:#FC0;margin-left:3px;font-size:13px;">Wireless is setting...</div>
   	  			<p class="formfonttitle_nwm" ><#QIS_finish_wireless_item1#></p>
       			<input style="*margin-top:-7px; width:260px;" id="wl_ssid" type="text" name="wl_ssid" value="<% nvram_get("wl_ssid"); %>" maxlength="32" size="22" class="input_25_table" autocomplete="off" autocorrect="off" autocapitalize="off">
       			<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
@@ -881,8 +927,8 @@ function change_smart_connect(v){
 	<td> 			
  		<table width="95%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px">
   		<tr id="apply_tr">
-    			<td style="border-bottom:5px #2A3539 solid;padding:5px 10px 5px 10px;">
-    				<input id="applySecurity" type="button" class="button_gen" value="<#CTL_apply#>" onclick="submitForm();" style="margin-left:90px;">
+				<td id="bottom_border">
+					<input id="applySecurity" type="button" class="button_gen" value="<#CTL_apply#>" onclick="submitForm();" style="margin-left:90px;">
     			</td>
   		</tr>
   		<tr>
@@ -936,6 +982,12 @@ function change_smart_connect(v){
     				<p class="tab_info_bg" style="padding-left:10px; margin-bottom:5px; margin-top:3px; *margin-top:-5px; padding-bottom:3px; margin-right:10px;line-height:20px;" id="MAC_wl5_2"></p>
     			</td>
   		</tr>  
+		<tr id="macaddr_wl60" style="display:none;">
+			<td style="padding:5px 10px 0px 10px;">
+				<p class="formfonttitle_nwm" >Wireless <span id="macaddr_wl60_title">60GHz </span><#MAC_Address#></p>
+				<p class="tab_info_bg" style="padding-left:10px; margin-bottom:5px; margin-top:3px; *margin-top:-5px; padding-bottom:3px; margin-right:10px;line-height:20px;" id="MAC_wl60"></p>
+			</td>
+		</tr>
 		</table>
 	</td>
 </tr>

@@ -2,7 +2,7 @@
  * Broadcom Home Gateway Reference Design
  * Broadcom Wi-Fi Blanket shared functions
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: wbd_rc_shared.h 633592 2016-04-23 10:52:25Z $
+ * $Id: wbd_rc_shared.h 670128 2016-11-14 12:15:13Z $
  */
 
 #ifndef _WBD_RC_SHARED_H_
@@ -43,6 +43,9 @@ extern int wbd_create_dwds_ap_vif(int unit, int subunit);
 
 /* Read "wbd_ifnames" NVRAM and get actual ifnames */
 extern int wbd_read_actual_ifnames(char *wbd_ifnames1, int len1, bool create);
+
+/* Find Number of valid interfaces */
+extern int wbd_count_interfaces(void);
 
 /* ----------------------------- WBD shared Routines --------------------------------- */
 

@@ -5,6 +5,7 @@ export LINUXDIR := $(SRCBASE)/kernel/linux-4.1
 else
 export LINUXDIR := $(SRCBASE)/linux/linux-2.6
 endif
+export BUILD := $(shell (gcc -dumpmachine))
 
 ifeq ($(RTCONFIG_BCMARM),y)
 
@@ -168,7 +169,9 @@ define platformKernelConfig
 			elif [ "$(BCM9)" = "y" ]; then \
 				echo "do nothing"; \
 			elif [ "$(HND_ROUTER)" = "y" ]; then \
-				echo "do nothing"; \
+				cp -f $(SRCBASE)/router/dpsta/hnd/dpsta.o $(SRCBASE)/router/dpsta/linux; \
+				cp -f $(SRCBASE)/router/dpsta/hnd/dpsta.h $(SRCBASE)/router/dpsta; \
+				cp -f $(SRCBASE)/router/dpsta/hnd/dpsta_linux.h $(SRCBASE)/router/dpsta; \
 			else \
 				if [ "$(ARMCPUSMP)" = "up" ]; then \
 					cp -f $(SRCBASE)/router/dpsta/bcm6_up/dpsta.o $(SRCBASE)/router/dpsta/linux; \

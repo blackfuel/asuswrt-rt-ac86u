@@ -4,7 +4,7 @@
 obj-$(CONFIG_ARM64) += bcm_legacy_io_map.o
 obj-$(CONFIG_ARM64) += bcm_arm_irq.o
 obj-$(CONFIG_ARM64) += bcm_arm64_setup.o
-obj-$(CONFIG_ARM64) += bcm_thermal.o
+obj-$(CONFIG_BCM_THERMAL) += bcm_thermal.o
 obj-$(CONFIG_BCM_ARM_CPUIDLE) += bcm_arm_cpuidle.o
 obj-$(CONFIG_BCM_CFE_XARGS) += blxargs.o
 obj-$(CONFIG_ARM) += bcm_arm_setup.o

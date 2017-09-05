@@ -639,7 +639,6 @@ void kerSysNvRamGetBoardId(char *boardId)
     spin_unlock_irqrestore(&inMemNvramData_spinlock, flags);
 }
 EXPORT_SYMBOL(kerSysNvRamGetBoardId);
-
 void kerSysNvRamGetNoUpdatingFirmwareLocked(unsigned char *noUpdatingFirmware)
 {
     memcpy(noUpdatingFirmware, &inMemNvramData.noUpdatingFirmware,

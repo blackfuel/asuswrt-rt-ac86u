@@ -213,7 +213,7 @@ do_ej(char *path, FILE *stream)
 	char pat_buf[PATTERN_LENGTH];
 	char *pattern = pat_buf, *asp = NULL, *asp_end = NULL, *key = NULL, *key_end = NULL;
 	char *start_pat, *end_pat, *lang;
-	FILE *fp;
+	FILE *fp = NULL;
 	int conn_break = 0;
 	size_t ret, read_len, len;
 	int no_translate = 1;
@@ -221,7 +221,6 @@ do_ej(char *path, FILE *stream)
 
 	if (!(fp = fopen(path, "r")))
 		return;
-
 #ifdef TRANSLATE_ON_FLY
 	// Load dictionary file
 
@@ -379,11 +378,8 @@ do_ej(char *path, FILE *stream)
 	}		/* while (conn_break == 0) */
 
 	fflush (stream);
-	fclose(fp);
 
-	if (pattern != pat_buf) {
-		free (pattern);
-	}
+	fclose(fp);
 }
 #endif  // defined TRANSLATE_ON_FLY
 

@@ -989,7 +989,6 @@ int hnd_nvram_erase()
 {
 	int err = 0;
 
-	_dprintf("Erasing nvram ...\n");
 	if (access(PRE_COMMIT_KERNEL_NVRM_FILE, F_OK) != -1 &&
 		unlink(PRE_COMMIT_KERNEL_NVRM_FILE) < 0) {
 		_dprintf("*** Failed to delete file %s. Error: %s\n",
@@ -1018,6 +1017,8 @@ int hnd_nvram_erase()
 		err = errno;
 	}
 
+	sync();
+	_dprintf("Erasing nvram done\n");
 	return err;
 }
 

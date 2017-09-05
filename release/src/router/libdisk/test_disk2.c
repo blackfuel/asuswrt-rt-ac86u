@@ -33,11 +33,6 @@
 #include "disk_initial.h"
 #include "usb_info.h"
 
-#define SYS_BLOCK "/sys/block"
-#define SYS_TTY "/sys/class/tty"
-#define SYS_USB "/sys/class/usb"
-#define SYS_SG "/sys/class/scsi_generic"
-
 #if defined(usb_dbg)
 #undef usb_dbg
 #endif

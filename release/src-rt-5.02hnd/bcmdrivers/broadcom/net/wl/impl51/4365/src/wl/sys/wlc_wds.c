@@ -2,7 +2,7 @@
  * Dynamic WDS module source file
  * Broadcom 802.11abgn Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_wds.c 650673 2016-07-22 06:19:09Z $
+ * $Id: wlc_wds.c 671529 2016-11-22 08:41:13Z $
  */
 
 /**
@@ -56,11 +56,18 @@
 #ifdef PSPRETEND
 #include <wlc_apps.h>
 #endif /* PSPRETEND */
+#ifdef WLAMPDU
+#include <wlc_ampdu_cmn.h>
+#endif
 
 /* PS listen interval (no of beacon intervals) for WDS SCB.
  * Used for PS pretend probing timeout also.
  */
 #define WDS_SCB_LISTEN_INT	20
+
+#ifndef IFNAMSIZ
+#define IFNAMSIZ		16
+#endif /* IFNAMSIZ */
 
 /* IOVar table */
 enum {
@@ -73,6 +80,7 @@ enum {
 	IOV_DWDS_BRCM_IE,
 #endif
 	IOV_WDS_TYPE,
+	IOV_WDS_AP_IFNAME,
 	IOV_LAST
 };
 
@@ -94,6 +102,7 @@ static const bcm_iovar_t wlc_wds_iovars[] = {
 	{"wds_type", IOV_WDS_TYPE,
 	(0), IOVT_UINT32, 0
 	},
+	{"wds_ap_ifname", IOV_WDS_AP_IFNAME, (0), IOVT_BUFFER, 0},
 	{NULL, 0, 0, 0, 0}
 };
 
@@ -352,6 +361,15 @@ wlc_wds_doiovar(void *ctx, const bcm_iovar_t *vi, uint32 actionid, const char *n
 				WL_WDSIFTYPE_DWDS : WL_WDSIFTYPE_WDS;
 		break;
 	 }
+
+	case IOV_GVAL(IOV_WDS_AP_IFNAME): {
+		 if ((wlcif->type == WLC_IFTYPE_WDS) && BSSCFG_AP(bsscfg)) {
+			strncpy(arg, wl_ifname(wlc->wl, bsscfg->wlcif->wlif), IFNAMSIZ);
+			break;
+		 }
+		 err = BCME_UNSUPPORTED;
+		 break;
+	}
 
 	default:
 		err = BCME_UNSUPPORTED;
@@ -775,6 +793,7 @@ wlc_ap_wds_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb)
 	/* ack indicates the sta is there */
 	if (txstatus & TX_STATUS_MASK) {
 		scb->flags |= SCB_WDS_LINKUP;
+		WL_ERROR(("%s: WDS link up\n", wl_ifname(wlc->wl, scb->wds->wlif)));
 		return;
 	}
 
@@ -782,7 +801,22 @@ wlc_ap_wds_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb)
 	WL_INFORM(("wl%d: %s: no ACK from %s for Null Data\n",
 	           wlc->pub->unit, __FUNCTION__, bcm_ether_ntoa(&scb->ea, eabuf)));
 
+	if (wlc->ap->scb_activity_time &&
+		((wlc->pub->now - scb->used) < wlc->ap->scb_activity_time)) {
+		WL_INFORM(("%s: There was recent traffic (%u sec) with %s so don't block link\n",
+			__FUNCTION__, wlc->pub->now - scb->used, bcm_ether_ntoa(&scb->ea, eabuf)));
+		return;
+	}
+
 	scb->flags &= ~SCB_WDS_LINKUP;
+
+#ifdef WLAMPDU
+	/* cleanup ampdu when peer is lost */
+	if (SCB_AMPDU(scb)) {
+		WL_AMPDU(("wl%d: scb ampdu cleanup for %s\n", wlc->pub->unit, eabuf));
+		scb_ampdu_cleanup(wlc, scb);
+	}
+#endif /* WLAMPDU */
 }
 
 /*
@@ -870,6 +904,24 @@ wlc_wds_lazywds_is_enable(wlc_wds_info_t *mwds)
 		return FALSE;
 }
 
+int
+wlc_wds_peers_connected(wlc_info_t *wlc)
+{
+	struct scb_iter scbiter;
+	struct scb *scb;
+	wlc_bsscfg_t *bsscfg;
+	int32 idx, count = 0;
+
+	FOREACH_BSS(wlc, idx, bsscfg) {
+		FOREACH_BSS_SCB(wlc->scbstate, &scbiter, bsscfg, scb) {
+			if (SCB_WDS(scb) != NULL) {
+				count++;
+			}
+		}
+	}
+	return count;
+}
+
 #ifdef DWDS
 static int
 wlc_dwds_config(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, wlc_dwds_config_t *dwds)
@@ -920,6 +972,8 @@ wlc_dwds_config(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, wlc_dwds_config_t *dwds)
 	} else {
 		/* free WDS state */
 		if (scb->wds != NULL) {
+			/* process event queue */
+			wlc_eventq_flush(wlc->eventq);
 			if (scb->wds->wlif) {
 				wlc_if_event(wlc, WLC_E_IF_DEL, scb->wds);
 				wl_del_if(wlc->wl, scb->wds->wlif);

@@ -2,7 +2,7 @@
  * Chip-specific hardware definitions for
  * Broadcom 802.11abg Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: d11.h 648755 2016-07-13 15:40:07Z $
+ * $Id: d11.h 669540 2016-11-10 01:23:08Z $
  */
 
 #ifndef	_D11_H
@@ -1741,16 +1741,17 @@ BWL_PRE_PACKED_STRUCT struct d11actxh {
 #define D11AC_TXC_URIFS			0x8000	/* Use RIFS */
 
 /* MacTxControlHigh */
-#define D11AC_TXC_DISFCS		0x0001	/* Discard FCS */
-#define D11AC_TXC_FIX_RATE		0x0002	/* Use primary rate only */
-#define D11AC_TXC_SVHT			0x0004	/* Single VHT mpdu ampdu */
-#define D11AC_TXC_PPS			0x0008  /* Enable PS Pretend feature */
-#define D11AC_TXC_UCODE_SEQ		0x0010	/* Sequence counter for BK traffic, for offloads */
-#define D11AC_TXC_TIMBC_TSF		0x0020  /* Enable TIMBC tsf field present */
+#define D11AC_TXC_DISFCS		0x0001 /* Discard FCS */
+#define D11AC_TXC_FIX_RATE		0x0002 /* Use primary rate only */
+#define D11AC_TXC_SVHT			0x0004 /* Single VHT mpdu ampdu */
+#define D11AC_TXC_PPS			0x0008 /* Enable PS Pretend feature */
+#define D11AC_TXC_UCODE_SEQ		0x0010 /* Sequence counter for BK traffic, for offloads */
+#define D11AC_TXC_TIMBC_TSF		0x0020 /* Enable TIMBC tsf field present */
 #define D11AC_TXC_TCPACK		0x0040
-#define D11AC_TXC_AWDL_PHYTT 	0x0080  /* Fill in PHY Transmission Time for AWDL action frames */
+#define D11AC_TXC_AWDL_PHYTT		0x0080 /* Fill in PHY Tx Time for AWDL action frames */
 #define D11AC_TXC_TOF			0x0100 /* Enable wifi ranging processing for rxd frames */
 #define D11AC_TXC_MU			0x0200 /* MU Tx data */
+#define D11AC_TXC_BFIX			0x0800 /* BFI from SHMx */
 
 #define D11AC_TSTAMP_SHIFT		8	/* Tstamp in 256us units */
 
@@ -1847,10 +1848,10 @@ BWL_PRE_PACKED_STRUCT struct d11actxh {
 #define D11AC_RTSCTS_SHORT_PREAMBLE	0x0010	/* Long/short preamble: 0 - long, 1 - short? */
 #define D11AC_RTSCTS_LAST_RATE		0x0020	/* this is last rate */
 #define D11AC_RTSCTS_IMBF               0x0040  /* Implicit TxBF */
-#define D11AC_RTSCTS_BF_IDX_MASK	0x7000  /* 3-bit index to the beamforming block */
+#define D11AC_RTSCTS_BF_IDX_MASK	0xF000  /* 4-bit index to the beamforming block */
 #define D11AC_RTSCTS_BF_IDX_SHIFT	12
-#define D11AC_RTSCTS_RATE_MASK		0xF000	/* Rate table offset: bit 3-0 of PLCP byte 0 */
-#define D11AC_RTSCTS_RATE_SHIFT		12
+#define D11AC_RTSCTS_RATE_MASK		0x0F00	/* Rate table offset: bit 3-0 of PLCP byte 0 */
+#define D11AC_RTSCTS_RATE_SHIFT		8
 
 /* BssIdEncAlg */
 #define D11AC_BSSID_MASK		0x000F	/* BSS index */
@@ -2805,7 +2806,7 @@ BWL_PRE_PACKED_STRUCT struct shm_acparams {
 #define MHF3_PAPD_OFF_OFDM	0x8000		/* Disable PAPD comp for OFDM frames */
 
 /* Flags in M_HOST_FLAGS4 */
-#define MHF4_CISCOTKIP_WAR	0x0001		/* Change WME timings under certain conditions */
+#define MHF4_RTS_INFB		0x0001		/* Enable RTS in frameburst */
 #define	MHF4_RCMTA_BSSID_EN	0x0002		/* BTAMP: multiSta BSSIDs matching in RCMTA area */
 #define	MHF4_BCN_ROT_RR		0x0004		/* MBSSID: beacon rotate in round-robin fashion */
 #define	MHF4_OPT_SLEEP		0x0008		/* enable opportunistic sleep */
@@ -4520,6 +4521,7 @@ extern uint16 aes_xtime9dbe[512];
 /* Phy cache index Bit<8> indicates the validity. Cleared during TxBf link Init
  * to trigger a new sounding sequence.
  */
+#define	C_BFRIDX_MASK         0x001F
 #define C_BFRIDX_VLD_NBIT     8   /* valid */
 #define C_BFRIDX_EN_NBIT      7   /* BFI block is enabled (has valid info),
 				   * applicable only for MU BFI block in shmemx
@@ -4531,6 +4533,9 @@ extern uint16 aes_xtime9dbe[512];
 #define C_BFI_BFRCTL_POS_NSTS_SHIFT	1	/* 0: 2 stream; 1: 3 streams 2: 4 streams */
 #define C_BFI_BFRCTL_POS_MLBF_SHIFT	4	/* 1  enable MLBF(used for corerev < 64) */
 #define C_BFI_BFRCTL_POS_BFM_SHIFT	8	/* Bits15-8: BFM mask for BFM frame tx */
+#define C_BFI_MUMBSS_NBIT           	9   	/* MU MBSS feature 0=disabled, 1=enabled */
+#define C_BFI_BSSID_NBIT            	10  	/* bssid for C_BFI_NDPA_FCTST_POS */
+
 /* dynamic rflo ucode WAR defines */
 #define UCODE_WAR_EN		1
 #define UCODE_WAR_DIS		0
@@ -4691,10 +4696,16 @@ extern uint16 aes_xtime9dbe[512];
 
 /* pointers section in shmem_x */
 #define MX_BFI_BLK_PTR		(MX_PSM_SOFT_REGS + 16*2)
+#define MX_NDPPWR_PTR		(MX_PSM_SOFT_REGS + 17*2)
 
 /* configuration parameters in shmem_x */
 #define MX_MUSND_PER		(MX_PSM_SOFT_REGS + 32*2)
-#define C_MUBF_NDPPWR_POS       0x80
+#define C_MUBF_NDPPWR_POS		0x100
+
+/* define number of MCSs for NDP PWR lookup table:
+ * every two are packed into one 16-bit entry
+ */
+#define D11_MU_NDPPWR_MAXMCS	9
 
 /* utracex start and end pointers */
 #define	MX_UTRACEX_SPTR		(MX_PSM_SOFT_REGS + 36*2)

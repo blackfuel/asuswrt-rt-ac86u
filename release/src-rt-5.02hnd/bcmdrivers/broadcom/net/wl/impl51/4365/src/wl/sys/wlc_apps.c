@@ -1,7 +1,7 @@
 /*
  * Common interface to the 802.11 AP Power Save state per scb
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_apps.c 658896 2016-09-10 09:55:52Z $
+ * $Id: wlc_apps.c 677428 2017-01-03 06:16:57Z $
  */
 
 /**
@@ -87,7 +87,6 @@
 #include <wlc_txbf.h>
 #endif /* WL_BEAMFORMING */
 
-static void wlc_apps_ps_flush(wlc_info_t *wlc, struct scb *scb);
 static void wlc_apps_ps_timedout(wlc_info_t *wlc, struct scb *scb);
 static bool wlc_apps_ps_send(wlc_info_t *wlc, struct scb *scb, uint prec_bmp, uint32 flags);
 static bool wlc_apps_ps_enq_resp(wlc_info_t *wlc, struct scb *scb, void *pkt, int prec);
@@ -564,6 +563,11 @@ wlc_apps_scb_psinfo_init(void *context, struct scb *scb)
 	scb_psinfo = SCB_PSINFO(wlc->psinfo, scb);
 	ASSERT(scb_psinfo);
 
+	/* Initialize the auxpmq_idx first, this will be used in wlc_apps_scb_psinfo_deinit().
+	 * So that if apsd_hpkt_timer fails, the deinit function won't do incorrect handling.
+	 */
+	scb_psinfo->auxpmq_idx = AUXPMQ_INVALID_IDX;
+
 #ifdef PROP_TXSTATUS
 	if (!(scb_psinfo->apsd_hpkt_timer = wl_init_timer(wlc->wl,
 		wlc_apps_apsd_hpkt_tmout, scb_psinfo, "appsapsdhkpt"))) {
@@ -575,8 +579,6 @@ wlc_apps_scb_psinfo_init(void *context, struct scb *scb)
 #endif
 	/* PS state init */
 	pktq_init(&scb_psinfo->psq, WLC_PREC_COUNT, PSQ_PKTQ_LEN_DEFAULT);
-
-	scb_psinfo->auxpmq_idx = AUXPMQ_INVALID_IDX;
 
 	return 0;
 }
@@ -1191,7 +1193,7 @@ wlc_apps_process_pend_ps(wlc_info_t *wlc)
 }
 
 /* Free any pending PS packets for this STA */
-static void
+void
 wlc_apps_ps_flush(wlc_info_t *wlc, struct scb *scb)
 {
 #if defined(BCMDBG) || defined(WLMSG_PS)
@@ -1421,10 +1423,10 @@ wlc_apps_psq(wlc_info_t *wlc, void *pkt, int prec)
 
 				if (scb_psinfo->apsd_cnt > 1 &&
 					wlc_apps_apsd_delv_count(wlc, scb) == 1) {
-					uint8 prec_bmp;
-					prec_bmp = WLC_ACBITMAP_TO_PRECBITMAP(scb->apsd.ac_delv);
+					ac_bitmap_t ac_to_request;
+					ac_to_request = scb->apsd.ac_delv & AC_BITMAP_ALL;
 					wlfc_psmode_request(wlc->wl, scb->mac_address_handle,
-						1, prec_bmp, WLFC_CTL_TYPE_MAC_REQUEST_PACKET);
+						1, ac_to_request, WLFC_CTL_TYPE_MAC_REQUEST_PACKET);
 					wl_add_timer(wlc->wl, scb_psinfo->apsd_hpkt_timer,
 						WLC_PS_APSD_HPKT_TIME, FALSE);
 				} else
@@ -2869,8 +2871,9 @@ wlc_apps_apsd_send(wlc_info_t *wlc, struct scb *scb)
 		if (!scb_psinfo->apsd_hpkt_timer_on &&
 			scb_psinfo->apsd_cnt > 1 &&
 			wlc_apps_apsd_delv_count(wlc, scb) == 1) {
+			ac_bitmap_t ac_to_request = scb->apsd.ac_delv & AC_BITMAP_ALL;
 			wlfc_psmode_request(wlc->wl, scb->mac_address_handle,
-				1, prec_bmp, WLFC_CTL_TYPE_MAC_REQUEST_PACKET);
+				1, ac_to_request, WLFC_CTL_TYPE_MAC_REQUEST_PACKET);
 			wl_add_timer(wlc->wl, scb_psinfo->apsd_hpkt_timer,
 				WLC_PS_APSD_HPKT_TIME, FALSE);
 			scb_psinfo->apsd_hpkt_timer_on = TRUE;

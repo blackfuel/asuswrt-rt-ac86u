@@ -3841,7 +3841,7 @@ GEN_CONF:
 			eval("wl", "-i", ifname, "ldpc_cap", "1");	// driver default setting
 #endif
 #ifdef RTCONFIG_BCMWL6
-#if !defined(RTCONFIG_BCM7) && !defined(RTCONFIG_BCM_7114)
+#if !defined(RTCONFIG_BCM7) && !defined(RTCONFIG_BCM_7114) && !defined(RTCONFIG_BCM9) && !defined(HND_ROUTER)
 		if (nvram_match(strcat_r(prefix, "ack_ratio", tmp), "1"))
 			eval("wl", "-i", ifname, "ack_ratio", "4");
 		else
@@ -3917,6 +3917,9 @@ GEN_CONF:
 			if (nvram_match(strcat_r(prefix, "ampdu_rts", tmp), "0") &&
 				nvram_match(strcat_r(prefix, "nmode", tmp), "-1"))
 				eval("wl", "-i", ifname, "rtsthresh", "65535");
+
+			if (nvram_match(strcat_r(prefix, "frameburst_disable", tmp), "1"))
+				eval("wl", "-i", ifname, "frameburst", "0");
 #endif
 
 			wl_dfs_radarthrs_config(ifname, unit);

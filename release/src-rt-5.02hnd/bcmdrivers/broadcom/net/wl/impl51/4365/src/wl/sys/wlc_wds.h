@@ -1,7 +1,7 @@
 /*
  * Dynamic WDS module header file
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_wds.h 600588 2015-11-19 07:34:57Z $
+ * $Id: wlc_wds.h 665867 2016-10-19 08:33:38Z $
 */
 
 
@@ -30,6 +30,7 @@ extern int wlc_wds_create(wlc_info_t *wlc, struct scb *scb, uint flags);
 extern void wlc_scb_wds_free(struct wlc_info *wlc);
 extern bool wlc_wds_lazywds_is_enable(wlc_wds_info_t *mwds);
 extern int wlc_wds_create_link_event(wlc_info_t *wlc, struct scb *scb, bool isup);
+extern int wlc_wds_peers_connected(wlc_info_t *wlc);
 #ifdef DPSTA
 #if defined(STA) && defined(DWDS)
 extern struct scb *wlc_dwds_client_is_ds_sta(wlc_info_t *wlc, struct ether_addr *mac);

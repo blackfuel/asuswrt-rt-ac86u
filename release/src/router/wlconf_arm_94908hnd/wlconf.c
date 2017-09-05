@@ -1,7 +1,7 @@
 /*
  * Wireless Network Adapter Configuration Utility
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlconf.c 654151 2016-08-11 08:53:58Z $
+ * $Id: wlconf.c 679828 2017-01-17 17:37:52Z $
  */
 
 #include <typedefs.h>
@@ -145,7 +145,7 @@
 #endif
 #endif /* BCMDBG */
 
-#define CHECK_PSK(mode) ((mode) & (WPA_AUTH_PSK | WPA2_AUTH_PSK))
+#define CHECK_PSK(mode) ((mode) & (WPA_AUTH_PSK | WPA2_AUTH_PSK | WPA2_AUTH_FT))
 
 #ifdef MFP
 #define WL_MFP_DISABLE		0X00
@@ -247,6 +247,8 @@ wlconf_akm_options(char *prefix)
 			akm_ret_val |= WPA2_AUTH_UNSPECIFIED;
 		if (!strcmp(akm, "psk2"))
 			akm_ret_val |= WPA2_AUTH_PSK;
+		if (!strcmp(akm, "psk2ft"))
+			akm_ret_val |= WPA2_AUTH_PSK | WPA2_AUTH_FT;
 		if (!strcmp(akm, "brcm_psk"))
 			akm_ret_val |= BRCM_AUTH_PSK;
 	}
@@ -962,7 +964,7 @@ wlconf_security_options(char *name, char *prefix, int bsscfg_idx, bool id_supp,
 	int ret;
 	char tmp[100];
 	bool need_join_pref = FALSE;
-#define AUTOWPA(cfg) ((cfg) == (WPA_AUTH_PSK | WPA2_AUTH_PSK))
+#define AUTOWPA(cfg) ((cfg) == (WPA_AUTH_PSK | WPA2_AUTH_PSK | WPA2_AUTH_FT))
 
 	/* Set WSEC */
 	/*
@@ -1024,7 +1026,7 @@ wlconf_security_options(char *name, char *prefix, int bsscfg_idx, bool id_supp,
 	/* Set MFP */
 	val = WPA_AUTH_DISABLED;
 	WL_BSSIOVAR_GET(name, "wpa_auth", bsscfg_idx, &val, sizeof(val));
-	if (val & (WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED)) {
+	if (val & (WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED | WPA2_AUTH_FT)) {
 		int phytype;
 		char var[8];
 		int band;
@@ -1222,13 +1224,6 @@ wlconf_ampdu_amsdu_set(char *name, char prefix[PREFIX_LEN], int nmode, int btc_m
 			if (amsdu_option_val != OFF) { /* AMPDU (above) has priority over AMSDU */
 				if (rev.corerev >= 40) {
 					WL_IOVAR_SETINT(name, "amsdu", amsdu_option_val);
-#ifdef __CONFIG_DHDAP__
-					/* Only for 43602 dhdap, ampdu_mpdu=32 gives good tput
-					 * with amsdu but on BCM4365_CHIP it gets worst 20~30Mbps.
-					 */
-					if (is_dhd && rev.chipnum == BCM43602_CHIP_ID)
-						WL_IOVAR_SETINT(name, "ampdu_mpdu", 32);
-#endif
 				} else if (ampdu_option_val == OFF) {
 					WL_IOVAR_SETINT(name, "ampdu", OFF);
 					WL_IOVAR_SETINT(name, "amsdu", amsdu_option_val);
@@ -1900,6 +1895,88 @@ wlconf_get_wbd_slave_mode(char *ifname)
 	return 0;
 }
 #endif /* BCM_WBD */
+
+#ifdef WLHOSTFBT
+
+/* FBT related NVRAMs */
+#define NVRAM_FBT_ENABLED	"fbt"
+#define NVRAM_FBT_MDID		"fbt_mdid"
+#define NVRAM_FBT_OVERDS	"fbtoverds"
+#define NVRAM_FBT_REASSOC_TIME	"fbt_reassoc_time"
+#define NVRAM_FBT_AP		"fbt_ap"
+#define NVRAM_FBT_R0KH_ID	"r0kh_id"
+#define NVRAM_FBT_R1KH_ID	"r1kh_id"
+
+/* FBT Related IOVAR Names */
+#define WLCONF_IOVAR_FBT		"fbt"
+#define WLCONF_IOVAR_FBT_MDID		"fbt_mdid"
+#define WLCONF_IOVAR_FBT_OVERDS		"fbtoverds"
+#define WLCONF_IOVAR_FBT_R0KHID		"fbt_r0kh_id"
+#define WLCONF_IOVAR_FBT_R1KHID		"fbt_r1kh_id"
+#define WLCONF_IOVAR_FBT_REASSOC_TIME	"fbt_reassoc_time"
+#define WLCONF_IOVAR_FBT_AP		"fbt_ap"
+
+/* Configure the FBT based on NVRAMs */
+static int
+wlconf_set_fbt(struct bsscfg_list *bclist)
+{
+	int i, nvval, ret;
+	struct bsscfg_info *bsscfg = NULL;
+	char tmp[100];
+	char *strnvval = NULL;
+	struct ether_addr ea;
+
+	for (i = 0; i < bclist->count; i++) {
+		bsscfg = &bclist->bsscfgs[i];
+
+		/* Set FBT NVRAM and set wl */
+		nvval = atoi(nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_ENABLED, tmp)));
+		if (nvval <= 0) {
+			WLCONF_DBG("i[%d] name[%s] prefix[%s] FBT Disabled\n",
+				i, bsscfg->ifname, bsscfg->prefix);
+			continue;
+		}
+		WL_IOVAR_SETINT(bsscfg->ifname, WLCONF_IOVAR_FBT, nvval);
+		if (ret != 0) {
+			WLCONF_DBG("i[%d] name[%s] prefix[%s] FBT Set Failed. Skipping\n",
+				i, bsscfg->ifname, bsscfg->prefix);
+			continue;
+		}
+
+		/* Read fbtoverds NVRAM and set wl */
+		nvval = atoi(nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_OVERDS, tmp)));
+		WL_IOVAR_SETINT(bsscfg->ifname, WLCONF_IOVAR_FBT_OVERDS, nvval);
+
+		/* Read MDID NVRAM and set wl */
+		nvval = atoi(nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_MDID, tmp)));
+		WL_IOVAR_SETINT(bsscfg->ifname, WLCONF_IOVAR_FBT_MDID, nvval);
+
+		/* Read r0khid NVRAM and set wl */
+		strnvval = nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_R0KH_ID, tmp));
+		if (strlen(strnvval)) {
+			WL_IOVAR_SET(bsscfg->ifname, WLCONF_IOVAR_FBT_R0KHID, strnvval,
+				strlen(strnvval));
+		}
+
+		/* Set R1KHID as BSSID */
+		strnvval = nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_R1KH_ID, tmp));
+		if (strlen(strnvval)) {
+			ether_atoe(strnvval, &ea.octet[0]);
+			WL_IOVAR_SET(bsscfg->ifname, WLCONF_IOVAR_FBT_R1KHID, &ea, sizeof(ea));
+		}
+
+		/* Read fbt reassoc time NVRAM and set wl */
+		nvval = atoi(nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_REASSOC_TIME, tmp)));
+		WL_IOVAR_SETINT(bsscfg->ifname, WLCONF_IOVAR_FBT_REASSOC_TIME, nvval);
+
+		/* Read fbt ap NVRAM and set wl */
+		nvval = atoi(nvram_safe_get(strcat_r(bsscfg->prefix, NVRAM_FBT_AP, tmp)));
+		WL_IOVAR_SETINT(bsscfg->ifname, WLCONF_IOVAR_FBT_AP, nvval);
+	}
+
+	return 1;
+}
+#endif /* WLHOSTFBT */
 
 /* configure the specified wireless interface */
 int
@@ -2783,11 +2860,12 @@ wlconf(char *name)
 	}
 
 	/* on 160MHz effect dyn160 setting when capable */
-	if (cap_dyn160) {
-		val = atoi(nvram_safe_get(strcat_r(prefix, "dyn160", tmp)));
+	str = nvram_safe_get(strcat_r(prefix, "dyn160", tmp));
+	/* validate before setting */
+	if (cap_dyn160 && str != NULL && str[0] != '\0' && str[0] >= '0' && str[0] <= '1') {
+		val = atoi(str);
 		WL_IOVAR_SETINT(name, "dyn160", (uint32)val);
 	}
-
 #ifdef HND_ROUTER
 	str = nvram_safe_get(strcat_r(prefix, "phy_dyn_switch_th", tmp));
 	if (str != NULL && str[0] != '\0') {
@@ -2820,7 +2898,6 @@ wlconf(char *name)
 		}
 	}
 #endif
-
 	WL_IOVAR_GETINT(name, "chanspec", &prev_chspec);
 
 	/* Use chanspec to set the channel */
@@ -3249,11 +3326,16 @@ wlconf(char *name)
 	WL_IOVAR_SETINT(name, "bcn_rotate", val);
 
 	/* Set framebursting mode */
-	if (btc_mode == WL_BTC_PREMPT)
+	if (btc_mode == WL_BTC_PREMPT) {
 		val = FALSE;
-	else
+	} else {
 		val = nvram_match(strcat_r(prefix, "frameburst", tmp), "on");
+	}
 	WL_IOCTL(name, WLC_SET_FAKEFRAG, &val, sizeof(val));
+
+	/* Dynamic framebusrting */
+	val = nvram_match(strcat_r(prefix, "frameburst_override", tmp), "on");
+	WL_IOVAR_SETINT(name, "frameburst_override", val);
 
 	/* Set STBC tx and rx mode */
 	if (phytype == PHY_TYPE_N ||
@@ -3416,9 +3498,22 @@ wlconf(char *name)
 	/* Set phy periodic cal if nvram present. Otherwise, use driver defaults. */
 	str = nvram_get(strcat_r(prefix, "cal_period", tmp));
 	if (str) {
-		/* user specified phy cal period. */
+		/*
+		 *  If cal_period is "-1 / Auto"
+		 *     - For corerev >= 40, set cal_period to 0
+		 *     - For corerev < 40, use driver defaults.
+		 *  Else
+		 *     - Use the value specified in the nvram.
+		 */
 		val = atoi(str);
-		WL_IOVAR_SET(name, "cal_period", &val, sizeof(val));
+		if (val == -1) {
+			if (rev.corerev >= 40) {
+				val = 0;
+				WL_IOVAR_SET(name, "cal_period", &val, sizeof(val));
+			}
+		} else {
+			WL_IOVAR_SET(name, "cal_period", &val, sizeof(val));
+		}
 	}
 
 	/* Set antenna */
@@ -3558,15 +3653,11 @@ wlconf(char *name)
 
 		snprintf(tmp, sizeof(tmp), "acs_ifnames");
 		ptr = nvram_get(tmp);
-		if (ptr) {
-			if (!find_in_list(ptr, name)) {
-				snprintf(buf, sizeof(buf), "%s %s", ptr, name);
-				nvram_set(tmp, buf);
-			}
-		} else {
+		if (ptr)
+			snprintf(buf, sizeof(buf), "%s %s", ptr, name);
+		else
 			strncpy(buf, name, sizeof(buf));
-			nvram_set(tmp, buf);
-		}
+		nvram_set(tmp, buf);
 		WL_IOVAR_SETINT(name, "chanim_mode", CHANIM_EXT);
 		goto legacy_end;
 
@@ -4000,6 +4091,11 @@ wlconf_start(char *name)
 	}
 #endif /* __CONFIG_LBR_AGGR__ */
 #endif /* __CONFIG_DHDAP__ */
+
+#ifdef WLHOSTFBT
+	/* Set FBT */
+	wlconf_set_fbt(bclist);
+#endif /* WLHOSTFBT */
 
 	if (bclist != NULL)
 		free(bclist);

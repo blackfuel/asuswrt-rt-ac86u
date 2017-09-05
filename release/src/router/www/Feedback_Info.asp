@@ -187,7 +187,7 @@ function reset_diag_state(){
 <div id="fb_send_debug_log" style="display:none;">
 	<br>
 	<br>
-	<div class="feedback_info_0">Diagnostic DSL debug log capture completed.</div>
+	<div class="feedback_info_0">The debug log of diagnostic DSL captured.</div>
 	<br>
 	<br>
 	<div class="feedback_info_1">Please send us an email directly ( <a id="Email_subject" href="" target="_top" style="color:#FFCC00;">xdsl_feedback@asus.com</a> ). Simply copy from following text area and paste as mail content. <br><div onClick="reset_diag_state();" style="text-decoration: underline; font-family:Lucida Console; cursor:pointer;">Click here to download the debug log and add as mail attachment.</div></div>

@@ -307,7 +307,6 @@ extern void add_ifttt_flag(void);
 #endif
 
 #ifdef RTCONFIG_HTTPS
-extern char *pwenc(const char *input);
 extern int check_model_name(void);
 #endif
 
@@ -326,5 +325,6 @@ extern char* ipisdomain(char* hostname, char* str);
 extern int referer_check(char* referer, int fromapp_flag);
 extern int check_noauth_referrer(char* referer, int fromapp_flag);
 extern char current_page_name[128];
+extern int gen_guestnetwork_pass(char *key, size_t size);
 
 #endif /* _httpd_h_ */

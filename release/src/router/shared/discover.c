@@ -429,6 +429,7 @@ int raw_packet(struct dhcpMessage *payload, u_int32_t source_ip, int source_port
 	socklen_t optlen;
 	struct sockaddr_ll dest;
 	struct udp_dhcp_packet packet;
+	int final_len;
 
 	if ((fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
 		goto ret_sock;
@@ -459,24 +460,31 @@ int raw_packet(struct dhcpMessage *payload, u_int32_t source_ip, int source_port
 		close(fd);
 		return -1;
 	}
-																	       
+
+	final_len = end_option(payload->options) + 1;				/* the length of options */
+	final_len += sizeof(packet.data) - sizeof(packet.data.options);		/* the length of whole dhcp packet */
+	if(final_len < 300)
+		final_len = 300;						/* reduce the sizeof dhcp packet, but the BOOTP content have NOT to below 300 bytes */
+	final_len += sizeof(packet.ip) + sizeof(packet.udp);			/* the final (real) length of whole packet */
+
 	packet.ip.protocol = IPPROTO_UDP;
 	packet.ip.saddr = source_ip;
 	packet.ip.daddr = dest_ip;
 	packet.udp.source = htons(source_port);
 	packet.udp.dest = htons(dest_port);
-	packet.udp.len = htons(sizeof(packet.udp) + sizeof(struct dhcpMessage)); /* cheat on the psuedo-header */
-	packet.ip.tot_len = packet.udp.len;
+	packet.udp.len = htons(final_len - sizeof(packet.ip)); /* cheat on the psuedo-header */
 	memcpy(&(packet.data), payload, sizeof(struct dhcpMessage));
-	packet.udp.check = checksum(&packet, sizeof(struct udp_dhcp_packet));
-																	       
-	packet.ip.tot_len = htons(sizeof(struct udp_dhcp_packet));
+
+	packet.ip.tot_len = packet.udp.len;
+	packet.udp.check = checksum(&packet, final_len);
+	packet.ip.tot_len = htons(final_len);
+
 	packet.ip.ihl = sizeof(packet.ip) >> 2;
 	packet.ip.version = IPVERSION;
 	packet.ip.ttl = ttl;
 	packet.ip.check = checksum(&(packet.ip), sizeof(packet.ip));
 																	       
-	result = sendto(fd, &packet, sizeof(struct udp_dhcp_packet), 0, (struct sockaddr *) &dest, sizeof(dest));
+	result = sendto(fd, &packet, final_len, 0, (struct sockaddr *) &dest, sizeof(dest));
 	if (result <= 0) {
 		//DEBUG(LOG_ERR, "write on socket failed: %s", strerror(errno));
 		fprintf(stderr, "write on socket failed: %s", strerror(errno));
@@ -539,16 +547,34 @@ int get_raw_packet(struct dhcpMessage *payload, int fd)
 eprintf("--- get_raw_packet: couldn't read on raw listening socket! ---\n");
 		return -1;
 	}
-																	       
+#if 0
+	{
+		int i;
+		char buf[256], *p = buf;
+		for(i=0; i<bytes; i++) {
+			unsigned char data = ((unsigned char *)&packet)[i];
+			if((i & 0xf) == 0x0) p += sprintf(p, "%04x: %02x", i, data);
+			else if((i & 0xf) == 0x8) p += sprintf(p, " - %02x", data);
+			else p += sprintf(p, " %02x", data);
+			if((i & 0xf) == 0xf) {
+				eprintf("%s\n", buf);
+				p = buf;
+			}
+		}
+		if(p != buf)
+			eprintf("%s\n", buf);
+	}
+#endif
+
 	if (bytes < (int) (sizeof(struct iphdr) + sizeof(struct udphdr))) {
 		//DEBUG(LOG_INFO, "message too short, ignoring");
-eprintf("--- get_raw_packet: message too short! ---\n");
+eprintf("--- get_raw_packet: message too short! bytes(%d) ---\n", bytes);
 		return -2;
 	}
 																	       
 	if (bytes < ntohs(packet.ip.tot_len)) {
 		//DEBUG(LOG_INFO, "Truncated packet");
-eprintf("--- get_raw_packet: Truncated packet! ---\n");
+eprintf("--- get_raw_packet: Truncated packet! bytes(%d) tot_len(%d)---\n", bytes, ntohs(packet.ip.tot_len));
 		//return -2;
 		return -100;
 	}

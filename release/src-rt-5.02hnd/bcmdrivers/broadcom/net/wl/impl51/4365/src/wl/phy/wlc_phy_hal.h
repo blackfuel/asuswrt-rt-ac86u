@@ -2,7 +2,7 @@
  * Required functions exported by the PHY module (phy-dependent)
  * to common (os-independent) driver code.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_phy_hal.h 654130 2016-08-11 06:59:54Z $
+ * $Id: wlc_phy_hal.h 676345 2016-12-21 15:16:06Z $
  */
 
 #ifndef _wlc_phy_h_

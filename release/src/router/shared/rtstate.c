@@ -65,6 +65,37 @@ void del_rc_support(char *features)
 	}
 }
 
+#if defined(RTCONFIG_DUALWAN)
+/**
+ * is_nat_enabled() for dual/multiple WAN.
+ * In Single WAN mode or Dual WAN Fail-Over/Fail-Back mode, check primary WAN.
+ * In Dual WAN load-balance mode, check all WAN.
+ */
+int is_nat_enabled(void)
+{
+	int i, nr_nat = 0, sw_mode = nvram_get_int("sw_mode");
+	char prefix[sizeof("wanX_XXXXXX")];
+
+	if (sw_mode != SW_MODE_ROUTER && sw_mode != SW_MODE_HOTSPOT)
+		return 0;
+
+	if (get_nr_wan_unit() >= 2 && nvram_match("wans_mode", "lb")) {
+		/* Dual WAN LB, check all WAN unit. */
+		for (i = WAN_UNIT_FIRST; i < WAN_UNIT_MAX; ++i) {
+			snprintf(prefix, sizeof(prefix), "wan%d_", i);
+			if (nvram_pf_get_int(prefix, "nat_x") == 1)
+				nr_nat++;
+		}
+	} else {
+		/* Single WAN/Dual WAN FO/FB, check primary WAN unit only. */
+		snprintf(prefix, sizeof(prefix), "wan%d_", wan_primary_ifunit());
+		nr_nat = nvram_pf_get_int(prefix, "nat_x");
+	}
+
+	return (nr_nat > 0)? 1 : 0;
+}
+#endif
+
 int get_wan_state(int unit){
 	char tmp[100], prefix[16];
 
@@ -430,11 +461,22 @@ wan_primary_ifunit(void)
 	return 0;
 }
 
+#ifdef RTCONFIG_REALTEK
+/* The fuction is avoiding watchdog segfault on RP-AC68U.
+ * This is a workaround solution.
+ * */
+int
+rtk_wan_primary_ifunit(void)
+{
+	return wan_primary_ifunit();
+}
+#endif
+
 int
 wan_primary_ifunit_ipv6(void)
 {
 #ifdef RTCONFIG_DUALWAN
-#if 0
+#if defined(RTCONFIG_MULTIWAN_CFG)
 	int unit = wan_primary_ifunit();
 
 	if (!strstr(nvram_safe_get("wans_dualwan"), "none")
@@ -789,34 +831,81 @@ int get_nr_wan_unit(void)
 
 	return c;
 }
+#endif	/* RTCONFIG_DUALWAN */
 
-int get_gate_num(void){
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+/**
+ * Return number of enabled guest network of one/all band.
+ * @band:
+ *  >= 0:	calculate number of enabled guest network of specified band.
+ *  <  0:	calculate number of enabled guest network of all band.
+ * @return:	number of enabled guest network of one/all band.
+ */
+int get_nr_guest_network(int band)
+{
+	int i, j, c = 0, mode = get_model();
+	char prefix[16];
+
+	if (__repeater_mode(mode) || __mediabridge_mode(mode))
+		return 0;
+
+	/* 0:	2G
+	 * 1:	5G
+	 * 2:	5G-2, may not exist.
+	 * 3:	Wigig=11ad, may not exist.
+	 */
+	for (i = 0; i < 4; ++i) {
+		if (band >= 0 && band != i)
+			continue;
+
+		for (j = 1; j < MAX_NO_MSSID; ++j) {
+			snprintf(prefix, sizeof(prefix), "wl%d.%d_", i, j);
+			if (nvram_pf_match(prefix, "bss_enabled", "1"))
+				c++;
+		}
+	}
+
+	return c;
+}
+
+int get_gate_num(void)
+{
+	char prefix[] = "wanXXXXXXXXXX_", link_wan[sizeof("link_wanXXXXXX")];
 	char wan_ip[32], wan_gate[32];
 	int unit;
 	int gate_num = 0;
-
-	for(unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; ++unit){ // Multipath
+	for (unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; ++unit){ // Multipath
 		snprintf(prefix, sizeof(prefix), "wan%d_", unit);
-		snprintf(wan_ip, sizeof(wan_ip), "%s", nvram_safe_get(strcat_r(prefix, "ipaddr", tmp)));
-		snprintf(wan_gate, sizeof(wan_gate), "%s", nvram_safe_get(strcat_r(prefix, "gateway", tmp)));
+		strncpy(wan_ip, nvram_pf_safe_get(prefix, "ipaddr"), 32);
+		strncpy(wan_gate, nvram_pf_safe_get(prefix, "gateway"), 32);
 
 		// when wan_down().
 		if(!is_wan_connect(unit))
 			continue;
 
-		if(strlen(wan_ip) <= 0 || !strcmp(wan_ip, "0.0.0.0"))
-			continue;
+		/* We need to check link_wanX instead of wanX_state_t if this WAN unit is static IP. */
+		if (nvram_pf_match(prefix, "proto", "static") && dualwan_unit__nonusbif(unit)) {
+			if (unit == WAN_UNIT_FIRST)
+				strlcpy(link_wan, "link_wan", sizeof(link_wan));
+			else
+				snprintf(link_wan, sizeof(link_wan), "link_wan%d", unit);
+
+			if (!nvram_match(link_wan, "1"))
+				continue;
+		}
 
 		if(strlen(wan_gate) <= 0 || !strcmp(wan_gate, "0.0.0.0"))
 			continue;
 
-		++gate_num;
-	}
+		if(strlen(wan_ip) <= 0 || !strcmp(wan_ip, "0.0.0.0"))
+			continue;
 
+		++gate_num;
+#ifndef	RTCONFIG_DUALWAN
+		break;
+#endif	/* RTCONFIG_DUALWAN */
+	}
 	return gate_num;
 }
-#endif	/* RTCONFIG_DUALWAN || RTCONFIG_MULTICAST_IPTV */
 
 // no more to use
 /*
@@ -951,38 +1040,107 @@ int get_wantype_by_modemunit(int modem_unit){
 		return WANS_DUALWAN_IF_NONE;
 }
 
-#if defined(RTCONFIG_CONCURRENTREPEATER)
-char ssid[64]={0};
-char *get_default_ssid(int unit, int band_num)
-{
-	char *result = NULL;
-	int i=0;
-	unsigned char ssidbase[16];
+char ssid[64] = { 0 };
+char ssid2[64] = { 0 };
 
-	char *macp = NULL;
+/**
+ * Get default ssid.
+ * @unit:	wireless unit
+ * @subunit:	wireless subunit
+ * @return:	pointer to a char array which contains result, default ssid.
+ */
+char *get_default_ssid(int unit, int subunit)
+{
+	const int band_num = num_of_wl_if();
+	char ssidbase[16], *macp = NULL;
 	unsigned char mac_binary[6];
+	const char *post_5g = "-1", *post_5g2 = "-2", *post_guest = "_Guest";	/* postfix for RTCONFIG_NEWSSID_REV2 case */
+
+	if (unit < 0 || unit >= WL_NR_BANDS || subunit < 0) {
+		dbg("%s: invalid parameter. (unit %d, subunit %d)\n",
+			__func__, unit, subunit);
+	}
+
+	/* Adjust postfix for different conditions. */
+#ifdef GTAC5300
+	post_5g = "";
+	post_5g2 = "_Gaming";
+#elif !defined(RTCONFIG_NEWSSID_REV2) && !defined(RTCONFIG_SINGLE_SSID)
+	post_5g = "";
+#endif
+
+#if defined(RTCONFIG_SINGLE_SSID) && defined(RTCONFIG_SSID_AMAPS)
+	post_guest = "_AMAPS_Guest";
+#endif
+
 
 	memset(ssid, 0x0, sizeof(ssid));
-
 #if defined(RTCONFIG_NEWSSID_REV2)
-
 	macp = get_2g_hwaddr();
 	ether_atoe(macp, mac_binary);
-	sprintf((char *)ssidbase, "ASUS_%02X", mac_binary[5]);
+#if defined(RTAC58U)
+	if (!strncmp(nvram_safe_get("territory_code"), "SP", 2))
+		sprintf((char *)ssidbase, "Spirit_%02X", mac_binary[5]);
+	else
+#endif
+		sprintf((char *)ssidbase, "%s_%02X", SSID_PREFIX, mac_binary[5]);
+#elif defined(RTCONFIG_SINGLE_SSID)
+	macp = get_2g_hwaddr();
+	ether_atoe(macp, mac_binary);
+#if defined(RTCONFIG_SSID_AMAPS)
+	sprintf((char *)ssidbase, "%s_%02X_AMAPS", SSID_PREFIX, mac_binary[5]);
+#else
+	sprintf((char *)ssidbase, "%s_%02X", SSID_PREFIX, mac_binary[5]);
+#endif /* RTCONFIG_SSID_AMAPS */
 #else
 	macp = get_lan_hwaddr();
 	ether_atoe(macp, mac_binary);
 	sprintf((char *)ssidbase, "%s_%02X", get_productid(), mac_binary[5]);
-#endif	
-
-
-#if defined(RTCONFIG_NEWSSID_REV2)
-			sprintf((char *)ssid, "%s%s", ssidbase, unit ? (unit == 2 ? "_5G-2" : (band_num > 2 ? "_5G-1" : "_5G")) : (band_num > 1 ? "_2G" : ""));
-#else
-			sprintf((char *)ssid, "%s%s", ssidbase, unit ? (unit == 2 ? "_5G-2" : "_5G") : "_2G");
 #endif
 
+	strlcpy(ssid, ssidbase, sizeof(ssid));
+#if !defined(RTCONFIG_SINGLE_SSID)	/* including RTCONFIG_NEWSSID_REV2 */
+	switch (unit) {
+	case WL_2G_BAND:
+#if defined(RTCONFIG_NEWSSID_REV2)
+		if (band_num > 1)
+#endif
+			strlcat(ssid, "_2G", sizeof(ssid));
+		break;
+	case WL_5G_BAND:
+		strlcat(ssid, "_5G", sizeof(ssid));
+		if (band_num > 2 &&
+		    nvram_get(wl_nvname("nband", WL_5G_2_BAND, 0)) != NULL)
+		{
+			strlcat(ssid, post_5g, sizeof(ssid));
+		}
+		break;
+	case WL_5G_2_BAND:
+		strlcat(ssid, "_5G", sizeof(ssid));
+		strlcat(ssid, post_5g2, sizeof(ssid));
+		break;
+	case WL_60G_BAND:
+		strlcat(ssid, "_60G", sizeof(ssid));
+		break;
+	default:
+		dbg("%s: Unknown wl_unit (%d)\n", __func__, unit);
+		strlcat(ssid, "_UNKNOWN", sizeof(ssid));
+	}
+#endif
+
+	/* Handle guest network SSID. */
+	if (subunit) {
+#if defined(RTCONFIG_SSID_AMAPS)
+		/* RTCONFIG_SSID_AMAPS use the same guest network SSID rule as SINGLE_SSID */
+		snprintf(ssid, sizeof(ssid), "%s_AMAPS_Guest", SSID_PREFIX);
+#else
+		strlcat(ssid, post_guest, sizeof(ssid));
+#endif
+		if (subunit > 1) {
+			sprintf(ssid2, "%s%d", ssid, subunit);
+			strlcpy(ssid, ssid2, sizeof(ssid));
+		}
+	}
 	fprintf(stderr,"###### Default ssid = %s\n", ssid);
 	return ssid;
 }
-#endif

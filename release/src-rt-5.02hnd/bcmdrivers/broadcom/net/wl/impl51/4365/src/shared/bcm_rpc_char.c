@@ -2,7 +2,7 @@
  * Implementation of a bcm_rpc_tp based on the
  * bcm_rpc_char simple character device bus API
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

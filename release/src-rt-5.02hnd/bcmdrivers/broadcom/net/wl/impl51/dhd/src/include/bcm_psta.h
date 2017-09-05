@@ -1,7 +1,7 @@
 /*
  * BCM PSTA protocol processing
  * shared code for PSTA protocol processing in dhd & wl
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,13 +36,13 @@ typedef int32 (*bcm_psta_dhcp_proc_cb)(void *psta_cb, void *cfg_cb,
 #define	BCM_PSTA_SET_ALIAS(cli_mac, mod_mac, ea) \
 do { \
 	ASSERT(BCM_EA_CMP((cli_mac), (ea))); \
-	*((uint8 *)(ea)) = *((uint8 *)(mod_mac)); \
+	memcpy(ea, mod_mac, ETHER_ADDR_LEN); \
 } while (0)
 
 #define	BCM_PSTA_CLR_ALIAS(cli_mac, mod_mac, ea) \
 do { \
 	ASSERT(BCM_EA_CMP((mod_mac), (ea))); \
-	*((uint8 *)(ea)) = *((uint8 *)(cli_mac)); \
+	memcpy(ea, cli_mac, ETHER_ADDR_LEN); \
 } while (0)
 
 #define	BCM_PSTA_IS_ALIAS(mod_mac, ea)	BCM_EA_CMP((mod_mac), (ea))

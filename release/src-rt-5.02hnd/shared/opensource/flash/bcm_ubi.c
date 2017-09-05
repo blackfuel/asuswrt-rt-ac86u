@@ -128,11 +128,6 @@ RETRY:
 
                 if ( (!vid->data_size) || (getCrc32((void *)buf + be32_to_cpu(ec->data_offset), be32_to_cpu(vid->data_size), CRC_INIT) == be32_to_cpu(vid->data_crc)) )
                 { // if dynamic volume or data crc matches
-                    if (dataP) // return first block which matches criteria if that's all that's requested
-                    {
-                       *dataP = (char *)start + (i * blk_size);
-                       return(1);
-                    }
 
                     retry = 1; // found our block, allow for spin through blocks again if we get to the end just in case they are out of order
 
@@ -394,7 +389,12 @@ CONT:
                             }
 
                             if (writeblk)
+                            {
+                                if (dataP) // return block which matches found entry
+                                    *dataP = (char *)start + (i * blk_size);
+
                                 return(status);
+			    }
                             else if (crc_calc == crc_grab)
                                 return(status);
                             else

@@ -196,7 +196,18 @@ typedef struct pki_ca_s{
 }pki_ca_t;
 
 extern void rc_ipsec_config_init();
-extern void rc_ipsec_topology_set();
+
+#if defined(RTCONFIG_QUICKSEC)
+typedef struct qs_virtual_ip_s{
+    char ip_start[SZ_MIN];
+    char ip_end[SZ_MIN];
+    char subnet[SZ_MIN];
+}qs_virtual_ip_t;
+
+//extern void *get_virtual_ip_format(char *virtual_subnet);
+extern void rc_ipsec_topology_set_XML();
+#endif
+
 extern void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type);
 
 extern void rc_ipsec_ca_import();

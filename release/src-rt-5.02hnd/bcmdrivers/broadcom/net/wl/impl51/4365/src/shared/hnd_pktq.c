@@ -1,7 +1,7 @@
 /*
  * HND generic pktq operation primitives
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -463,6 +463,88 @@ done:
 
 	return ret;
 }
+
+
+static void
+_pktq_pfilter(struct pktq *pq, int prec, pktq_filter_t fltr, void* fltr_ctx,
+              defer_free_pkt_fn_t defer, void *defer_ctx)
+{
+	struct pktq_prec wq;
+	struct pktq_prec *q;
+	void *p;
+	uint enq_len = 0;
+
+	/* protect shared resource */
+	if (HND_PKTQ_MUTEX_ACQUIRE(&pq->mutex, OSL_EXT_TIME_FOREVER) != OSL_EXT_SUCCESS)
+		return;
+
+	/* move the prec queue aside to a work queue */
+	q = &pq->q[prec];
+
+	wq = *q;
+
+	q->head = NULL;
+	q->tail = NULL;
+	q->len = 0;
+
+#ifdef WL_TXQ_STALL
+	q->dequeue_count += wq.len;
+#endif
+
+	/* protect shared resource */
+	if (HND_PKTQ_MUTEX_RELEASE(&pq->mutex) != OSL_EXT_SUCCESS)
+		return;
+
+	/* start with the head of the work queue */
+	while ((p = wq.head) != NULL) {
+		/* unlink the current packet from the list */
+		wq.head = PKTLINK(p);
+		PKTSETLINK(p, NULL);
+		wq.len--;
+
+#ifdef WL_TXQ_STALL
+		wq.dequeue_count++;
+#endif
+
+		/* call the filter function on current packet */
+		ASSERT(fltr != NULL);
+		switch ((*fltr)(fltr_ctx, p)) {
+		case PKT_FILTER_NOACTION:
+			/* put this packet back */
+			pktq_penq(pq, prec, p);
+			break;
+
+		case PKT_FILTER_DELETE:
+			/* delete this packet */
+			ASSERT(defer != NULL);
+			(*defer)(defer_ctx, p);
+			enq_len++;
+			break;
+
+		case PKT_FILTER_REMOVE:
+			/* pkt already removed from list */
+			break;
+
+		default:
+			ASSERT(0);
+			break;
+		}
+	}
+
+	ASSERT(wq.len == 0);
+}
+
+
+void
+pktq_pfilter(struct pktq *pq, int prec, pktq_filter_t fltr, void* fltr_ctx,
+	defer_free_pkt_fn_t defer, void *defer_ctx, flush_free_pkt_fn_t flush, void *flush_ctx)
+{
+	_pktq_pfilter(pq, prec, fltr, fltr_ctx, defer, defer_ctx);
+
+	ASSERT(flush != NULL);
+	(*flush)(flush_ctx);
+}
+
 
 bool
 pktq_init(struct pktq *pq, int num_prec, int max_len)

@@ -1,7 +1,7 @@
 /*
  * MU-MIMO receive module for Broadcom 802.11 Networking Adapter Device Drivers
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -423,6 +423,10 @@ wlc_murx_dump(wlc_murx_info_t *mu_info, struct bcmstrbuf *b)
 			}
 		}
 	}
+
+	/* To avoid too many rates in one dump */
+	wlc_murx_clear_dump(mu_info);
+
 	return BCME_OK;
 }
 #endif /* BCMDBG || WLDUMP */

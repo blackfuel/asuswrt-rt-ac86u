@@ -4,7 +4,7 @@
  *
  * VHT support
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_vht.h 648746 2016-07-13 14:12:44Z $
+ * $Id: wlc_vht.h 675653 2016-12-16 14:27:14Z $
  */
 
 
@@ -142,6 +142,7 @@ extern chanspec_t wlc_vht_find_upgrade_chanspec(wlc_vht_info_t *vhti, wlc_bsscfg
 extern uint8 wlc_vht_get_opermode_from_chspec(wlc_vht_info_t *vhti, chanspec_t chanspec);
 extern void wlc_send_action_vht_oper_mode(wlc_vht_info_t *vhti, wlc_bsscfg_t *bsscfg,
 	const struct ether_addr *ea, uint8 oper_mode_new);
+extern uint16 wlc_vht_get_rx_mcsmap(wlc_vht_info_t *vhti);
 
 #ifdef WLTXMONITOR
 extern INLINE void

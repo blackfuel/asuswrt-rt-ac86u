@@ -4,7 +4,7 @@
  *
  * Definitions subject to change without notice.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,7 +18,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: wlioctl.h 654915 2016-08-17 06:31:47Z $
+ * $Id: wlioctl.h 680565 2017-01-20 10:30:43Z $
  */
 
 #ifndef _wlioctl_h_
@@ -87,6 +87,16 @@ typedef struct wl_dfs_forced_params {
 	uint16 version;
 	chanspec_list_t chspec_list;
 } wl_dfs_forced_t;
+
+typedef struct {
+	uint ver;
+	uint len;
+	int rssi_th[3];
+	uint8 rssi_gain_80[4];
+	uint8 rssi_gain_160[4];
+} wl_dyn_switch_th_t;
+
+#define WL_PHY_DYN_SWITCH_TH_VERSION 1
 
 #define DFS_PREFCHANLIST_VER 0x01
 #define WL_CHSPEC_LIST_FIXED_SIZE	OFFSETOF(chanspec_list_t, list)
@@ -2160,6 +2170,7 @@ typedef struct {
 	uint32	txdatamcast;	/* Number of TX multicast data packets */
 	uint32	txdatabcast;	/* Number of TX broadcast data packets */
 	uint32	psmxwds;	/* Number of PSMx watchdogs */
+	uint32	txchain_shutdown; /* Number of Txchain shutdowns due to over temperature */
 } wl_cnt_wlc_t;
 
 /* MACXSTAT counters for ucodex (corerev >= 64) */
@@ -4980,6 +4991,8 @@ typedef struct {
 /* structure/defines for selective mgmt frame (smf) stats support */
 
 #define SMFS_VERSION 1
+#define SMFS_8021x_AUTHORIZE	0xFFFB
+#define SMFS_8021x_DEAUTHORIZE	0xFFFC
 /* selected mgmt frame (smf) stats element */
 typedef struct wl_smfs_elem {
 	uint32 count;
@@ -5012,6 +5025,8 @@ typedef enum smfs_type {
 	SMFS_TYPE_DISASSOC_RX,
 	SMFS_TYPE_DEAUTH_TX,
 	SMFS_TYPE_DEAUTH_RX,
+	SMFS_TYPE_AUTHORIZE,
+	SMFS_TYPE_DEAUTHORIZE,
 	SMFS_TYPE_MAX
 } smfs_type_t;
 
@@ -6719,6 +6734,72 @@ typedef enum {
 #define M_RXTSFTMRVAL_WD2		(20)
 #define M_RXTSFTMRVAL_WD3		(21)
 #define BCNTRIM_STATS_NUMPARAMS	(22) /* 16 bit words */
+
+/** PTK key maintained per SCB */
+#define RSN_TEMP_ENCR_KEY_LEN 16
+typedef struct wpa_ptk {
+	uint8 kck[RSN_KCK_LENGTH]; /**< EAPOL-Key Key Confirmation Key (KCK) */
+	uint8 kek[RSN_KEK_LENGTH]; /**< EAPOL-Key Key Encryption Key (KEK) */
+	uint8 tk1[RSN_TEMP_ENCR_KEY_LEN]; /**< Temporal Key 1 (TK1) */
+	uint8 tk2[RSN_TEMP_ENCR_KEY_LEN]; /**< Temporal Key 2 (TK2) */
+} wpa_ptk_t;
+
+/** GTK key maintained per SCB */
+typedef struct wpa_gtk {
+	uint32 idx;
+	uint32 key_len;
+	uint8  key[DOT11_MAX_KEY_SIZE];
+} wpa_gtk_t;
+
+/** FBT Auth Response Data structure */
+typedef struct wlc_fbt_auth_resp {
+	uint8 macaddr[ETHER_ADDR_LEN]; /**< station mac address */
+	uint8 pad[2];
+	uint8 pmk_r1_name[WPA2_PMKID_LEN];
+	wpa_ptk_t ptk; /**< pairwise key */
+	wpa_gtk_t gtk; /**< group key */
+	uint32 ie_len;
+	uint8 status;  /**< Status of parsing FBT authentication
+					Request in application
+					*/
+	uint8 ies[1]; /**< IEs contains MDIE, RSNIE,
+					FBTIE (ANonce, SNonce,R0KH-ID, R1KH-ID)
+					*/
+} wlc_fbt_auth_resp_t;
+
+/** FBT Action Response frame */
+typedef struct wlc_fbt_action_resp {
+	uint16 version; /**< structure version */
+	uint16 length; /**< length of structure */
+	uint8 macaddr[ETHER_ADDR_LEN]; /**< station mac address */
+	uint8 data_len;  /**< len of ie from Category */
+	uint8 data[1]; /**< data contains category, action, sta address, target ap,
+						status code,fbt response frame body
+						*/
+} wlc_fbt_action_resp_t;
+
+/* Fast BSS Transition parameter configuration */
+#define FBT_PARAM_CURRENT_VERSION 0
+
+typedef struct _wl_fbt_params {
+	uint16	version;		/* version of the structure
+					* as defined by FBT_PARAM_CURRENT_VERSION
+					*/
+	uint16	length;			/* length of the entire structure */
+
+	uint16 param_type;		/* type of parameter defined below */
+	uint16 param_len;		/* length of the param_value */
+	uint8 param_value[1];		/* variable length */
+} wl_fbt_params_t;
+
+#define WL_FBT_PARAM_TYPE_RSNIE			0
+#define WL_FBT_PARAM_TYPE_FTIE			0x1
+#define WL_FBT_PARAM_TYPE_SNONCE		0x2
+#define WL_FBT_PARAM_TYPE_MDE			0x3
+#define WL_FBT_PARAM_TYPE_PMK_R0_NAME		0x4
+#define WL_FBT_PARAM_TYPE_R0_KHID		0x5
+#define WL_FBT_PARAM_TYPE_R1_KHID		0x6
+#define WL_FBT_PARAM_TYPE_FIRST_INVALID		0x7
 
 #define MACDBG_PMAC_ADDR_INPUT_MAXNUM 16
 #define MACDBG_PMAC_OBJ_TYPE_LEN 8

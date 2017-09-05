@@ -43,7 +43,7 @@
 /* NOTIFICATION DATABASE DEFINE SETTING 
 ----------------------------------------*/
 #define TYPE_SHIFT              16
-#define NOTIFY_DB_QLEN          200
+#define NOTIFY_DB_QLEN          400
 #define NOTIFY_DB_DEBUG         "/tmp/NTD_DEBUG"
 
 #ifdef ASUSWRT_SDK /* ASUSWRT SDK */
@@ -72,16 +72,18 @@
 #define ACTION_NOTIFY_WEBUI     0x01
 #define ACTION_NOTIFY_EMAIL     0x02
 #define ACTION_NOTIFY_APP       0x04
-#define ACTION_NOTIFY_WEEKLY    0x08
+#define ACTION_NOTIFY_IFTTT     0x08
+#define ACTION_NOTIFY_WEEKLY    0x10
 
-#define ACTION_MULTI_ALL        ACTION_NOTIFY_WEBUI | ACTION_NOTIFY_APP | ACTION_NOTIFY_EMAIL | ACTION_NOTIFY_WEEKLY
+#define ACTION_MULTI_ALL        ACTION_NOTIFY_WEBUI | ACTION_NOTIFY_APP | ACTION_NOTIFY_EMAIL | ACTION_NOTIFY_IFTTT | ACTION_NOTIFY_WEEKLY
 #define ACTION_MULTI_UIAPP      ACTION_NOTIFY_WEBUI | ACTION_NOTIFY_APP
 
 /* ACTION BIT OPERATION */
 #define NC_ACT_WEBUI_BIT        0
 #define NC_ACT_EMAIL_BIT        1
 #define NC_ACT_APP_BIT          2
-#define NC_ACT_WEEKLY_BIT       3
+#define NC_ACT_IFTTT_BIT        3
+#define NC_ACT_WEEKLY_BIT       4
 
 #define NC_ACTION_SET(value,x) ( (value) |=  (0x1 << x))
 #define NC_ACTION_CLR(value,x) ( (value) &= ~(0x1 << x))

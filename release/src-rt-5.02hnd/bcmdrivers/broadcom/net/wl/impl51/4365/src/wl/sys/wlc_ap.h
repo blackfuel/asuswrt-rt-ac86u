@@ -1,7 +1,7 @@
 /*
  * AP Module Public Interface
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_ap.h 567648 2015-06-30 05:58:36Z $
+ * $Id: wlc_ap.h 664112 2016-10-10 13:27:40Z $
  */
 #ifndef _WLC_AP_H_
 #define _WLC_AP_H_
@@ -151,6 +151,9 @@ extern bool wlc_radio_pwrsave_bcm_cancelled(const wlc_ap_info_t *ap);
 
 extern void wlc_bss_up(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg);
 
+extern int wlc_ap_sendauth(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
+	struct scb *scb, int auth_alg, int auth_seq, int status,
+	uint8 *challenge_text, bool short_preamble, bool send_auth);
 #if defined(TXQ_MUX)
 extern bool wlc_bcmc_enqueue(wlc_info_t *wlc, wlc_bsscfg_t *cfg, void *pkt, uint prec);
 extern void wlc_bcmc_stop_mux_sources(wlc_bsscfg_t *cfg);

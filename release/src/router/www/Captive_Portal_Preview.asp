@@ -66,6 +66,7 @@
 .splash_template_terms_service_cb {
 	width: 15%;
 	float: left;
+	margin-top: 2%;
 }
 .splash_template_terms_service_text {
 	width: 85%;
@@ -119,6 +120,16 @@
 	background-size: 100%;
 	position: absolute;
 	background-repeat: no-repeat;
+}
+.splash_template_passcode {
+	background-color: rgba(74, 144, 226, 0.5);
+	border-radius: 4px;
+	width: 90%;
+	border: 0px;
+	color: #FFFFFF;
+	padding-left: 2%;
+	font-size: 12px;
+	margin-left: 4%;
 }
 </style>
 <script>
@@ -273,6 +284,10 @@ function initial() {
 		control_bt_status();
 	}
 
+	if(opener.document.form.cb_passcode.checked == false) {
+		document.getElementById("splash_template_passcode").style.display = "none";
+	}
+
 	resize_component()
 }
 function resize_component() {
@@ -340,6 +355,11 @@ function resize_component() {
 	document.getElementById('splash_template_continue').style.fontSize = (12 * _ratio) + 'px';
 	document.getElementById('splash_template_continue').style.lineHeight = (25 * _ratio) + 'px';
 	document.getElementById('splash_template_continue').style.margin = '' + (15 * _ratio) + 'px auto';
+
+	//splash_template_passcode
+	document.getElementById('splash_template_passcode').style.height = (20 * _ratio) + 'px';
+	document.getElementById('splash_template_passcode').style.fontSize = (12 * _ratio) + 'px';
+	document.getElementById('splash_template_passcode').style.lineHeight = (20 * _ratio) + 'px';
 }
 function control_bt_status() {
 	var _obj = document.getElementById('cbTermService');
@@ -351,18 +371,29 @@ function control_bt_status() {
 	}
 }
 function continue_action() {
+	var passcode_status = false;
+	if(opener.document.form.cb_passcode.checked == true) {
+		passcode_status = true;
+		var _obj_value = document.getElementById('splash_template_passcode').value.trim();
+		if(_obj_value == '') {
+			alert("<#JS_fieldblank#>");
+			document.getElementById('splash_template_passcode').focus();
+			return false;
+		}
+	}
+
 	if(opener.document.form.cb_terms_service.checked == true) {
 		var _obj = document.getElementById('cbTermService');
-		if(_obj.checked) {
-			//formSubmit(0);
-		}
-		else {
+		if(!_obj.checked) {
 			alert('You must agree to the terms of service before continuing.');
+			return false;
 		}
 	}
-	else {
-		//formSubmit(0);
-	}
+
+	if(passcode_status)
+		console.log("formSubmit(2)");
+	else
+		console.log("formSubmit(0)");
 }
 function open_term_service() {
 	if(isMobile()) {
@@ -417,6 +448,7 @@ function isMobile() {
 		</svg>
 		<div id='splash_template_title' class='splash_template_title'>Welcome to</div>
 		<div id='splash_template_brand_name' class='splash_template_brand_name'>Brand Name</div>
+		<input id='splash_template_passcode' name='splash_template_passcode' class='splash_template_passcode' value='' placeHolder='Please enter Passcode' type='text' maxlength='64' autocorrect='off' autocapitalize='off'>
 		<div id='splash_template_terms_service' class='splash_template_terms_service'>
 		<div class='splash_template_terms_service_cb'>
 			<input type='checkbox' name='cbTermService' id='cbTermService' onclick='control_bt_status();'>

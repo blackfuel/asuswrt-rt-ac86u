@@ -6,7 +6,7 @@
  *         sdioh host/core control(sdioh_host_xx, sdioh_core_xx)
  *         sdio protocol(sdio_)
  *         utilities
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

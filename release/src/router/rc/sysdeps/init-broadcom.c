@@ -1648,7 +1648,7 @@ void init_switch()
 	) {
 		nvram_set("ctf_disable", "1");
 	}
-#ifdef RTCONFIG_BWDPI
+#if defined(RTCONFIG_BWDPI)
 	else if (check_bwdpi_nvram_setting() && is_router_mode()) {
 		nvram_set("ctf_disable", "0");
 	}
@@ -2714,6 +2714,9 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 	int max_no_vifs = wl_max_no_vifs(unit);
 	char lan_ifnames[NVRAM_MAX_PARAM_LEN] = "lan_ifnames";
 	bool psta = 0, psr = 0;
+#ifdef AMAS
+	char prefix_local[]="wlXXXXXXX_";
+#endif
 #endif
 #ifdef RTCONFIG_BCMWL6
 	int phytype;
@@ -2732,11 +2735,7 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 		}
 #endif
 
-		if (nvram_match("wps_enable", "1") &&
-			((unit == nvram_get_int("wps_band_x") || nvram_match("w_Setting", "0"))))
-			nvram_set(strcat_r(prefix, "wps_mode", tmp), "enabled");
-		else
-			nvram_set(strcat_r(prefix, "wps_mode", tmp), "disabled");
+		nvram_set(strcat_r(prefix, "wps_mode", tmp), nvram_match("wps_enable", "1") ? "enabled" : "disabled");
 
 #ifdef BCM_BSD
 		if (((unit == 0) && nvram_get_int("smart_connect_x") == 1) ||
@@ -2938,6 +2937,19 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 				nvram_set(strcat_r(prefix, "key4", tmp), nvram_safe_get(strcat_r(prefix2, "wep_key", tmp2)));
 				nvram_set(strcat_r(prefix, "crypto", tmp), nvram_safe_get(strcat_r(prefix2, "crypto", tmp2)));
 				nvram_set(strcat_r(prefix, "wpa_psk", tmp), nvram_safe_get(strcat_r(prefix2, "wpa_psk", tmp2)));
+#ifdef AMAS
+				snprintf(prefix_local, sizeof(prefix_local), "wl%d.%d_", unit, 1);
+				nvram_set(strcat_r(prefix_local, "ssid", tmp), nvram_safe_get(strcat_r(prefix2, "ssid", tmp2)));
+				nvram_set(strcat_r(prefix_local, "auth_mode_x", tmp), nvram_safe_get(strcat_r(prefix2, "auth_mode", tmp2)));
+				nvram_set(strcat_r(prefix_local, "wep_x", tmp), nvram_safe_get(strcat_r(prefix2, "wep", tmp2)));
+				nvram_set(strcat_r(prefix_local, "key", tmp), nvram_safe_get(strcat_r(prefix2, "key", tmp2)));
+				nvram_set(strcat_r(prefix_local, "key1", tmp), nvram_safe_get(strcat_r(prefix2, "wep_key", tmp2)));
+				nvram_set(strcat_r(prefix_local, "key2", tmp), nvram_safe_get(strcat_r(prefix2, "wep_key", tmp2)));
+				nvram_set(strcat_r(prefix_local, "key3", tmp), nvram_safe_get(strcat_r(prefix2, "wep_key", tmp2)));
+				nvram_set(strcat_r(prefix_local, "key4", tmp), nvram_safe_get(strcat_r(prefix2, "wep_key", tmp2)));
+				nvram_set(strcat_r(prefix_local, "crypto", tmp), nvram_safe_get(strcat_r(prefix2, "crypto", tmp2)));
+				nvram_set(strcat_r(prefix_local, "wpa_psk", tmp), nvram_safe_get(strcat_r(prefix2, "wpa_psk", tmp2)));
+#endif
 			}
 			else
 #ifdef RTCONFIG_DPSTA
@@ -3052,7 +3064,10 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 			nvram_set("wlc_psta", "1");
 #endif
 		// wds mode control
-		if (is_ure(unit)) nvram_set(strcat_r(prefix, "mode", tmp), "wet");
+		if (is_ure(unit))
+		{
+			nvram_set(strcat_r(prefix, "mode", tmp), "wet");
+		}
 		else
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 		if (is_psta(unit))
@@ -3068,13 +3083,13 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 		if (nvram_match(strcat_r(prefix, "mode_x", tmp), "1") &&	// wds only
 			(is_router_mode() || access_point_mode()))
 			nvram_set(strcat_r(prefix, "mode", tmp), "wds");
-		else nvram_set(strcat_r(prefix, "mode", tmp), "ap");
+		else
+			nvram_set(strcat_r(prefix, "mode", tmp), "ap");
 
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
-#ifndef HND_ROUTER
 		nvram_set(strcat_r(prefix, "psr_mrpt", tmp), is_psr(unit) ? "1" : "0");
-#else
-		nvram_set(strcat_r(prefix, "psr_mrpt", tmp), "0");
+#ifdef RTCONFIG_BCMARM
+		nvram_set(strcat_r(prefix, "dwds", tmp), is_ure(unit) ? "0" : "1");
 #endif
 #endif
 
@@ -3512,6 +3527,11 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 		nvram_set(strcat_r(prefix, "net_reauth", tmp), tmp2);
 
 		wl_dfs_support(unit);
+#if 0
+#if defined(RTCONFIG_BCM_7114) || defined(GTAC5300)
+		wl_CE_support(unit);
+#endif
+#endif
 
 #if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 		if (nvram_get_int("smart_connect_x"))
@@ -4615,7 +4635,7 @@ _dprintf("*** Multicast IPTV: config Singtel TR069 on wan port ***\n");
 
 #ifdef HND_ROUTER
 	case MODEL_GTAC5300:
-				/*      P1   P0   x3 x2 P3   P6   x1 x0	[P4(P0) P5(P1&P2) P8(P3)] */
+				/*      P1   P0   x3 x2 P3   P2   x1 x0	[P4(P0) P5(P1&P2) P8(P3)] */
 				/* eth0 eth2 eth1 eth5  eth4 eth3 eth5				  */
 				/* WAN  L1   L2   L3 L4 L5   L6   L7 L8 CPU			  */
 	case MODEL_RTAC86U:
@@ -4634,6 +4654,15 @@ _dprintf("*** Multicast IPTV: config Singtel TR069 on wan port ***\n");
 			sprintf(vlanDev1, "eth4.v0");
 			sprintf(vlanDev2, "eth3.v0");
 		}
+
+		/* RT-AC86U revert to 4 ports base IPTV profile */
+		if (model == MODEL_RTAC86U) {
+			sprintf(ethPort1, "eth1");
+			sprintf(ethPort2, "eth2");
+			sprintf(vlanDev1, "eth1.v0");
+			sprintf(vlanDev2, "eth2.v0");
+		}
+
 		/* Using vlanctl to handle vlan forwarding */
 		if (wan_vid) { /* config wan port */
 #if 0
@@ -6292,13 +6321,6 @@ _dprintf("*** Multicast IPTV: config Singtel TR069 on wan port ***\n");
 	return;
 }
 
-char *get_wlifname(int unit, int subunit, int subunit_x, char *buf)
-{
-	sprintf(buf, "wl%d.%d", unit, subunit);
-
-	return buf;
-}
-
 int
 wl_exist(char *ifname, int band)
 {
@@ -6919,13 +6941,15 @@ void hnd_nat_ac_init(int bootup)
 		psr |= is_psr(unit++);
 
 	// traditional qos / bandwidth limter: disable fc
-	nvram_set_int("fc_disable", nvram_get_int("fc_disable_force") || (routing_mode && qos_en && (nvram_get_int("qos_type") != 1)) || psr ? 1 : 0);
-	nvram_set_int("runner_disable", nvram_get_int("runner_disable_force") || (routing_mode && qos_en) || psr ? 1 : 0);
+	nvram_set_int("fc_disable", nvram_get_int("fc_disable_force") || (routing_mode && qos_en && (nvram_get_int("qos_type") != 1)) ? 1 : 0);
+	nvram_set_int("runner_disable", nvram_get_int("runner_disable_force") || (routing_mode && qos_en) ? 1 : 0);
 
 	if (nvram_match("fc_disable", "1"))
 		fc_fini();
 	else if (!bootup)
 		fc_init();
+	else if (psr)
+		eval("fc", "config", "--accel-mode", "1");
 
 	if (nvram_match("runner_disable", "1"))
 		eval("runner", "disable");

@@ -4,7 +4,7 @@
  * MAC based SW probe response module source file -
  * It uses the MAC filter list to influence the decision about
  * which MAC to send SW probe response.
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

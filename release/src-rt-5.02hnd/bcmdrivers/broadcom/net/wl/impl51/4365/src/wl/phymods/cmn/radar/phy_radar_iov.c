@@ -1,7 +1,7 @@
 /*
  * RadarDetect module implementation - iovar table/handlers & registration
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -85,6 +85,7 @@ phy_radar_doiovar(void *ctx, uint32 aid, void *p, uint plen, void *a, uint alen,
 	int err = BCME_OK;
 	int int_val = 0;
 	bool bool_val;
+	int subband_80p80 = 0;
 
 	/* The PHY type implemenation isn't registered */
 	if (st == NULL) {
@@ -250,7 +251,26 @@ phy_radar_doiovar(void *ctx, uint32 aid, void *p, uint plen, void *a, uint alen,
 
 		case IOV_GVAL(IOV_RADAR_SUBBAND_STATUS):
 			if (ISNPHY(pi) || ISHTPHY(pi) || ISACPHY(pi)) {
-				bcopy(&st->radar_work.subband_result, a, sizeof(int));
+				if (st->radar_work_sc.subband_result == 0) {
+					bcopy(&st->radar_work.subband_result, a, sizeof(int));
+				} else {
+					subband_80p80 = st->radar_work.subband_result +
+						(st->radar_work_sc.subband_result << 4);
+					bcopy(&subband_80p80, a, sizeof(int));
+				}
+			} else
+				err = BCME_UNSUPPORTED;
+			break;
+
+		case IOV_SVAL(IOV_RADAR_SUBBAND_STATUS):
+			if (ISNPHY(pi) || ISHTPHY(pi) || ISACPHY(pi)) {
+				if (!pi->sh->up) {
+					err = BCME_NOTUP;
+					break;
+				}
+
+				st->radar_work.subband_result = 0;
+				st->radar_work_sc.subband_result = 0;
 			} else
 				err = BCME_UNSUPPORTED;
 			break;

@@ -7,7 +7,7 @@
  * level as the A-MPDU transmit module, it provides balance amongst MPDU and AMPDU traffic
  * by regulating the number of in-transit packets for non-aggregating stations.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -15,7 +15,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_nar.c 652252 2016-08-01 04:33:36Z $
+ * $Id: wlc_nar.c 663426 2016-10-05 09:36:54Z $
  *
  */
 
@@ -511,6 +511,43 @@ wlc_nar_reset_release_state(nar_scb_cubby_t *cubby)
 	    cubby->last_state_gProt = FALSE;
 	    cubby->last_state_flags = 0;
 #endif
+}
+
+/** free all pkts asscoated with the given scb on the pktq for given precedences */
+void
+wlc_nar_flush_scb_pqueues(wlc_info_t *wlc, uint prec_bmp, struct pktq *pq1, struct scb *scb)
+{
+	wlc_nar_info_t *nit = wlc->nar_handle;
+	nar_scb_cubby_t *cubby;
+	struct pktq *pq = NULL;
+	uint prec;
+	int prec_cnt = PKTQ_MAX_PREC-1;
+	uint packet_count = 0;
+
+	/* Get the packet queue for this scb */
+	cubby = SCB_NAR_CUBBY(nit, scb);
+	if (!cubby) {
+		return;
+	}
+	pq = &cubby->tx_queue;
+	packet_count = pq->len;
+
+	/* Loop over all precedences set in the bitmap, and flush the target prec */
+	while (prec_cnt >= 0) {
+		prec = (prec_bmp & (1 << prec_cnt));
+		if ((prec) && (!pktq_pempty(pq, prec_cnt))) {
+			WL_PRINT(("wl%d: filter %d packets of prec=%d for scb:0x%p\n",
+				wlc->pub->unit, pktq_plen(pq, prec_cnt), prec_cnt, scb));
+			pktq_pflush(wlc->osh, pq, prec_cnt, TRUE, NULL, 0);
+		}
+		prec_cnt--;
+	}
+
+	packet_count -= pq->len;
+	cubby->packets_in_queue -= packet_count;
+	cubby->packets_in_transit -= packet_count;
+	nit->packets_in_queue -= cubby->packets_in_queue;
+	nit->packets_in_transit -= cubby->packets_in_transit;
 }
 
 static void
@@ -1388,21 +1425,7 @@ wlc_nar_dotxstatus(wlc_nar_info_t *nit, struct scb *scb, void *pkt, tx_status_t 
 	}
 
 }
-/**
- * Check if the aggregation is enabled
- * Here we also update the value for aggregation priority mask to keep status for BA always updated
- */
-bool
-nar_check_aggregation(struct scb *scb, void *pkt, uint prec)
-{
 
-	bool prio_is_aggregating;
-	int apm = wlc_ampdu_ba_on_tidmask(scb);
-
-	prio_is_aggregating = (SCB_AMPDU(scb) && (apm & (1<<PKTPRIO(pkt))));
-	return prio_is_aggregating;
-
-}
 /*
  * Packet TXMOD handler.
  *
@@ -1417,6 +1440,11 @@ wlc_nar_transmit_packet(void *handle, struct scb *scb, void *pkt, uint prec)
 	wlc_nar_info_t *nit = handle;
 	nar_scb_cubby_t *cubby;
 	bool prio_is_aggregating;
+#if defined(PKTC) || defined(PKTC_TX_DONGLE)
+	void *pkt1 = NULL;
+	uint32 lifetime = 0;
+#endif /* #if defined(PKTC) */
+
 
 	ASSERT(scb != NULL);		/* Why would we get called with no SCB ? */
 
@@ -1437,6 +1465,29 @@ wlc_nar_transmit_packet(void *handle, struct scb *scb, void *pkt, uint prec)
 
 	NAR_STATS_INC(cubby, PACKETS_RECEIVED);
 
+	prio_is_aggregating = (SCB_AMPDU(scb) && (cubby->aggr_prio_mask & (1<<PKTPRIO(pkt))));
+
+	/* If ampdu is enabled, pass on the packets */
+	if (SCB_AMPDU(scb)) {
+		nit->ampdu_scb_present = TRUE;   /* Ask watchdog to keep an eye on this scb */
+
+		if (prio_is_aggregating) {
+			/* We have not queued this packet, pass it to the next layer (ampdu) */
+			NAR_STATS_INC(cubby, PACKETS_AGGREGATING);
+			SCB_TX_NEXT(TXMOD_NAR, scb, pkt, prec);   /* Pass the packet on */
+			return;
+		}
+	}
+#if defined(PKTC) || defined(PKTC_TX_DONGLE)
+	lifetime = nit->wlc->lifetime[(SCB_WME(scb) ? WME_PRIO2AC(PKTPRIO(pkt)) : AC_BE)];
+
+	FOREACH_CHAINED_PKT(pkt, pkt1) {
+		PKTCLRCHAINED(nit->wlc->osh, pkt);
+		if (pkt1 != NULL) {
+			wlc_pktc_sdu_prep(nit->wlc, scb, pkt, pkt1, lifetime);
+		}
+#endif /* PKTC || PKTC_TX_DONGLE  */
+
 	/*
 	 * If the queue is already full, try to dequeue some packets before queueing this one.
 	 */
@@ -1447,36 +1498,27 @@ wlc_nar_transmit_packet(void *handle, struct scb *scb, void *pkt, uint prec)
 		}
 	}
 
-	prio_is_aggregating = nar_check_aggregation(scb, pkt, prec);
-
-	/*
-	 * Enqueue packet, then try to dequeue up to fair share.
-	 */
-	if (!prio_is_aggregating && !wlc_nar_enqueue_packet(cubby, pkt, prec)) {
 		/*
-		 * Failed to queue packet. Drop it on the floor.
+		 * Enqueue packet, then try to dequeue up to fair share.
 		 */
-		PKTFREE(nit->wlc->osh, pkt, TRUE);
-		NAR_STATS_INC(cubby, PACKETS_DROPPED);
-		WLCNTINCR(nit->wlc->pub->_cnt->txnobuf);
+		if (!prio_is_aggregating && !wlc_nar_enqueue_packet(cubby, pkt, prec)) {
+			/*
+			 * Failed to queue packet. Drop it on the floor.
+			 */
+			PKTFREE(nit->wlc->osh, pkt, TRUE);
+			NAR_STATS_INC(cubby, PACKETS_DROPPED);
+			WLCNTINCR(nit->wlc->pub->_cnt->txnobuf);
+		}
+
+#if defined(PKTC) || defined(PKTC_TX_DONGLE)
 	}
+#endif /*  PKTC || PKTC_TX_DONGLE */
 
 	if (wlc_nar_release_from_queue(cubby, prec)) {
 		NAR_STATS_INC(cubby, KICKSTARTS_IN_TX);
 	}
 
-	#if !defined(PKTC)
-	if (SCB_AMPDU(scb)) {
-		nit->ampdu_scb_present = TRUE;   /* Ask watchdog to keep an eye on this scb */
-
-		if (prio_is_aggregating) {
-			/* We have not queued this packet, pass it to the next layer (ampdu) */
-			NAR_STATS_INC(cubby, PACKETS_AGGREGATING);
-			SCB_TX_NEXT(TXMOD_NAR, scb, pkt, prec);   /* Pass the packet on */
-		}
-	}
-	#endif
-	return;
+return;
 
 }
 

@@ -183,14 +183,18 @@ Set Up Environment(Tested in Fedora 8/9 and Ubuntu)
 		make rt-ac55u
 		( make rt-ac55uhp )
 
-	g. brt-ac828 (/ rt-ac88q )
+	g. brt-ac828 (/ rt-ac88q / rt-ad7200 )
 		cd release/src-qca-ipq8064
 		make brt-ac828
+		( make rt-ad7200 )
 
-	h. rt-ac58u (/ rt-ac82u )
+	h. rt-ac58u (/ rt-ac82u / map-ac1300 / map-ac2200 / vrz-ac1300 )
 		cd release/src-qca-dakota
 		make rt-ac58u
 		( make rt-ac82u )
+		( make map-ac1300 )
+		( make map-ac2200 )
+		( make vrz-ac1300 )
 
 	i. rt-ac85u (/ rt-ac85u / rt-ac65u / rp-ac87 )
 		cd release/src-ra-5010
@@ -206,4 +210,10 @@ Set Up Environment(Tested in Fedora 8/9 and Ubuntu)
 		( make rt-ac1200gu )
 		( make rt-ac51u+ )
 		( make rt-ac53 )
+
+	k. rp-ac68u (/ rp-ac53 / rp-ac55 )
+		cd release/src-rtk-819x
+		make rp-ac68u
+		( make rp-ac53 )
+		( make rp-ac55 )
 

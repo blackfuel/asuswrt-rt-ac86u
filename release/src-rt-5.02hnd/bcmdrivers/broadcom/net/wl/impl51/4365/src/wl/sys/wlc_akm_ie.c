@@ -1,7 +1,7 @@
 /**
  * AKM (Authentication and Key Management) module source, 802.1x related.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_akm_ie.c 611816 2016-01-12 07:27:02Z $
+ * $Id: wlc_akm_ie.c 669426 2016-11-09 12:29:43Z $
  */
 
 #include <wlc_cfg.h>
@@ -469,6 +469,17 @@ wlc_write_rsn_ie_safe(wlc_info_t *wlc, wlc_bsscfg_t *cfg, uint8 *buf, int buflen
 		WPA_len += WPA_SUITE_LEN;
 		buflen -= WPA_SUITE_LEN;
 	}
+#ifdef WLFBT
+	if (BSSCFG_IS_FBT(cfg)) {
+		/* length check */
+		/* if buffer too small, return untouched buffer */
+		BUFLEN_CHECK_AND_RETURN(WPA_SUITE_LEN, buflen, orig_buf);
+		bcopy(WPA2_OUI, auth->list[count].oui, DOT11_OUI_LEN);
+		auth->list[count++].type = BSSCFG_IS_FBT_1X(cfg) ? RSN_AKM_FBT_1X : RSN_AKM_FBT_PSK;
+		WPA_len += WPA_SUITE_LEN;
+		buflen -= WPA_SUITE_LEN;
+	}
+#endif /* WLFBT */
 #if defined(WLTDLS)
 	if (WPA_auth & WPA2_AUTH_TPK) {
 		/* length check */
@@ -767,7 +778,7 @@ wlc_rsn_build_ie(wlc_info_t *wlc, wlc_bsscfg_t *cfg, struct rsn_parms *rsn, void
 		mgmt->list[0].type = RSN_AKM_PSK;
 	else if (cfg->WPA_auth & (WPA2_AUTH_UNSPECIFIED | WPA2_AUTH_1X_SHA256)) {
 #ifdef WLFBT
-		if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+		if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 			(rsn->flags & RSN_FLAGS_FBT))
 			mgmt->list[0].type = RSN_AKM_FBT_1X;
 		else
@@ -786,7 +797,7 @@ wlc_rsn_build_ie(wlc_info_t *wlc, wlc_bsscfg_t *cfg, struct rsn_parms *rsn, void
 	}
 	else if (cfg->WPA_auth & (WPA2_AUTH_PSK | WPA2_AUTH_PSK_SHA256)) {
 #ifdef WLFBT
-		if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+		if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 			(rsn->flags & RSN_FLAGS_FBT)) {
 			mgmt->list[0].type = RSN_AKM_FBT_PSK;
 		} else
@@ -830,7 +841,7 @@ wlc_akm_build_rsn_ie(wlc_info_t *wlc, wlc_bsscfg_t *cfg, wlc_bss_info_t *bi,
 {
 	bcm_tlv_t *wpa2_ie = (bcm_tlv_t *)ie;
 #if defined(WLFBT)
-	bool fbt = WLFBT_ENAB(wlc->pub) &&
+	bool fbt = BSSCFG_IS_FBT(cfg) &&
 		(cfg->WPA_auth & WPA2_AUTH_FT) && (bi->wpa2.flags & RSN_FLAGS_FBT);
 #endif /* WLFBT */
 	bcm_tlv_t *wpa2;
@@ -893,7 +904,7 @@ wlc_akm_build_rsn_ie(wlc_info_t *wlc, wlc_bsscfg_t *cfg, wlc_bss_info_t *bi,
 
 	/* Save the akm type being used for the current association */
 #if defined(WLFBT)
-	if (WLFBT_ENAB(wlc->pub))
+	if (BSSCFG_IS_FBT(cfg))
 		wlc_fbt_save_current_akm(wlc->fbt, cfg, bi);
 #endif /* WLFBT */
 }
@@ -1306,6 +1317,12 @@ wlc_check_wpa2ie(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, bcm_tlv_t *wpa2ie, struc
 	    !((bcmp(mgmt->list[0].oui, WPA2_OUI, DOT11_OUI_LEN) == 0) &&
 	      (((mgmt->list[0].type == RSN_AKM_UNSPECIFIED) &&
 	        (WPA_auth & WPA2_AUTH_UNSPECIFIED)) ||
+#ifdef WLFBT
+		(BSSCFG_IS_FBT_1X(bsscfg) && (mgmt->list[0].type == RSN_AKM_FBT_1X) &&
+		(WPA_auth & WPA2_AUTH_UNSPECIFIED)) ||
+		(BSSCFG_IS_FBT_PSK(bsscfg) && (mgmt->list[0].type == RSN_AKM_FBT_PSK) &&
+		(WPA_auth & WPA2_AUTH_PSK)) ||
+#endif /* WLFBT */
 	       ((mgmt->list[0].type == RSN_AKM_SHA256_1X) &&
 		(WPA_auth & WPA2_AUTH_1X_SHA256)) ||
 	       ((mgmt->list[0].type == RSN_AKM_SHA256_PSK) &&

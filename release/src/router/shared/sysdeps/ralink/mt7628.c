@@ -1778,7 +1778,7 @@ ralink_gpio_write_bit(int idx, int value)
 	}	
 	else if (idx==96) 
 	{              
-#if defined (RTAC1200) || defined (RTN11P_B1)//wlan led
+#if defined (RTAC1200) || defined (RTN11P_B1) || defined(RTN10P_V3) //wlan led
 		req=RALINK_ATE_GPIO96;
 		idx=value;
 #else

@@ -18,7 +18,7 @@ else
 	HTTP_VERSION=3.1.0.97
 	OPENSSL_VERSION=1.0.2j.v001
 endif
-else ifeq ($(or $(RTCONFIG_QCA),$(RTCONFIG_REALTEK)),y)
+else ifeq ($(or $(RTCONFIG_QCA),$(RTCONFIG_REALTEK),$(RTCONFIG_LANTIQ)),y)
 	pkg_type=mipsbig
 	DM_VERSION=3.1.0.101
 	HTTP_VERSION=3.1.0.97
@@ -127,9 +127,7 @@ ifeq ($(RTCONFIG_USB_MODEM),y)
 	install -m 0755 apps_scripts/modem_*.sh $(INSTALLDIR)/usr/sbin
 	install -m 0755 apps_scripts/3ginfo.sh $(INSTALLDIR)/usr/sbin
 ifeq ($(RTCONFIG_INTERNAL_GOBI),y)
-ifeq ($(RT4GAC55U),y)
 	install -m 0755 apps_scripts/gobi_update.sh $(INSTALLDIR)/usr/sbin
-endif
 endif
 endif
 endif
@@ -141,7 +139,7 @@ endif
 ifeq ($(RTCONFIG_AUTOLIVEUPDATE_ZIP),y)
 	cp -f webs_scripts/zip_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 	cp -f webs_scripts/zip_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
-ifeq ($(RTCONFIG_BWDPI),y)
+ifeq ($(or $(RTCONFIG_BWDPI),$(RTCONFIG_BWDPI_DEP)),y)
 	cp -f webs_scripts/sig2nd_upgrade.sh $(INSTALLDIR)/usr/sbin/sig_upgrade.sh
 	cp -f webs_scripts/sig2nd_update.sh $(INSTALLDIR)/usr/sbin/sig_update.sh
 endif
@@ -169,7 +167,7 @@ ifeq ($(AC2900),y)
 	cp -f webs_scripts/verizon_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
 endif
 
-ifeq ($(RTCONFIG_BWDPI),y)
+ifeq ($(or $(RTCONFIG_BWDPI),$(RTCONFIG_BWDPI_DEP)),y)
 	cp -f webs_scripts/sig2nd_upgrade.sh $(INSTALLDIR)/usr/sbin/sig_upgrade.sh
 	cp -f webs_scripts/sig2nd_update.sh $(INSTALLDIR)/usr/sbin/sig_update.sh
 endif
@@ -228,3 +226,6 @@ endif
 
 	install -m 0755 webs_scripts/GoogleDNS_Update.sh $(INSTALLDIR)/usr/sbin
 
+ifeq ($(RTCONFIG_LETSENCRYPT),y)
+	install -m 0644 rom/etc/ssl/certs/DST_Root_CA_X3.pem $(INSTALLDIR)/rom/etc/ssl/certs/letsencrypt.pem
+endif

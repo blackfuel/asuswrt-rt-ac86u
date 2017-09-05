@@ -3,25 +3,19 @@
  * Networking Adapter Device Drivers.
  *
  * THIS IS A GENERATED FILE - DO NOT EDIT
- * Generated on Wed Oct 19 12:46:13 PDT 2016
+ * Generated on Tue Apr 18 09:59:15 PM PDT 2017
  *
  * FILE-CSTYLED
  *
- * Ucode directory: /tmp/ucode_release_G8x9pB/ucode_checkout/build/bt2w
- * Derived from major_rev = 1128, minor_rev = 13905.
+ * Ucode directory: /tmp/ucode_release_62uWRc/ucode_checkout/build/bt2w
+ * Derived from major_rev = 1128, minor_rev = 17405.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
- * All Rights Reserved.
- * 
- * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
- * the contents of this file may not be disclosed to third parties, copied
- * or duplicated in any form, in whole or in part, without the prior
- * written permission of Broadcom.
+ * $ Copyright Broadcom Corporation $
  *
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: d11ucode_2w.c 666051 2016-10-19 19:47:40Z $
+ * $Id: d11ucode_2w.c 695158 2017-04-19 04:59:50Z shinuk $
  */
 
 #include "wlc_cfg.h"
@@ -30,7 +24,7 @@
 #include "d11ucode.h"
 
 CONST uint32 d11ucode_2w_bommajor = 1128;
-CONST uint32 d11ucode_2w_bomminor = 13905;
+CONST uint32 d11ucode_2w_bomminor = 17405;
 
 #if NCONF && D11CONF_MSK(MSK_RANGE(11, 12))
 /* Skipping inits */
@@ -917,7 +911,7 @@ CONST uint32 BCMUCODEDATA(d11ucode_2w11)[] = {
  0x00c00be7, 0x0000378c, 0x00c00be8, 0x0000378c, 0x00c00be9, 0x0000378c,
  0x00c00bec, 0x0000378c, 0x00c00bed, 0x0000378c, 0x29c00a1b, 0x00000d10,
  0xc0bc0a1c, 0x000077fb, 0x29c04a1c, 0x00000d10, 0x04c68000, 0x0000378c,
- 0x36c51001, 0x0000378c, 0x7dc9b002, 0x0000378c, 0x00c00003, 0x0000378c,
+ 0x43cfd001, 0x0000378c, 0x83c1d002, 0x0000378c, 0x00c00003, 0x0000378c,
  0x00c00004, 0x0000378c, 0x04c02005, 0x0000378c, 0x05c78861, 0x0000378c,
  0x04c8e860, 0x0000378c, 0x00c005e4, 0x0000378c, 0xc3c00bc5, 0x0000160b,
  0x2dbc3945, 0x00001409, 0xc0bc08db, 0x000077fb, 0xd75ba5ba, 0x0000310b,
@@ -2059,7 +2053,7 @@ CONST uint32 BCMUCODEDATA(d11ucode_2w13)[] = {
  0xfcc000c4, 0x0000378c, 0x00c02849, 0x0000378c, 0x00c00be7, 0x0000378c,
  0x00c00be8, 0x0000378c, 0x00c00be9, 0x0000378c, 0x00c00bec, 0x0000378c,
  0x00c00bed, 0x0000378c, 0x29c0096f, 0x00000d10, 0xc0bc096f, 0x000077fb,
- 0x04c68000, 0x0000378c, 0x36c51001, 0x0000378c, 0x7dc9b002, 0x0000378c,
+ 0x04c68000, 0x0000378c, 0x43cfd001, 0x0000378c, 0x83c1d002, 0x0000378c,
  0x00c00003, 0x0000378c, 0x00c00004, 0x0000378c, 0x04c02005, 0x0000378c,
  0x05c48861, 0x0000378c, 0x04c62860, 0x0000378c, 0x00c005b6, 0x0000378c,
  0xc3c00bc5, 0x0000160b, 0x2dbc3945, 0x00001409, 0xc0bc083d, 0x000077fb,
@@ -3278,8 +3272,8 @@ CONST uint32 BCMUCODEDATA(d11ucode_2w15)[] = {
  0x67000029, 0x00011c40, 0x03005049, 0x0001bc60, 0x030017a7, 0x0001bc60,
  0x030017a8, 0x0001bc60, 0x030017a9, 0x0001bc60, 0x030017ac, 0x0001bc60,
  0x030017ad, 0x0001bc60, 0x030017ae, 0x0001bc60, 0xa70009fa, 0x00006880,
- 0x02f009fa, 0x0003bfde, 0x130d0000, 0x0001bc60, 0xdb0a2001, 0x0001bc60,
- 0xf7136002, 0x0001bc61, 0x03000003, 0x0001bc60, 0x03000004, 0x0001bc60,
+ 0x02f009fa, 0x0003bfde, 0x130d0000, 0x0001bc60, 0x0f1fa001, 0x0001bc61,
+ 0x0f03a002, 0x0001bc62, 0x03000003, 0x0001bc60, 0x03000004, 0x0001bc60,
  0x13044005, 0x0001bc60, 0x1b011061, 0x0001bc60, 0x13125060, 0x0001bc60,
  0x0300068e, 0x0001bc60, 0x0f001785, 0x0000b05e, 0xb6f07145, 0x0000a044,
  0x02f0089d, 0x0003bfde, 0xb3000a12, 0x000285de, 0x5ccc8664, 0x0001885e,
@@ -3687,3 +3681,4 @@ CONST uint BCMUCODEDATA(d11ucode_2w15sz) = sizeof(d11ucode_2w15);
 CONST uint32 BCMUCODEDATA(d11ucode_2w15)[] = { 0x00000000 };
 CONST uint BCMUCODEDATA(d11ucode_2w15sz) = sizeof(d11ucode_2w15);
 #endif /* D11CONF_HAS(15) */
+

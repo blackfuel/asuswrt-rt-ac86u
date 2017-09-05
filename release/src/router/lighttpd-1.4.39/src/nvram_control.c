@@ -149,7 +149,6 @@
 
 static const char base64_xlat[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-
 int base64_encode(const unsigned char *in, char *out, int inlen)
 {
         char *o;
@@ -180,8 +179,7 @@ int base64_encode(const unsigned char *in, char *out, int inlen)
         return out - o;
 }
 
-
-int base64_decode_t(const char *in, unsigned char *out, int inlen)
+int base64_decode(const char *in, unsigned char *out, int inlen)
 {
         char *p;
         int n;
@@ -613,7 +611,7 @@ int nvram_get_file(const char *key, const char *fname, int max)
         n = strlen(p);
         if (n <= max) {
                 if ((b = malloc(base64_decoded_len(n) + 128)) != NULL) {
-                        n = base64_decode_t(p, b, n);
+                        n = base64_decode(p, b, n);
                         if (n > 0) r = (f_write(fname, b, n, 0, 0644) == n);
                         free(b);
                 }
@@ -1640,11 +1638,11 @@ char* nvram_get_uamsecret(const char *str)
 #ifdef USE_TCAPI
         //Todo
 #else
-        if(!strncmp(str, nvram_get("chilli_net"), 11)){
-           return nvram_get("chilli_uamsecret");
-        }else{
-           return nvram_get("cp_uamsecret");
-        }
+    	if(!strncmp(str, nvram_get("chilli_net"), 11)){ 
+	   return nvram_get("chilli_uamsecret");
+	}else{
+	   return nvram_get("cp_uamsecret");
+	}
 #endif
 }
 #endif

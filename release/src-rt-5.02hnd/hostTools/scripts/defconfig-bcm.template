@@ -1015,6 +1015,7 @@ CONFIG_MMU=y
 #
 # CONFIG_CPU_IDLE is not set
 # CONFIG_BCM_ARM_CPUIDLE is not set
+# CONFIG_BCM_CPUIDLE_CLK_DIVIDER is not set
 
 #
 # Executable file formats

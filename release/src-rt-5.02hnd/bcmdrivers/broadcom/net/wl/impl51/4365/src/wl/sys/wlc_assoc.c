@@ -1,7 +1,7 @@
 /*
  * Association/Roam related routines
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_assoc.c 669890 2016-11-11 14:41:52Z $
+ * $Id: wlc_assoc.c 672670 2016-11-29 10:51:06Z $
  */
 
 
@@ -2465,7 +2465,7 @@ wlc_assoc_scan_complete(void *arg, int status, wlc_bsscfg_t *cfg)
 	/* register scan results as possible PMKID candidates */
 	if ((cfg->WPA_auth & WPA2_AUTH_UNSPECIFIED) &&
 #ifdef WLFBT
-		(!WLFBT_ENAB(wlc->pub) || !(cfg->WPA_auth & WPA2_AUTH_FT)) &&
+		(!BSSCFG_IS_FBT(cfg) || !(cfg->WPA_auth & WPA2_AUTH_FT)) &&
 #endif /* WLFBT */
 		TRUE)
 		wlc_pmkid_build_cand_list(cfg, FALSE);
@@ -2842,7 +2842,7 @@ wlc_join_wsec_filter(wlc_info_t *wlc, wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 
 #ifdef WLFBT
 	/* Check AKM suite in target AP against the one STA is currently configured for */
-	if (WLFBT_ENAB(wlc->pub))
+	if (BSSCFG_IS_FBT(cfg))
 		akm_match = wlc_fbt_akm_match(wlc->fbt, cfg, bi);
 #endif /* WLFBT */
 
@@ -3873,7 +3873,7 @@ wlc_join_assoc_start(wlc_info_t *wlc, wlc_bsscfg_t *cfg, struct scb *scb,
 	*/
 	if (!(cfg->WPA_auth & WPA2_AUTH_FT))
 		allow_reassoc = TRUE;
-	else if (WLFBT_ENAB(wlc->pub) && !ETHER_ISNULLADDR(&cfg->current_bss->BSSID) &&
+	else if (BSSCFG_IS_FBT(cfg) && !ETHER_ISNULLADDR(&cfg->current_bss->BSSID) &&
 		wlc_fbt_is_fast_reassoc(wlc->fbt, cfg, bi)) {
 		allow_reassoc = TRUE;
 	} else
@@ -4023,7 +4023,7 @@ wlc_join_BSS(wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 	if (wlc_chk_chanspec_update(wlc, chanspec) &&
 #ifdef WLFBT
 	    ((as->type != AS_ROAM) ||
-	     !WLFBT_ENAB(wlc->pub) || !(bi->flags2 & WLC_BSS_OVERDS_FBT) ||
+	     !BSSCFG_IS_FBT(cfg) || !(bi->flags2 & WLC_BSS_OVERDS_FBT) ||
 		(as->state == AS_SENT_FTREQ) || (roam->reason == WLC_E_REASON_BCNS_LOST)) &&
 #endif /* WLFBT */
 		TRUE) {
@@ -4033,7 +4033,7 @@ wlc_join_BSS(wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 
 #if defined(WLFBT)
 		/* If we're likely to do FT reassoc, check if we're going to change bands */
-		if (WLFBT_ENAB(wlc->pub) &&
+		if (BSSCFG_IS_FBT(cfg) &&
 			(as->type == AS_ROAM) && (cfg->auth == DOT11_OPEN_SYSTEM) &&
 			wlc_fbt_is_cur_mdid(wlc->fbt, cfg, bi)) {
 			if (CHSPEC_BAND(cfg->current_bss->chanspec) == CHSPEC_BAND(chanspec))
@@ -4149,7 +4149,7 @@ wlc_join_BSS(wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 	 * happens only after receiving FT response.
 	 */
 	if (WLCISACPHY(wlc->band) &&
-		!(WLFBT_ENAB(wlc->pub) && (target_bss->flags2 & WLC_BSS_OVERDS_FBT))) {
+		!(BSSCFG_IS_FBT(cfg) && (target_bss->flags2 & WLC_BSS_OVERDS_FBT))) {
 		/* skip cal for PSTAs; doing it on primary is good enough */
 		if (!(cfg->BSS && as->type == AS_RECREATE &&
 		      as->flags & AS_F_SPEEDY_RECREATE) && !BSSCFG_PSTA(cfg)) {
@@ -4163,7 +4163,7 @@ wlc_join_BSS(wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 	}
 	else if ((WLCISNPHY(wlc->band) || WLCISHTPHY(wlc->band)) &&
 #if defined(WLFBT)
-		(WLFBT_ENAB(wlc->pub) && ft_band_changed) &&
+		(BSSCFG_IS_FBT(cfg) && ft_band_changed) &&
 #endif /* WLFBT */
 	    (as->type != AS_ROAM || ch_changed)) {
 		/* phy full cal takes time and slow down reconnection after sleep.
@@ -4358,7 +4358,7 @@ wlc_join_BSS(wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 			/* Make sure STA is associated to a valid BSSID before doing
 			 * a fast transition.
 			 */
-			if (WLFBT_ENAB(wlc->pub) && (as->type == AS_ROAM) &&
+			if (BSSCFG_IS_FBT(cfg) && (as->type == AS_ROAM) &&
 				(auth == DOT11_OPEN_SYSTEM) &&
 				wlc_fbt_is_fast_reassoc(wlc->fbt, cfg, bi) &&
 				!ETHER_ISNULLADDR(&cfg->current_bss->BSSID)) {
@@ -4400,7 +4400,7 @@ wlc_join_BSS(wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 			/* Skip FBT over-the-DS if current AP is not reachable or does not
 			 * respond to FT Request frame and instead send auth frame to target AP.
 			 */
-			if (WLFBT_ENAB(wlc->pub) && (as->type == AS_ROAM) && cfg->associated &&
+			if (BSSCFG_IS_FBT(cfg) && (as->type == AS_ROAM) && cfg->associated &&
 				(auth == DOT11_FAST_BSS) && (bi->flags2 & WLC_BSS_OVERDS_FBT) &&
 				(roam->reason != WLC_E_REASON_BCNS_LOST) &&
 				(as->state != AS_SENT_FTREQ)) {
@@ -5447,7 +5447,7 @@ wlc_join_adopt_bss(wlc_bsscfg_t *cfg)
 	            WLCWLUNIT(wlc)));
 
 #if defined(WLFBT)
-	if (WLFBT_ENAB(wlc->pub) && (bcmwpa_is_wpa2_auth(cfg->WPA_auth)) &&
+	if (BSSCFG_IS_FBT(cfg) && (bcmwpa_is_wpa2_auth(cfg->WPA_auth)) &&
 		(cfg->auth_atmptd == DOT11_FAST_BSS)) {
 		reason = WLC_E_REASON_BSSTRANS_REQ;  /* any non-zero reason is okay here */
 	}
@@ -7032,7 +7032,7 @@ wlc_authresp_client(wlc_bsscfg_t *cfg, struct dot11_management_header *hdr,
 
 	/* invalid authentication algorithm number */
 #ifdef WLFBT
-	if (!WLFBT_ENAB(wlc->pub)) {
+	if (!BSSCFG_IS_FBT(cfg)) {
 #endif
 #ifdef BCMCCX
 	if (CCX_ENAB(wlc->pub) && wlc->ccx->ccx_network)
@@ -7854,7 +7854,7 @@ wlc_assoc_success(wlc_bsscfg_t *cfg, struct scb *scb)
 			CHSPEC_WLCBANDUNIT(cfg->current_bss->chanspec));
 		if (prev_scb) {
 #ifdef WLFBT
-			if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+			if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 				CAC_ENAB(wlc->pub) && (wlc->cac != NULL)) {
 				wlc_cac_copy_state(wlc->cac, prev_scb, scb);
 			}
@@ -7894,13 +7894,6 @@ wlc_assoc_success(wlc_bsscfg_t *cfg, struct scb *scb)
 	/* adopt the BSS parameters */
 	wlc_join_adopt_bss(cfg);
 
-	if (((scb->flags & SCB_HTCAP) == 0) && (scb->wsec == TKIP_ENABLED)) {
-		WL_INFORM(("Activating MHF4_CISCOTKIP_WAR\n"));
-		wlc_mhf(wlc, MHF4, MHF4_CISCOTKIP_WAR, MHF4_CISCOTKIP_WAR, WLC_BAND_ALL);
-	} else {
-		WL_INFORM(("Deactivating MHF4_CISCOTKIP_WAR\n"));
-		wlc_mhf(wlc, MHF4, MHF4_CISCOTKIP_WAR, 0, WLC_BAND_ALL);
-	}
 	/* 11g hybrid coex cause jerky mouse, disable for now. do not apply for ECI chip for now */
 	if (!SCB_HT_CAP(scb) && !BCMECICOEX_ENAB(wlc))
 		wlc_mhf(wlc, MHF3, MHF3_BTCX_SIM_RSP, 0, WLC_BAND_2G);
@@ -8028,7 +8021,7 @@ wlc_auth_complete(wlc_bsscfg_t *cfg, uint status, struct ether_addr* addr,
 		/* No response from current AP for FT Request frame,
 		 * join target AP using FBT over-the-air.
 		 */
-		if (WLFBT_ENAB(wlc->pub) && (target_bss->flags2 & WLC_BSS_OVERDS_FBT) &&
+		if (BSSCFG_IS_FBT(cfg) && (target_bss->flags2 & WLC_BSS_OVERDS_FBT) &&
 		    (as->state == AS_SENT_FTREQ)) {
 			wlc_join_BSS(cfg,
 			wlc->as_info->join_targets->ptrs[wlc->as_info->join_targets_last]);
@@ -8049,7 +8042,7 @@ wlc_auth_complete(wlc_bsscfg_t *cfg, uint status, struct ether_addr* addr,
 		wlc_scb_clearstatebit(scb, AUTHENTICATED);
 
 #if defined(WLFBT)
-		if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+		if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 			((auth_status == DOT11_SC_ASSOC_R0KH_UNREACHABLE) ||
 			(auth_status == DOT11_SC_INVALID_PMKID))) {
 			wlc_fbt_clear_ies(wlc->fbt, cfg);
@@ -8208,7 +8201,7 @@ wlc_assoc_complete(wlc_bsscfg_t *cfg, uint status, struct ether_addr* addr,
 			wlc_restart_ap(wlc->ap);
 		}
 #if defined(BCMSUP_PSK) && defined(WLFBT)
-		if (WLFBT_ENAB(wlc->pub) && SUP_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+		if (BSSCFG_IS_FBT(cfg) && SUP_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 			reassoc)
 			wlc_sup_clear_replay(wlc->idsup, cfg);
 #endif /* BCMSUP_PSK && WLFBT */
@@ -8575,7 +8568,7 @@ do_event:
 		/* Send up ft_key in case of FT AUTH, and the supplicant will take the information
 		 * only when it is valid at the FBT roaming.
 		 */
-		if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+		if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 			wlc_fbt_get_kck_kek(wlc->fbt, cfg, ft_key);
 			wlc_bss_mac_event(wlc, cfg, WLC_E_BSSID, addr, status,
 				roam->reason, bss_type, ft_key, sizeof(ft_key));
@@ -10380,6 +10373,11 @@ wlc_deauth_ind_complete(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, uint status,
 	struct ether_addr *addr, uint deauth_reason, uint bss_type,
 	uint8 *body, int body_len)
 {
+	struct scb *scb = wlc_scbfindband(wlc, bsscfg, addr,
+		CHSPEC_WLCBANDUNIT(bsscfg->current_bss->chanspec));
+	if (scb)
+		wlc_scb_clearstatebit(scb, AUTHENTICATED);
+
 #if defined(STA) && defined(BCMCCX) && defined(CCX_SDK)
 	if (CCX_ENAB(wlc->pub) && IHV_ENAB(wlc->ccx))
 		wlc_ccx_mgmt_status_hdlr(wlc->ccx, addr, deauth_reason, FALSE, NULL, 0);

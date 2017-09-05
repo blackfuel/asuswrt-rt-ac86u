@@ -3,10 +3,18 @@ include ../common.mak
 ASUSWRTTOOLSDIR = $(SRCBASE)/router/tools/Lnx_AsusWrtDictPrep
 ASUSWRTTOOLSDIR2 = $(SRCBASE)/router/tools/Lnx_ToolHelp
 
-MODELS_HAVE_USB3 = "DSL-AC68U RT-AC3200 RT-AC87U RT-AC68U RT-AC68A 4G-AC68U RT-AC56S RT-AC56U RT-AC55U RT-AC55UHP RT-N18U RT-N65U RT-AC88U RT-AC3100 RT-AC5300 GT-AC5300 GT-AC9600 RT-AC86U AC2900 RT-AC58U RT-AC82U RP-AC68U RT-AC85U RT-AC65U"
+MODELS_HAVE_USB3 = AC2900 \
+	BRT-AC828 RT-AD7200 \
+	DSL-AC68U \
+	RT-AC5300 GT-AC5300 GT-AC9600 RT-AC95U RT-AC3100 RT-AC3200 \
+	RT-AC55U RT-AC55UHP RT-AC58U RT-AC82U RT-AC88Q \
+	RT-AC86U RT-AC88U RT-AC87U RT-AC85U RT-AC68U RT-AC68A 4G-AC68U RT-AC65U RT-AC56S RT-AC56U \
+	RT-N65U \
+	RT-N18U \
+	RP-AC68U
 
 MODELS_HAVE_TRAFFIC_ANALYZER = RT-AC3200 RT-AC87U RT-AC88U RT-AC86U RT-AC3100 RT-AC5300 GT-AC5300 GT-AC9600 DSL-AC68U RT-AC68U \
-	4G-AC68U RT-AC68R RT-AC68W RT-AC68RW RT-AC1900P RT-AC67U RT-AC56U RT-AC56R RT-AC85U BRT-AC828 MAP-AC1300 MAP-AC2200
+	4G-AC68U RT-AC68R RT-AC68W RT-AC68RW RT-AC1900P RT-AC67U RT-AC56U RT-AC56R RT-AC85U BRT-AC828 MAP-AC1300 MAP-AC2200 VRZ-AC1300 BLUECAVE
 
 all:
 ifeq ($(and $(HND_ROUTER),$(RTCONFIG_VISUALIZATION)),y)
@@ -228,7 +236,7 @@ endif
 endif
 endif
 
-ifneq ($(RTCONFIG_BWDPI),y)
+ifneq ($(or $(RTCONFIG_BWDPI),$(RTCONFIG_BWDPI_DEP)),y)
 ifneq ($(RTCONFIG_CLOUDSYNC),y)
 	rm -rf $(INSTALLDIR)/www/images/line.png
 endif
@@ -260,6 +268,8 @@ ifeq ($(RTCONFIG_NO_USBSTORAGE),y)
 	rm -rf $(INSTALLDIR)/www/images/New_ui/networkmap/blue.png
 	rm -rf $(INSTALLDIR)/www/images/New_ui/networkmap/red.png
 	rm -rf $(INSTALLDIR)/www/images/New_ui/networkmap/USB_2.png
+	# disk format
+	rm -rf $(INSTALLDIR)/www/device-map/disk_format.asp
 else
 ifneq ($(RTCONFIG_USB),y)
 	rm -rf $(INSTALLDIR)/www/images/New_ui/USBExt
@@ -314,6 +324,8 @@ ifneq ($(RTCONFIG_USB),y)
 	rm -rf $(INSTALLDIR)/www/disk_scan.asp
 	rm -rf $(INSTALLDIR)/www/diskmon_test.asp
 	rm -rf $(INSTALLDIR)/www/disk_functions.js
+	# disk format
+	rm -rf $(INSTALLDIR)/www/device-map/disk_format.asp
 endif
 ifneq ($(MODEM),y)
 	-rm -f $(INSTALLDIR)/www/qis/QIS_modem.htm
@@ -345,7 +357,6 @@ ifneq ($(RTCONFIG_TIMEMACHINE),y)
 endif
 ifneq ($(RTCONFIG_PROXYSTA),y)
 ifneq ($(RTCONFIG_WIRELESSREPEATER),y)
-#	rm -rf $(INSTALLDIR)/www/images/survey
 	rm -rf $(INSTALLDIR)/www/images/New_ui/re.jpg
 	rm -rf $(INSTALLDIR)/www/qis/QIS_sitesurvey.htm
 endif
@@ -359,7 +370,7 @@ ifneq ($(RTCONFIG_KYIVSTAR),y)
 	rm -rf $(INSTALLDIR)/www/userRpm/SoftwareUpgradeRpm.htm
 endif
 
-ifneq ($(RTCONFIG_BWDPI),y)
+ifneq ($(RTCONFIG_BWDPI)$(RTCONFIG_BWDPI_DEP),y)
 	rm -rf $(INSTALLDIR)/www/AdaptiveQoS_Bandwidth_Monitor.asp
 	rm -rf $(INSTALLDIR)/www/AdaptiveQoS_WebHistory.asp
 	rm -rf $(INSTALLDIR)/www/AiProtection_HomeSecurity.asp
@@ -484,7 +495,7 @@ ifneq ($(BUILD_NAME),$(filter $(BUILD_NAME), RT-AC88U RT-AC3100 RT-AC5300 GT-AC5
 	rm -rf $(INSTALLDIR)/www/qis_m
 	rm -rf $(INSTALLDIR)/www/images/qis/icon_MAC_clone.svg
 	rm -rf $(INSTALLDIR)/www/images/qis/logo.png
-ifneq ($(BUILD_NAME),$(filter $(BUILD_NAME), RP-AC66 RP-AC68U RP-AC51 MAP-AC1300 MAP-AC2200))
+ifneq ($(BUILD_NAME),$(filter $(BUILD_NAME), RP-AC66 RP-AC68U RP-AC51 MAP-AC1300 MAP-AC2200 VRZ-AC1300))
 	rm -rf $(INSTALLDIR)/www/css/icon-qis.css
 	rm -rf $(INSTALLDIR)/www/images/qis/loading.gif
 	rm -rf $(INSTALLDIR)/www/images/qis/mainimage_img4.png
@@ -530,6 +541,11 @@ endif
 	rm -rf $(INSTALLDIR)/www/images/New_ui/upgrade.svg
 	rm -rf $(INSTALLDIR)/www/images/New_ui/upgrade_hover.svg	
 endif
+ifneq ($(RTCONFIG_IPSEC), y)
+	rm -rf $(INSTALLDIR)/www/Advanced_VPN_IPSec.asp
+	rm -rf $(INSTALLDIR)/www/ajax_ipsec.asp
+	rm -rf $(INSTALLDIR)/www/ajax_ipsec_log.xml
+endif
 
 ifneq ($(RTCONFIG_IPSEC), y)
 	rm -rf $(INSTALLDIR)/www/Advanced_VPN_IPSec.asp
@@ -553,24 +569,6 @@ ifneq ($(RTCONFIG_CAPTIVE_PORTAL), y)
 	rm -rf $(INSTALLDIR)/www/ajax_captive_portal_log.asp
 	rm -rf $(INSTALLDIR)/www/jscolor
 endif
-
-ifeq ($(RTCONFIG_CAPTIVE_PORTAL), y)
-ifeq ($(RTCONFIG_CP_FREEWIFI), y)
-	rm -rf $(INSTALLDIR)/www/Captive_Portal_Advanced.asp
-	rm -rf $(INSTALLDIR)/www/Captive_Portal_Advanced.css
-	rm -rf $(INSTALLDIR)/www/Captive_Portal_Advanced_Preview.asp
-	rm -rf $(INSTALLDIR)/www/Captive_Portal_Advanced_template.js
-	rm -rf $(INSTALLDIR)/www/ajax_captive_portal_log.asp
-	rm -rf $(INSTALLDIR)/www/jscolor
-endif
-ifeq ($(RTCONFIG_CP_ADVANCED), y)
-	rm -rf $(INSTALLDIR)/www/Captive_Portal.asp
-	rm -rf $(INSTALLDIR)/www/Captive_Portal.css
-	rm -rf $(INSTALLDIR)/www/Captive_Portal_Preview.asp
-	rm -rf $(INSTALLDIR)/www/Captive_Portal_template.js
-endif
-endif
-
 ifeq ($(RTCONFIG_NOIPTV), y)
 	rm -rf $(INSTALLDIR)/www/Advanced_IPTV_Content.asp
 endif
@@ -581,24 +579,30 @@ ifneq ($(RTCONFIG_TRAFFIC_LIMITER), y)
 endif
 
 ifneq ($(RTCONFIG_IFTTT), y)
-	rm -rf $(INSTALLDIR)/www/Advanced_IFTTT_Pincode.asp
-	rm -rf $(INSTALLDIR)/www/Advanced_Smart_Control_IFTTT.asp
-	rm -rf $(INSTALLDIR)/www/images/New_ui/icon_alexa.jpg
-	rm -rf $(INSTALLDIR)/www/images/New_ui/icon_ifttt.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_asus_router.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_blue_cave.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_step_1.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_step_2.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_step_2_text.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_step_3.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_step_3_acclink.png
-	rm -rf $(INSTALLDIR)/www/images/New_ui/smc_step_4_flow.png
+	rm -rf $(INSTALLDIR)/www/Advanced_Smart_Home_IFTTT.asp
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_ifttt.png
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_ifttt_asus_channel.png
+endif
+ifneq ($(RTCONFIG_ALEXA), y)
+	rm -rf $(INSTALLDIR)/www/Advanced_Smart_Home_Alexa.asp
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_asus_router.png
+endif
+ifneq ($(RTCONFIG_IFTTT)$(RTCONFIG_ALEXA),y)
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_step_1.png
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_step_2.png
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_step_2_text.png
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_step_3.png
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_step_3_acclink.png
+	rm -rf $(INSTALLDIR)/www/images/New_ui/smh_step_4_flow.png
 endif
 
 ifneq ($(RTCONFIG_PORT_BASED_VLAN), y)
 	rm -rf $(INSTALLDIR)/www/Advanced_VLAN_Content.asp
 	rm -rf $(INSTALLDIR)/www/Advanced_VLAN_DHCP_Content.asp
 	rm -rf $(INSTALLDIR)/www/Advanced_VLAN_Group_Content.asp
+endif
+ifneq ($(RTCONFIG_TAGGED_BASED_VLAN), y)
+	rm -rf $(INSTALLDIR)/www/Advanced_TagBasedVLAN_Content.asp
 endif
 ifneq ($(RTCONFIG_FBWIFI), y)
 	rm -rf $(INSTALLDIR)/www/Guest_network_fbwifi.asp
@@ -632,6 +636,8 @@ else ifeq ($(BUILD_NAME),$(filter $(BUILD_NAME), GT-AC5300 GT-AC9600))
 	cd $(INSTALLDIR)/www/require && mv menuTrees/menuTree_ROG.js modules/menuTree.js
 else ifeq ($(BUILD_NAME),BRT-AC828)
 	cd $(INSTALLDIR)/www/require && mv menuTrees/menuTree_BRTAC828.js modules/menuTree.js
+else ifeq ($(BUILD_NAME),BLUECAVE)
+	cd $(INSTALLDIR)/www/require && mv menuTrees/menuTree_BLUECAVE.js modules/menuTree.js	
 else ifeq ($(RTCONFIG_BWDPI),y)
 ifeq ($(findstring $(BUILD_NAME),$(MODELS_HAVE_TRAFFIC_ANALYZER)),)
 	cd $(INSTALLDIR)/www/require && mv menuTrees/menuTree_bwdpi_no_traffic_analyzer.js modules/menuTree.js
@@ -642,7 +648,6 @@ else
 	cd $(INSTALLDIR)/www/require && mv menuTrees/menuTree_no_bwdpi.js modules/menuTree.js
 endif
 	rm -rf $(INSTALLDIR)/www/require/menuTrees
-
 ifneq ($(BUILD_NAME),$(filter $(BUILD_NAME), BRT-AC828))
 	rm -rf $(INSTALLDIR)/www/images/New_ui/networkmap/M2.png
 	rm -rf $(INSTALLDIR)/www/images/New_ui/networkmap/M2_default.png

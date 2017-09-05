@@ -1,7 +1,7 @@
 /*
  * L2 Filter handling functions
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,7 +18,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: bcm_l2_filter.h 604476 2015-12-07 13:46:20Z $
+ * $Id: bcm_l2_filter.h 666933 2016-10-25 08:12:15Z $
  *
  */
 #ifndef _l2_filter_h_
@@ -47,6 +47,13 @@
 	(pub_tick - entry->used > BCM_PARP_ANNOUNCE_WAIT)
 
 #define BCM_ARP_TABLE_UPDATE_TIMEOUT	100
+
+/* Taken from wlc_tdls.h for block_tdls iovar */
+#define TDLS_PAYLOAD_TYPE		2
+#define TDLS_PAYLOAD_TYPE_LEN		1
+
+/* TDLS Action Category code */
+#define TDLS_ACTION_CATEGORY_CODE	12
 
 typedef struct parp_entry {
 	struct parp_entry	*next;
@@ -88,4 +95,5 @@ void bcm_l2_filter_parp_set_smac(arp_table_t* ptable, void* smac);
 void bcm_l2_filter_parp_set_cmac(arp_table_t* ptable, void* cmac);
 bcm_tlv_t* parse_nd_options(void *buf, int buflen, uint key);
 uint16 calc_checksum(uint8 *src_ipa, uint8 *dst_ipa, uint32 ul_len, uint8 prot, uint8 *ul_data);
+extern int bcm_l2_filter_block_tdls(osl_t *osh, void *pktbuf);
 #endif /* _l2_filter_h */

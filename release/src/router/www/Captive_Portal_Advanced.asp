@@ -559,6 +559,26 @@ function gen_basic_settings() {
 	code += "</tr>";
 
 	code += "<tr>";
+	code += "<th>Maximum Download Speed Per Client</th>";/*untranslated*/
+	code += "<td>";
+	code += "<input type='radio' name='cpa_bw_dl' id='cpa_bw_dl_limited'>";
+	code += "<input name='cpa_bw_dl_set' class='input_15_table' value='1' type='text' maxlength='12' autocorrect='off' autocapitalize='off' onKeyPress='return validator.bandwidth_code(this, event);'>";
+	code += "&nbsp;&nbsp;Mb/s";
+	code += "&nbsp;&nbsp;<input type='radio' name='cpa_bw_dl' id='cpa_bw_dl_unlimited' checked><label for='cpa_bw_dl_unlimited'><#Limitless#></label>";
+	code += "</td>";
+	code += "</tr>";
+
+	code += "<tr>";
+	code += "<th>Maximum Upload Speed Per Client</th>";/*untranslated*/
+	code += "<td>";
+	code += "<input type='radio' name='cpa_bw_ul' id='cpa_bw_ul_limited'>";
+	code += "<input name='cpa_bw_ul_set' class='input_15_table' value='1' type='text' maxlength='12' autocorrect='off' autocapitalize='off' onKeyPress='return validator.bandwidth_code(this, event);'>";
+	code += "&nbsp;&nbsp;Mb/s";
+	code += "&nbsp;&nbsp;<input type='radio' name='cpa_bw_ul' id='cpa_bw_ul_unlimited' checked><label for='cpa_bw_ul_unlimited'><#Limitless#></label>";
+	code += "</td>";
+	code += "</tr>";
+
+	code += "<tr>";
 	code += "<th><#FreeWiFi_LandingPage#> (<#FreeWiFi_RedirectPage#>)</th>";
 	code += "<td>";
 	code += "<input style='margin-left:0px;' type='text' name='cpa_landing_page' value='' class='input_25_table' maxlength='64' autocomplete='off' autocorrect='off' autocapitalize='off'>";
@@ -1287,10 +1307,25 @@ function edit_update_content_image(_component_id) {
 	$("input[name=edit_image_walled_garden]").val($.trim($("input[name=edit_image_walled_garden]").val()));
 	var image_walled_garden = $('input[name="edit_image_walled_garden"]').val();
 	if(image_walled_garden != "") {
-		if(!isValidDomin(image_walled_garden)) {
-			add_hint_msg($('input[name="edit_image_walled_garden"]'), "" + image_walled_garden + " is invalid Domain Name");/*untranslated*/
-			$("input[name=edit_image_walled_garden]").focus();
-			return;
+		var validIPFlag = false;
+		if(image_walled_garden.split(".").length == 4) {
+			var part = image_walled_garden.split(".");
+			if(!isNaN(part[0]) && !isNaN(part[1]) && !isNaN(part[2]) && !isNaN(part[3]))
+				validIPFlag = true;
+		}
+		if(validIPFlag) {
+			if(!validator.ipv4_addr(image_walled_garden)) {
+				add_hint_msg($('input[name="edit_image_walled_garden"]'), "" + image_walled_garden + " <#JS_validip#>");
+				$("input[name=edit_image_walled_garden]").focus();
+				return;
+			}
+		}
+		else {
+			if(!validator.domainName(image_walled_garden)) {
+				add_hint_msg($('input[name="edit_image_walled_garden"]'), "" + image_walled_garden + " is invalid Domain Name");/*untranslated*/
+				$("input[name=edit_image_walled_garden]").focus();
+				return;
+			}
 		}
 	}
 
@@ -1583,10 +1618,25 @@ function edit_update_content_text(_component_id) {
 	$("input[name=edit_text_walled_garden]").val($.trim($("input[name=edit_text_walled_garden]").val()));
 	var text_walled_garden = $('input[name="edit_text_walled_garden"]').val();
 	if(text_walled_garden != "") {
-		if(!isValidDomin(text_walled_garden)) {
-			add_hint_msg($('input[name="edit_text_walled_garden"]'), "" + text_walled_garden + " is invalid Domain Name");/*untranslated*/
-			$("input[name=edit_text_walled_garden]").focus();
-			return;
+		var validIPFlag = false;
+		if(text_walled_garden.split(".").length == 4) {
+			var part = text_walled_garden.split(".");
+			if(!isNaN(part[0]) && !isNaN(part[1]) && !isNaN(part[2]) && !isNaN(part[3]))
+				validIPFlag = true;
+		}
+		if(validIPFlag) {
+			if(!validator.ipv4_addr(text_walled_garden)) {
+				add_hint_msg($('input[name="edit_text_walled_garden"]'), "" + text_walled_garden + " <#JS_validip#>");
+				$("input[name=edit_text_walled_garden]").focus();
+				return;
+			}
+		}
+		else {
+			if(!validator.domainName(text_walled_garden)) {
+				add_hint_msg($('input[name="edit_text_walled_garden"]'), "" + text_walled_garden + " is invalid Domain Name");/*untranslated*/
+				$("input[name=edit_text_walled_garden]").focus();
+				return;
+			}
 		}
 	}
 	var text_decoration = (text_walled_garden == "") ? "none" : "underline";
@@ -2599,6 +2649,22 @@ function editProfile(_profile_id) {
 	}
 	showHideVerification();
 
+	if(edit_profile_content[14] == undefined || edit_profile_content[14] == 0) {
+		$("#cpa_bw_dl_unlimited").prop("checked", true);
+	}
+	else {
+		$("#cpa_bw_dl_limited").prop("checked", true);
+		$("input[name=cpa_bw_dl_set]").val(edit_profile_content[14]/1024);
+	}
+
+	if(edit_profile_content[15] == undefined || edit_profile_content[15] == 0) {
+		$("#cpa_bw_ul_unlimited").prop("checked", true);
+	}
+	else {
+		$("#cpa_bw_ul_limited").prop("checked", true);
+		$("input[name=cpa_bw_ul_set]").val(edit_profile_content[15]/1024);
+	}
+
 	show_local_clientlist();
 }
 function switch_tab(_idx) {
@@ -3067,6 +3133,35 @@ function finishRule(flag) {
 
 	//profile active (1) or deactivate (0)
 	captive_portal_adv_current_edit_array.push(1);
+
+	//bandwidth limiter
+	if($("input[name=cpa_bw_dl]:checked")[0].id == "cpa_bw_dl_unlimited") {
+		captive_portal_adv_current_edit_array.push(0);
+	}
+	else {
+		if(($("input[name=cpa_bw_dl_set]").val().split(".").length > 2 || $("input[name=cpa_bw_dl_set]").val() < 0.1) || isNaN(parseFloat($("input[name=cpa_bw_dl_set]").val()))) {
+			captive_portal_adv_edit_idx = 1;
+			set_tab_and_action_btn();
+			alert("<#min_bound#> : 0.1 Mb/s");
+			$("input[name=cpa_bw_dl_set]").focus();
+			return false;
+		}
+		captive_portal_adv_current_edit_array.push($("input[name=cpa_bw_dl_set]").val().trim()*1024);
+	}
+
+	if($("input[name=cpa_bw_ul]:checked")[0].id == "cpa_bw_ul_unlimited") {
+		captive_portal_adv_current_edit_array.push(0);
+	}
+	else {
+		if(($("input[name=cpa_bw_ul_set]").val().split(".").length > 2 || $("input[name=cpa_bw_ul_set]").val() < 0.1) || isNaN(parseFloat($("input[name=cpa_bw_ul_set]").val()))) {
+			captive_portal_adv_edit_idx = 1;
+			set_tab_and_action_btn();
+			alert("<#min_bound#> : 0.1 Mb/s");
+			$("input[name=cpa_bw_ul_set]").focus();
+			return false;
+		}
+		captive_portal_adv_current_edit_array.push($("input[name=cpa_bw_ul_set]").val().trim()*1024);
+	}
 
 	//save splash page setting
 	var check_pattern = function(obj) {
@@ -3839,10 +3934,7 @@ function finishRule(flag) {
 		captive_portal_adv_profile_list += captive_portal_adv_profile_item;
 		rc_service_wl_en = re_gen_wl_if(captive_portal_adv_profile_item.split(">")[5]);
 		rc_service_wl_dis = "";
-		if($("input[name=cpa_verification]:checked").val() == "0") //local
-			captive_portal_adv_local_clientlist += "<" + profile_id + ">" + local_list_current;
-		else
-			captive_portal_adv_local_clientlist += "<" + profile_id + ">";
+		captive_portal_adv_local_clientlist += "<" + profile_id + ">" + local_list_current;
 	}
 	else {
 		var captive_portal_adv_profile_list_temp = "";
@@ -3868,10 +3960,7 @@ function finishRule(flag) {
 			if(local_clientlist_row[i] != "") {
 				var captive_portal_list_col = local_clientlist_row[i].split(">");
 				if(flag == captive_portal_list_col[0]) {
-					if($("input[name=cpa_verification]:checked").val() == "0") //local
-						adv_local_clientlist_temp += "<" + profile_id + ">" + local_list_current;
-					else
-						adv_local_clientlist_temp += "<" + profile_id + ">";
+					adv_local_clientlist_temp += "<" + profile_id + ">" + local_list_current;
 				}
 				else {
 					adv_local_clientlist_temp += "<" + local_clientlist_row[i];
@@ -4842,19 +4931,6 @@ function remove_hint_msg() {
 		$(".hint_msg").remove();
 	}
 }
-function isValidDomin(_val) {
-	//domin name
-	 var re = new RegExp(/^((?:(?:(?:\w[\.\-\+]?)*)\w)+)((?:(?:(?:\w[\.\-\+]?){0,62})\w)+)\.(\w{2,6})$/); 
-	 if(_val.match(re))
-	 	return true;
-
-	//ip
-	if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(_val)) {
-		return true;
-	}
-
-	return false;
-}
 </script>
 
 </head>
@@ -4872,7 +4948,7 @@ function isValidDomin(_val) {
 <input type="hidden" name="modified" value="0">
 <input type="hidden" name="action_mode" value="apply_new">
 <input type="hidden" name="action_script" value="restart_wireless;restart_CP;restart_uam_srv;">
-<input type="hidden" name="action_wait" value="15">
+<input type="hidden" name="action_wait" value="50">
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
 <input type="hidden" name="captive_portal_adv_enable" value="<% nvram_get("captive_portal_adv_enable"); %>">

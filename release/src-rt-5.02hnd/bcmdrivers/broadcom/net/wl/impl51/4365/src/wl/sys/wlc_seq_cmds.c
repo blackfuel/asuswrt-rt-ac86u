@@ -34,7 +34,7 @@
  * Because of the nature of the batching, it is suited towards a series of
  * set commands. IOCTLs/IOVARS that query information are not supported.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

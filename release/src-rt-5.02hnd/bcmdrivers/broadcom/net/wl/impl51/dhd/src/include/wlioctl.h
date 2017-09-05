@@ -6,7 +6,7 @@
  *
  * Definitions subject to change without notice.
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,7 +21,7 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wlioctl.h 654912 2016-08-17 06:22:26Z $
+ * $Id: wlioctl.h 663486 2016-10-05 15:26:04Z $
  */
 
 #ifndef _wlioctl_h_
@@ -2266,6 +2266,7 @@ typedef struct {
 	uint32	txdatamcast;	/**< Number of TX multicast data packets */
 	uint32	txdatabcast;	/**< Number of TX broadcast data packets */
 	uint32	psmxwds;	/**< Number of PSMx watchdogs */
+	uint32	txchain_shutdown; /* Number of Txchain shutdowns due to over temperature */
 } wl_cnt_wlc_t;
 
 /* MACXSTAT counters for ucodex (corerev >= 64) */
@@ -5171,6 +5172,8 @@ typedef struct {
 /* structure/defines for selective mgmt frame (smf) stats support */
 
 #define SMFS_VERSION 1
+#define SMFS_8021x_AUTHORIZE	0xFFFB
+#define SMFS_8021x_DEAUTHORIZE	0xFFFC
 /* selected mgmt frame (smf) stats element */
 typedef struct wl_smfs_elem {
 	uint32 count;
@@ -5203,6 +5206,8 @@ typedef enum smfs_type {
 	SMFS_TYPE_DISASSOC_RX,
 	SMFS_TYPE_DEAUTH_TX,
 	SMFS_TYPE_DEAUTH_RX,
+	SMFS_TYPE_AUTHORIZE,
+	SMFS_TYPE_DEAUTHORIZE,
 	SMFS_TYPE_MAX
 } smfs_type_t;
 

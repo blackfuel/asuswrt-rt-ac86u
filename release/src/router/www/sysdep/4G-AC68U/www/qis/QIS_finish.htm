@@ -1097,24 +1097,7 @@ function QKfinish_load_body(){
 				$("#lanip")[0].innerHTML = parent.staticIP;
 				document.getElementById("applyBtn").innerHTML = "<div style='text-align:left;margin-left:70px;'><br/><br/><#SAVE_restart_desc#><br><#LAN_IP_changed_suggedtion1#>&nbsp;" + parent.staticIP + "&nbsp;<#LAN_IP_changed_suggedtion2#></div>";
 				
-				var startQuery = function(){
-					$.ajax({ 
-						url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
-						dataType: 'jsonp',
-						timeout: 2000,
-
-						error: function(){
-							setTimeout(function(){
-								startQuery();
-							}, 1000);
-						}
-					});
-
-				}
-
-				setTimeout(function(){
-					startQuery();
-				}, 80000);
+				setTimeout(startQuery, 80000);
 			}
 			else{
 				$("#lanip")[0].innerHTML = "<#BOP_ctype_title1#>";
@@ -1169,29 +1152,33 @@ function QKfinish_load_body(){
 	if(!parent.sysReboot) setTimeout("check_firmware();", 1000);
 }
 
+var startQuery = function(){
+	$.ajax({ 
+		url: location_org.replace(header_info[0].host, parent.staticIP) + "/repage.json",
+		dataType: "script",
+		timeout: 5000,
+		success: function(){
+			top.location.href = location_org.replace(header_info[0].host, parent.staticIP);
+		},
+		error: function(){
+			setTimeout(startQuery, 1000);
+		}
+	});
+};
+
 function check_firmware(){
 	if(!parent.new_FW){
 		gotoNext();
 	}	
 }
 
-function repage(){
-	top.location.href = "http://" + parent.staticIP;					
-}
-
 function gotoASUS(){
 	parent.location.href = "http://www.asus.com/support/";
 }
 
-var wans_dualwan_orig = '<% nvram_get("wans_dualwan"); %>';
 function goto_index(){
 	document.restartForm.force_change.value++;
 	document.restartForm.action_wait.value = 0;
-
-	if(parent.gobi_support && autodet_state == "4" && parent.usb_connected == 1 && wans_dualwan_orig == "wan usb"){
-		document.restartForm.wans_dualwan.disabled = false;
-		document.restartForm.wans_dualwan.value = "usb wan";
-	}
 
 	if(parent.QKform.wans_dualwan.disabled == false){
 		document.restartForm.wans_dualwan.disabled = false;
@@ -1241,10 +1228,6 @@ function goto_index(){
 		}
 
 		document.restartForm.action_script.value = actionScriptArray.join(";");
-	}
-
-	if(parent.gobi_support && wans_mode == "lb" && parent.based_modelid == "4G-AC55U"){
-		document.restartForm.wans_mode.disabled = false;
 	}
 
 	document.restartForm.submit();
@@ -1883,7 +1866,6 @@ function detect_redirect(){
 	<input type="hidden" name="action_wait" value="0">
 	<input type="hidden" name="x_Setting" value="1">
 	<input type="hidden" name="force_change" value="<% nvram_get("force_change"); %>">
-	<input type="hidden" name="wans_mode" value="fo" disabled>
 	<input type="hidden" name="wans_dualwan" value="<% nvram_get("wans_dualwan"); %>" disabled>
 	<!--USB Modem-->
 	<input type="hidden" name="modem_enable" value="<% nvram_get("modem_enable"); %>" disabled>

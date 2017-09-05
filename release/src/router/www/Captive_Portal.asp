@@ -134,6 +134,15 @@ function initial_landing_setting() {
 			$("#cb_terms_service").prop("checked", false);
 		}
 
+		var passcode_value = decodeURIComponent('<% nvram_char_to_ascii("", "captive_portal_passcode"); %>');
+		$("input[name=passcode]").val(passcode_value);
+		if(captive_portal_array[setting_profile_id][6] == "1") {
+			$("#cb_passcode").prop("checked", true);
+		}
+		else {
+			$("#cb_passcode").prop("checked", false);
+		}
+
 		var set_checkbox_status = function(_unit, _status) {
 			if($("input[name=cb_wl_" + _unit + "]").length) {
 				$("#cb_wl_" + _unit + "").prop("checked", _status);
@@ -164,6 +173,12 @@ function initial_landing_setting() {
 				}
 			}
 		}
+
+		if(captive_portal_array[setting_profile_id][7] != undefined)
+			$("input[name=bandwidth_limiter_dl]").val(captive_portal_array[setting_profile_id][7]/1024);
+		if(captive_portal_array[setting_profile_id][8] != undefined)
+			$("input[name=bandwidth_limiter_ul]").val(captive_portal_array[setting_profile_id][8]/1024);
+
 	}
 	else {
 		var template_icon = template_1;
@@ -173,6 +188,7 @@ function initial_landing_setting() {
 		splash_image_base64 = template_icon;
 	}
 	update_terms_service();
+	update_passcode();
 }
 function gen_guestnetwork_wl() {
 	var code = "";
@@ -384,6 +400,14 @@ function update_terms_service() {
 		$("#splash_template_terms_service").css("display", "none");
 	}
 }
+function update_passcode() {
+	if($("#cb_passcode").prop("checked")) {
+		$("#splash_template_passcode").css("display", "");
+	}
+	else {
+		$("#splash_template_passcode").css("display", "none");
+	}
+}
 function splash_image_size_change() {
 	var size_type = $("#splash_image_size").val();
 	switch(size_type) {
@@ -443,6 +467,7 @@ function gen_splash_page() {
 					code += "</div>";
 					code += "<div id='splash_template_brand_name' class='splash_template_brand_name'><#FreeWiFi_BrandName#>";
 					code += "</div>";
+					code += "<input id='splash_template_passcode' name='splash_template_passcode' class='splash_template_passcode' value='Please enter Passcode' type='text' maxlength='64' autocorrect='off' autocapitalize='off' disabled=true;>";
 					code += "<div id='splash_template_terms_service' class='splash_template_terms_service'>";
 						code += "<div style='width: 15%;float: left;'>";
 							code += "<input type='checkbox' checked disabled>";
@@ -487,6 +512,13 @@ function gen_splash_page() {
 		}
 
 		code += "<div class='splash_item_content'>";
+			code += "<div class='splash_item_title'>Passcode</div>";/*untranslated*/
+			code += "<input type='checkbox' name='cb_passcode' id='cb_passcode' onchange='update_passcode();'>";
+			code += "Option: Add your own Passcode";/*untranslated*/
+			code += "<input name='passcode' class='input_25_table' value='' type='text' maxlength='64' autocorrect='off' autocapitalize='off'>";
+		code += "</div>";
+
+		code += "<div class='splash_item_content'>";
 			code += "<div class='splash_item_title'><#Terms_of_Service#></div>";
 			code += "<input type='checkbox' name='cb_terms_service' id='cb_terms_service' onchange='update_terms_service();' checked>";
 			code += "<#FreeWiFi_OptionHint#>";
@@ -500,6 +532,17 @@ function gen_splash_page() {
 			code += "<input name='session_length' class='input_6_table' value='60' type='text' maxlength='3' autocorrect='off' autocapitalize='off' onKeyPress='return validator.isNumber(this, event);'>";
 			code += "<span class='splash_item_text'><#Minute#></span>";
 			//code += "<span class='splash_item_hint'>(<#Setting_factorydefault_value#> : 60)</span>";
+		code += "</div>";
+
+		code += "<div class='splash_item_content'>";
+			code += "<div class='splash_item_title'><#Bandwidth_Limiter#></div>";
+			code += "<span class='splash_item_hint' style='margin:0px;'>(<#EzQoS_bandwidth_note2#>)</span>";
+			code += "<div class='splash_item_title'><#option_download#></div>";
+			code += "<input name='bandwidth_limiter_dl' class='input_15_table' value='0' type='text' maxlength='12' autocorrect='off' autocapitalize='off' onKeyPress='return validator.bandwidth_code(this, event);'>";
+			code += "<span class='splash_item_text'>Mb/s</span>";
+			code += "<div class='splash_item_title'><#option_upload#></div>";
+			code += "<input name='bandwidth_limiter_ul' class='input_15_table' value='0' type='text' maxlength='12' autocorrect='off' autocapitalize='off' onKeyPress='return validator.bandwidth_code(this, event);'>";
+			code += "<span class='splash_item_text'>Mb/s</span>";
 		code += "</div>";
 
 		code += "<div class='splash_item_content'>";
@@ -636,6 +679,25 @@ function apply() {
 			if(!validator.numberRange($("input[name=session_length]")[0], 1, 999))
 				return false;
 
+			//bandwidth limiter
+			if(!validator.isEmpty($("input[name=bandwidth_limiter_dl]")[0]))
+				return false;
+
+			if(($("input[name=bandwidth_limiter_dl]").val() !== "0" && ($("input[name=bandwidth_limiter_dl]").val().split(".").length > 2 || $("input[name=bandwidth_limiter_dl]").val() < 0.1)) || isNaN(parseFloat($("input[name=bandwidth_limiter_dl]").val()))) {
+				alert("<#min_bound#> : 0.1 Mb/s");
+				$("input[name=bandwidth_limiter_dl]").focus();
+				return false;
+			}
+
+			if(!validator.isEmpty($("input[name=bandwidth_limiter_ul]")[0]))
+				return false;
+
+			if(($("input[name=bandwidth_limiter_ul]").val() !== "0" && ($("input[name=bandwidth_limiter_ul]").val().split(".").length > 2 || $("input[name=bandwidth_limiter_ul]").val() < 0.1)) || isNaN(parseFloat($("input[name=bandwidth_limiter_ul]").val()))) {
+				alert("<#min_bound#> : 0.1 Mb/s");
+				$("input[name=bandwidth_limiter_ul]").focus();
+				return false;
+			}
+
 			//combine landing page none and internet
 			if($("input[name=internet_website]").val().trim() != "") {
 				var landingPage = $("input[name=internet_website]").val().trim();
@@ -645,6 +707,28 @@ function apply() {
 				}
 			}
 
+			if($("#cb_passcode").prop("checked")) {
+				var passcode_value = $("input[name=passcode]").val().trim();
+				if(passcode_value == "") {
+					alert("<#JS_fieldblank#>");
+					$("input[name=passcode]").focus();
+					return false;
+				}
+				else if(passcode_value.length > 0 && passcode_value.length < 5) {
+					alert("* <#JS_short_password#>");
+					$("input[name=passcode]").focus();
+					return false;
+				}
+
+				//confirm common string combination	#JS_common_passwd#
+				var is_common_string = check_common_string(passcode_value, "httpd_password");
+				if(passcode_value.length > 0 && is_common_string){
+					if(!confirm("<#JS_common_passwd#>")){
+						$("input[name=passcode]").focus();
+						return false;
+					}
+				}
+			}
 			return true;
 		};
 
@@ -708,6 +792,7 @@ function apply() {
 		document.form.captive_portal_2g.disabled = true;
 		document.form.captive_portal_5g.disabled = true;
 		document.form.captive_portal_5g_2.disabled = true;
+		document.form.captive_portal_passcode.disabled = true;
 		document.form.captive_portal_2g_if.value = "off";
 		document.form.captive_portal_5g_if.value = "off";
 		document.form.captive_portal_5g_2_if.value = "off";
@@ -719,8 +804,12 @@ function call_back_to_save_config(_splash_page_status) {
 	if(_splash_page_status) {
 		var _profile_id = setting_profile_id;
 		var terms_service_status = $("#cb_terms_service").prop("checked");
+		var passcode_status = $("#cb_passcode").prop("checked");
+		var passcode =  $("input[name=passcode]").val().trim();
 		var brand_name = $("input[name=brand_name]").val().trim();
 		var session_time = $("input[name=session_length]").val().trim();
+		var bandwidth_limiter_dl = $("input[name=bandwidth_limiter_dl]").val().trim()*1024;
+		var bandwidth_limiter_ul = $("input[name=bandwidth_limiter_ul]").val().trim()*1024;
 		var landing_type = "0";
 		//combine landing page none and internet
 		if($("input[name=internet_website]").val().trim() == "") {
@@ -751,7 +840,7 @@ function call_back_to_save_config(_splash_page_status) {
 		}
 
 		var captive_portal_temp = "";
-		captive_portal_temp += "<" + _profile_id + ">" + brand_name + ">" + session_time + ">" + landing_type + ">" + landing_type_value + ">" + wl_list + ">" + ((terms_service_status) ? "1" : "0");
+		captive_portal_temp += "<" + _profile_id + ">" + brand_name + ">" + session_time + ">" + landing_type + ">" + landing_type_value + ">" + wl_list + ">" + ((terms_service_status) ? "1" : "0") + ">" + ((passcode_status) ? "1" : "0") + ">" + bandwidth_limiter_dl + ">" + bandwidth_limiter_ul;
 		document.form.captive_portal.value = captive_portal_temp;
 		document.form.captive_portal_2g.value = $("input[name=wl_0]").val().trim();
 		if(wl_info.band5g_support)
@@ -766,7 +855,8 @@ function call_back_to_save_config(_splash_page_status) {
 				document.form.next_page.value = "Guest_network.asp";
 			}
 		}
-		
+
+		document.form.captive_portal_passcode.value = passcode;
 		document.form.submit();
 	}
 	else {
@@ -779,6 +869,7 @@ function save_splash_page_content() {
 	var terms_service = encode_decode_text($('textarea#terms_service').val(), "encode");
 	var brand_name = encode_decode_text($("input[name=brand_name]").val().trim(), "encode");
 	var terms_service_status = $("#cb_terms_service").prop("checked");
+	var passcode_status = $("#cb_passcode").prop("checked");
 	var image_size = $("#splash_image_size").val();
 	var splash_page_setting = '';
 	splash_page_setting += '{\n';
@@ -847,10 +938,23 @@ function save_splash_page_content() {
 		html_landing_css += ".splash_template_terms_service_cb {\n";
 		html_landing_css += "width: 15%;\n";
 		html_landing_css += "float: left;\n";
+		html_landing_css += "margin-top: 2%;\n";
 		html_landing_css += "}\n";
 		html_landing_css += ".splash_template_terms_service_text {\n";
 		html_landing_css += "width: 85%;\n";
 		html_landing_css += "float: left;\n";
+		html_landing_css += "}\n";
+	}
+	if(passcode_status) {
+		html_landing_css += ".splash_template_passcode {\n";
+		html_landing_css += "background-color: rgba(74, 144, 226, 0.5);\n";
+		html_landing_css += "border-radius: 4px;\n";
+		html_landing_css += "width: 90%;\n";
+		html_landing_css += "border: 0px;\n";
+		html_landing_css += "color: #FFFFFF;\n";
+		html_landing_css += "padding-left: 2%;\n";
+		html_landing_css += "font-size: 12px;\n";
+		html_landing_css += "margin-left: 4%;\n";
 		html_landing_css += "}\n";
 	}
 	html_landing_css += ".splash_body {\n";
@@ -1148,6 +1252,11 @@ function save_splash_page_content() {
 		html_landing += "document.getElementById('splash_template_continue').style.fontSize = (12 * _ratio) + 'px';\n";
 		html_landing += "document.getElementById('splash_template_continue').style.lineHeight = (25 * _ratio) + 'px';\n";
 		html_landing += "document.getElementById('splash_template_continue').style.margin = '' + (15 * _ratio) + 'px auto';\n";
+		if(passcode_status) {
+			html_landing += "document.getElementById('splash_template_passcode').style.height = (20 * _ratio) + 'px';\n";
+			html_landing += "document.getElementById('splash_template_passcode').style.fontSize = (12 * _ratio) + 'px';\n";
+			html_landing += "document.getElementById('splash_template_passcode').style.lineHeight = (20 * _ratio) + 'px';\n";
+		}
 		html_landing += "}\n";
 		if(terms_service_status) {
 			html_landing += "function control_bt_status() {\n";
@@ -1159,15 +1268,7 @@ function save_splash_page_content() {
 			html_landing += "document.getElementById('splash_template_continue').style.opacity = 0.5;\n";
 			html_landing += "}\n";
 			html_landing += "}\n";
-			html_landing += "function continue_action() {\n";
-			html_landing += "var _obj = document.getElementById('cbTermService');\n";
-			html_landing += "if(_obj.checked) {\n";
-			html_landing += "formSubmit(0);\n";
-			html_landing += "}\n";
-			html_landing += "else {\n";
-			html_landing += "alert('You must agree to the terms of service before continuing.');\n";
-			html_landing += "}\n";
-			html_landing += "}\n";
+			
 			html_landing += "function open_term_service() {\n";
 			html_landing += "if(isMobile()) {\n";
 			html_landing += "$('#terms_service').css('display', 'block');\n";
@@ -1189,11 +1290,31 @@ function save_splash_page_content() {
 			html_landing += "}\n";
 			html_landing += "}\n";
 		}
-		else {
-			html_landing += "function continue_action() {\n";
-			html_landing += "formSubmit(0);\n";
+
+		html_landing += "function continue_action() {\n";
+		html_landing += "var passcode_status = false;\n";
+		if(passcode_status) {
+			html_landing += "passcode_status = true;\n";
+			html_landing += "var _obj_value = document.getElementById('splash_template_passcode').value.trim();\n";
+			html_landing += "if(_obj_value == '') {\n";
+			html_landing += "alert('<#JS_fieldblank#>');\n";
+			html_landing += "document.getElementById('splash_template_passcode').focus();\n";
+			html_landing += "return false;\n";
 			html_landing += "}\n";
 		}
+		if(terms_service_status) {
+			html_landing += "var _obj = document.getElementById('cbTermService');\n";
+			html_landing += "if(!_obj.checked) {\n";
+			html_landing += "alert('You must agree to the terms of service before continuing.');\n";
+			html_landing += "return false;\n";
+			html_landing += "}\n";
+		}
+		html_landing += "if(passcode_status)\n";
+		html_landing += "formSubmit(2);\n";
+		html_landing += "else\n";
+		html_landing += "formSubmit(0);\n";
+		html_landing += "}\n";
+
 		html_landing += "function isMobile() {\n";
 		html_landing += "var userAgentString = navigator.userAgent.toLowerCase();\n";
 		html_landing += "var mobile = ['iphone','ipad','ipod','android','blackberry','nokia','opera mini','windows mobile','windows phone','iemobile','mobile safari','bb10; touch', 'tablet'];\n";
@@ -1229,6 +1350,9 @@ function save_splash_page_content() {
 		html_landing += "</svg>\n";
 		html_landing += "<div id='splash_template_title' class='splash_template_title'>Welcome to</div>\n";
 		html_landing += "<div id='splash_template_brand_name' class='splash_template_brand_name'><#FreeWiFi_BrandName#></div>\n";
+		if(passcode_status) {
+			html_landing += "<input id='splash_template_passcode' name='splash_template_passcode' class='splash_template_passcode' value='' placeHolder='Please enter Passcode' type='text' maxlength='64' autocorrect='off' autocapitalize='off'>\n";
+		}
 		if(terms_service_status) {
 			html_landing += "<div id='splash_template_terms_service' class='splash_template_terms_service'>\n";
 				html_landing += "<div class='splash_template_terms_service_cb'>\n";
@@ -1712,7 +1836,7 @@ function check_gn_if_status(_subunit, _gn_array) {
 <input type="hidden" name="modified" value="0">
 <input type="hidden" name="action_mode" value="apply_new">
 <input type="hidden" name="action_script" value="set_captive_portal_wl;restart_wireless;restart_chilli;restart_uam_srv;">
-<input type="hidden" name="action_wait" value="15">
+<input type="hidden" name="action_wait" value="50">
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
 <input type="hidden" name="captive_portal" value="">
@@ -1723,6 +1847,7 @@ function check_gn_if_status(_subunit, _gn_array) {
 <input type="hidden" name="captive_portal_5g_if" value="">
 <input type="hidden" name="captive_portal_5g_2_if" value="">
 <input type="hidden" name="captive_portal_enable" value="<% nvram_get("captive_portal_enable"); %>">
+<input type="hidden" name="captive_portal_passcode" value="">
 
 <table class="content" align="center" cellpadding="0" cellspacing="0">
 	<tr>

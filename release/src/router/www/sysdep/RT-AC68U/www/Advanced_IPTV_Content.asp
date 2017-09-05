@@ -76,8 +76,9 @@ function initial(){
 	
 	document.form.switch_stb_x.value = original_switch_stb_x;
 	disable_udpxy();
-	if(!Rtkwifi_support && !Qcawifi_support)
+	if(!Rtkwifi_support && !Qcawifi_support && !hnd_support){
 		document.getElementById('enable_eff_multicast_forward').style.display="";
+	}
 	
 	if(dualWAN_support)
 		document.getElementById("IPTV_desc_DualWAN").style.display = "";
@@ -88,7 +89,7 @@ function initial(){
 		document.form.switch_stb_x.remove(5);	//LAN1 & LAN2
 		document.form.switch_stb_x.remove(1);	//LAN1
 	}
-	else if(based_modelid == "GT-AC5300"){ //MODELDEP: GT-AC5300 : TRUNK ports
+	else if(based_modelid == "GT-AC5300" || based_modelid == "GT-AC9600"){ //MODELDEP: GT-AC5300 : TRUNK ports
 		document.getElementById("port_settings").style.display = "";
 		if(iptv_port_settings_orig == "12"){
 			document.getElementById("switch_stb_x").options[3].text = "LAN1"; 	 //P1
@@ -114,18 +115,6 @@ function initial(){
 		document.form.switch_stb_x.remove(2);
 		document.form.switch_stb_x.remove(1);
 		show_gaming_note(iptv_port_settings_orig);
-	}
-	else if(based_modelid == "RT-AC86U" || based_modelid == "AC2900"){ //MODELDEP: RT-AC86U/AC2900 : TRUNK ports
-		document.getElementById("switch_stb_x").options[3].text = "LAN1"; 	 //P3
-		document.getElementById("switch_stb_x").options[4].text = "LAN2";	 //P2
-		document.getElementById("switch_stb_x").options[6].text = "LAN1 & LAN2"; //P3+P2
-		document.form.switch_stb_x.remove(5);   //LAN3 & LAN4
-		document.form.switch_stb_x.remove(2);   //LAN4
-		document.form.switch_stb_x.remove(1);   //LAN3
-		document.getElementById("voip_port").innerHTML = "LAN2";	//P2
-		document.getElementById("iptv_port").innerHTML = "LAN1";	//P3
-		document.getElementById("voip_port3").innerHTML = "LAN port 2"; //P2
-		document.getElementById("iptv_port4").innerHTML = "LAN port 1"; //P3
 	}
 	if( !meoVoda_support ){
 		document.getElementById('meoOption').outerHTML = "";
@@ -275,10 +264,12 @@ function ISP_Profile_Selection(isp){
 	document.getElementById("wan_voip_port3_x").style.display = ISP_setting[5];
 	document.form.switch_stb_x.value = ISP_setting[6];
 	document.getElementById("mr_enable_field").style.display = ISP_setting[7];
-	if(!Rtkwifi_support && !Qcawifi_support)
+	if(!Rtkwifi_support && !Qcawifi_support && !hnd_support){
 		document.getElementById("enable_eff_multicast_forward").style.display = ISP_setting[8];
-	else
+	}
+	else{
 		document.getElementById("enable_eff_multicast_forward").style.display = "none";
+	}
 
 	document.getElementById("iptv_settings_btn").style.display = ISP_setting[9];
 	document.getElementById("voip_settings_btn").style.display = ISP_setting[10];

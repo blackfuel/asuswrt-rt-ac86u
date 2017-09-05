@@ -56,7 +56,7 @@ struct _mac_address {
 } __attribute__ ((packed));
 
 /* PKT_PRIO_LVL_CNT should never exceed 16.
- * If it does make sure the prio_bitmap in the ctf_brc_hot structure
+ * If it does make sure the prio_bitmap in the wl_pktc_tbl structure
  * and priority encoding logic between FAP and Ethernet driver for TX WLAN flows are modified
  */
 #define PKT_PRIO_LVL_CNT	16 	/* PKT_PRIO_BASE_CNT * PKT_PRIO_LVL */
@@ -88,7 +88,6 @@ struct pktc_info {
 	c_stats_t	stats;		/* pktc stats */
 	osl_t		*osh;		/* pointer to os handler */
 	void		*wlif;
-	uint16		txsbnd;		/* chain size bound */
 	uint8		prio;
 };
 typedef struct pktc_info pktc_info_t;
@@ -170,19 +169,19 @@ unsigned long pktc_tbl_update_fn(wl_pktc_tbl_t *pt, uint8 *da, struct net_device
 unsigned long pktc_tbl_lookup_fn(wl_pktc_tbl_t *pt, uint8_t *da);
 
 /* PKTC requests */
-#define PKTC_TBL_INIT			1    /* Initialize hot bridge table */
-#define PKTC_TBL_GET_BY_DA		2    /* Get BRC_HOT pointer for pkt chaining by dest addr */
-#define PKTC_TBL_GET_BY_IDX		3    /* Get BRC_HOT pointer for pkt chaining by table idx */
-#define PKTC_TBL_UPDATE			4    /* To update BRC_HOT entry */
+#define PKTC_TBL_INIT			1    /* Initialize pktc table */
+#define PKTC_TBL_GET_BY_DA		2    /* Get pktc_tbl pointer for pkt chaining by dest addr */
+#define PKTC_TBL_GET_BY_IDX		3    /* Get pktc_tbl pointer for pkt chaining by table idx */
+#define PKTC_TBL_UPDATE			4    /* To update pktc_tbl entry */
 #define PKTC_TBL_UPDATE_WLAN_HANDLE	5    /* To update wlan handle */
 #define PKTC_TBL_SET_TX_MODE		6    /* To set pktc tx mode: enabled=0, disabled=1 */
 #define PKTC_TBL_GET_TX_MODE		7    /* To get pktc tx mode: enabled=0, disabled=1 */
-#define PKTC_TBL_DELETE			8    /* To delete BRC_HOT entry */
-#define PKTC_TBL_DUMP			9    /* To dump BRC_HOT table */
-#define PKTC_TBL_GET_START_ADDRESS	10   /* Get the address/top of BRC_HOT table */
+#define PKTC_TBL_DELETE			8    /* To delete pktc_tbl entry */
+#define PKTC_TBL_DUMP			9    /* To dump pktc_tbl table */
+#define PKTC_TBL_GET_START_ADDRESS	10   /* Get the address/top of pktc_tbl table */
 #define PKTC_TBL_DELETE_WLAN_HANDLE	11   /* To delete wlan handle in wldev table */
 #define PKTC_TBL_UPDATE_WFD_IDX_BY_DEV	12   /* To update WFD Index by WLAN Dev */
-#define PKTC_TBL_FLUSH			13   /* To flush out entire BRC_HOT table */
+#define PKTC_TBL_FLUSH			13   /* To flush out entire pktc_tbl table */
 
 extern unsigned long wl_pktc_req(int rid, unsigned long p0, unsigned long p1, unsigned long p2);
 extern unsigned long(* wl_pktc_req_hook)(int rid, unsigned long p0, unsigned long p1,
@@ -198,10 +197,8 @@ extern void wl_txchain_unlock(pktc_info_t *pktci);
 extern void BCMFASTPATH wl_start_pktc(pktc_info_t *pktci, struct net_device *dev,
 	struct sk_buff *skb);
 
-#if defined(PKTC_TBL)
 extern int (*send_packet_to_upper_layer)(struct sk_buff *skb);
 extern int inject_to_fastpath;
-#endif
 
 extern wl_pktc_tbl_t *wl_pktc_attach(struct wl_info *wl, struct wl_if *wlif);
 extern void wl_pktc_detach(struct wl_info *wl);
@@ -225,6 +222,25 @@ extern void wl_pktpreallocdec(uint8 unit, struct sk_buff *skb);
 extern bool wl_pkt_drop_on_wmark(void *wl_ptr, struct sk_buff *skb, bool is_pktc);
 
 #define PKT_PREALLOCINC(osh, skb, c) osl_pktpreallocinc((osh), (skb), c)
+#define CTF_ENAB(wl)	(!(wl)->prealloc_skb_mode)
 #endif
+
+/* DHD part */
+
+#if defined(BCM_ROUTER_DHD)
+#if defined(PKTC_TBL)
+extern unsigned long dhd_pktc_req(int req_id, unsigned long param0, unsigned long param1, unsigned long param2);
+extern wl_pktc_tbl_t *dhd_pktc_attach(void *dhdp);
+extern void dhd_pktc_dump(void *dhdp, void *buf);
+extern int32 dhd_rxchainhandler(void *dhdp, struct sk_buff *skb);
+extern unsigned long (*dhd_pktc_req_hook)(int req_id, unsigned long param0, unsigned long param1, unsigned long param2);
+extern void dhd_pktc_del(unsigned long addr);
+extern void (*dhd_pktc_del_hook)(unsigned long addr);
+#endif /* PKTC_TBL */
+
+#if !defined(HNDCTF)
+#define CTF_ENAB(x)	FALSE
+#endif
+#endif /* BCM_ROUTER_DHD */
 
 #endif /* _wl_pktc_h_ */

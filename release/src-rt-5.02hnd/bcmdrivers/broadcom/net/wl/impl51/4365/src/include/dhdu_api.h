@@ -2,7 +2,7 @@
  * Entry points for dhd utility application for platforms where the dhd utility
  * is not a standalone application.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

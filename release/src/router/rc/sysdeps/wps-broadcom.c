@@ -381,7 +381,7 @@ int is_wps_stopped(void)
 			break;
 		case 10: /* WPS_UI_ASSOCIATING */
 			ret = 0;
-			dbg("Assciating with access point...\n");
+			dbg("Associating with access point...\n");
 			break;
 		default:
 			ret = 0;

@@ -106,6 +106,7 @@ int is_wps_stopped(void)
 			++i;
 			continue;
 		}
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
 		snprintf(prefix, sizeof(prefix), "wl%d_", i);
 		if (!__need_to_start_wps_band(prefix) || nvram_match(strcat_r(prefix, "radio", tmp), "0")) {
 			ret = 0;
@@ -113,7 +114,7 @@ int is_wps_stopped(void)
 			continue;
 		}
 
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -208,7 +209,8 @@ int get_wps_er_main(int argc, char *argv[])
 			int len;
 			char *pt1,*pt2 = NULL;
 
-			sprintf(buf, "hostapd_cli -i%s get_config", word);
+			SKIP_ABSENT_FAKE_IFACE(word);
+			snprintf(buf, sizeof(buf), "hostapd_cli -i%s get_config", word);
 			fp = popen(buf, "r");
 			if (fp) {
 				memset(buf, 0, sizeof(buf));
@@ -291,9 +293,13 @@ int get_wps_er_main(int argc, char *argv[])
 	foreach (word, ifnames, next) {
 		if (i >= MAX_NR_WL_IF)
 			break;
-		if (!strcmp(word, wps_ifname))
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
+		if (!strcmp(word, wps_ifname)) {
+			++i;
 			continue;
+		}
 		eval("hostapd_cli", "-i", word, "wps_config", _ssid, _auth, _encr, _key);
+		++i;
 	}
 
 	return 0;

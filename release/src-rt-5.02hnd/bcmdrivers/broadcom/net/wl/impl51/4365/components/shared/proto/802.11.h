@@ -1,7 +1,7 @@
 /*
  * Fundamental types and constants relating to 802.11
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,7 +18,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: 802.11.h 654127 2016-08-11 06:56:35Z $
+ * $Id: 802.11.h 661116 2016-09-23 08:42:40Z $
  */
 
 #ifndef _802_11_H_
@@ -3490,6 +3490,10 @@ typedef int vht_group_id_t;
 #define VHT_N_SERVICE           16	/* bits in SERVICE field */
 #define VHT_N_TAIL               6	/* tail bits per BCC encoder */
 
+#define HE_LTF_1_GI_1_6us		(0)
+#define HE_LTF_2_GI_0_8us		(1)
+#define HE_LTF_2_GI_1_6us		(2)
+#define HE_LTF_4_GI_3_2us		(3)
 
 /** dot11Counters Table - 802.11 spec., Annex D */
 typedef struct d11cnt {

@@ -38,6 +38,17 @@ ifeq ($(RTCONFIG_QTN),y)
 LDFLAGS += -L$(TOP)/libqcsapi_client -lqcsapi_client
 endif
 
+ifeq ($(RTCONFIG_PERMISSION_MANAGEMENT),y)
+ifeq ($(RTCONFIG_QCA),y)
+LDFLAGS += -lpthread -ldl
+endif
+CFLAGS += -I$(TOP)/sqlCipher
+CFLAGS += -I$(TOP)/PMS_DBapis
+LDFLAGS += -L$(TOP)/openssl -lcrypto
+LDFLAGS += -L$(TOP)/sqlCipher/.libs -lsqlcipher
+LDFLAGS += -L$(TOP)/PMS_DBapis -lpms_sql
+endif
+
 OBJS	=	main.o utility.o prelogin.o ftpcmdio.o postlogin.o privsock.o \
 		tunables.o ftpdataio.o secbuf.o ls.o \
 		postprivparent.o logging.o str.o netstr.o sysstr.o strlist.o \

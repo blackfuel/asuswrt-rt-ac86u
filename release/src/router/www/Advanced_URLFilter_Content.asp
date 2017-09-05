@@ -190,7 +190,16 @@ function done_validating(action){
 												<input type="radio" value="1" name="url_enable_x" <% nvram_match("url_enable_x", "1", "checked"); %>><#CTL_Enabled#>
 												<input type="radio" value="0" name="url_enable_x" <% nvram_match("url_enable_x", "0", "checked"); %>><#CTL_Disabled#>
 											</td>
-										</tr>	
+										</tr>
+										<tr>
+											<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(9,3);"><#FirewallConfig_LanWanDefaultAct_itemname#></a></th>
+											<td>
+												<select name="url_mode_x" class="input_option" onChange="">
+													<option class="content_input_fd" value="0" <% nvram_match( "url_mode_x", "0", "selected"); %>><#BlackList#></option>
+													<option class="content_input_fd" value="1" <% nvram_match( "url_mode_x", "1", "selected"); %>><#WhiteList#></option>
+												</select>
+											</td>
+										</tr>
 									</table>
 									<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" class="FormTable_table">
 										<thead>

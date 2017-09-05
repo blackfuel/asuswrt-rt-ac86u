@@ -1,7 +1,7 @@
 /*
  * ACPHY Rx Gain Control and Carrier Sense module implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -1235,13 +1235,11 @@ wlc_phy_desense_apply_acphy(phy_info_t *pi, bool apply_desense)
 
 		bphy_desense = MIN(ACPHY_ACI_MAX_DESENSE_BPHY_DB, desense->bphy_desense);
 		ofdm_desense = MIN(ACPHY_ACI_MAX_DESENSE_OFDM_DB, desense->ofdm_desense);
-		if (pi_ac->lesi == 1) {
 		  if (ofdm_desense > 0 || bphy_desense > 12) {
 		    wlc_phy_lesi_acphy(pi, FALSE);
 		  } else {
 		    wlc_phy_lesi_acphy(pi, TRUE);
 		  }
-		}
 
 		/* channal update set to interference mode */
 		if (ofdm_desense > 0) {
@@ -3123,7 +3121,11 @@ void
 wlc_phy_lesi_acphy(phy_info_t *pi, bool on)
 {
 	  phy_info_acphy_t *pi_ac = pi->u.pi_acphy;
-	  if (pi_ac->lesi > 0)  {
+
+	// LESI not supported for this chip OR don't want to enable it
+	if (pi_ac->lesi == 0)
+		return;
+
 	    if (on) {
 		MOD_PHYREG(pi, lesi_control, lesiFstrEn, 1);
 		MOD_PHYREG(pi, lesi_control, lesiCrsEn, 1);
@@ -3178,14 +3180,13 @@ wlc_phy_lesi_acphy(phy_info_t *pi, bool on)
 		      MOD_PHYREG(pi, lesiFstrControl4, selLesiCstr, 0);
 		    }
 		  }
-
 	    } else {
 		    MOD_PHYREG(pi, lesi_control, lesiFstrEn, 0);
 		    MOD_PHYREG(pi, lesi_control, lesiCrsEn, 0);
 	    }
-	  }
 
-	  if (pi_ac->lesi > 0 && PHY_AS_80P80(pi, pi->radio_chanspec)) {
+	// Turn LESI off for 80+80
+	  if (PHY_AS_80P80(pi, pi->radio_chanspec)) {
 		    MOD_PHYREG(pi, lesi_control, lesiFstrEn, 0);
 		    MOD_PHYREG(pi, lesi_control, lesiCrsEn, 0);
 	  }

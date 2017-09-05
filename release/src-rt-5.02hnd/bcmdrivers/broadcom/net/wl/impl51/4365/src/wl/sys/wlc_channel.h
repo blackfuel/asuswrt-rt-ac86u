@@ -1,7 +1,7 @@
 
 /*
  * Common interface to channel definitions.
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_channel.h 667151 2016-10-26 05:49:20Z $
+ * $Id: wlc_channel.h 665230 2016-10-17 05:21:20Z $
  */
 
 #ifndef _WLC_CHANNEL_H_

@@ -1,21 +1,5 @@
-﻿define(function(){
-	var AiProtection_title_add_br = "<#Menu_TrafficManager#>";
-	var Traffic_Analyzer_add_br = "<#Traffic_Analyzer#>";
-	var Adaptive_QoS_add_br = "<#Adaptive_QoS#>";
-	var AiCloud_Title_add_br = "<#AiCloud_Title#>";
-	if(bwdpi_support) {
-		AiProtection_title_add_br = "<#AiProtection_title#>";
-	}
-	if("<% nvram_get("preferred_lang"); %>" == "CN" || "<% nvram_get("preferred_lang"); %>" == "TW"){
-		AiProtection_title_add_br = AiProtection_title_add_br.splice(13,0,"<br>");
-		Traffic_Analyzer_add_br = Traffic_Analyzer_add_br.splice(17,0,"<br>");
-		Adaptive_QoS_add_br = Adaptive_QoS_add_br.splice(13,0,"<br>");
-		AiCloud_Title_add_br = AiCloud_Title_add_br.splice(12,0,"<br>");
-	}
-	var uab_APP_samba = "<#menu5_4_1#>";
-	if(WebDav_support) {
-		uab_APP_samba = "<#menu5_4_1#> / <#Cloud_Disk#>";
-	}
+﻿/* menuTree_bwdpi_traffic_analyzer.js */
+define(function(){
 	var menuTree = {
 		list: [
 			/*
@@ -54,7 +38,7 @@
 				menuName: "<#menu1#>",
 				index: "menu_Index",
 				tab: [
-					{url: "<% rel_index_page(); %>", tabName: "__HIDE__"},
+					{url: "<% networkmap_page(); %>", tabName: "__HIDE__"},
 					{url: "NULL", tabName: "__INHERIT__"}
 				]
 			}, 
@@ -70,11 +54,14 @@
 				]
 			},
 			{
-				menuName: AiProtection_title_add_br,
+				menuName: "<#AiProtection_title#>",
 				index: "menu_AiProtection", 
 				tab: [
 					{url: "AiProtection_HomeSecurity.asp", tabName: "__HIDE__"},
 					{url: "AiProtection_HomeProtection.asp", tabName: "<#AiProtection_Home#>"},
+					{url: "AiProtection_MaliciousSitesBlocking.asp", tabName: "<#AiProtection_sites_blocking#>"},
+					{url: "AiProtection_IntrusionPreventionSystem.asp", tabName: "<#AiProtection_two-way_IPS#>"},
+					{url: "AiProtection_InfectedDevicePreventBlock.asp", tabName: "<#AiProtection_detection_blocking#>"},
 					{url: "AiProtection_WebProtector.asp", tabName: "<#Parental_Control#>"},
 					{url: "ParentalControl.asp", tabName: "__INHERIT__"},
 					{url: "AiProtection_AdBlock.asp", tabName: "Ad Blocking"},
@@ -83,7 +70,7 @@
 				] 
 			},
 			{
-				menuName: Adaptive_QoS_add_br,
+				menuName: "<#Adaptive_QoS#>",
 				index: "menu_BandwidthMonitor", 
 				tab: [
 					{url: "AdaptiveQoS_Bandwidth_Monitor.asp", tabName: "<#Bandwidth_monitor#>"},
@@ -98,7 +85,7 @@
 				] 
 			},
 			{
-				menuName: Traffic_Analyzer_add_br,
+				menuName: "<#Traffic_Analyzer#>",
 				index: "menu_TrafficAnalyzer", 
 				tab: [
 					{url: "TrafficAnalyzer_Statistic.asp", tabName: "<#Statistic#>"},
@@ -124,7 +111,7 @@
 					{url: "APP_Installation.asp", tabName: "__HIDE__"},
 					{url: "aidisk.asp", tabName: "__INHERIT__"},
 					{url: "mediaserver.asp", tabName: "<#UPnPMediaServer#>"},
-					{url: "Advanced_AiDisk_samba.asp", tabName: uab_APP_samba},
+					{url: "Advanced_AiDisk_samba.asp", tabName: "<#menu5_4_1#>".concat(WebDav_support?" / <#Cloud_Disk#>":"")},
 					{url: "Advanced_AiDisk_ftp.asp", tabName: "<#menu5_4_2#>"},
 					{url: "PrinterServer.asp", tabName: "__INHERIT__"},
 					{url: "Advanced_Modem_Content.asp", tabName: "__INHERIT__"},
@@ -133,7 +120,7 @@
 				] 
 			},
 			{
-				menuName: AiCloud_Title_add_br,
+				menuName: "<#AiCloud_Title#>",
 				index: "menu_AiCloud", 
 				tab: [
 					{url: "cloud_main.asp", tabName: "AiCloud 2.0"},
@@ -185,12 +172,24 @@
 				tab: [
 					{url: "Advanced_WAN_Content.asp", tabName: "<#menu5_3_1#>"},
 					{url: "Advanced_DSL_Content.asp", tabName: "<#menu5_3_1#>"},
+					{url: "Advanced_VDSL_Content.asp", tabName: "<#menu5_3_1#>"},
+					{url: "Advanced_Modem_Content.asp", tabName: "<#menu5_3_1#>"},
+					{url: "Advanced_MobileBroadband_Content.asp", tabName: "<#menu5_3_1#>"},
 					{url: "Advanced_WANPort_Content.asp", tabName: "<#dualwan#>"},
 					{url: "Advanced_PortTrigger_Content.asp", tabName: "<#menu5_3_3#>"},
 					{url: "Advanced_VirtualServer_Content.asp", tabName: "<#menu5_3_4#>"},
 					{url: "Advanced_Exposed_Content.asp", tabName: "<#menu5_3_5#>"},
 					{url: "Advanced_ASUSDDNS_Content.asp", tabName: "<#menu5_3_6#>"},
 					{url: "Advanced_NATPassThrough_Content.asp", tabName: "<#NAT_passthrough_itemname#>"},
+					{url: "NULL", tabName: "__INHERIT__"}
+				]
+			},
+			{
+				menuName: "Alexa & IFTTT",
+				index: "menu_Alexa_IFTTT",
+				tab: [
+					{url: "Advanced_Smart_Home_Alexa.asp", tabName: "__INHERIT__"},
+					{url: "Advanced_Smart_Home_IFTTT.asp", tabName: "__INHERIT__"},
 					{url: "NULL", tabName: "__INHERIT__"}
 				]
 			},
@@ -299,6 +298,10 @@
 					retArray.push("menu_AiCloud");
 				}
 
+				if(!ifttt_support && !alexa_support){
+					retArray.push("menu_Alexa_IFTTT");
+				}
+
 				if(!IPv6_support){
 					retArray.push("menu_IPv6");
 				}
@@ -320,7 +323,7 @@
 				}
 
 				/* Operation Mode */
-				if(sw_mode == 2){
+				if(isSwMode("re")){
 					retArray.push("menu_GuestNetwork");
 					retArray.push("menu_AccessControl");
 					retArray.push("menu_TrafficAnalyzer");
@@ -341,7 +344,7 @@
 						retArray.push("menu_Wireless");
 					}
 				}
-				else if(sw_mode == 3){
+				else if(isSwMode("ap")){
 					retArray.push("menu_AccessControl");
 					retArray.push("menu_TrafficAnalyzer");
 					retArray.push("menu_QoS");
@@ -353,7 +356,7 @@
 					retArray.push("menu_VLAN");
 					retArray.push("menu_Firewall");
 				}
-				else if(sw_mode == 4){
+				else if(isSwMode("mb")){
 					retArray.push("menu_GuestNetwork");
 					retArray.push("menu_AccessControl");
 					retArray.push("menu_TrafficAnalyzer");
@@ -366,6 +369,10 @@
 					retArray.push("menu_VPN");
 					retArray.push("menu_VLAN");
 					retArray.push("menu_Firewall");
+				}
+
+				if(lyra_hide_support){
+					retArray.push("menu_Wireless");
 				}
 
 				return retArray;
@@ -412,7 +419,7 @@
 				if(!ipsec_srv_support){
 					retArray.push("Advanced_VPN_IPSec.asp");
 				}
-
+				
 				if(!vpnc_support){
 					retArray.push("Advanced_VPNClient_Content.asp");
 				}
@@ -435,6 +442,21 @@
 				
 				if(!dualWAN_support){
 					retArray.push("Advanced_WANPort_Content.asp");
+					retArray.push("Advanced_Modem_Content.asp");
+					retArray.push("Advanced_MobileBroadband_Content.asp");
+				}
+				else{
+					if(!dualwan_enabled && usb_index == 0){
+						retArray.push("Advanced_WAN_Content.asp");
+						if(!gobi_support)
+							retArray.push("Advanced_MobileBroadband_Content.asp");
+						else
+							retArray.push("Advanced_Modem_Content.asp");
+					}
+					else{
+						retArray.push("Advanced_MobileBroadband_Content.asp");
+						retArray.push("Advanced_Modem_Content.asp");
+					}
 				}
 
 				if(!SwitchCtrl_support){
@@ -470,18 +492,21 @@
 
 				if(!dsl_support) {
 					retArray.push("Advanced_DSL_Content.asp");
+					retArray.push("Advanced_VDSL_Content.asp");
 					retArray.push("Advanced_ADSL_Content.asp");
 					retArray.push("Main_AdslStatus_Content.asp");
 					retArray.push("Main_Spectrum_Content.asp");
 				}
-				else{
-					retArray.push("Advanced_OperationMode_Content.asp");			
+				else{					
+					retArray.push("Advanced_WAN_Content.asp");
+					retArray.push("Advanced_VDSL_Content.asp");
+					retArray.push("Advanced_OperationMode_Content.asp");					
 					if(!spectrum_support)
 						retArray.push("Main_Spectrum_Content.asp");
 				}
 
 				if(hwmodeSwitch_support){
-					retArray.push("Advanced_OperationMode_Content.asp");		
+					retArray.push("Advanced_OperationMode_Content.asp");
 				}
 
 				if(noiptv_support){
@@ -497,8 +522,16 @@
 					retArray.push("AdaptiveQoS_ROG.asp");
 				}
 
-				if(wtfast_support){
+				if(!wtfast_support){
 					retArray.push("GameBoost.asp");
+				}
+
+				if(!alexa_support){
+					retArray.push("Advanced_Smart_Home_Alexa.asp");
+				}
+
+				if(!ifttt_support){
+					retArray.push("Advanced_Smart_Home_IFTTT.asp");
 				}
 
 				if(!IPv6_support){
@@ -517,7 +550,7 @@
 				else
 					retArray.push("Advanced_DHCP_Content.asp");
 
-				if(!wifiproxy_support || !concurrep_support || sw_mode != 2){
+				if((!Rawifi_support && ! Rtkwifi_support) || !concurrep_support || !isSwMode("re")){
 					retArray.push("Advanced_WProxy_Content.asp");
 				}
 				
@@ -537,7 +570,7 @@
 				}
 
 				/* Operation Mode */
-				if(sw_mode == 2){
+				if(isSwMode("re")){
 					retArray.push("GameBoost.asp");
 					retArray.push("TrafficAnalyzer_Statistic.asp");
 					retArray.push("Advanced_DHCP_Content.asp");
@@ -561,7 +594,7 @@
 						retArray.push("Advanced_WSecurity_Content.asp");
 					}
 				}
-				else if(sw_mode == 3){
+				else if(isSwMode("ap")){
 					retArray.push("GameBoost.asp");
 					retArray.push("TrafficAnalyzer_Statistic.asp");	
 					if(!dhcp_override_support){
@@ -582,7 +615,7 @@
 					//short term solution for only router mode support Facebook Wi-Fi
 					retArray.push("Guest_network_fbwifi.asp");
 				}
-				else if(sw_mode == 4){
+				else if(isSwMode("mb")){
 					retArray.push("GameBoost.asp");
 					retArray.push("TrafficAnalyzer_Statistic.asp");
 					retArray.push("Advanced_DHCP_Content.asp");
@@ -618,6 +651,16 @@
 				}
 				else{
 					retArray.push("Advanced_MobileBroadband_Content.asp");
+				}
+
+				if(lyra_hide_support){
+					retArray.push("Advanced_IPTV_Content.asp");
+					retArray.push("AiProtection_HomeSecurity.asp");
+					retArray.push("AiProtection_WebProtector.asp");
+					retArray.push("ParentalControl.asp");
+					retArray.push("Advanced_OperationMode_Content.asp");
+					retArray.push("QoS_EZQoS.asp");
+					retArray.push("AdaptiveQoS_WebHistory.asp");
 				}
 
 				return retArray;

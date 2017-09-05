@@ -388,6 +388,7 @@ extern pid_t get_pid_by_name(char *name);
 extern char *get_process_name_by_pid(const int pid);
 extern char *ether_etoa2(const unsigned char *e, char *a);
 extern char *ATE_FACTORY_MODE_STR();
+extern char *ATE_UPGRADE_MODE_STR();
 extern int hex2str(unsigned char *hex, char *str, int hex_len);
 
 #endif /* _shutils_h_ */

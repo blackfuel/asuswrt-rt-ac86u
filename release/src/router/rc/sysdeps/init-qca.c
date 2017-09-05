@@ -91,6 +91,9 @@ static struct load_wifi_kmod_seq_s {
 #endif
 	/* { "ath_pktlog", 0, 0, 0 }, */
 	/* { "smart_antenna", 0, 0, 0 }, */
+#if defined(RTCONFIG_WIGIG)
+	{ "wil6210", 0, 0, 0 },
+#endif
 };
 
 static struct load_nat_accel_kmod_seq_s {
@@ -177,7 +180,7 @@ void tweak_wifi_ps(const char *wif)
 	if (!strncmp(wif, WIF_2G, strlen(WIF_2G)) || !strcmp(wif, VPHY_2G))
 		set_iface_ps(wif, 1);	/* 2G: CPU0 only */
 	else
-		set_iface_ps(wif, 3);	/* 5G: CPU0 and CPU1 */
+		set_iface_ps(wif, 3);	/* 5G/5G2/60G: CPU0 and CPU1 */
 }
 #endif
 
@@ -249,7 +252,7 @@ static void init_switch_qca(void)
 
 #if defined(RTCONFIG_SOC_IPQ40XX)
 		if (!strcmp(*qmod, "shortcut-fe-cm")) {
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 			if(sw_mode() != SW_MODE_ROUTER)
 				continue;
 #endif
@@ -273,7 +276,7 @@ static void init_switch_qca(void)
 			_eval(essedma_argv, NULL, 0, NULL);
 			continue;
 		}
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 		else if (!strcmp(*qmod, "shortcut-fe")) {
 			if(sw_mode() != SW_MODE_ROUTER)
 				continue;
@@ -307,11 +310,13 @@ static void init_switch_qca(void)
 			p = lan_ifnames;
 			while ((ifname = strsep(&p, " ")) != NULL) {
 				while (*ifname == ' ') ++ifname;
+				SKIP_ABSENT_FAKE_IFACE(ifname);
 				if (!strcmp(ifname, lan_ifname))
 					continue;
-				if (!strncmp(ifname, WIF_2G, strlen(WIF_2G)) ||
-				    !strncmp(ifname, WIF_5G, strlen(WIF_5G))
+				if (!strncmp(ifname, WIF_2G, strlen(WIF_2G))
+				    || !strncmp(ifname, WIF_5G, strlen(WIF_5G))
 				    || !strncmp(ifname, WIF_5G2, strlen(WIF_5G2))
+				    || !strncmp(ifname, WIF_60G, strlen(WIF_60G))
 				   )
 					continue;
 				if (*ifname == 0)
@@ -362,7 +367,7 @@ void enable_jumbo_frame(void)
 	if (nvram_get_int("jumbo_frame_enable"))
 		mtu = 9000;
 
-	sprintf(mtu_str, "%d", mtu);
+	snprintf(mtu_str, sizeof(mtu_str), "%d", mtu);
 #if defined(RTCONFIG_SOC_IPQ40XX)
 	eval("ifconfig", "eth0", "mtu", mtu_str);
 	eval("ifconfig", "eth1", "mtu", mtu_str);
@@ -424,16 +429,16 @@ static int __setup_vlan(int vid, int prio, unsigned int mask)
 	_dprintf("%s: vid %d prio %d mask 0x%08x\n", __func__, vid, prio, mask);
 
 	if (vid >= 0) {
-		sprintf(vlan_str, "%d", vid);
+		snprintf(vlan_str, sizeof(vlan_str), "%d", vid);
 		_eval(set_vlan_argv, NULL, 0, NULL);
 	}
 
 	if (prio >= 0) {
-		sprintf(prio_str, "%d", prio);
+		snprintf(prio_str, sizeof(prio_str), "%d", prio);
 		_eval(set_prio_argv, NULL, 0, NULL);
 	}
 
-	sprintf(mask_str, "0x%08x", mask);
+	snprintf(mask_str, sizeof(mask_str), "0x%08x", mask);
 	_eval(set_mask_argv, NULL, 0, NULL);
 
 	return 0;
@@ -449,6 +454,7 @@ void config_switch(void)
 	int controlrate_multicast;
 	int controlrate_broadcast;
 	int merge_wan_port_into_lan_ports;
+	char *str;
 
 	dbG("link down all ports\n");
 	eval("rtkswitch", "17");	// link down all ports
@@ -460,6 +466,7 @@ void config_switch(void)
 	case MODEL_RTAC58U:	/* fall through */
 	case MODEL_RTAC82U:	/* fall through */
 	case MODEL_MAPAC1300:	/* fall through */
+	case MODEL_VRZAC1300:	/* fall through */
 	case MODEL_MAPAC2200:	/* fall through */
 	case MODEL_RTAC88N:	/* fall through */
 		merge_wan_port_into_lan_ports = 1;
@@ -494,12 +501,12 @@ void config_switch(void)
 			wan_mask |= 0x1 << 0;
 		if(wanscap_wanlan & WANSCAP_LAN)
 			wan_mask |= 0x1 << wans_lanport;
-		sprintf(cmd, "rtkswitch 44 0x%08x", wan_mask);
+		snprintf(cmd, sizeof(cmd), "rtkswitch 44 0x%08x", wan_mask);
 		system(cmd);
 
 		for (unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; ++unit) {
-			sprintf(prefix, "%d", unit);
-			sprintf(nvram_ports, "wan%sports_mask", (unit == WAN_UNIT_FIRST)? "" : prefix);
+			snprintf(prefix, sizeof(prefix), "%d", unit);
+			snprintf(nvram_ports, sizeof(nvram_ports), "wan%sports_mask", (unit == WAN_UNIT_FIRST)? "" : prefix);
 			nvram_unset(nvram_ports);
 			if (get_dualwan_by_unit(unit) == WANS_DUALWAN_IF_LAN) {
 				/* BRT-AC828 LAN1 = P0, LAN2 = P1, etc */
@@ -518,7 +525,7 @@ void config_switch(void)
 	if (is_routing_enabled()) {
 		char parm_buf[] = "XXX";
 
-		stbport = atoi(nvram_safe_get("switch_stb_x"));
+		stbport = safe_atoi(nvram_safe_get("switch_stb_x"));
 		if (stbport < 0 || stbport > 6) stbport = 0;
 		dbG("ISP Profile/STB: %s/%d\n", nvram_safe_get("switch_wantag"), stbport);
 		/* stbport:	Model-independent	unifi_malaysia=1	otherwise
@@ -546,7 +553,7 @@ void config_switch(void)
 			int t, vlan_val = -1, prio_val = -1;
 			unsigned int mask = 0;
 
-//			voip_port = atoi(nvram_safe_get("voip_port"));
+//			voip_port = safe_atoi(nvram_safe_get("voip_port"));
 			voip_port = 3;
 			if (voip_port < 0 || voip_port > 4)
 				voip_port = 0;		
@@ -555,7 +562,7 @@ void config_switch(void)
 			stbport = 4;	
 			voip_port = 3;
 	
-			sprintf(tmp, "rtkswitch 29 %d", voip_port);	
+			snprintf(tmp, sizeof(tmp), "rtkswitch 29 %d", voip_port);
 			system(tmp);	
 
 			if (!strncmp(nvram_safe_get("switch_wantag"), "unifi", 5)) {
@@ -693,13 +700,13 @@ void config_switch(void)
 				if(strcmp(nvram_safe_get("switch_wan0tagid"), "") != 0) {
 					// Internet on WAN (port 4)
 					if ((p = nvram_get("switch_wan0tagid")) != NULL) {
-						t = atoi(p);
+						t = safe_atoi(p);
 						if((t >= 2) && (t <= 4094))
 							vlan_val = t;
 					}
 
 					if((p = nvram_get("switch_wan0prio")) != NULL && *p != '\0')
-						prio_val = atoi(p);
+						prio_val = safe_atoi(p);
 
 					__setup_vlan(vlan_val, prio_val, 0x02000210);
 				}
@@ -707,13 +714,13 @@ void config_switch(void)
 				if(strcmp(nvram_safe_get("switch_wan1tagid"), "") != 0) {
 					// IPTV on LAN4 (port 0)
 					if ((p = nvram_get("switch_wan1tagid")) != NULL) {
-						t = atoi(p);
+						t = safe_atoi(p);
 						if((t >= 2) && (t <= 4094))
 							vlan_val = t;
 					}
 
 					if((p = nvram_get("switch_wan1prio")) != NULL && *p != '\0')
-						prio_val = atoi(p);
+						prio_val = safe_atoi(p);
 
 					if(!strcmp(nvram_safe_get("switch_wan1tagid"), nvram_safe_get("switch_wan2tagid")))
 						mask = 0x00030013;	//IPTV=VOIP
@@ -726,13 +733,13 @@ void config_switch(void)
 				if(strcmp(nvram_safe_get("switch_wan2tagid"), "") != 0) {
 					// VoIP on LAN3 (port 1)
 					if ((p = nvram_get("switch_wan2tagid")) != NULL) {
-						t = atoi(p);
+						t = safe_atoi(p);
 						if((t >= 2) && (t <= 4094))
 							vlan_val = t;
 					}
 
 					if((p = nvram_get("switch_wan2prio")) != NULL && *p != '\0')
-						prio_val = atoi(p);
+						prio_val = safe_atoi(p);
 
 					if(!strcmp(nvram_safe_get("switch_wan1tagid"), nvram_safe_get("switch_wan2tagid")))
 						mask = 0x00030013;	//IPTV=VOIP
@@ -746,7 +753,7 @@ void config_switch(void)
 		}
 		else
 		{
-			sprintf(parm_buf, "%d", stbport);
+			snprintf(parm_buf, sizeof(parm_buf), "%d", stbport);
 			if (stbport)
 				eval("rtkswitch", "8", parm_buf);
 #if defined(RTCONFIG_SWITCH_RTL8370M_PHY_QCA8033_X2) || \
@@ -775,12 +782,12 @@ void config_switch(void)
 		if (!nvram_get("switch_ctrlrate_unknown_unicast"))
 			controlrate_unknown_unicast = 0;
 		else
-			controlrate_unknown_unicast = atoi(nvram_get("switch_ctrlrate_unknown_unicast"));
+			controlrate_unknown_unicast = safe_atoi(nvram_get("switch_ctrlrate_unknown_unicast"));
 		if (controlrate_unknown_unicast < 0 || controlrate_unknown_unicast > 1024)
 			controlrate_unknown_unicast = 0;
 		if (controlrate_unknown_unicast)
 		{
-			sprintf(parm_buf, "%d", controlrate_unknown_unicast);
+			snprintf(parm_buf, sizeof(parm_buf), "%d", controlrate_unknown_unicast);
 			eval("rtkswitch", "22", parm_buf);
 		}
 	
@@ -788,11 +795,11 @@ void config_switch(void)
 		if (!nvram_get("switch_ctrlrate_unknown_multicast"))
 			controlrate_unknown_multicast = 0;
 		else
-			controlrate_unknown_multicast = atoi(nvram_get("switch_ctrlrate_unknown_multicast"));
+			controlrate_unknown_multicast = safe_atoi(nvram_get("switch_ctrlrate_unknown_multicast"));
 		if (controlrate_unknown_multicast < 0 || controlrate_unknown_multicast > 1024)
 			controlrate_unknown_multicast = 0;
 		if (controlrate_unknown_multicast) {
-			sprintf(parm_buf, "%d", controlrate_unknown_multicast);
+			snprintf(parm_buf, sizeof(parm_buf), "%d", controlrate_unknown_multicast);
 			eval("rtkswitch", "23", parm_buf);
 		}
 	
@@ -800,12 +807,12 @@ void config_switch(void)
 		if (!nvram_get("switch_ctrlrate_multicast"))
 			controlrate_multicast = 0;
 		else
-			controlrate_multicast = atoi(nvram_get("switch_ctrlrate_multicast"));
+			controlrate_multicast = safe_atoi(nvram_get("switch_ctrlrate_multicast"));
 		if (controlrate_multicast < 0 || controlrate_multicast > 1024)
 			controlrate_multicast = 0;
 		if (controlrate_multicast)
 		{
-			sprintf(parm_buf, "%d", controlrate_multicast);
+			snprintf(parm_buf, sizeof(parm_buf), "%d", controlrate_multicast);
 			eval("rtkswitch", "24", parm_buf);
 		}
 	
@@ -813,11 +820,11 @@ void config_switch(void)
 		if (!nvram_get("switch_ctrlrate_broadcast"))
 			controlrate_broadcast = 0;
 		else
-			controlrate_broadcast = atoi(nvram_get("switch_ctrlrate_broadcast"));
+			controlrate_broadcast = safe_atoi(nvram_get("switch_ctrlrate_broadcast"));
 		if (controlrate_broadcast < 0 || controlrate_broadcast > 1024)
 			controlrate_broadcast = 0;
 		if (controlrate_broadcast) {
-			sprintf(parm_buf, "%d", controlrate_broadcast);
+			snprintf(parm_buf, sizeof(parm_buf), "%d", controlrate_broadcast);
 			eval("rtkswitch", "25", parm_buf);
 		}
 	}
@@ -831,6 +838,14 @@ void config_switch(void)
 	{
 		if (merge_wan_port_into_lan_ports)
 			eval("rtkswitch", "8", "100");
+	}
+#endif
+
+#if defined(RTCONFIG_SWITCH_RTL8370M_PHY_QCA8033_X2) || \
+    defined(RTCONFIG_SWITCH_RTL8370MB_PHY_QCA8033_X2)
+	str = nvram_get("lan_hash_algorithm");
+	if(str && *str != '\0') {
+		eval("rtkswitch", "47", str);
 	}
 #endif
 
@@ -883,9 +898,9 @@ int switch_exist(void)
 	int rlen;
 
 #ifdef RTCONFIG_QCA8033
-	sprintf(cmd, "cat /proc/link_status");
+	snprintf(cmd, sizeof(cmd), "cat /proc/link_status");
 #else
-	sprintf(cmd, "swconfig dev %s port 0 get link", MII_IFNAME);
+	snprintf(cmd, sizeof(cmd), "swconfig dev %s port 0 get link", MII_IFNAME);
 #endif
 	if ((fp = popen(cmd, "r")) == NULL) {
 		return 0;
@@ -912,7 +927,7 @@ int switch_exist(void)
  */
 static void __load_wifi_driver(int testmode)
 {
-	char country[FACTORY_COUNTRY_CODE_LEN + 1], code_str[6];
+	char country[FACTORY_COUNTRY_CODE_LEN + 1], code_str[6], prefix[sizeof("wlXXXXX_")];
 	const char *umac_params[] = {
 		"vow_config", "OL_ACBKMinfree", "OL_ACBEMinfree", "OL_ACVIMinfree",
 		"OL_ACVOMinfree", "ar900b_emu", "frac", "intval",
@@ -928,7 +943,7 @@ static void __load_wifi_driver(int testmode)
 #endif
 		NULL
 	}, **up;
-	int i, code;
+	int i, shift, l, len;
 	char param[512], *s = &param[0], umac_nv[64], *val;
 	char *argv[30] = {
 		"modprobe", "-s", NULL
@@ -953,12 +968,17 @@ static void __load_wifi_driver(int testmode)
 		}
 	}
 
-	olcfg = (!!nvram_get_int("wl0_hwol") << 0) | (!!nvram_get_int("wl1_hwol") << 1);
+	for (i = 0, olcfg = 0, shift = 0; i < MAX_NR_WL_IF; ++i) {
+		SKIP_ABSENT_BAND(i);
+		snprintf(prefix, sizeof(prefix), "wl%d_", i);
+		olcfg |= !!nvram_pf_get_int(prefix, "hwol") << shift;
+		shift++;
+	}
 	/* Always use maximum extra_pbuf_core0.
 	 * Because it can't be changed if it is allocated, write non-zero value.
 	 */
 	extra_pbuf_core0 = "5939200";
-	if (olcfg == 1 || olcfg == 2) {
+	if (olcfg == 1 || olcfg == 2 || olcfg == 4) {
 		n2h_high_water_core0 = "43008";
 		n2h_wifi_pool_buf = "20224";
 	} else if (olcfg) {
@@ -991,7 +1011,7 @@ static void __load_wifi_driver(int testmode)
 	}
 #endif
 
-	for (i = 0, p = &load_wifi_kmod_seq[i]; i < ARRAY_SIZE(load_wifi_kmod_seq); ++i, ++p) {
+	for (i = 0, len = sizeof(param), p = &load_wifi_kmod_seq[i]; len > 0 && i < ARRAY_SIZE(load_wifi_kmod_seq); ++i, ++p) {
 		if (module_loaded(p->kmod_name))
 			continue;
 
@@ -1011,8 +1031,9 @@ static void __load_wifi_driver(int testmode)
 
 
 			*v++ = s;
-			s += sprintf(s, "ce_level=%d", ce_level);
-			s++;
+			l = snprintf(s, len, "ce_level=%d", ce_level);
+			len -= l;
+			s += l + 1;
 		}
 #endif
 		if (!strcmp(p->kmod_name, "umac")) {
@@ -1029,24 +1050,27 @@ static void __load_wifi_driver(int testmode)
 					if (!(val = nvram_get(umac_nv)))
 						continue;
 					*v++ = s;
-					s += sprintf(s, "%s=%s", *up, val);
-					s++;
+					l = snprintf(s, len, "%s=%s", *up, val);
+					len -= l;
+					s += l + 1;
 				}
 #endif
 
 #ifdef RTCONFIG_AIR_TIME_FAIRNESS
 				if (nvram_match("wl0_atf", "1") || nvram_match("wl1_atf", "1")) {
 					*v++ = s;
-					s += sprintf(s, "atf_mode=1");
-					s++;
+					l = snprintf(s, len, "atf_mode=1");
+					len -= l;
+					s += l + 1;
 				}
 #endif
 
 #if !defined(RTCONFIG_SOC_IPQ40XX)
 #if defined(RTCONFIG_WIFI_QCA9990_QCA9990) || defined(RTCONFIG_WIFI_QCA9994_QCA9994)
 				*v++ = s;
-				s += sprintf(s, "nss_wifi_olcfg=%d", olcfg);
-				s++;
+				l = snprintf(s, len, "nss_wifi_olcfg=%d", olcfg);
+				len -= l;
+				s += l + 1;
 #endif
 #endif
 
@@ -1075,8 +1099,9 @@ static void __load_wifi_driver(int testmode)
 					if (!(val = nvram_get(umac_nv)))
 						continue;
 					*v++ = s;
-					s += sprintf(s, "%s=%s", *up, val);
-					s++;
+					l = snprintf(s, len, "%s=%s", *up, val);
+					len -= l;
+					s += l + 1;
 				}
 			}
 			else {
@@ -1089,8 +1114,9 @@ static void __load_wifi_driver(int testmode)
 		if (!strcmp(p->kmod_name, "adf")) {
 			if (nvram_get("qca_prealloc_disabled") != NULL) {
 				*v++ = s;
-				s += sprintf(s, "prealloc_disabled=%d", nvram_get_int("qca_prealloc_disabled"));
-				s++;
+				l = snprintf(s, len, "prealloc_disabled=%d", nvram_get_int("qca_prealloc_disabled"));
+				len -= l;
+				s += l + 1;
 			}
 		}
 #endif
@@ -1116,22 +1142,16 @@ static void __load_wifi_driver(int testmode)
 		eval("iwpriv", (char*) VPHY_5G2, "enable_ol_stats", "0");
 #endif
 
-		strncpy(country, nvram_safe_get("wl0_country_code"), FACTORY_COUNTRY_CODE_LEN);
-		country[FACTORY_COUNTRY_CODE_LEN] = '\0';
-		code = country_to_code(country, 2);
-		if (code < 0)
-			code = country_to_code("DB", 2);
-		sprintf(code_str, "%d", code);
+		strlcpy(country, nvram_safe_get("wl0_country_code"), sizeof(country));
+		if (country_to_code(country, 2, code_str, sizeof(code_str)) < 0)
+			country_to_code("DB", 2, code_str, sizeof(code_str));
 		eval("iwpriv", (char*) VPHY_2G, "setCountryID", code_str);
 		strncpy(code_str, nvram_safe_get("wl0_txpower"), sizeof(code_str)-1);
 		eval("iwpriv", (char*) VPHY_2G, "txpwrpc", code_str);
 
-		strncpy(country, nvram_safe_get("wl1_country_code"), FACTORY_COUNTRY_CODE_LEN);
-		country[FACTORY_COUNTRY_CODE_LEN] = '\0';
-		code = country_to_code(country, 5);
-		if (code < 0)
-			code = country_to_code("DB", 5);
-		sprintf(code_str, "%d", code);
+		strlcpy(country, nvram_safe_get("wl1_country_code"), sizeof(country));
+		if (country_to_code(country, 5, code_str, sizeof(code_str)) < 0)
+			country_to_code("DB", 5, code_str, sizeof(code_str));
 		eval("iwpriv", (char*) VPHY_5G, "setCountryID", code_str);
 
 #if defined(RTCONFIG_PCIE_QCA9888) && defined(RTCONFIG_SOC_IPQ40XX)
@@ -1144,15 +1164,34 @@ static void __load_wifi_driver(int testmode)
 		eval("iwpriv", (char*) VPHY_5G2, "txpwrpc", code_str);
 #endif
 
-#if defined(BRTAC828)
-		set_irq_smp_affinity(68, 1);	/* wifi0 = 2G ==> CPU0 */
-		set_irq_smp_affinity(90, 2);	/* wifi1 = 5G ==> CPU1 */
+#if defined(RTCONFIG_HAS_5G_2)
+		strlcpy(country, nvram_safe_get("wl2_country_code"), sizeof(country));
+		if (country_to_code(country, 5, code_str, sizeof(code_str)) < 0)
+			country_to_code("DB", 5, code_str, sizeof(code_str));
+		eval("iwpriv", (char*) VPHY_5G2, "setCountryID", code_str);
+
+#endif
+
+#if defined(RTCONFIG_WIGIG)
+		/* country code of 802.11ad Wigig can be handled by hostapd too. */
+		strlcpy(country, nvram_safe_get("wl3_country_code"), sizeof(country));
+		if (country_to_code(country, 60, code_str, sizeof(code_str)) < 0)
+			country_to_code("DB", 60, code_str, sizeof(code_str));
+		eval("iw", "reg", "set", code_str);
+#endif
+
+#if defined(BRTAC828) || defined(RTAD7200)
+		set_irq_smp_affinity(68, 1);	/* wifi0 = 2G ==> core 0 */
+		set_irq_smp_affinity(90, 2);	/* wifi1 = 5G ==> core 1 */
 #elif defined(RTCONFIG_SOC_IPQ40XX)
 		set_irq_smp_affinity(200, 4);	/* wifi0 = 2G ==> core 3 */
 #if defined(RTAC82U)
 		set_irq_smp_affinity(174, 2);	/* wifi1 = 5G ==> core 2 */
 #else
 		set_irq_smp_affinity(201, 8);	/* wifi1 = 5G ==> core 4 */
+#endif
+#if defined(RTAD7200)
+		set_irq_smp_affinity(1433, 2);	/* wil6210 = 60G ==> core 0 */
 #endif
 		f_write_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "performance", 0, 0); // for throughput
 #if 0 // before 1.1CSU3
@@ -1168,11 +1207,19 @@ static void __load_wifi_driver(int testmode)
 #if defined(RTCONFIG_PCIE_QCA9888) && defined(RTCONFIG_SOC_IPQ40XX)
 		tweak_wifi_ps(VPHY_5G2);
 #endif
+#if defined(RTCONFIG_WIGIG)
+		tweak_wifi_ps(WIF_60G);
+#endif
 	}
 }
 
 void load_wifi_driver(void)
 {
+#if defined(RTCONFIG_SOC_IPQ8064)
+	f_write_string("/proc/sys/vm/pagecache_ratio", "25", 0, 0);
+	f_write_string("/proc/net/skb_recycler/max_skbs", "2176", 0, 0);
+#endif
+
 	__load_wifi_driver(0);
 }
 
@@ -1215,6 +1262,11 @@ void init_wl(void)
 #endif
 #endif
 
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+	if (nvram_match("lyra_disable_wifi_drv", "1"))
+		return;
+#endif
+
 	if(!create_node)
 	{ 
 		load_wifi_driver();
@@ -1227,45 +1279,59 @@ void init_wl(void)
 			while ((ifname = strsep(&p, " ")) != NULL) {
 				while (*ifname == ' ') ++ifname;
 				if (*ifname == 0) break;
+				SKIP_ABSENT_FAKE_IFACE(ifname);
 
 				//create ath00x & ath10x 
-				 if(strncmp(ifname,WIF_2G,strlen(WIF_2G))==0
+				if (!strncmp(ifname,WIF_2G,strlen(WIF_2G))
 #if defined(RTCONFIG_CONCURRENTREPEATER)
-				    || strncmp(ifname,STA_2G,strlen(STA_2G))==0
+				     || !strncmp(ifname,STA_2G,strlen(STA_2G))
+#endif
+				   )
+					unit = 0;
+				else if (!strncmp(ifname,WIF_5G,strlen(WIF_5G))
+#if defined(RTCONFIG_CONCURRENTREPEATER)
+					|| !strncmp(ifname,STA_5G,strlen(STA_5G))
 #endif
 					)
-					unit=0;	
-				 else if(strncmp(ifname,WIF_5G,strlen(WIF_5G))==0
-#if defined(RTCONFIG_CONCURRENTREPEATER)
-				    || strncmp(ifname,STA_5G,strlen(STA_5G))==0
+					unit = 1;
+				else if (!strncmp(ifname,WIF_5G2,strlen(WIF_5G2)))
+					unit = 2;
+#if defined(RTCONFIG_WIGIG)
+				else if(strncmp(ifname,WIF_60G,strlen(WIF_60G))==0)
+					unit = 3;
 #endif
-					)
-					unit=1;
-				 else if(strncmp(ifname,WIF_5G2,strlen(WIF_5G2))==0)
-					unit=2;
-			 	 else
+				else
 			   		unit=-99;	
-			         if(unit>=0)
-			   	 {
+
+				switch (unit) {
+				case WL_2G_BAND:	/* fall-through */
+				case WL_5G_BAND:	/* fall-through */
+				case WL_5G_2_BAND:
 #if defined(RTCONFIG_CONCURRENTREPEATER)
-					if (strncmp(ifname,STA_2G,strlen(STA_2G))==0 || strncmp(ifname,STA_5G,strlen(STA_5G))==0) {
-						if(sw_mode()==SW_MODE_REPEATER) {
+					if (!strncmp(ifname, STA_2G, strlen(STA_2G)) || !strncmp(ifname, STA_5G, strlen(STA_5G))) {
+						if(sw_mode() == SW_MODE_REPEATER) {
 							dbG("\ncreate a wifi node %s from %s\n", ifname, get_vphyifname(unit));
 							doSystem("wlanconfig %s create wlandev %s wlanmode sta nosbeacon", ifname, get_vphyifname(unit));
 						}
-					}
-					else
-					{
+					} else {
 						dbG("\ncreate a wifi node %s from %s\n", ifname, get_vphyifname(unit));
 						doSystem("wlanconfig %s create wlandev %s wlanmode ap", ifname, get_vphyifname(unit));
-		   				sleep(1);
+						sleep(1);
 					}
 #else
 					dbG("\ncreate a wifi node %s from %s\n", ifname, get_vphyifname(unit));
 					doSystem("wlanconfig %s create wlandev %s wlanmode ap", ifname, get_vphyifname(unit));
-   					sleep(1);
+					sleep(1);
 #endif	    
-				 }	
+					break;
+#if defined(RTCONFIG_WIGIG)
+				case WL_60G_BAND:
+					/* Nothing to do. Both VAP and VPHY interfaces are created by driver automatically. */
+					break;
+#endif
+				default:
+					dbg("%s: Unknown wl%d band, ifname [%s]!\n", __func__, unit, ifname);
+				}
 			}
 			free(wl_ifnames);
 		}
@@ -1275,13 +1341,15 @@ void init_wl(void)
 		if(sw_mode()==SW_MODE_REPEATER)
 		{ 
 		  	wlc_band=nvram_get_int("wlc_band");
-			doSystem("wlanconfig %s create wlandev %s wlanmode sta nosbeacon",
-				get_staifname(wlc_band), get_vphyifname(wlc_band));
+			if (wlc_band != WL_60G_BAND) {
+				doSystem("wlanconfig %s create wlandev %s wlanmode sta nosbeacon",
+					get_staifname(wlc_band), get_vphyifname(wlc_band));
+			}
 		}      
 #endif
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 		if(sw_mode() != SW_MODE_ROUTER || nvram_match("wps_e_success", "1"))
 		{
 			if(nvram_get_int("x_Setting"))
@@ -1303,20 +1371,32 @@ void init_wl(void)
 #endif
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 	int i;
 	if(sw_mode() == SW_MODE_AP) //router->ap
 	{
 		if(nvram_get_int("x_Setting"))
 		{
 #ifdef RTCONFIG_DUAL_BACKHAUL
-			for(i=0;i<2;i++)
+			for (i = 0; i < MAX_NR_WL_IF; i++)
 #else
 			i=1;
 #endif
 			{
+#ifdef RTCONFIG_DUAL_BACKHAUL
+				SKIP_ABSENT_BAND(i);
+#endif
 				if(!get_stamac(i))
 				{
+					if(nvram_match("wl1_country_code", "GB"))
+					{
+						_dprintf("=> RE: hold for cac timeout...\n");
+						while(get_cac_state())
+						{
+							_dprintf(".");
+						}
+						_dprintf("exit!!!\n");
+					}
 					_dprintf("=> switch router to ap : create sta%d\n",i);
 					doSystem("wlanconfig %s create wlandev %s wlanmode sta nosbeacon",
 						get_staifname(i), get_vphyifname(i));
@@ -1353,19 +1433,22 @@ void fini_wl(void)
 #endif
 
 	dbG("fini_wl:destroy wi node\n");
-	for (unit = 0; unit < 2; ++unit) {
+	for (unit = 0; unit < MAX_NR_WL_IF; ++unit) {
+		SKIP_ABSENT_BAND(unit);
 		max_sunit = num_of_mssid_support(unit);
 		snprintf(prefix, sizeof(prefix), "wl%d_", unit);
 		for (sunit = 0; sunit <= max_sunit; ++sunit) {
 			__get_wlifname(unit, sunit, wif);
-			sprintf(pid_path, "/var/run/hostapd_%s.pid", wif);
+			snprintf(pid_path, sizeof(pid_path), "/var/run/hostapd_%s.pid", wif);
 			if (f_exists(pid_path))
 				kill_pidfile_tk(pid_path);
 
-			sprintf(path, "/sys/class/net/%s", wif);
+			snprintf(path, sizeof(path), "/sys/class/net/%s", wif);
 			if (d_exists(path)) {
 				eval("ifconfig", wif, "down");
-				eval("wlanconfig", wif, "destroy");
+				if (unit != WL_60G_BAND) {
+					eval("wlanconfig", wif, "destroy");
+				}
 			}
 		}
 	}
@@ -1382,12 +1465,14 @@ void fini_wl(void)
 				doSystem("wlanconfig %s destroy", STA_5G);
 #else
 		  	wlc_band=nvram_get_int("wlc_band");
-			doSystem("wlanconfig %s destroy", get_staifname(wlc_band));
+			if (wlc_band != WL_60G_BAND) {
+				doSystem("wlanconfig %s destroy", get_staifname(wlc_band));
+			}
 #endif
 		}      
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 	if(sw_mode() != SW_MODE_ROUTER || nvram_match("wps_e_success", "1"))
 	{
 		if(nvram_get_int("x_Setting"))
@@ -1410,10 +1495,14 @@ void fini_wl(void)
 #endif
 #endif
 
-	eval("ifconfig", (char*) VPHY_2G, "down");
-	eval("ifconfig", (char*) VPHY_5G, "down");
-#if defined(RTCONFIG_PCIE_QCA9888) && defined(RTCONFIG_SOC_IPQ40XX)
-	eval("ifconfig", (char*) VPHY_5G2, "down");
+	ifconfig(VPHY_2G, 0, NULL, NULL);
+	ifconfig(VPHY_5G, 0, NULL, NULL);
+#if defined(RTCONFIG_HAS_5G_2) || \
+    (defined(RTCONFIG_PCIE_QCA9888) && defined(RTCONFIG_SOC_IPQ40XX))
+	ifconfig(VPHY_5G2, 0, NULL, NULL);
+#endif
+#if defined(RTCONFIG_WIGIG)
+	ifconfig(WIF_60G, 0, NULL, NULL);
 #endif
 	for (i = ARRAY_SIZE(load_wifi_kmod_seq)-1, wp = &load_wifi_kmod_seq[i]; i >= 0; --i, --wp) {
 		if (!module_loaded(wp->kmod_name))
@@ -1458,8 +1547,8 @@ void init_syspara(void)
 	char modelname[16];
 #endif
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) /* for Lyra */
-	char disableGUI;
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) /* for Lyra */
+	char disableWifiDrv;
 #endif
 #ifdef RTCONFIG_CFGSYNC
 	char cfg_group_buf[CFGSYNC_GROUPID_LEN+1];
@@ -1544,9 +1633,12 @@ void init_syspara(void)
 		nvram_set("wl_country_code", country_code);
 		nvram_set("wl0_country_code", country_code);
 		nvram_set("wl1_country_code", country_code);
-#if defined(MAPAC2200)
+#if defined(MAPAC2200) || defined(RTCONFIG_HAS_5G_2)
 		nvram_set("wl2_country_code", country_code);
 #endif	/* MAPAC2200 */
+#if defined(RTCONFIG_WIGIG)
+		nvram_set("wl3_country_code", country_code);
+#endif
 	}
 
 	/* reserved for Ralink. used as ASUS pin code. */
@@ -1576,7 +1668,7 @@ void init_syspara(void)
 	} else {
 		strncpy(productid, buffer + 4, 12);
 		productid[12] = 0;
-		sprintf(fwver, "%d.%d.%d.%d", buffer[0], buffer[1], buffer[2],
+		snprintf(fwver, sizeof(fwver), "%d.%d.%d.%d", buffer[0], buffer[1], buffer[2],
 			buffer[3]);
 		nvram_set("productid", trim_r(productid));
 		nvram_set("firmver", trim_r(fwver));
@@ -1620,7 +1712,7 @@ void init_syspara(void)
 
 	memset(buffer, 0, sizeof(buffer));
 	FRead(buffer, OFFSET_BOOT_VER, 4);
-	sprintf(blver, "%s-0%c-0%c-0%c-0%c", trim_r(productid), buffer[0],
+	snprintf(blver, sizeof(blver), "%s-0%c-0%c-0%c-0%c", trim_r(productid), buffer[0],
 		buffer[1], buffer[2], buffer[3]);
 	nvram_set("blver", trim_r(blver));
 
@@ -1665,12 +1757,12 @@ void init_syspara(void)
 	}
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200) /* for Lyra */
-	if (FRead(&disableGUI, OFFSET_DISABLE_GUI, 1) < 0) {
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) /* for Lyra */
+	if (FRead(&disableWifiDrv, OFFSET_DISABLE_WIFI_DRV, 1) < 0) {
 		_dprintf("Out of scope\n");
 	} else {
-		if ((disableGUI == 'N') || (disableGUI == 'n'))
-			nvram_set("enableGUI_fac", "1");
+		if ((disableWifiDrv == 'Y') || (disableWifiDrv == 'y'))
+			nvram_set("disableWifiDrv_fac", "1");
 	}
 #endif
 #ifdef RTCONFIG_CFGSYNC
@@ -1761,7 +1853,7 @@ void reinit_sfe(int unit)
 			   )
 				act = 0;
 		} else {
-			sprintf(nat_x_str, "wan%d_nat_x", unit);
+			snprintf(nat_x_str, sizeof(nat_x_str), "wan%d_nat_x", unit);
 			nat_x = nvram_get_int(nat_x_str);
 			if (unit == prim_unit && !nat_x)
 				act = 0;
@@ -1778,7 +1870,7 @@ void reinit_sfe(int unit)
 #endif
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 	if(sw_mode() != SW_MODE_ROUTER) /* maybe we should determin by wan0_nat_x, just override */
 		act = 0;
 #endif
@@ -1989,11 +2081,11 @@ void post_ecm(void)
 	snprintf(ipv46_conn, sizeof(ipv46_conn), "%d", IPV46_CONN);
 	*tmp = '\0';
 	r = f_read_string("/proc/sys/dev/nss/ipv4cfg/ipv4_conn", tmp, sizeof(tmp));
-	if (r > 0 && atoi(tmp) != IPV46_CONN)
+	if (r > 0 && safe_atoi(tmp) != IPV46_CONN)
 		r = f_write_string("/proc/sys/dev/nss/ipv4cfg/ipv4_conn", ipv46_conn, 0, 0);
 	*tmp = '\0';
 	r = f_read_string("/proc/sys/dev/nss/ipv6cfg/ipv6_conn", tmp, sizeof(tmp));
-	if (r > 0 && atoi(tmp) != IPV46_CONN)
+	if (r > 0 && safe_atoi(tmp) != IPV46_CONN)
 		r = f_write_string("/proc/sys/dev/nss/ipv6cfg/ipv6_conn", ipv46_conn, 0, 0);
 
 	redir = act = ecm_selection();
@@ -2016,12 +2108,35 @@ void post_ecm(void)
 }
 #endif	/* RTCONFIG_SOC_IPQ8064 */
 
+/** Whether wireless interface works.
+ * @ifname:
+ * @band:
+ * @return:
+ * 	0:	Wireless interface absent or not work.
+ *  otherwizse:	Wireless interface exist and works.
+ */
 int wl_exist(char *ifname, int band)
 {
-	int ret = 0;
-	ret = eval("iwpriv", ifname, "get_driver_caps");
-	_dprintf("eval(iwpriv, %s, get_driver_caps) ret(%d)\n", ifname, ret);
-	return (ret==0);
+	int ret = 0, r, flags = 0;
+
+	switch (band) {
+	case WL_2G_BAND:	/* fall-through */
+	case WL_5G_BAND:	/* fall-through */
+	case WL_5G_2_BAND:
+		ret = eval("iwpriv", ifname, "get_driver_caps");
+		dbg("eval(iwpriv, %s, get_driver_caps) ret(%d)\n", ifname, ret);
+		break;
+	case WL_60G_BAND:
+		r = _ifconfig_get(ifname, &flags, NULL, NULL, NULL, NULL);
+		if (r < 0 || (flags & IFUP) != IFUP) {
+			dbg("%s: can't get flags of %s or it is not up. (flags 0x%x)\n",
+				__func__, ifname, flags);
+			ret = 1;
+		}
+		break;
+	};
+
+	return (ret == 0);
 }
 
 void
@@ -2032,7 +2147,7 @@ set_wan_tag(char *interface) {
 	model = get_model();
 	wan_vid = nvram_get_int("switch_wan0tagid");
 
-	sprintf(wan_dev, "vlan%d", wan_vid);
+	snprintf(wan_dev, sizeof(wan_dev), "vlan%d", wan_vid);
 
 	switch(model) {
 	case MODEL_BRTAC828:
@@ -2045,7 +2160,7 @@ set_wan_tag(char *interface) {
 		ifconfig(interface, IFUP, 0, 0);
 		if(wan_vid) { /* config wan port */
 			eval("vconfig", "rem", "vlan2");
-			sprintf(port_id, "%d", wan_vid);
+			snprintf(port_id, sizeof(port_id), "%d", wan_vid);
 			eval("vconfig", "add", interface, port_id);
 		}
 		/* Set Wan port PRIO */
@@ -2083,9 +2198,9 @@ set_wan_tag(char *interface) {
 			}
 
 			if (iptv_vid) { /* config IPTV on wan port */
-				sprintf(wan_dev, "vlan%d", iptv_vid);
+				snprintf(wan_dev, sizeof(wan_dev), "vlan%d", iptv_vid);
 				nvram_set("wan10_ifname", wan_dev);
-				sprintf(port_id, "%d", iptv_vid);
+				snprintf(port_id, sizeof(port_id), "%d", iptv_vid);
 				eval("vconfig", "add", interface, port_id);
 
 				__setup_vlan(iptv_vid, iptv_prio, 0x00000210);	/* config WAN & WAN_MAC port */
@@ -2097,9 +2212,9 @@ set_wan_tag(char *interface) {
 		}
 		if (switch_stb >= 8) {
 			if (voip_vid) { /* config voip on wan port */
-				sprintf(wan_dev, "vlan%d", voip_vid);
+				snprintf(wan_dev, sizeof(wan_dev), "vlan%d", voip_vid);
 				nvram_set("wan11_ifname", wan_dev);
-				sprintf(port_id, "%d", voip_vid);
+				snprintf(port_id, sizeof(port_id), "%d", voip_vid);
 				eval("vconfig", "add", interface, port_id);
 
 				__setup_vlan(voip_vid, voip_prio, 0x00000210);	/* config WAN & WAN_MAC port */
@@ -2111,9 +2226,9 @@ set_wan_tag(char *interface) {
 		}
 		if (switch_stb >=9 ) {
 			if (mang_vid) { /* config tr069 on wan port */
-				sprintf(wan_dev, "vlan%d", mang_vid);
+				snprintf(wan_dev, sizeof(wan_dev), "vlan%d", mang_vid);
 				nvram_set("wan12_ifname", wan_dev);
-				sprintf(port_id, "%d", mang_vid);
+				snprintf(port_id, sizeof(port_id), "%d", mang_vid);
 				eval("vconfig", "add", interface, port_id);
 
 				__setup_vlan(mang_vid, mang_prio, 0x00000210);	/* config WAN & WAN_MAC port */
@@ -2141,13 +2256,15 @@ int start_thermald(void)
 void vlan_switch_accept_tagged(unsigned int port)
 {
 	char lanportset_str[16]={0};
-	sprintf(lanportset_str,"%d",port);
+
+	snprintf(lanportset_str, sizeof(lanportset_str), "%d", port);
 	eval("rtkswitch","298",lanportset_str);
 }
 void vlan_switch_accept_untagged(unsigned int port)
 {
 	char lanportset_str[16]={0};
-	sprintf(lanportset_str,"%d",port);
+
+	snprintf(lanportset_str, sizeof(lanportset_str), "%d", port);
 	eval("rtkswitch","299",lanportset_str);
 }
 
@@ -2155,7 +2272,8 @@ void vlan_switch_accept_untagged(unsigned int port)
 void vlan_switch_accept_all(unsigned int port)
 {
 	char lanportset_str[16]={0};
-	sprintf(lanportset_str,"%d",port);
+
+	snprintf(lanportset_str, sizeof(lanportset_str), "%d", port);
 	eval("rtkswitch","300",lanportset_str);
 }
 
@@ -2164,10 +2282,10 @@ void vlan_switch_setup(int vlan_id, int vlan_prio, int lanportset)
 	char vlan_id_str[12]={0},vlan_prio_str[12]={0};
 	char lanportset_str[16]={0};
 
-	sprintf(vlan_id_str,"%d",vlan_id);
-	sprintf(vlan_prio_str,"%d",vlan_prio);
+	snprintf(vlan_id_str, sizeof(vlan_id_str), "%d", vlan_id);
+	snprintf(vlan_prio_str, sizeof(vlan_prio_str), "%d", vlan_prio);
 	//lanportset |= ( 1<<15 );
-	sprintf(lanportset_str,"0x%x",lanportset);
+	snprintf(lanportset_str, sizeof(lanportset_str), "0x%x", lanportset);
 
 	eval("rtkswitch","301",vlan_id_str);
 	eval("rtkswitch","302",vlan_prio_str);
@@ -2189,9 +2307,9 @@ int vlan_switch_pvid_setup(int *pvid_list, int *pprio_list, int size)
 		memset(port_str,0,8);
 		memset(pvid_str,0,8);
 		memset(pprio_str,0,8);
-		sprintf(port_str,"%d",i);
-		sprintf(pvid_str,"%d",pvid_list[i]);
-		sprintf(pprio_str,"%d",pprio_list[i]);
+		snprintf(port_str, sizeof(port_str), "%d", i);
+		snprintf(pvid_str, sizeof(pvid_str), "%d", pvid_list[i]);
+		snprintf(pprio_str, sizeof(pprio_str), "%d", pprio_list[i]);
 
 		if(pvid_list[i] == 0 || pvid_list[i] == 1)
 			continue;
@@ -2270,11 +2388,11 @@ void set_tagged_based_vlan_config(char *interface)
 						rtkswitch 303 0x000000FF */
 
 					lanportset_tmp |= ( 1<<15 );
-					sprintf(lanportset_str,"0x%x",lanportset_tmp);
+					snprintf(lanportset_str, sizeof(lanportset_str), "0x%x", lanportset_tmp);
 
 					get_vlan_info(vlan_name,vlan_id,vlan_prio);
-					vlan_id_tmp = atoi(vlan_id);
-					vlan_prio_tmp = atoi(vlan_prio);
+					vlan_id_tmp = safe_atoi(vlan_id);
+					vlan_prio_tmp = safe_atoi(vlan_prio);
 					if( vlan_id_tmp < 1 || vlan_id_tmp > 4095 || vlan_prio_tmp < 0 || vlan_prio_tmp > 7 )
 					{
 						printf("VLAN vaule error vlan %d, prio %d\n",vlan_id_tmp,vlan_prio_tmp);

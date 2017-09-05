@@ -88,7 +88,7 @@ void split(char **arr, char *str, char *del) {
 
 int get_unit(int value)
 {
-	return value *brightness*9 /100/10/2;
+	return value *9 / 10 / 2;
 }
 
 void max_col_cur(char *b, char *g, char *r)
@@ -106,7 +106,7 @@ void max_col_cur(char *b, char *g, char *r)
 	if (max<red)
 		max = red;
 
-	max_unit = get_unit(max);
+	max_unit = get_unit(max) * brightness / 100;
 
 	return;
 }
@@ -114,7 +114,7 @@ void max_col_cur(char *b, char *g, char *r)
 void pattern_breath_ex(int value, char *output)
 {
 	char *wait = "4200";
-	char result[256], increase[256], decrease[256], tmp[256]; 
+	char result[CKN_STR256], increase[CKN_STR256], decrease[CKN_STR256], tmp[CKN_STR256]; 
 	int val_unit = get_unit(value);
 	int mul_unit = max_unit / val_unit;
 	int wait_unit = max_unit - (mul_unit*val_unit);

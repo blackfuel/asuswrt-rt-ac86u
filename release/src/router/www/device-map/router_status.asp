@@ -140,6 +140,9 @@ function initial(){
 			if(wl_info.band5g_2_support)
 				tab_reset(0);
 
+			if(wl_info.band60g_support)
+				tab_reset(0);
+
 			if(smart_connect_support && (parent.isSwMode("rt") || parent.isSwMode("ap")))
 				change_smart_connect('<% nvram_get("smart_connect_x"); %>');
 			
@@ -166,10 +169,12 @@ function initial(){
 	detect_CPU_RAM();
 
 	get_ethernet_ports();
+
+	set_NM_height();
 }
 
 function tabclickhandler(wl_unit){
-	if(wl_unit == 3){
+	if(wl_unit == "status"){
 		location.href = "router_status.asp";
 	}
 	else{
@@ -336,6 +341,10 @@ function tab_reset(v){
 			document.getElementById("span1").innerHTML = "5GHz";
 			document.getElementById("t2").style.display = "none";
 		}
+
+		if(!wl_info.band60g_support){
+			document.getElementById("t3").style.display = "none";
+		}		
 	}else if(v == 1){	//Smart Connect
 		if(based_modelid == "RT-AC5300" || based_modelid == "RT-AC3200" || based_modelid == "RT-AC5300R")
 			document.getElementById("span0").innerHTML = "2.4GHz, 5GHz-1 and 5GHz-2";
@@ -467,7 +476,7 @@ function get_ethernet_ports() {
 <input type="hidden" name="wl_unit" value="<% nvram_get("wl_unit"); %>">
 <input type="hidden" name="wl_subunit" value="-1">
 
-<table border="0" cellpadding="0" cellspacing="0" style="padding-left:5px">
+<table border="0" cellpadding="0" cellspacing="0" id="rt_table">
 <tr>
 	<td>		
 		<table width="100px" border="0" align="left" style="margin-left:8px;" cellpadding="0" cellspacing="0">
@@ -487,8 +496,13 @@ function get_ethernet_ports() {
 				</div>
 			</td>
 			<td>
-				<div id="t3" class="tabclick_NW" align="center" style="font-weight: bolder; margin-right:2px; width:90px;" onclick="tabclickhandler(3)">
-					<span id="span3" style="cursor:pointer;font-weight: bolder;">Status</span>
+				<div id="t3" class="tab_NW" align="center" style="font-weight: bolder;display:none; margin-right:2px; width:90px;" onclick="tabclickhandler(3)">
+					<span id="span3" style="cursor:pointer;font-weight: bolder;">60GHz</span>
+				</div>
+			</td>
+			<td>
+				<div id="t_status" class="tabclick_NW" align="center" style="font-weight: bolder; margin-right:2px; width:90px;" onclick="tabclickhandler('status')">
+					<span id="span_status" style="cursor:pointer;font-weight: bolder;"><#Status_Str#></span>
 				</div>
 			</td>
 		</table>
@@ -498,7 +512,7 @@ function get_ethernet_ports() {
 <tr>
 	<td>
 		<div>
-		<table width="98%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px" id="cpu">
+		<table width="96%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px" id="cpu" style="margin: 0px 8px;">
 			<tr>
 				<td >
 					<div class="title">CPU</div>
@@ -557,7 +571,7 @@ function get_ethernet_ports() {
 <tr>
 	<td> 
 		<div>
-			<table width="98%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px">	
+			<table width="96%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px" style="margin: 0px 8px;">	
 			<tr>
 				<td colspan="3">		
 					<div class="title">RAM</div>
@@ -641,7 +655,7 @@ function get_ethernet_ports() {
 <tr id="tr_ethernet_ports" style="display:none;">
 	<td> 
 		<div>
-			<table width="98%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px">	
+			<table width="96%" border="1" align="center" cellpadding="4" cellspacing="0" class="table1px" style="margin: 0px 8px;">	
 				<tr>
 					<td style="border-bottom:5px #2A3539 solid;padding:0px 10px 5px 10px;"></td>
 				</tr>

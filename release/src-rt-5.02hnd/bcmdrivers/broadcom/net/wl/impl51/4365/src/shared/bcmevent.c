@@ -1,7 +1,7 @@
 /*
  * bcmevent read-only data shared by kernel or app layers
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- * $Id: bcmevent.c 598298 2015-11-09 09:11:22Z $
+ * $Id: bcmevent.c 664112 2016-10-10 13:27:40Z $
  */
 
 #include <typedefs.h>
@@ -202,6 +202,9 @@ static const bcmevent_name_str_t bcmevent_names[] = {
 #ifdef SPLIT_ASSOC
 	BCMEVENT_NAME(WLC_E_PRE_ASSOC_RSEP_IND),
 #endif /* SPLIT_ASSOC */
+#ifdef WLFBT
+	BCMEVENT_NAME(WLC_E_FBT),
+#endif /* WLFBT */
 };
 
 

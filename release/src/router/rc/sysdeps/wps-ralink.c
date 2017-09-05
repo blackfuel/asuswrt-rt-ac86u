@@ -88,6 +88,7 @@ stop_wps_method(void)
 
 
 	foreach(wif, nvram_safe_get("wl_ifnames"), next) {
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
 		sprintf(prefix, "wl%d_", i);
 		aif = nvram_safe_get(strcat_r(prefix, "vifs", tmp));
 			/* Make sure WPS on all band are turned off */
@@ -111,6 +112,7 @@ stop_wps_method(void)
 			++i;
 			continue;
 		}
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
 		snprintf(prefix, sizeof(prefix), "wl%d_", i);
 
 		if (!multiband) {
@@ -160,6 +162,7 @@ int is_wps_stopped(void)
 			++i;
 			continue;
 		}
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
 		snprintf(prefix, sizeof(prefix), "wl%d_", i);
 		if (!__need_to_start_wps_band(prefix) || nvram_match(strcat_r(prefix, "radio", tmp), "0")) {
 			ret = 0;

@@ -31,7 +31,7 @@
  *		...
  *	};
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -39,7 +39,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_wet_tunnel.c 598153 2015-11-09 03:01:48Z $
+ * $Id: wlc_wet_tunnel.c 675500 2016-12-16 03:05:40Z $
  */
 
 /**
@@ -296,8 +296,8 @@ BCMATTACHFN(wlc_wet_tunnel_detach)(wlc_wet_tunnel_info_t *weth)
 {
 	if (!weth)
 		return;
-	MFREE(weth->pub->osh, weth, sizeof(wlc_wet_tunnel_info_t));
 	wlc_module_unregister(weth->pub, "wet_tunnel", weth);
+	MFREE(weth->pub->osh, weth, sizeof(wlc_wet_tunnel_info_t));
 }
 
 /* Handling WET related iovars */

@@ -1,7 +1,7 @@
 /*
  * Visualization system data concentrator database utility implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: database.c 656124 2016-08-25 08:26:28Z $
+ * $Id: database.c 672659 2016-11-29 10:24:01Z $
  */
 
 #include <stdio.h>
@@ -269,14 +269,14 @@ create_database_and_tables()
 			"%s TEXT, %s INTEGER, %s INTEGER, "
 			"%s INTEGER, %s INTEGER, %s INTEGER, "
 			"%s INTEGER, %s INTEGER, %s TEXT, "
-			"%s TEXT, %s TEXT, %s TEXT, %s INTEGER); ",
+			"%s TEXT, %s TEXT, %s TEXT, %s INTEGER, %s INTEGER); ",
 			TABLE_DUTDETAILS, COL_DUT_ROWID,
 			COL_DUT_ISAP, COL_DUT_BSSID, COL_DUT_SSID,
 			COL_DUT_MAC, COL_DUT_CHANNEL, COL_DUT_BANDWIDTH,
 			COL_DUT_RSSI, COL_DUT_CONTROLCH, COL_DUT_NOISE,
 			COL_DUT_BAND, COL_DUT_SPEED, COL_DUT_STANDARDS,
 			COL_DUT_MCASTRSN, COL_DUT_UCASTRSN, COL_DUT_AKMRSN,
-			COL_DUT_ISENABLED);
+			COL_DUT_ISENABLED, COL_DUT_ERRINFO);
 
 	rval = execute_sql_statement(db, querystr);
 
@@ -1060,13 +1060,13 @@ get_dut_details_from_db(char *mac, dut_info_t *dutdet)
 	snprintf(querystr, sizeof(querystr), "SELECT %s, %s, %s, %s, "
 		"%s, %s, %s, "
 		"%s, %s, %s, "
-		"%s, %s, %s, %s "
+		"%s, %s, %s, %s, %s "
 		"FROM %s WHERE %s = '%s' AND %s = '1'",
 		COL_DUT_ROWID, COL_DUT_SSID, COL_DUT_BSSID, COL_DUT_CHANNEL,
 		COL_DUT_BANDWIDTH, COL_DUT_RSSI, COL_DUT_NOISE,
 		COL_DUT_CONTROLCH, COL_DUT_BAND, COL_DUT_SPEED,
 		COL_DUT_STANDARDS, COL_DUT_MCASTRSN, COL_DUT_UCASTRSN, COL_DUT_AKMRSN,
-		TABLE_DUTDETAILS, COL_DUT_MAC, mac, COL_DUT_ISENABLED);
+		COL_DUT_ERRINFO, TABLE_DUTDETAILS, COL_DUT_MAC, mac, COL_DUT_ISENABLED);
 
 	ret = sqlite3_get_table(g_db, querystr, &qResults, &nRows, &nCols,
 		&szErrMsg);
@@ -1094,6 +1094,7 @@ get_dut_details_from_db(char *mac, dut_info_t *dutdet)
 			qResults[(1)*nCols+12]);
 		snprintf(dutdet->akmrsntype, sizeof(dutdet->akmrsntype), "%s",
 			qResults[(1)*nCols+13]);
+		dutdet->errinfo = atoi(qResults[(1)*nCols+14]);
 
 		VIS_DB("ROW ID : %d\n", dutdet->rowid);
 	} else {
@@ -1160,12 +1161,56 @@ end:
 	return ret;
 }
 
+/* Gets errorinfo from dutinfo table. */
+static uint32
+get_dut_errinfo(int rowid, int islock)
+{
+	char	*szErrMsg = NULL;
+	char	**qResults = NULL;
+	char	querystr[256];
+	int	ret, nRows = 0, nCols = 0, idx = -1;
+	uint32 errinfo = 0;
+
+	SHOW_TIME_ELAPSE_START();
+
+	if (islock == TRUE) {
+		lock_db_mutex(TABLE_DUTDETAILS, &idx);
+	}
+
+	snprintf(querystr, sizeof(querystr),
+		"SELECT %s FROM %s WHERE %s = '%d';",
+		COL_DUT_ERRINFO, TABLE_DUTDETAILS, COL_DUT_ROWID, rowid);
+	ret = sqlite3_get_table(g_db, querystr, &qResults, &nRows, &nCols,
+		&szErrMsg);
+	if (ret != SQLITE_OK) {
+		SQLITE_QUERY_FAIL(szErrMsg);
+		goto end;
+	}
+
+	if (nRows > 0)	{
+		errinfo = atoi(qResults[(1)*nCols]);
+		VIS_DB("errinfo : %d\n", errinfo);
+	}
+
+	sqlite3_free_table(qResults);
+
+end:
+	if (islock == TRUE) {
+		unlock_db_mutex(TABLE_DUTDETAILS, idx);
+	}
+
+	SHOW_TIME_ELAPSE_END();
+
+	return errinfo;
+}
+
 /* Stores DUT details to table */
 int
 store_dut_details(dut_info_t *dutinfo)
 {
 	char	querystr[MAX_QUERY_SIZE];
 	int	rval = 0, rowid = -1, idx = -1;
+	uint32 errorinfo = 0, currerr = 0;
 
 	SHOW_TIME_ELAPSE_START();
 
@@ -1179,29 +1224,41 @@ store_dut_details(dut_info_t *dutinfo)
 			"%s, %s, %s, "
 			"%s, %s, %s, "
 			"%s, %s, %s, "
-			"%s, %s) "
+			"%s, %s, %s) "
 			"VALUES (NULL, '%d', '%s', "
 			"'%q', '%s', '%d', "
 			"'%d', '%d', '%d', "
 			"'%d', '%d', '%d', "
 			"'%s', '%s', '%s', "
-			"'%s', '%d'); ",
+			"'%s', '%d', '%d'); ",
 			TABLE_DUTDETAILS, COL_DUT_ROWID, COL_DUT_ISAP, COL_DUT_BSSID,
 			COL_DUT_SSID, COL_DUT_MAC, COL_DUT_CHANNEL,
 			COL_DUT_BANDWIDTH, COL_DUT_RSSI, COL_DUT_NOISE,
 			COL_DUT_CONTROLCH, COL_DUT_BAND, COL_DUT_SPEED,
 			COL_DUT_STANDARDS, COL_DUT_MCASTRSN, COL_DUT_UCASTRSN,
-			COL_DUT_AKMRSN, COL_DUT_ISENABLED,
+			COL_DUT_AKMRSN, COL_DUT_ISENABLED, COL_DUT_ERRINFO,
 			dutinfo->isAP, dutinfo->bssid,
 			dutinfo->ssid, dutinfo->mac, dutinfo->channel,
 			dutinfo->bandwidth, dutinfo->rssi, dutinfo->noise,
 			dutinfo->ctrlch, dutinfo->band, dutinfo->maxrate,
 			dutinfo->networktype, dutinfo->mcastrsntype, dutinfo->ucastrsntype,
-			dutinfo->akmrsntype, dutinfo->isenabled);
+			dutinfo->akmrsntype, dutinfo->isenabled, dutinfo->errinfo);
 
 		rval = execute_sql_statement(g_db, querystr);
 		is_dut_present(dutinfo->mac, &dutinfo->rowid, FALSE, FALSE);
 	} else { /* UPDATE */
+
+		/* get the stored errinfo val */
+		currerr = get_dut_errinfo(rowid, FALSE);
+		errorinfo = dutinfo->errinfo;
+		if (VIS_CHECK_BIT(errorinfo, VIS_SCAN_DONE)) {
+			if (VIS_CHECK_BIT(errorinfo, VIS_SCAN_ERROR)) {
+				VIS_SET_BIT(currerr, VIS_SCAN_ERROR);
+			} else {
+				VIS_CLEAR_BIT(currerr, VIS_SCAN_ERROR);
+			}
+		}
+
 		sqlite3_snprintf(sizeof(querystr), querystr, "UPDATE %s SET %s = '%d', "
 			"%s = '%d', %s = '%s', "
 			"%s = '%q', %s = '%d', "
@@ -1209,7 +1266,7 @@ store_dut_details(dut_info_t *dutinfo)
 			"%s = '%d', %s = '%d', "
 			"%s = '%d', %s = '%s', "
 			"%s = '%s', %s = '%s', "
-			"%s = '%s', %s = '%d' WHERE %s = '%d'",
+			"%s = '%s', %s = '%d', %s = '%d' WHERE %s = '%d'",
 			TABLE_DUTDETAILS, COL_DUT_CHANNEL, dutinfo->channel,
 			COL_DUT_BANDWIDTH, dutinfo->bandwidth,
 			COL_DUT_BSSID, dutinfo->bssid,
@@ -1224,6 +1281,7 @@ store_dut_details(dut_info_t *dutinfo)
 			COL_DUT_UCASTRSN, dutinfo->ucastrsntype,
 			COL_DUT_AKMRSN, dutinfo->akmrsntype,
 			COL_DUT_ISENABLED, dutinfo->isenabled,
+			COL_DUT_ERRINFO, currerr,
 			COL_DUT_ROWID, rowid);
 		dutinfo->rowid = rowid; /* Save the rowID */
 		rval = execute_sql_statement(g_db, querystr);
@@ -3010,25 +3068,25 @@ get_rrm_adv_stastats_from_db(int rowid, char *mac)
 		rrmstatslist->rrmstats[i].txop = atoi(qResults[(i+1)*nCols+1]);
 		rrmstatslist->rrmstats[i].pktrequested =
 			verify_and_set_rrm_stats_data(atoi(qResults[(i+1)*nCols+2]),
-				atoi(qResults[(i+2)*nCols+2]));
+			atoi(qResults[(i+2)*nCols+2]));
 		rrmstatslist->rrmstats[i].pktdropped =
 			verify_and_set_rrm_stats_data(atoi(qResults[(i+1)*nCols+3]),
-				atoi(qResults[(i+2)*nCols+3]));
+			atoi(qResults[(i+2)*nCols+3]));
 		rrmstatslist->rrmstats[i].pktstored =
 			verify_and_set_rrm_stats_data(atoi(qResults[(i+1)*nCols+4]),
-				atoi(qResults[(i+2)*nCols+4]));
+			atoi(qResults[(i+2)*nCols+4]));
 		rrmstatslist->rrmstats[i].pktretried =
 			verify_and_set_rrm_stats_data(atoi(qResults[(i+1)*nCols+5]),
-				atoi(qResults[(i+2)*nCols+5]));
+			atoi(qResults[(i+2)*nCols+5]));
 		rrmstatslist->rrmstats[i].pktacked =
 			verify_and_set_rrm_stats_data(atoi(qResults[(i+1)*nCols+6]),
-				atoi(qResults[(i+2)*nCols+6]));
+			atoi(qResults[(i+2)*nCols+6]));
 		rrmstatslist->rrmstats[i].pktstored = rrmstatslist->rrmstats[i].pktrequested -
 			rrmstatslist->rrmstats[i].pktdropped;
 		rrmstatslist->rrmstats[i].pktacked =
 			verify_and_set_rrm_stats_data(rrmstatslist->rrmstats[i].pktrequested,
-				(rrmstatslist->rrmstats[i].pktdropped +
-				rrmstatslist->rrmstats[i].pktacked));
+			(rrmstatslist->rrmstats[i].pktdropped +
+			rrmstatslist->rrmstats[i].pktacked));
 
 		VIS_DB_RRM("%ld\t %s\t %d\t\t %d\t\t"
 			"%d\t\t %d\t\t %d\t\t %d\n",

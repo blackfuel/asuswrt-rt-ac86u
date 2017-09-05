@@ -3,7 +3,7 @@
  * Broadcom traffic management support. A lot of the design was based
  * on information found at http://phix.me/dm.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;

@@ -130,6 +130,13 @@ const char* pns_sendmsg_template =
 "</pns_sendmsg>\r\n\r\n"
 ;
 
+const char* ifttt_notification_template = 
+"%s"
+;
+
 const char* wb_custom_header_templ = 
 "Set-Cookie:ONE_VER=1_0; path=/; sid=%s";
 #endif
+
+const char* ifttt_notification_header_templ = 
+"Content-Type: application/json";

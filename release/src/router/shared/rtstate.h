@@ -304,9 +304,7 @@ enum {
 #define WANS_DUALWAN_IF_2G      5
 #define WANS_DUALWAN_IF_5G      6
 #define WANS_DUALWAN_IF_WAN2	7
-#ifdef RTCONFIG_USB_MULTIMODEM
 #define WANS_DUALWAN_IF_USB2    8
-#endif
 
 // the following definition is for free_caches()
 #define FREE_MEM_NONE  "0"
@@ -321,7 +319,11 @@ enum {
 #endif
 #define is_routing_enabled() (sw_mode()==SW_MODE_ROUTER||sw_mode()==SW_MODE_HOTSPOT)
 #define is_router_mode()     (sw_mode()==SW_MODE_ROUTER)
+#if defined(RTCONFIG_DUALWAN)
+extern int is_nat_enabled(void);
+#else
 #define is_nat_enabled()     ((sw_mode()==SW_MODE_ROUTER||sw_mode()==SW_MODE_HOTSPOT)&&nvram_get_int("wan0_nat_x")==1)
+#endif
 #define is_lan_connected()   (nvram_get_int("lan_state")==LAN_STATE_CONNECTED)
 #ifdef RTCONFIG_WIRELESSWAN
 #define is_wirelesswan_enabled() (sw_mode()==SW_MODE_HOTSPOT)
@@ -329,6 +331,12 @@ enum {
 // todo: multiple wan
 
 extern int wan_primary_ifunit(void);
+#ifdef RTCONFIG_REALTEK
+/* The fuction is avoiding watchdog segfault on RP-AC68U.
+ * This is a workaround solution.
+**/
+extern int rtk_wan_primary_ifunit(void);
+#endif
 extern int wan_primary_ifunit_ipv6(void);
 extern int get_wan_state(int unit);
 extern int get_wan_sbstate(int unit);

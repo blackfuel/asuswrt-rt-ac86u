@@ -1,7 +1,7 @@
 #
 # Broadcom 802.11 Networking Device Driver Configuration file
 #
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
+# Broadcom Proprietary and Confidential. Copyright (C) 2017,
 # All Rights Reserved.
 # 
 # This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -280,3 +280,4 @@ WL_MODESW=1
 #taf feature
 WLTAF=1
 FLOW_PRIO_MAP_AC=1
+CLIENT_CSA=1

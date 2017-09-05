@@ -508,7 +508,7 @@ var retValHandler = {
 				clearInterval(Counter.ajaxTimer)
 				viewHandler.forceHideLoading();
 				var isIPChanged = false;
-				if(window.location.hostName != (retValHandler.dutIP.split("://")[1] || window.location.hostName))
+				if(window.location.hostname != (retValHandler.dutIP.split("://")[1] || window.location.hostname))
 					isIPChanged = true;
 	
 				// case handler

@@ -1,7 +1,7 @@
 /*
  * Linux Visualization Data Collector
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_linux_main.c 616026 2016-01-29 11:14:36Z $
+ * $Id: vis_linux_main.c 672659 2016-11-29 10:24:01Z $
  */
 #include "vis_linux_main.h"
 #include <stdio.h>
@@ -281,7 +281,13 @@ get_counter_from_driver()
 	while (curnode != NULL) {
 		if (curnode->enabled) {
 			if (isfirsttime == 1 || curnode->dutset.isscan == 1) {
+				/*
+				 * For scan set the dut's error info scan bit.
+				 * If scan results are successfully retrieved Clear the error bit.
+				 */
 				wl_scan(&curnode->ifr);
+				VIS_SET_BIT(curnode->dut_info.errinfo, VIS_SCAN_ERROR);
+				VIS_SET_BIT(curnode->dut_info.errinfo, VIS_SCAN_DONE);
 				isscanned = 1;
 			}
 		}
@@ -338,7 +344,8 @@ get_counter_from_driver()
 		while (curnode != NULL) {
 			if (curnode->enabled) {
 				if (isfirsttime == 1 || curnode->dutset.isscan == 1)
-					curnode->networks_list = wl_dump_networks(&curnode->ifr);
+					curnode->networks_list = wl_dump_networks(&curnode->ifr,
+						&(curnode->dut_info.errinfo));
 
 			}
 			curnode = curnode->next;

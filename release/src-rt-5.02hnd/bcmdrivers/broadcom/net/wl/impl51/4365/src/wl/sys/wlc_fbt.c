@@ -1,7 +1,7 @@
 /*
  * wlc_fbt.c -- FBT module source.
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -9,7 +9,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_fbt.c 515999 2014-11-18 08:18:09Z $
+ * $Id: wlc_fbt.c 669831 2016-11-11 08:48:06Z $
  */
 
 /**
@@ -23,9 +23,6 @@
 #include <wlc_cfg.h>
 #endif /* BCMINTSUP */
 
-#ifndef	STA
-#error "STA must be defined for wlc_fbt.c"
-#endif /* STA */
 #if !defined(WLFBT)
 #error "WLFBT must be defined"
 #endif /* !defined(WLFBT) */
@@ -41,9 +38,7 @@
 #include <proto/eap.h>
 #include <proto/eapol.h>
 #include <bcmwpa.h>
-#if defined(BCMSUP_PSK)
 #include <bcmcrypto/prf.h>
-#endif /* BCMSUP_PSK */
 
 #include <proto/802.11.h>
 #include <d11.h>
@@ -95,12 +90,57 @@
 #include "wlc_wpa.h"
 #endif /* BCMINTSUP */
 
+
+#ifdef AP
+#include <wlc_ap.h>
+#include <wlc_scan.h>
+#include <bcmutils.h>
+#include <bcmnvram.h>
+#endif /* AP */
 #ifdef WLMCHAN
 #include <wlc_mchan.h>
 #endif
+#include <proto/802.11r.h>
 #include "wlc_fbt.h"
 #include "wlc_cac.h"
 #include <wlc_tx.h>
+
+#ifdef AP
+/* MIC count for fixed elements in FBT IE */
+#define FBTIE_MIC_IE_COUNT		3
+
+/* OFFSET to optional FBT IE */
+#define DOT11_SUBELEM_ID_OFF    0
+
+typedef struct wlc_fbt_ies
+{
+	dot11_mdid_ie_t mdie;
+	uint8 *ftie;
+	uchar *r1kh_id;
+	uchar *r0kh_id;
+	uint8 *gtk;
+	uint8 *igtk;
+	uint8 *rsnie;
+	uint8 *pmkid;
+	uint8 *ricie;
+	uint ric_len;
+	uint ric_elem_count;
+	uint8 ftie_len;
+	uint8 r1kh_id_len;
+	uint8 r0kh_id_len;
+	uint8 gtk_len;
+	uint8 igtk_len;
+	uint8 rsnie_len;
+	uint8 pmkid_len;
+	uint8 pad0;
+} wlc_fbt_ies_t;
+#endif /* AP */
+
+#if !defined(DONGLEBUILD) && (defined(BCMDBG) || defined(WLTEST))
+#define WL_FT_DBG_IOVARS_ENAB 1
+#else
+#define WL_FT_DBG_IOVARS_ENAB 0
+#endif /* !DONGLEBUILD && (BCMDBG || WLTEST) */
 
 typedef struct wlc_fbt_priv {
 	/* references to driver `common' things */
@@ -110,11 +150,42 @@ typedef struct wlc_fbt_priv {
 	osl_t *osh;			/* PKT* stuff wants this */
 
 	uint16 bss_fbt_priv_offset; /* offset of priv cubby in bsscfg */
+#if WL_FT_DBG_IOVARS_ENAB
+	uint32 msg_level;		/* control debug output */
+#endif /* WL_FT_DBG_IOVARS_ENAB */
 } wlc_fbt_priv_t;
+
+#ifdef WLFBT_STA_OVERRIDES
+	#if defined(WL_ENAB_RUNTIME_CHECK) || !defined(DONGLEBUILD)
+		#define WLFBT_STA_OVERRIDES_ENAB(fbt) ((fbt)->_sta_overrides)
+	#elif defined(WLFBT_STA_OVERRIDES_DISABLED)
+		#define WLFBT_STA_OVERRIDES_ENAB(fbt) ((void)(fbt), FALSE)
+	#else
+		#define WLFBT_STA_OVERRIDES_ENAB(fbt) ((void)(fbt), TRUE)
+	#endif
+
+	#define WLC_FT_PARAM_OVERRIDE_ACTIVE(fbt, bss_priv) \
+		(WLFBT_ENAB((fbt)->mod_priv.wlc->pub) && \
+		WLFBT_STA_OVERRIDES_ENAB(fbt) && (bss_priv) != NULL && \
+		(bss_priv)->fbt_bss_overrides != NULL)
+#else
+	#define WLFBT_STA_OVERRIDES_ENAB(fbt) ((void)(fbt), FALSE)
+	#define WLC_FT_PARAM_OVERRIDE_ACTIVE(fbt, priv) (FALSE)
+#endif /* WLFBT_STA_OVERRIDES */
+
+typedef struct bss_fbt_overrides {
+	uint8 *override_ptrs[WL_FBT_PARAM_TYPE_FIRST_INVALID];
+	uint8 override_lens[WL_FBT_PARAM_TYPE_FIRST_INVALID];
+} wlc_bss_fbt_overrides_t;
 
 struct wlc_fbt_info {
 	wlc_fbt_pub_t	mod_pub;
 	wlc_fbt_priv_t	mod_priv;
+#ifdef AP
+	int				scbh;		/* scb cubby handle */
+	struct wl_timer *fbt_timer;	/* timer */
+#endif /* AP */
+	bool _sta_overrides;
 };
 
 typedef struct bss_fbt_priv {
@@ -141,13 +212,51 @@ typedef struct bss_fbt_priv {
 	uchar pmkr1name[WPA2_PMKID_LEN];
 	uint8 current_akm_type;		/* AKM suite used for current association */
 	bool use_sup_wpa;		/* TRUE if idsup is enabled and owns wpa/wpa_info */
+	wlc_bss_fbt_overrides_t *fbt_bss_overrides; /* when WLFBT_STA_OVERRIDES_ENAB */
 } bss_fbt_priv_t;
 
 typedef struct bss_fbt_info {
 	bss_fbt_pub_t	bss_pub;
 	bss_fbt_priv_t	bss_priv;
+#ifdef AP
+	wlc_fbt_info_t	*fbt_info;
+	bool			fbt_mode; /* FBT mode */
+	uint16			mdid; /* Mobility Domain Identifier */
+	char			fbt_r0kh_id[FBT_R0KH_ID_LEN]; /* Config R0 Key holder Identifier */
+	uint			fbt_r0kh_id_len; /* R0 Key holder ID Length */
+	uint8			fbt_r1kh_id[ETHER_ADDR_LEN];	/* Configured R1 Key holder ID */
+	uint8			fbt_over_ds;		/* FBT over DS support */
+	uint8			fbt_res_req_cap;	/* resource req capability support */
+	uint			reassoc_time;		/* reassoc deadline timer value in TU */
+	bool                    fbt_timer_set;          /* Fbt timer is set or not */
+#endif /* AP */
 } bss_fbt_info_t;
 
+#ifdef AP
+/* SCB Config Cubby structure */
+typedef struct wlc_fbt_scb {
+	struct ether_addr macaddr; /* station mac address */
+	uint8	pmk_r1_name[WPA2_PMKID_LEN];
+	uint8	status;		/* DOT11_SC_SUCCESS or other status code */
+	wpa_ptk_t ptk;		/* pairwise key */
+	wpa_gtk_t gtk;		/* group key */
+	uint	auth_resp_ielen; /* length of ies below */
+	uint8	*auth_resp_ies; /* IEs contains MDIE, RSNIE, FBTIE
+							(ANonce, SNonce, R0KH-ID, R1KH-ID)
+							*/
+	uint	auth_time; /* the system time in milliseconds when
+						FBT authentication request is received by AP
+						*/
+	wlc_fbt_ies_t fbties_assoc;
+} wlc_fbt_scb_t;
+
+typedef struct wlc_fbt_scb_cubby {
+	wlc_fbt_scb_t *cubby;
+} wlc_fbt_scb_cubby_t;
+
+#define FBT_SCB_CUBBY(fbt, scb) ((wlc_fbt_scb_cubby_t *)SCB_CUBBY((scb), (fbt)->scbh))
+#define FBT_SCB(fbt, scb) ((FBT_SCB_CUBBY(fbt, scb))->cubby)
+#endif /* AP */
 /* wlc_fbt_info_priv_t offset in module states */
 static uint16 wlc_fbt_info_priv_offset = OFFSETOF(wlc_fbt_info_t, mod_priv);
 
@@ -173,17 +282,109 @@ static uint16 wlc_fbt_info_priv_offset = OFFSETOF(wlc_fbt_info_t, mod_priv);
 #define FT_MIC_ASSOC_REQUEST_TSN	5	/* TSN for association request frames. */
 #define FT_MIC_REASSOC_RESPONSE_TSN	6	/* TSN for reassociation request response frames. */
 
+#if WL_FT_DBG_IOVARS_ENAB
+
+#define FT_MSG_LVL_IMPORTANT	0x1
+#define FT_MSG_LVL_CHATTY	0x2
+#define FT_MSG_LVL_ENTRY	0x4
+
+#define WL_FT_MSG(ft, args) \
+	do { \
+		if ((ft) && ((ft)->msg_level & FT_MSG_LVL_IMPORTANT) != 0) { \
+			WL_PRINT(args); \
+		} \
+	} while (0)
+
+#define WL_FT_CHATTY(ft, args) \
+	do { \
+		if ((ft) && ((ft)->msg_level & FT_MSG_LVL_CHATTY) != 0) { \
+			WL_PRINT(args); \
+		} \
+	} while (0)
+
+#define WL_FT_ENTRY(ft, args) \
+	do { \
+		if ((ft) && ((ft)->msg_level & FT_MSG_LVL_ENTRY) != 0) { \
+			WL_PRINT(args); \
+		} \
+	} while (0)
+
+#else
+#define WL_FT_MSG(ft, args)
+#define WL_FT_CHATTY(ft, args)
+#define WL_FT_ENTRY(ft, args)
+#endif /* WL_FT_DBG_IOVARS_ENAB */
+
 #ifdef BCMDBG
+#if defined(STA) && defined(FBT_STA)
 static void wlc_fbt_dump_fbt_keys(bss_fbt_priv_t *fbt_bss_priv, uchar *pmkr0, uchar *pmkr1);
-#endif
+#endif /* STA && FBT_STA */
+#ifdef AP
+static void wlc_fbt_scb_dump(void *context, struct scb *scb, struct bcmstrbuf *b);
+static void
+wlc_fbt_bsscfg_dump(void *context, wlc_bsscfg_t *bsscfg, struct bcmstrbuf *b);
+#endif /* AP */
+#else
+#define wlc_fbt_scb_dump NULL
+#define wlc_fbt_bsscfg_dump NULL
+#endif /* BCMDBG */
 
 static int wlc_fbt_doiovar(void *handle, const bcm_iovar_t *vi, uint32 actionid, const char *name,
 	void *params, uint plen, void *arg, int alen, int vsize, struct wlc_if *wlcif);
 static void wlc_fbt_bsscfg_init(void *ctx, wlc_bsscfg_t *cfg);
 static void wlc_fbt_bsscfg_deinit(void *ctx, wlc_bsscfg_t *cfg);
+#if defined(STA) && defined(FBT_STA)
 static void wlc_fbt_handle_joinproc(void *ctx, bss_assoc_state_data_t *evt_data);
+#endif /* STA && FBT_STA */
 static void wlc_fbt_bsscfg_updown_callbk(void *ctx, bsscfg_up_down_event_data_t *evt);
 static void wlc_fbt_free_ies(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg);
+#if defined(STA) && defined(FBT_STA)
+static bool wlc_fbt_update_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg);
+static void wlc_fbt_upd_authie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg);
+#endif /* STA && FBT_STA */
+#ifdef AP
+static bool wlc_fbt_fbtoverds_flag(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg);
+static bool wlc_fbt_fbtoverds_enable(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, bool fbt_over_ds);
+static void wlc_fbtap_reassociation_timer(void *arg);
+static int wlc_fbtap_process_auth_resp(wlc_info_t *wlc, wlc_fbt_info_t *fbt_info,
+	struct scb *scb, wlc_fbt_auth_resp_t *fbt_auth_resp);
+static int wlc_fbtap_process_ds_auth_resp(wlc_info_t *wlc, wlc_fbt_info_t *fbt_info,
+	wlc_bsscfg_t *bsscfg, wlc_fbt_auth_resp_t *fbt_auth_resp);
+static int wlc_fbt_scb_init(void *context, struct scb *scb);
+static void wlc_fbt_scb_deinit(void *context, struct scb *scb);
+static void wlc_fbtap_parse_fbties(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg,
+	uchar *tlvs, uint tlvs_len, wlc_fbt_ies_t *fbt_ies);
+static int wlc_fbtap_validate_auth_fbties(wlc_info_t *wlc, bss_fbt_info_t *fbt_bsscfg,
+	wlc_fbt_ies_t fbties, char *sa);
+static void wlc_fbtap_add_timer(wlc_info_t *wlc, struct scb *scb, uint timeval);
+static void wlc_fbtap_free_fbties(wlc_info_t *wlc, wlc_fbt_ies_t *fbties);
+static int wlc_fbtap_process_action_resp(wlc_info_t *wlc, wlc_fbt_info_t *fbt_info,
+	wlc_bsscfg_t *bsscfg, wlc_fbt_action_resp_t *fbt_action_resp);
+static uint8 *wlc_fbtap_write_ric_ie(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg,
+	wlc_fbt_ies_t *fbties_assoc, struct scb *scb, uint8 *cp,
+	uint *ricdata_len, uint *ric_ie_count);
+static uint8 *wlc_fbt_write_rsn_ie_safe(wlc_info_t *wlc, wlc_bsscfg_t *cfg,
+	uint8 *buf, int buflen);
+static uint wlc_fbtap_calc_rsn_ie_len(void *ctx, wlc_iem_calc_data_t *data);
+static int wlc_fbtap_write_rsn_ie(void *ctx, wlc_iem_build_data_t *data);
+static uint wlc_fbtap_calc_md_ie_len(void *ctx, wlc_iem_calc_data_t *data);
+static int wlc_fbtap_write_md_ie(void *ctx, wlc_iem_build_data_t *data);
+static uint wlc_fbtap_auth_calc_rsn_ie_len(void *ctx, wlc_iem_calc_data_t *data);
+static int wlc_fbtap_auth_write_rsn_ie(void *ctx, wlc_iem_build_data_t *data);
+static uint wlc_fbtap_auth_calc_md_ie_len(void *ctx, wlc_iem_calc_data_t *data);
+static int wlc_fbtap_auth_write_md_ie(void *ctx, wlc_iem_build_data_t *data);
+static uint wlc_fbtap_auth_calc_ft_ie_len(void *ctx, wlc_iem_calc_data_t *data);
+static int wlc_fbtap_auth_write_ft_ie(void *ctx, wlc_iem_build_data_t *data);
+static uint wlc_fbtap_calc_ft_ie_len(void *ctx, wlc_iem_calc_data_t *data);
+static int wlc_fbtap_write_ft_ie(void *ctx, wlc_iem_build_data_t *data);
+static int wlc_fbtap_parse_rsn_ie(void *ctx, wlc_iem_parse_data_t *data);
+static int wlc_fbtap_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data);
+static int wlc_fbtap_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data);
+static int wlc_fbtap_parse_rde_ie(void *ctx, wlc_iem_parse_data_t *data);
+static int wlc_fbtap_auth_parse_rsn_ie(void *ctx, wlc_iem_parse_data_t *data);
+static int wlc_fbtap_auth_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data);
+static void wlc_fbtap_scb_state_upd(wlc_fbt_info_t *fbt_info, scb_state_upd_data_t *data);
+#endif /* AP */
 
 #ifdef BCMSUP_PSK
 static void wlc_fbt_sup_updown_callbk(void *ctx, sup_init_event_data_t *evt);
@@ -191,6 +392,7 @@ static void wlc_fbt_sup_init(void *ctx, sup_init_event_data_t *evt);
 static void wlc_fbt_sup_deinit(void *ctx, wlc_bsscfg_t *cfg);
 #endif /* BCMSUP_PSK */
 
+#if defined(STA) && defined(FBT_STA)
 /* IE mgmt */
 static uint wlc_fbt_auth_calc_rsn_ie_len(void *ctx, wlc_iem_calc_data_t *data);
 static int wlc_fbt_auth_write_rsn_ie(void *ctx, wlc_iem_build_data_t *data);
@@ -199,22 +401,109 @@ static uint wlc_fbt_calc_md_ie_len(void *ctx, wlc_iem_calc_data_t *data);
 static int wlc_fbt_write_md_ie(void *ctx, wlc_iem_build_data_t *data);
 static int wlc_fbt_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data);
 static int wlc_fbt_scan_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data);
+static int wlc_fbt_scan_parse_ccx_ext_cap_ie(void *ctx, wlc_iem_parse_data_t *data);
 static uint wlc_fbt_calc_ft_ie_len(void *ctx, wlc_iem_calc_data_t *data);
 static int wlc_fbt_write_ft_ie(void *ctx, wlc_iem_build_data_t *data);
 static int wlc_fbt_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data);
 static uint wlc_fbt_calc_rde_ie_len(void *ctx, wlc_iem_calc_data_t *data);
 static int wlc_fbt_write_rde_ie(void *ctx, wlc_iem_build_data_t *data);
 static int wlc_fbt_parse_rde_ie(void *ctx, wlc_iem_parse_data_t *data);
+#endif /* STA && FBT_STA */
+
+#ifdef WLFBT_STA_OVERRIDES
+static bool
+wlc_fbt_write_overridable_ie(void *ctx, uint16 param_type,
+	wlc_iem_build_data_t *data);
+
+static bool
+wlc_fbt_calc_overridable_ie_len(void *ctx, wlc_iem_calc_data_t *data,
+	uint16 param_type, uint8 *length);
+
+static void wlc_fbt_bsscfg_free_overrides(bss_fbt_priv_t *fbt_bss_priv);
+static bss_fbt_priv_t *wlc_fbt_get_bsscfg(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg);
+
+static int wlc_fbt_cubby_field_alloc_set(wlc_fbt_priv_t *fbt_priv,
+	void *value_in, uint16 value_in_len,
+	uint8 **field_ptr_out, uint8 *field_len_out);
+
+static int wlc_fbt_param_set(wlc_fbt_info_t *fbt_info, wl_fbt_params_t *fbt_params,
+	wlc_bsscfg_t *bsscfg);
+
+static int wlc_fbt_param_get(wlc_fbt_info_t *fbt_info, wl_fbt_params_t *fbt_params,
+	wlc_bsscfg_t *bsscfg);
+
+static uint8*
+wlc_ft_override_get(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
+	uint16 param_type, uint8 **to_ptr, uint8 *to_len);
+
+static bool
+wlc_ft_override_get_len(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
+uint16 param_type, uint8 *to_len);
+
+static bool
+wlc_ft_override_get_buf(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
+uint16 param_type, uint8 *to_ptr, uint8 max_len);
+
+static void
+wlc_ft_param_type_to_pointers(wlc_bss_fbt_overrides_t *fbt_bss_overrides,
+	uint16 param_type, uint8 ***to_ptr, uint8 **to_len);
+
+static bool
+wlc_fbt_exclude_mde_override(void *ctx, wlc_bsscfg_t *cfg,
+	uint16 frame_type);
+
+static bss_fbt_priv_t*
+wlc_fbt_param_get_bss_priv(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *bsscfg);
+#else
+#define wlc_fbt_write_overridable_ie(a, b, c) (FALSE)
+#define wlc_fbt_calc_overridable_ie_len(a, b, c, d) (FALSE)
+#define wlc_ft_override_get_len(a, b, c, d) (FALSE)
+#define wlc_ft_override_get_buf(a, b, c, d, e) (FALSE)
+#define wlc_fbt_exclude_mde_override(a, b, c) (TRUE)
+#define wlc_fbt_bsscfg_free_overrides(a)
+#define wlc_fbt_param_get_bss_priv(a, b) (NULL)
+#endif /* WLFBT_STA_OVERRIDES */
 
 enum {
-	IOV_ALLOW_FBTOVERDS,
-	IOV_FBT_CAP,
+	IOV_ALLOW_FBTOVERDS = 0,
+	IOV_FBT_CAP = 1,
+	IOV_FBT = 2,				/* Enable Disable FBT per BSS */
+	IOV_FBT_AP = 3,				/* Enable Disable FBT per AP */
+	IOV_FBT_MDID = 4,			/* Mobility domain Identifier per BSS */
+	IOV_FBT_R0KH_ID = 5,		/* R0 Key holder Identifier (nas identifer for this BSS) */
+	IOV_FBT_R1KH_ID = 6,		/* R1 Key holder Identifier. (MAC address of this BSS) */
+	IOV_FBT_REASSOC_TIME = 7,	/* Reassociation deadline interval per BSS */
+	IOV_FBT_AUTH_RESP = 8,		/* Send FBT Authentication Response */
+	IOV_FBT_DS_ADD_STA = 9,		/* Application handles FBT over DS and sets this ioctl */
+	IOV_FBT_ACT_RESP = 10,		/* Send FBT Action Response Frame */
+#ifdef WLFBT_STA_OVERRIDES
+	IOV_FBT_PARAM = 11,			/* Override various FBT parameters for STA */
+#endif /* WLFBT_STA_OVERRIDES */
+#if WL_FT_DBG_IOVARS_ENAB
+	IOV_FBT_MSGLEVEL = 12,		/* Add or remove extra debug output for FBT */
+#endif /* WL_FT_DBG_IOVARS_ENAB */
 	IOV_LAST
 };
 
 static const bcm_iovar_t fbt_iovars[] = {
 	{"fbtoverds", IOV_ALLOW_FBTOVERDS, (0), IOVT_UINT32, 0},
 	{"fbt_cap", IOV_FBT_CAP, (IOVF_OPEN_ALLOW), IOVT_UINT32, 0},
+	{"fbt", IOV_FBT, IOVF_SET_UP, IOVT_INT32, 0},
+	{"fbt_ap", IOV_FBT_AP, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_INT32, 0},
+	{"fbt_mdid", IOV_FBT_MDID, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_UINT16, 0},
+	{"fbt_r0kh_id", IOV_FBT_R0KH_ID, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_BUFFER, 0},
+	{"fbt_r1kh_id", IOV_FBT_R1KH_ID, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_BUFFER, 0},
+	{"fbt_reassoc_time", IOV_FBT_REASSOC_TIME, IOVF_BSSCFG_AP_ONLY, IOVT_UINT32, 0},
+	{"fbt_auth_resp", IOV_FBT_AUTH_RESP, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_BUFFER, 0},
+	{"fbt_ds_add_sta", IOV_FBT_DS_ADD_STA, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_BUFFER, 0},
+	{"fbt_act_resp", IOV_FBT_ACT_RESP, IOVF_SET_UP|IOVF_BSSCFG_AP_ONLY, IOVT_BUFFER, 0},
+#ifdef WLFBT_STA_OVERRIDES
+	{"fbt_param", IOV_FBT_PARAM, IOVF_BSSCFG_STA_ONLY, IOVT_BUFFER,
+	sizeof(wl_fbt_params_t) - 1},
+#endif /* WLFBT_STA_OVERRIDES */
+#if WL_FT_DBG_IOVARS_ENAB
+	{"fbt_msglevel", IOV_FBT_MSGLEVEL, (0), IOVT_UINT32, 0},
+#endif /* WL_FT_DBG_IOVARS_ENAB */
 	{NULL, 0, 0, 0, 0}
 };
 
@@ -232,12 +521,29 @@ static const uint8 BCMINITDATA(ric_ie_tags)[] = {
 	DOT11_MNG_VS_ID
 };
 
+#define WLC_FBT_RDE_STA_STATUS_DEFAULT 0
+
 /* This includes the auto generated ROM IOCTL/IOVAR patch handler C source file (if auto patching is
  * enabled). It must be included after the prototypes and declarations above (since the generated
  * source file may reference private constants, types, variables, and functions).
  */
 #include <wlc_patch.h>
 
+#ifdef WLRSDB
+typedef struct {
+	void *cfg;
+} wlc_fbt_info_copy_t;
+
+#define FBT_INFO_COPY_SIZE	sizeof(wlc_fbt_info_copy_t)
+static int
+wlc_fbt_info_get(void *ctx, wlc_bsscfg_t *cfg, uint8 *data, int *len);
+static int
+wlc_fbt_info_set(void *ctx, wlc_bsscfg_t *cfg, const uint8 *data, int len);
+#else
+#define FBT_INFO_COPY_SIZE	0
+#define wlc_fbt_info_get NULL
+#define wlc_fbt_info_set NULL
+#endif /* WLRSDB */
 
 /* Allocate fbt context, squirrel away the passed values,
  * and return the context handle.
@@ -248,18 +554,30 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 	wlc_fbt_info_t *fbt_info;
 	wlc_fbt_priv_t	*fbt_priv;
 
+#ifdef FBT_STA
 	uint16 mdiefstbmp = FT2BMP(FC_ASSOC_REQ) | FT2BMP(FC_REASSOC_REQ) | FT2BMP(FC_AUTH);
 	uint16 ftiefstbmp = FT2BMP(FC_REASSOC_REQ) | FT2BMP(FC_AUTH);
 	uint16 scanfstbmp = FT2BMP(WLC_IEM_FC_SCAN_BCN) | FT2BMP(WLC_IEM_FC_SCAN_PRBRSP);
 	uint16 ftfstbmp = FT2BMP(FC_ASSOC_RESP) | FT2BMP(FC_REASSOC_RESP) | FT2BMP(FC_AUTH);
+	uint16 rsniefstbmp = FT2BMP(FC_AUTH);
+#endif /* FBT_STA */
+#ifdef AP
+	uint16 apmdiefstbmp = FT2BMP(FC_BEACON) | FT2BMP(FC_PROBE_RESP) |
+		FT2BMP(FC_ASSOC_RESP) | FT2BMP(FC_REASSOC_RESP);
+	uint16 apftiefstbmp = FT2BMP(FC_ASSOC_RESP) | FT2BMP(FC_REASSOC_RESP);
+	uint16 apassocreqbmp = FT2BMP(FC_ASSOC_REQ) | FT2BMP(FC_REASSOC_REQ);
+	uint16 apauthftiefstbmp = FT2BMP(FC_AUTH);
+#endif /* AP */
 
 	WL_TRACE(("wl%d: wlc_fbt_attach\n", wlc->pub->unit));
 
 	if (!(fbt_info = (wlc_fbt_info_t *)MALLOCZ(wlc->osh, sizeof(wlc_fbt_info_t)))) {
-		WL_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
+		WL_ATTACH_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
 		          wlc->pub->unit, __FUNCTION__, MALLOCED(wlc->osh)));
 		return NULL;
 	}
+
+	bzero((char *)fbt_info, sizeof(wlc_fbt_info_t));
 
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 	fbt_priv->wlc = wlc;
@@ -270,13 +588,14 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 
 	/* reserve cubby in the bsscfg container for per-bsscfg private data */
 	if ((fbt_info->mod_pub.cfgh = wlc_bsscfg_cubby_reserve(wlc, sizeof(bss_fbt_info_t *),
-	                NULL /* wlc_fbt_init */, wlc_fbt_bsscfg_deinit, NULL,
-	                (void *)fbt_info)) < 0) {
+		NULL /* wlc_fbt_init */, wlc_fbt_bsscfg_deinit, wlc_fbt_bsscfg_dump,
+		(void *)fbt_info)) < 0) {
 		WL_ERROR(("wl%d: %s: wlc_bsscfg_cubby_reserve() failed\n",
 		          UNIT(fbt_priv), __FUNCTION__));
 		goto err;
 	}
 
+#if defined(STA) && defined(FBT_STA)
 	/* assoc join-start/done callback */
 	if (wlc_bss_assoc_state_register(wlc, (bss_assoc_state_fn_t)wlc_fbt_handle_joinproc,
 		fbt_info) != BCME_OK) {
@@ -284,6 +603,7 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 		          UNIT(fbt_priv), __FUNCTION__));
 		goto err;
 	}
+#endif /* STA && FBT_STA */
 
 	if (wlc_bsscfg_updown_register(wlc, wlc_fbt_bsscfg_updown_callbk, fbt_info) != BCME_OK) {
 		WL_ERROR(("wl%d: %s: wlc_bsscfg_up_down_register() failed\n",
@@ -307,6 +627,35 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 		WL_ERROR(("wl%d: auth wlc_module_register() failed\n", UNIT(fbt_priv)));
 		goto err;
 	}
+#ifdef AP
+	fbt_info->fbt_timer = wl_init_timer(wlc->wl, wlc_fbtap_reassociation_timer,
+	                                    fbt_info, "fbt");
+
+	if (fbt_info->fbt_timer == NULL) {
+		WL_ERROR(("fbt_timer init failed\n"));
+		goto err;
+	}
+
+	if (wlc_scb_state_upd_register(wlc,
+		(bcm_notif_client_callback)wlc_fbtap_scb_state_upd, (void*)fbt_info)
+		!= BCME_OK) {
+		WL_ERROR(("fbt scb state upd register failed\n"));
+		goto err;
+	}
+
+	/* reserve cubby in the scb container for per-scb private data */
+	fbt_info->scbh = wlc_scb_cubby_reserve(wlc, sizeof(wlc_fbt_scb_cubby_t),
+		wlc_fbt_scb_init, wlc_fbt_scb_deinit, wlc_fbt_scb_dump, (void*)fbt_info);
+
+	if (fbt_info->scbh < 0) {
+		WL_ERROR(("wl%d: %s: wlc_scb_cubby_reserve() failed\n",
+			wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+
+	/* Disable FBT when in AP mode. Enable through iovar */
+	wlc->pub->_fbt = FALSE;
+#endif /* AP */
 	/* sort calc_len/build callbacks for Action frame */
 	(void)wlc_ier_sort_cbtbl(wlc->ier_fbt, fbt_ie_tags, sizeof(fbt_ie_tags));
 
@@ -315,7 +664,12 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 
 	/* calc/build */
 	/* authreq */
-	if (wlc_iem_add_build_fn(wlc->iemi, FC_AUTH, DOT11_MNG_RSN_ID,
+#ifdef WLFBT_STA_OVERRIDES
+	rsniefstbmp |= FT2BMP(FC_REASSOC_REQ);
+#endif /* WLFBT_STA_OVERRIDES */
+
+#ifdef FBT_STA
+	if (wlc_iem_add_build_fn_mft(wlc->iemi, rsniefstbmp, DOT11_MNG_RSN_ID,
 	      wlc_fbt_auth_calc_rsn_ie_len, wlc_fbt_auth_write_rsn_ie, fbt_info) != BCME_OK) {
 		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn failed, rsn in assocreq\n",
 		          wlc->pub->unit, __FUNCTION__));
@@ -358,6 +712,7 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 		goto err;
 	}
 	/* reassocreq */
+	/* reassocresp */
 	if (wlc_ier_add_build_fn(wlc->ier_ric, DOT11_MNG_RDE_ID,
 	      wlc_fbt_calc_rde_ie_len, wlc_fbt_write_rde_ie, fbt_info) != BCME_OK) {
 		WL_ERROR(("wl%d: %s wlc_ier_add_build_fn failed, rde ie in reassocreq\n",
@@ -374,6 +729,13 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 		goto err;
 	}
 
+	/* bcn/prbrsp */
+	if (wlc_iem_vs_add_parse_fn_mft(wlc->iemi, scanfstbmp, WLC_IEM_VS_IE_PRIO_CCX_EXT_CAP,
+	                             wlc_fbt_scan_parse_ccx_ext_cap_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_parse_fn failed, ccx ext cap ie in scan\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
 	/* reassocresp */
 	if (wlc_iem_add_parse_fn(wlc->iemi, FC_REASSOC_RESP, DOT11_MNG_RSN_ID,
 	                             wlc_fbt_parse_rsn_ie, fbt_info) != BCME_OK) {
@@ -424,6 +786,105 @@ BCMATTACHFN(wlc_fbt_attach)(wlc_info_t *wlc)
 		          wlc->pub->unit, __FUNCTION__));
 		goto err;
 	}
+#endif /* FBT_STA */
+#ifdef AP
+	/* parse */
+	/* assocreq/reassocreq */
+	if (wlc_iem_add_parse_fn_mft(wlc->iemi, apassocreqbmp, DOT11_MNG_RSN_ID,
+	                             wlc_fbtap_parse_rsn_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s wlc_iem_add_parse_fn failed, rsn ie */\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	/* assocreq/reassocreq */
+	if (wlc_iem_add_parse_fn_mft(wlc->iemi, apassocreqbmp, DOT11_MNG_MDIE_ID,
+	                         wlc_fbtap_parse_md_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_parse_fn failed, md ie\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+
+	/* auth */
+	if (wlc_iem_add_parse_fn(wlc->iemi, FC_AUTH, DOT11_MNG_RSN_ID,
+	                             wlc_fbtap_auth_parse_rsn_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s wlc_iem_add_parse_fn failed, rsn ie */\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	if (wlc_iem_add_parse_fn(wlc->iemi, FC_AUTH, DOT11_MNG_MDIE_ID,
+	                             wlc_fbtap_parse_md_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s wlc_iem_add_parse_fn failed, md ie */\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	if (wlc_iem_add_parse_fn(wlc->iemi, FC_AUTH, DOT11_MNG_FTIE_ID,
+	                             wlc_fbtap_auth_parse_ft_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s wlc_iem_add_parse_fn failed, ft ie */\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+
+	/* reassocreq */
+	if (wlc_iem_add_parse_fn(wlc->iemi, FC_REASSOC_REQ, DOT11_MNG_FTIE_ID,
+	                             wlc_fbtap_parse_ft_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s wlc_iem_add_parse_fn failed, ft ie */\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	/* reassocreq */
+	if (wlc_iem_add_parse_fn(wlc->iemi, FC_REASSOC_REQ, DOT11_MNG_RDE_ID,
+	                             wlc_fbtap_parse_rde_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s wlc_iem_add_parse_fn failed, rde ie */\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+
+	/* build */
+	/* reassocresp */
+	if (wlc_iem_add_build_fn(wlc->iemi, FC_REASSOC_RESP, DOT11_MNG_RSN_ID,
+	      wlc_fbtap_calc_rsn_ie_len, wlc_fbtap_write_rsn_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn_mft failed, rsn ie in reassocresp\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+
+	/* bcn/prbrsp/assocresp/reassocresp */
+	if (wlc_iem_add_build_fn_mft(wlc->iemi, apmdiefstbmp, DOT11_MNG_MDIE_ID,
+	      wlc_fbtap_calc_md_ie_len, wlc_fbtap_write_md_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn_mft failed, md ie in bcn\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	/* assocresp/reassocresp */
+	if (wlc_iem_add_build_fn_mft(wlc->iemi, apftiefstbmp, DOT11_MNG_FTIE_ID,
+	      wlc_fbtap_calc_ft_ie_len, wlc_fbtap_write_ft_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn_mft failed, ft ie in assocresp\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	/* authresp */
+	if (wlc_iem_add_build_fn_mft(wlc->iemi, apauthftiefstbmp, DOT11_MNG_RSN_ID,
+	      wlc_fbtap_auth_calc_rsn_ie_len, wlc_fbtap_auth_write_rsn_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn_mft failed, rsn ie in authresp\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	/* authresp */
+	if (wlc_iem_add_build_fn_mft(wlc->iemi, apauthftiefstbmp, DOT11_MNG_MDIE_ID,
+	      wlc_fbtap_auth_calc_md_ie_len, wlc_fbtap_auth_write_md_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn_mft failed, md ie in authresp\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+	/* authresp */
+	if (wlc_iem_add_build_fn_mft(wlc->iemi, apauthftiefstbmp, DOT11_MNG_FTIE_ID,
+	      wlc_fbtap_auth_calc_ft_ie_len, wlc_fbtap_auth_write_ft_ie, fbt_info) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: wlc_iem_add_build_fn_mft failed, ft ie in authresp\n",
+		          wlc->pub->unit, __FUNCTION__));
+		goto err;
+	}
+#endif /* AP */
+
 
 	return fbt_info;
 err:
@@ -442,13 +903,21 @@ BCMATTACHFN(wlc_fbt_detach)(wlc_fbt_info_t *fbt_info)
 
 	WL_TRACE(("wl%d: wlc_fbt_detach\n", UNIT(fbt_priv)));
 
+#if defined(STA) && defined(FBT_STA)
 	wlc_bss_assoc_state_unregister(fbt_priv->wlc, wlc_fbt_handle_joinproc, fbt_info);
+#endif /* STA && FBT_STA */
 #ifdef BCMSUP_PSK
 	if (SUP_ENAB(fbt_priv->wlc->pub))
 		wlc_sup_up_down_unregister(fbt_priv->wlc, wlc_fbt_sup_updown_callbk, fbt_info);
 #endif /* BCMSUP_PSK */
 	wlc_bsscfg_updown_unregister(fbt_priv->wlc, wlc_fbt_bsscfg_updown_callbk, fbt_info);
 
+#ifdef AP
+	/* free FBT timer */
+	if (fbt_info->fbt_timer) {
+		wl_free_timer(fbt_priv->wlc->wl, fbt_info->fbt_timer);
+	}
+#endif /* AP */
 	wlc_module_unregister(fbt_priv->pub, "fbt", fbt_info);
 	MFREE(fbt_priv->osh, fbt_info, sizeof(wlc_fbt_info_t));
 }
@@ -465,12 +934,15 @@ wlc_fbt_doiovar(void *handle, const bcm_iovar_t *vi, uint32 actionid, const char
 	int32 int_val = 0;
 	int32 *ret_int_ptr;
 	bool bool_val = FALSE;
+	bss_fbt_info_t *fbt_bsscfg;
 
 	/* update bsscfg w/provided interface context */
 	bsscfg = wlc_bsscfg_find_by_wlcif(wlc, wlcif);
 	ASSERT(bsscfg != NULL);
-	if (BSSCFG_AP(bsscfg)) {
-		err = BCME_NOTSTA;
+
+	fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+	if (BSSCFG_AP(bsscfg) && !fbt_bsscfg) {
+		err = BCME_ERROR;
 		goto exit;
 	}
 
@@ -487,24 +959,211 @@ wlc_fbt_doiovar(void *handle, const bcm_iovar_t *vi, uint32 actionid, const char
 	switch (actionid) {
 
 	case IOV_GVAL(IOV_ALLOW_FBTOVERDS):
-		*ret_int_ptr = ((bsscfg->flags & WLC_BSSCFG_ALLOW_FTOVERDS) != 0);
-		break;
+		{
+			if (WLFBT_ENAB(wlc->pub)) {
+				if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg))
+				{
+					*ret_int_ptr =  wlc_fbt_fbtoverds_flag(wlc, bsscfg);
+					break;
+				}
+			}
+			*ret_int_ptr = ((bsscfg->flags & WLC_BSSCFG_ALLOW_FTOVERDS) != 0);
+			break;
+		}
 
 	case IOV_SVAL(IOV_ALLOW_FBTOVERDS):
-		if (bool_val)
-			bsscfg->flags |= WLC_BSSCFG_ALLOW_FTOVERDS;
-		else
-			bsscfg->flags &= ~WLC_BSSCFG_ALLOW_FTOVERDS;
-		break;
+		{
+			if (bool_val)
+				bsscfg->flags |= WLC_BSSCFG_ALLOW_FTOVERDS;
+			else
+				bsscfg->flags &= ~WLC_BSSCFG_ALLOW_FTOVERDS;
+
+			wlc_fbt_fbtoverds_enable(wlc, bsscfg, bool_val);
+			break;
+		}
 
 	case IOV_GVAL(IOV_FBT_CAP):
-		if (WLFBT_ENAB(wlc->pub)) {
-			*ret_int_ptr = WLC_FBT_CAP_DRV_4WAY_AND_REASSOC;
-		} else {
-			err = BCME_UNSUPPORTED;
+		{
+			if (wlc->pub) {
+				*ret_int_ptr = WLFBT_CAP(wlc->pub);
+			} else {
+				err = BCME_UNSUPPORTED;
+			}
+			break;
 		}
-		break;
 
+	case IOV_GVAL(IOV_FBT):
+		{
+			*ret_int_ptr = WLFBT_ENAB(wlc->pub) && BSSCFG_IS_FBT(bsscfg);
+			break;
+		}
+	case IOV_SVAL(IOV_FBT):
+		{
+			if (WLFBT_CAP(wlc->pub)) { // check capability
+				wlc->pub->_fbt = (uint16) int_val; // toggle fbt
+				bsscfg->flags2 &= ~(WLC_BSSCFG_FL2_FBT_MASK); // clear
+				if (int_val == 0) { // disabled
+					break;
+				}
+				/* wpa_auth must be WPA2 capable before enabling fbt */
+				if (bsscfg->WPA_auth & WPA2_AUTH_UNSPECIFIED) {
+					bsscfg->flags2 |= WLC_BSSCFG_FL2_FBT_1X;
+				} else if (bsscfg->WPA_auth & WPA2_AUTH_PSK) {
+					bsscfg->flags2 |= WLC_BSSCFG_FL2_FBT_PSK;
+				} else {
+					err = BCME_BADARG;
+				}
+			} else {
+				err = BCME_UNSUPPORTED;
+			}
+			break;
+		}
+#ifdef AP
+	case IOV_GVAL(IOV_FBT_AP):
+		{
+			*ret_int_ptr = fbt_bsscfg->fbt_mode;
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_AP):
+		{
+			uint16 ft_mode;
+			ft_mode = (uint16) int_val;
+
+			if (fbt_bsscfg->fbt_mode == ft_mode)
+				break;
+			if (ft_mode) {
+				if (!WLFBT_ENAB(wlc->pub)) {
+					err = BCME_ERROR;
+					break;
+				}
+				/* wpa_auth must be WPA2 capable before enabling fbt_ap */
+				if (bsscfg->WPA_auth & WPA2_AUTH_UNSPECIFIED) {
+					bsscfg->flags2 = bsscfg->flags2 &
+						~(WLC_BSSCFG_FL2_FBT_1X|WLC_BSSCFG_FL2_FBT_PSK);
+					bsscfg->flags2 |= WLC_BSSCFG_FL2_FBT_1X;
+				}
+				else if (bsscfg->WPA_auth & WPA2_AUTH_PSK) {
+					bsscfg->flags2 = bsscfg->flags2 &
+						~(WLC_BSSCFG_FL2_FBT_1X|WLC_BSSCFG_FL2_FBT_PSK);
+					bsscfg->flags2 |= WLC_BSSCFG_FL2_FBT_PSK;
+				}
+				else {
+					err = BCME_BADARG;
+				}
+			}
+			else {
+				bsscfg->flags2 = bsscfg->flags2 &
+					~(WLC_BSSCFG_FL2_FBT_1X|WLC_BSSCFG_FL2_FBT_PSK);
+			}
+			if (err != BCME_OK)
+				break;
+			fbt_bsscfg->fbt_mode = ft_mode;
+			wlc_bss_update_beacon(wlc, bsscfg);
+			wlc_bss_update_probe_resp(wlc, bsscfg, FALSE);
+			break;
+		}
+	case IOV_GVAL(IOV_FBT_MDID):
+		{
+			*ret_int_ptr = fbt_bsscfg->mdid;
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_MDID):
+		{
+			uint16 mdid;
+			mdid = (uint16) int_val;
+			if (mdid == fbt_bsscfg->mdid)
+				break;
+			fbt_bsscfg->mdid = mdid;
+			if (!WLFBT_ENAB(wlc->pub)) /* global mode is disabled return */
+				break;
+			if (fbt_bsscfg->fbt_mode) {
+				wlc_bss_update_beacon(wlc, bsscfg);
+				wlc_bss_update_probe_resp(wlc, bsscfg, FALSE);
+			}
+			break;
+		}
+	case IOV_GVAL(IOV_FBT_R0KH_ID):
+		{
+			if (alen < strlen(fbt_bsscfg->fbt_r0kh_id) + 1)
+				return BCME_BUFTOOSHORT;
+			strncpy(arg, fbt_bsscfg->fbt_r0kh_id,
+					(strlen(fbt_bsscfg->fbt_r0kh_id) + 1));
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_R0KH_ID):
+		{
+			int slen;
+			/* find strlen, with string either null terminated or 'len' terminated */
+			for (slen = 0; slen < alen && ((char*)arg)[slen] != '\0'; slen++)
+				;
+			if (slen >= FBT_R0KH_ID_LEN)
+				return BCME_BADLEN;
+			memset(fbt_bsscfg->fbt_r0kh_id, 0, FBT_R0KH_ID_LEN);
+			strncpy(fbt_bsscfg->fbt_r0kh_id, arg, slen);
+			fbt_bsscfg->fbt_r0kh_id_len = slen;
+			break;
+		}
+	case IOV_GVAL(IOV_FBT_R1KH_ID):
+		{
+			if (alen < ETHER_ADDR_LEN)
+				return BCME_BUFTOOSHORT;
+			memcpy((uint8 *)arg, fbt_bsscfg->fbt_r1kh_id, ETHER_ADDR_LEN);
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_R1KH_ID):
+		{
+			if (alen != ETHER_ADDR_LEN)
+				return BCME_BADLEN;
+			memcpy(fbt_bsscfg->fbt_r1kh_id, arg, ETHER_ADDR_LEN);
+			break;
+		}
+	case IOV_GVAL(IOV_FBT_REASSOC_TIME):
+		{
+			*ret_int_ptr = fbt_bsscfg->reassoc_time;
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_REASSOC_TIME):
+		{
+			fbt_bsscfg->reassoc_time = *(uint *)arg;
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_AUTH_RESP):
+		{
+			struct scb *scb;
+			struct ether_addr sta_mac;
+#ifdef BCMDBG
+			char eabuf[ETHER_ADDR_STR_LEN];
+#endif /* BCMDBG */
+			wlc_fbt_auth_resp_t *fbt_auth_resp;
+			fbt_auth_resp = (wlc_fbt_auth_resp_t *)arg;
+			memcpy(sta_mac.octet, fbt_auth_resp->macaddr, ETHER_ADDR_LEN);
+
+			scb = wlc_scbfind(wlc, bsscfg, &sta_mac);
+			if (scb == NULL) {
+				WL_FBT(("wl%d: %s: FBT auth response for unknown MAC %s\n",
+					wlc->pub->unit, __FUNCTION__,
+					bcm_ether_ntoa((struct ether_addr *)&fbt_auth_resp->macaddr,
+					eabuf)));
+				return BCME_ERROR;
+			}
+			err = wlc_fbtap_process_auth_resp(wlc, fbt_info, scb, fbt_auth_resp);
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_DS_ADD_STA):
+		{
+			wlc_fbt_auth_resp_t *fbt_auth_resp;
+			fbt_auth_resp = (wlc_fbt_auth_resp_t *)arg;
+			err = wlc_fbtap_process_ds_auth_resp(wlc, fbt_info, bsscfg, fbt_auth_resp);
+			break;
+		}
+	case IOV_SVAL(IOV_FBT_ACT_RESP):
+		{
+			wlc_fbt_action_resp_t *fbt_act_resp;
+			fbt_act_resp = (wlc_fbt_action_resp_t *)arg;
+			err = wlc_fbtap_process_action_resp(wlc, fbt_info, bsscfg, fbt_act_resp);
+			break;
+		}
+#endif /* AP */
 	default:
 		err = BCME_UNSUPPORTED;
 		break;
@@ -513,6 +1172,7 @@ exit:
 	return err;
 }
 
+#if defined(STA) && defined(FBT_STA)
 void
 wlc_fbt_clear_ies(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
 {
@@ -525,8 +1185,12 @@ wlc_fbt_clear_ies(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
 
 	wlc_fbt_free_ies(fbt_info, cfg);
 
-	wlc_wpapsk_free(fbt_bss_priv->wlc, fbt_bss_priv->wpa);
-	fbt_bss_priv->wpa_info->pmk_len = 0;
+	if (fbt_bss_priv->wpa) {
+		wlc_wpapsk_free(fbt_bss_priv->wlc, fbt_bss_priv->wpa);
+	}
+	if (fbt_bss_priv->wpa_info) {
+		fbt_bss_priv->wpa_info->pmk_len = 0;
+	}
 }
 
 void
@@ -570,8 +1234,10 @@ wlc_fbt_calc_fbt_ptk(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
 #endif
 	}
 }
+#endif /* STA && FBT_STA */
 
 #ifdef BCMDBG
+#if defined(STA) && defined(FBT_STA)
 static void
 wlc_fbt_dump_fbt_keys(bss_fbt_priv_t *fbt_bss_priv, uchar *pmkr0, uchar *pmkr1)
 {
@@ -611,8 +1277,21 @@ wlc_fbt_dump_fbt_keys(bss_fbt_priv_t *fbt_bss_priv, uchar *pmkr0, uchar *pmkr1)
 		prhex("PTK", ptk, WPA_MIC_KEY_LEN);
 	}
 }
+#endif /* STA && FBT_STA */
+
+static void
+wlc_fbt_bsscfg_dump(void *context, wlc_bsscfg_t *bsscfg, struct bcmstrbuf *b)
+{
+#ifdef AP
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)context;
+
+	WL_ERROR(("%s: cfgh: %p scbh %d\n", __FUNCTION__,
+		FBT_BSSCFG_CUBBY_LOC(fbt_info, bsscfg), fbt_info->scbh));
+#endif /* AP */
+}
 #endif /* BCMDBG */
 
+#if defined(STA) && defined(FBT_STA)
 bool
 wlc_fbt_is_cur_mdid(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg, wlc_bss_info_t *bi)
 {
@@ -626,6 +1305,7 @@ wlc_fbt_is_cur_mdid(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg, wlc_bss_info_t 
 	return ((fbt_bss_priv->mdie_len != 0) && (bi->flags & WLC_BSS_FBT) &&
 		(bi->mdid == fbt_bss_priv->mdid));
 }
+#endif /* STA && FBT_STA */
 
 /* Calculate the RIC IE endptr and IE count. */
 static bool
@@ -671,15 +1351,26 @@ wlc_fbt_parse_ric(uint8 *pbody, int len, uint8 **ricend, int *ric_ie_count)
 
 /* Populates the MIC and MIC control fields of the supplied FTIE. */
 static bool
-wlc_fbt_ft_calc_mic(bss_fbt_priv_t *fbt_bss_priv, dot11_ft_ie_t *ftie,
-	bcm_tlv_t *mdie, bcm_tlv_t *rsnie, uint8 *ricdata, int ricdata_len,
-	int ric_ie_count, uint8 trans_seq_nbr)
+wlc_fbt_ft_calc_mic(bss_fbt_priv_t *fbt_bss_priv, wlc_bsscfg_t *cfg, struct scb *scb,
+        dot11_ft_ie_t *ftie, bcm_tlv_t *mdie, bcm_tlv_t *rsnie, uint8 *ricdata,
+        int ricdata_len, int ric_ie_count, uint8 trans_seq_nbr)
 {
 	int total_len = 0;
 	uint8 *micdata;
 	uint8 *pos;
 	uint8 mic[PRF_OUTBUF_LEN];
 	uint prot_ie_len = 3 + ric_ie_count;
+#ifdef AP
+	wlc_fbt_scb_t *fbt_scb = NULL;
+
+	if (BSSCFG_AP(cfg)) {
+		ASSERT(scb != NULL);
+		fbt_scb = FBT_SCB(fbt_bss_priv->wlc->fbt, scb);
+		if (fbt_scb == NULL)
+			return FALSE;
+	}
+
+#endif /* AP */
 
 	/* See 802.11r 11A.8.4 & 11A.8.5 for details. */
 	/* Total expected size of buffer needed to calculate the MIC. */
@@ -699,10 +1390,18 @@ wlc_fbt_ft_calc_mic(bss_fbt_priv_t *fbt_bss_priv, dot11_ft_ie_t *ftie,
 	pos = micdata;
 
 	/* calc mic */
-	bcopy((uint8 *)&CUR_EA(fbt_bss_priv), pos, ETHER_ADDR_LEN);
-	pos += ETHER_ADDR_LEN;
-	bcopy((uint8 *)&PEER_EA(fbt_bss_priv), pos, ETHER_ADDR_LEN);
-	pos += ETHER_ADDR_LEN;
+	if (BSSCFG_AP(cfg)) {
+		bcopy((uint8 *)&PEER_EA(fbt_bss_priv), pos, ETHER_ADDR_LEN);
+		pos += ETHER_ADDR_LEN;
+		bcopy((uint8 *)&CUR_EA(fbt_bss_priv), pos, ETHER_ADDR_LEN);
+		pos += ETHER_ADDR_LEN;
+	}
+	else {
+		bcopy((uint8 *)&CUR_EA(fbt_bss_priv), pos, ETHER_ADDR_LEN);
+		pos += ETHER_ADDR_LEN;
+		bcopy((uint8 *)&PEER_EA(fbt_bss_priv), pos, ETHER_ADDR_LEN);
+		pos += ETHER_ADDR_LEN;
+	}
 
 	/* Transaction sequence number. The value is dependent on whether we're called for an
 	 * (re)association request, (re)association response, or other.
@@ -729,6 +1428,13 @@ wlc_fbt_ft_calc_mic(bss_fbt_priv_t *fbt_bss_priv, dot11_ft_ie_t *ftie,
 		pos += ricdata_len;
 	}
 
+#ifdef AP
+	if (BSSCFG_AP(cfg)) {
+		aes_cmac_calc(micdata, pos - micdata, fbt_scb->ptk.kck,
+			EAPOL_WPA_KEY_MIC_LEN, mic, EAPOL_WPA_KEY_MIC_LEN);
+	}
+	else
+#endif /* AP */
 	aes_cmac_calc(micdata, pos - micdata, fbt_bss_priv->wpa->eapol_mic_key,
 		EAPOL_WPA_KEY_MIC_LEN, mic, EAPOL_WPA_KEY_MIC_LEN);
 	bcopy(mic, &ftie->mic[0], EAPOL_WPA_KEY_MIC_LEN);
@@ -737,6 +1443,7 @@ wlc_fbt_ft_calc_mic(bss_fbt_priv_t *fbt_bss_priv, dot11_ft_ie_t *ftie,
 	return TRUE;
 }
 
+#if defined(STA) && defined(FBT_STA)
 static bool
 wlc_fbt_auth_build_rsnie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg, uint8 *pbody)
 {
@@ -925,6 +1632,7 @@ wlc_fbt_auth_parse_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg, uint8 *body
 	return TRUE;
 }
 
+
 static bool
 wlc_fbt_reassoc_build_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
    uint8 *buf, int buflen, bcm_tlv_t *mdie, bcm_tlv_t *rsnie,
@@ -948,8 +1656,9 @@ wlc_fbt_reassoc_build_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
 		} else {
 			bcopy(fbt_bss_priv->ftie, ftptr, fbt_bss_priv->ftie_len);
 			/* Calculate MIC */
-			if (wlc_fbt_ft_calc_mic(fbt_bss_priv, (dot11_ft_ie_t*)ftptr, mdie, rsnie,
-				ricdata, ricdata_len, ric_ie_count, FT_MIC_ASSOC_REQUEST_TSN)) {
+			if (wlc_fbt_ft_calc_mic(fbt_bss_priv, cfg, NULL, (dot11_ft_ie_t*)ftptr,
+				mdie, rsnie, ricdata, ricdata_len, ric_ie_count,
+				FT_MIC_ASSOC_REQUEST_TSN)) {
 				bcm_copy_tlv_safe(ftptr, buf, buflen);
 			}
 			MFREE(fbt_bss_priv->osh, ftptr, fbt_bss_priv->ftie_len);
@@ -957,6 +1666,7 @@ wlc_fbt_reassoc_build_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
 	}
 	return TRUE;
 }
+#endif /* STA && FBT_STA */
 
 /*
  * wlc_fbt_reassoc_validate_ftie: Checks the validity of the FTIE (if provided) in the reassociation
@@ -968,8 +1678,9 @@ wlc_fbt_reassoc_build_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
  * function should discard the reassociation request response frame.
  */
 static bool
-wlc_fbt_reassoc_validate_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t* cfg, uint8 *ricie,
-	int ricie_len, dot11_ft_ie_t *ftie, bcm_tlv_t *mdie, bcm_tlv_t *rsnie)
+wlc_fbt_reassoc_validate_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t* cfg, struct scb *scb,
+	uint8 *ricie, int ricie_len, dot11_ft_ie_t *ftie, bcm_tlv_t *mdie, bcm_tlv_t *rsnie,
+	uint8 trans_seq_nbr)
 {
 	bss_fbt_priv_t *fbt_bss_priv;
 	bss_fbt_info_t *fbt_bss = FBT_BSSCFG_CUBBY(fbt_info, cfg);
@@ -1005,8 +1716,8 @@ wlc_fbt_reassoc_validate_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t* cfg, uint8
 		}
 		/* Copy received FTIE into own buffer as MIC calculation will modify it. */
 		bcopy(ftie, ftptr, ftie->len + TLV_HDR_LEN);
-		wlc_fbt_ft_calc_mic(fbt_bss_priv, (dot11_ft_ie_t*)ftptr, mdie,
-			rsnie, ricie, ricend - ricie, ric_ie_count, FT_MIC_REASSOC_RESPONSE_TSN);
+		wlc_fbt_ft_calc_mic(fbt_bss_priv, cfg, scb, (dot11_ft_ie_t*)ftptr, mdie,
+			rsnie, ricie, ricend - ricie, ric_ie_count, trans_seq_nbr);
 
 		/* Now get the calculated MIC and compare to that in ftie. */
 		myftie = (dot11_ft_ie_t*)ftptr;
@@ -1024,6 +1735,7 @@ wlc_fbt_reassoc_validate_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t* cfg, uint8
 	return is_valid;
 }
 
+#if defined(STA) && defined(FBT_STA)
 /* Looks for 802.11r RIC response TLVs. */
 static bool
 wlc_fbt_reassoc_parse_rdeie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t* cfg, uint8 *tlvs, int tlvs_len)
@@ -1195,6 +1907,7 @@ wlc_fbt_parse_associe(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
 	BSS_FBT_INI_FBT(fbt_info, cfg) = (mdie && ftie) ? TRUE : FALSE;
 	return TRUE;
 }
+#endif /* STA && FBT_STA */
 
 void
 wlc_fbt_set_ea(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg, struct ether_addr *ea)
@@ -1230,8 +1943,19 @@ wlc_fbt_wpa_free(bss_fbt_priv_t *fbt_bss_priv)
 static void
 wlc_fbt_bsscfg_updown_callbk(void *ctx, bsscfg_up_down_event_data_t *evt)
 {
+#ifdef WLFBT
+	if (!evt->up) {
+#if defined(STA) && defined(FBT_STA)
+		wlc_fbt_clear_ies(ctx, evt->bsscfg);
+#endif
+	}
+	else if (BSSCFG_AP(evt->bsscfg) && evt->up) {
+		wlc_fbt_bsscfg_init(ctx, evt->bsscfg);
+	}
+#else
 	if (!evt->up)
 		wlc_fbt_clear_ies(ctx, evt->bsscfg);
+#endif /* WLFBT */
 }
 
 static bss_fbt_priv_t *
@@ -1256,6 +1980,13 @@ wlc_fbt_bsscfg_cubby_init(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
 	fbt_bss_priv->wl = fbt_priv->wl;
 	fbt_bss_priv->pub = fbt_priv->pub;
 
+#ifdef WLFBT
+#ifdef AP
+	fbt_bss->fbt_info = fbt_info;
+	fbt_bss->reassoc_time = FBT_REASSOC_TIME_DEF;
+	fbt_bss->fbt_timer_set = FALSE;
+#endif /* AP */
+#endif /* WLFBT */
 	*pfbt_cfg = fbt_bss;
 	return fbt_bss_priv;
 }
@@ -1339,6 +2070,7 @@ void wlc_fbt_bsscfg_deinit(void *ctx, wlc_bsscfg_t *cfg)
 	*pfbt_cfg = NULL;
 }
 
+#if defined(STA) && defined(FBT_STA)
 static void
 wlc_fbt_handle_joindone(void *ctx, wlc_bsscfg_t *cfg)
 {
@@ -1354,8 +2086,16 @@ wlc_fbt_handle_joindone(void *ctx, wlc_bsscfg_t *cfg)
 
 	if (cfg->WPA_auth & WPA2_AUTH_FT) {
 		if (cfg->auth_atmptd == DOT11_FAST_BSS) {
+
+			if (WLC_FT_PARAM_OVERRIDE_ACTIVE(fbt_info,
+					fbt_bss_priv) == FALSE) {
+
 			/* plumbs keys from response frame for FBT-lite mode */
 			wlc_fbt_process_reassoc_resp(fbt_info, cfg);
+			}
+			/* else overrides were enabled, the outside supplicant should
+			* process the reassoc response, so no-op
+			*/
 		} else {
 			WL_WSEC(("wl%d: FBT adopt bss \n",
 				WLCWLUNIT(fbt_bss_priv->wlc)));
@@ -1374,10 +2114,23 @@ wlc_fbt_handle_joindone(void *ctx, wlc_bsscfg_t *cfg)
 			wlc_fbt_parse_associe(fbt_info, cfg);
 			wlc_fbt_set_ea(fbt_info, cfg, &cfg->BSSID);
 
+			/* Update beacon RSN IE AKM saved in supplicant for FBT adaptive mode */
+			if (cfg->current_bss->wpa2.flags & RSN_FLAGS_FBT) {
+				wlc_fbt_upd_authie(fbt_info, cfg);
+			}
+
 			if (!fbt_bss_priv->use_sup_wpa) {
 				fbt_bss_priv->wpa->WPA_auth = cfg->WPA_auth;
 				fbt_bss_priv->wpa_info->wlc = fbt_bss_priv->wlc;
 			}
+		}
+	} else {
+		if (WLC_FT_PARAM_OVERRIDE_ACTIVE(fbt_info, fbt_bss_priv)) {
+
+			WL_ASSOC(("wl%d.%d: %s: clearing bsscfg IE overrides\n",
+				fbt_info->mod_priv.wlc->pub->unit, WLC_BSSCFG_IDX(cfg),
+				__FUNCTION__));
+			wlc_fbt_bsscfg_free_overrides(fbt_bss_priv);
 		}
 	}
 }
@@ -1393,6 +2146,7 @@ wlc_fbt_handle_joinproc(void *ctx, bss_assoc_state_data_t *evt_data)
 		}
 	}
 }
+#endif /* STA && FBT_STA */
 
 static void
 wlc_fbt_free_ies(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
@@ -1414,26 +2168,56 @@ wlc_fbt_free_ies(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
 		fbt_bss_priv->ftie = NULL;
 		fbt_bss_priv->ftie_len = 0;
 	}
+
+	if (WLC_FT_PARAM_OVERRIDE_ACTIVE(fbt_info, fbt_bss_priv)) {
+		wlc_fbt_bsscfg_free_overrides(fbt_bss_priv);
+	}
+
 	BSS_FBT_INI_FBT(fbt_info, cfg) = FALSE;
 }
 
+#if defined(STA) && defined(FBT_STA)
 static uint
 wlc_fbt_auth_calc_rsn_ie_len(void *ctx, wlc_iem_calc_data_t *data)
 {
+	uint8 ie_len = 0;
+
 	wlc_fbt_priv_t *fbt_priv;
 	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
 	wlc_bsscfg_t *cfg = data->cfg;
+	bss_fbt_priv_t *fbt_bss_priv;
 
-	if (!fbt_info)
-		return 0;
+	if (!BSSCFG_STA(cfg)) {
+		goto exit;
+	}
+
+	if (fbt_info == NULL) {
+		goto exit;
+	}
+
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
-		(cfg->auth_atmptd == DOT11_FAST_BSS)) {
-		bss_fbt_priv_t *fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
-		return (fbt_bss_priv->wpa->sup_wpaie_len + sizeof(wpa_pmkid_list_t));
+	if (!BSSCFG_IS_FBT(cfg)) {
+		goto exit;
 	}
-	return 0;
+
+	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
+	/* see if override is present first */
+	if (WLC_FT_PARAM_OVERRIDE_ACTIVE(fbt_info, fbt_bss_priv) &&
+			wlc_fbt_calc_overridable_ie_len(ctx, data, WL_FBT_PARAM_TYPE_RSNIE,
+			&ie_len)) {
+
+		goto exit;
+	}
+
+	/* above overrides may be for auth and reassoc frames, while the below code only
+	* runs for select auth frames
+	*/
+	if ((cfg->WPA_auth & WPA2_AUTH_FT) && (cfg->auth_atmptd == DOT11_FAST_BSS)) {
+		ie_len = (fbt_bss_priv->wpa->sup_wpaie_len + sizeof(wpa_pmkid_list_t));
+	}
+exit:
+	return ie_len;
 }
 
 /* RSN IE in auth req for fast transition */
@@ -1444,11 +2228,13 @@ wlc_fbt_auth_write_rsn_ie(void *ctx, wlc_iem_build_data_t *data)
 	wlc_fbt_priv_t *fbt_priv;
 	wlc_bsscfg_t *cfg = data->cfg;
 
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+	if (BSSCFG_IS_FBT(bsscfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 		(cfg->auth_atmptd == DOT11_FAST_BSS))
 		wlc_fbt_auth_build_rsnie(fbt_info, cfg, data->buf);
 
@@ -1463,6 +2249,8 @@ wlc_fbt_parse_rsn_ie(void *ctx, wlc_iem_parse_data_t *data)
 	wlc_bsscfg_t *cfg = data->cfg;
 	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
 
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
@@ -1472,7 +2260,7 @@ wlc_fbt_parse_rsn_ie(void *ctx, wlc_iem_parse_data_t *data)
 
 	ASSERT(ftpparm != NULL);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 		(data->ft == FC_REASSOC_RESP)) {
 		/* Save the RSN IE for MIC calculation */
 		ftpparm->assocresp.wpa2_ie = data->ie;
@@ -1490,11 +2278,13 @@ wlc_fbt_calc_md_ie_len(void *ctx, wlc_iem_calc_data_t *data)
 	wlc_iem_ft_cbparm_t *ftcbparm;
 	uint ielen = 0;
 
+	if (!BSSCFG_STA(cfg))
+		return 0;
 	if (!fbt_info)
 		return 0;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 		switch (data->ft) {
 		case FC_AUTH:
 		case FC_ACTION:
@@ -1544,11 +2334,13 @@ wlc_fbt_write_md_ie(void *ctx, wlc_iem_build_data_t *data)
 	wlc_bsscfg_t *cfg = data->cfg;
 	wlc_iem_ft_cbparm_t *ftcbparm;
 
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 		switch (data->ft) {
 		case FC_AUTH:
 		case FC_ACTION:
@@ -1579,6 +2371,8 @@ wlc_fbt_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data)
 	wlc_bsscfg_t *cfg = data->cfg;
 	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
 
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
@@ -1588,7 +2382,7 @@ wlc_fbt_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data)
 
 	ASSERT(ftpparm != NULL);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 		switch (data->ft) {
 		case FC_AUTH:
 		case FC_ACTION:
@@ -1621,13 +2415,14 @@ wlc_fbt_scan_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data)
 	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
 	wlc_bss_info_t *bi = ftpparm->scan.result;
 	wlc_info_t *wlc;
+	wlc_bsscfg_t *cfg = data->cfg;
 
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 	wlc = fbt_priv->wlc;
 
-	if (!WLFBT_ENAB(wlc->pub))
+	if (!BSSCFG_IS_FBT(cfg))
 		return BCME_OK;
 
 	if (data->ie != NULL) {
@@ -1636,8 +2431,47 @@ wlc_fbt_scan_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data)
 		bi->mdid = ltoh16_ua(&mdie->mdid);
 		bi->flags |= WLC_BSS_FBT;
 		if ((mdie->cap & FBT_MDID_CAP_OVERDS) &&
-			(wlc->cfg->flags & WLC_BSSCFG_ALLOW_FTOVERDS))
+			(cfg->flags & WLC_BSSCFG_ALLOW_FTOVERDS))
 			bi->flags2 |= WLC_BSS_OVERDS_FBT;
+	}
+	return BCME_OK;
+}
+
+/* Parse CCX Extended capability IE from the beacon/probe resp */
+static int
+wlc_fbt_scan_parse_ccx_ext_cap_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	ccx_ext_cap_ie_t *ccx_ext_cap_ie = (ccx_ext_cap_ie_t *)data->ie;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	wlc_bss_info_t *bi = ftpparm->scan.result;
+	wlc_info_t *wlc;
+	wlc_bsscfg_t *cfg = data->cfg;
+
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	/* If FBT AKM suites already present, don't process
+	 * CCX Ext Cap IE.
+	 */
+	if (!BSSCFG_IS_FBT(cfg) || (bi->wpa2.flags & RSN_FLAGS_FBT))
+		return BCME_OK;
+
+	if (ccx_ext_cap_ie == NULL)
+		return BCME_OK;
+
+	/* CCX Ext cap IE is present and FBT AKM suites not enabled,
+	 * decide FBT capability based on FBT support bit in this IE.
+	 * bit6 = 0, target bss does not support FBT, no action required.
+	 * bit6 = 1, target bss supports FBT, set RSN_FLAGS_FBT flag.
+	 */
+	if (ccx_ext_cap_ie->cap & CCX_CAP_FBT) {
+		WL_INFORM(("wl%d: FBT support enabled in CCX Cap IE\n", wlc->pub->unit));
+		bi->wpa2.flags |= RSN_FLAGS_FBT;
 	}
 	return BCME_OK;
 }
@@ -1653,13 +2487,15 @@ wlc_fbt_calc_ft_ie_len(void *ctx, wlc_iem_calc_data_t *data)
 	wlc_info_t *wlc;
 	uint ielen = 0;
 
+	if (!BSSCFG_STA(cfg))
+		return 0;
 	if (!fbt_info)
 		return 0;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 	wlc = fbt_priv->wlc;
 	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 		switch (data->ft) {
 		case FC_AUTH:
 		case FC_ACTION:
@@ -1695,13 +2531,15 @@ wlc_fbt_write_ft_ie(void *ctx, wlc_iem_build_data_t *data)
 	bss_fbt_priv_t *fbt_bss_priv;
 	wlc_info_t *wlc;
 
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
 	wlc = fbt_priv->wlc;
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 		switch (data->ft) {
 		case FC_AUTH:
 		case FC_ACTION:
@@ -1753,6 +2591,8 @@ wlc_fbt_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data)
 	wlc_bsscfg_t *cfg = data->cfg;
 	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
 
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
@@ -1762,7 +2602,7 @@ wlc_fbt_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data)
 
 	ASSERT(ftpparm != NULL);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 		switch (data->ft) {
 		case FC_AUTH:
 		case FC_ACTION:
@@ -1795,15 +2635,29 @@ wlc_fbt_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data)
 			}
 			else {
 				/* RDE IE is absent. Do the MIC calculation here without RDE */
+#ifdef WLFBT
+				if (!wlc_fbt_reassoc_validate_ftie(fbt_info, cfg, NULL, NULL, 0,
+					(dot11_ft_ie_t *)data->ie,
+					(bcm_tlv_t *)ftpparm->assocresp.md_ie,
+					(bcm_tlv_t *)ftpparm->assocresp.wpa2_ie,
+					FT_MIC_REASSOC_RESPONSE_TSN)) {
+#else
 				if (!wlc_fbt_reassoc_validate_ftie(fbt_info, cfg, NULL, 0,
 					(dot11_ft_ie_t *)data->ie,
 					(bcm_tlv_t *)ftpparm->assocresp.md_ie,
 					(bcm_tlv_t *)ftpparm->assocresp.wpa2_ie)) {
+#endif /* WLFBT */
 					WL_ERROR(("wl%d: %s failed, ignoring reassoc response\n",
 					   UNIT(fbt_priv), __FUNCTION__));
 					ftpparm->assocresp.status = DOT11_SC_FAILURE;
 				}
 			}
+			/* Update FTIE to handle M1 message received without FT
+			 * initial association during unicast key rotation.
+			 */
+			if (!wlc_fbt_update_ftie(fbt_info, cfg))
+					WL_ERROR(("wl%d: %s: FTIE update failed \n",
+						UNIT(fbt_priv), __FUNCTION__));
 			break;
 		}
 	    default:
@@ -1824,7 +2678,7 @@ wlc_fbt_calc_rde_ie_len(void *ctx, wlc_iem_calc_data_t *data)
 		return 0;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub))
+	if (BSSCFG_IS_FBT(data->cfg))
 		len = DOT11_MNG_RDE_IE_LEN;
 	return len;
 }
@@ -1836,12 +2690,13 @@ wlc_fbt_write_rde_ie(void *ctx, wlc_iem_build_data_t *data)
 	wlc_fbt_priv_t *fbt_priv;
 	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
 	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	wlc_bsscfg_t *cfg = data->cfg;
 
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
-	if (WLFBT_ENAB(fbt_priv->wlc->pub)) {
+	if (BSSCFG_IS_FBT(cfg)) {
 		dot11_rde_ie_t* rdptr;
 		ftcbparm->fbtric.rde_count += 1;
 		/* RDE. */
@@ -1850,7 +2705,16 @@ wlc_fbt_write_rde_ie(void *ctx, wlc_iem_build_data_t *data)
 		rdptr->length = DOT11_MNG_RDE_IE_LEN - TLV_HDR_LEN;
 		rdptr->rde_id = ftcbparm->fbtric.rde_count;
 		rdptr->rd_count = 1;
+#ifdef WLFBT
+		if (BSSCFG_STA(cfg))
+			rdptr->status = htol16(0);	/* Always 0 for STA. */
+		else {
+			rdptr->status = htol16(ftcbparm->fbtric.status);
+			rdptr->rde_id = ftcbparm->fbtric.rde_id;
+		}
+#else
 		rdptr->status = htol16(0);	/* Always 0 for STA. */
+#endif /* WLFBT */
 	}
 	return BCME_OK;
 }
@@ -1863,6 +2727,10 @@ wlc_fbt_parse_rde_ie(void *ctx, wlc_iem_parse_data_t *data)
 	wlc_bsscfg_t *cfg = data->cfg;
 	wlc_info_t *wlc;
 
+#ifdef WLFBT
+	if (!BSSCFG_STA(cfg))
+		return BCME_OK;
+#endif /* WLFBT */
 	if (!fbt_info)
 		return BCME_OK;
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
@@ -1872,17 +2740,25 @@ wlc_fbt_parse_rde_ie(void *ctx, wlc_iem_parse_data_t *data)
 
 	wlc = fbt_priv->wlc;
 
-	if (WLFBT_ENAB(wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
+	if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT) &&
 		(data->ft == FC_REASSOC_RESP)) {
 		bool accepted;
 		wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
 		ASSERT(ftpparm != NULL);
 
 		/* Do the MIC calculation to validate FT IE when RDE IE is present */
+#ifdef WLFBT
+		if (wlc_fbt_reassoc_validate_ftie(fbt_info, cfg, NULL, data->ie,
+			data->ie_len, (dot11_ft_ie_t *)ftpparm->assocresp.ft_ie,
+			(bcm_tlv_t *)ftpparm->assocresp.md_ie,
+			(bcm_tlv_t *)ftpparm->assocresp.wpa2_ie,
+			FT_MIC_REASSOC_RESPONSE_TSN)) {
+#else
 		if (wlc_fbt_reassoc_validate_ftie(fbt_info, cfg, data->ie,
 			data->ie_len, (dot11_ft_ie_t *)ftpparm->assocresp.ft_ie,
 			(bcm_tlv_t *)ftpparm->assocresp.md_ie,
 			(bcm_tlv_t *)ftpparm->assocresp.wpa2_ie)) {
+#endif /* WLFBT */
 			/* Process any RIC responses. */
 			if (CAC_ENAB(wlc->pub)) {
 				accepted = wlc_fbt_reassoc_parse_rdeie(fbt_info,
@@ -1981,7 +2857,10 @@ wlc_fbt_send_overds_req(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg, struct ethe
 
 	return NULL;
 }
+#endif /* STA && FBT_STA */
 
+
+#if defined(STA) && defined(FBT_STA)
 static void
 wlc_fbt_auth_nhdlr_cb(void *ctx, wlc_iem_nhdlr_data_t *data)
 {
@@ -2159,6 +3038,11 @@ wlc_fbt_recv_overds_resp(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg,
 		if ((WLC_BAND_PI_RADIO_CHANSPEC != chanspec)) {
 			/* clear the quiet bit on the dest channel */
 			wlc_clr_quiet_chanspec(wlc->cmi, chanspec);
+			WL_CHANSW(("time=%uus old=%d new=%d reason=%d dwelltime=%dms",
+			           R_REG(wlc->osh, &wlc->regs->tsf_timerlow),
+			           WLC_BAND_PI_RADIO_CHANSPEC, chanspec,
+			           CHANSW_FBT, -1));
+
 			wlc_suspend_mac_and_wait(wlc);
 			wlc_set_chanspec(wlc, chanspec);
 #ifdef WLMCHAN
@@ -2247,7 +3131,9 @@ wlc_fbt_reset_current_akm(wlc_fbt_info_t *fbt_info, const wlc_bsscfg_t *cfg)
 
 	return;
 }
+#endif /* STA && FBT_STA */
 
+#if defined(STA) && defined(FBT_STA)
 /* Fast transition allowed only if the target AP supports the same FT AKM
  * suites as the currently associated AP.
  */
@@ -2291,7 +3177,7 @@ wlc_fbt_akm_match(wlc_fbt_info_t *fbt_info, const wlc_bsscfg_t *cfg, const wlc_b
 	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
 
 	if (bcmwpa_is_wpa2_auth(cfg->WPA_auth) && (bi->wpa2.flags & RSN_FLAGS_SUPPORTED)) {
-		if (WLFBT_ENAB(fbt_priv->wlc->pub) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
+		if (BSSCFG_IS_FBT(cfg) && (cfg->WPA_auth & WPA2_AUTH_FT)) {
 			for (i = 0; i < bi->wpa2.acount && (akm_match == FALSE); i++) {
 				if (((bi->wpa2.auth[i] == RSN_AKM_FBT_1X) &&
 					(cfg->WPA_auth & WPA2_AUTH_UNSPECIFIED)) ||
@@ -2328,6 +3214,7 @@ wlc_fbt_akm_match(wlc_fbt_info_t *fbt_info, const wlc_bsscfg_t *cfg, const wlc_b
 	}
 	return akm_match;
 }
+#endif /* STA && FBT_STA */
 
 #ifdef BCMSUP_PSK
 static
@@ -2370,6 +3257,11 @@ void wlc_fbt_sup_deinit(void *ctx, wlc_bsscfg_t *cfg)
 		return;
 	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
 	if (fbt_bss_priv->use_sup_wpa == TRUE) {
+		/* free wpapsk elements before removing reference to wpa/wpa_info
+		 */
+		wlc_wpapsk_free(fbt_bss_priv->wlc, fbt_bss_priv->wpa);
+		fbt_bss_priv->wpa_info->pmk_len = 0;
+
 		/* wpa/wpa_info are owned by sup module so only remove fbt reference to
 		 * them.
 		 */
@@ -2380,6 +3272,7 @@ void wlc_fbt_sup_deinit(void *ctx, wlc_bsscfg_t *cfg)
 }
 #endif /* BCMSUP_PSK */
 
+#if defined(STA) && defined(FBT_STA)
 int
 wlc_fbt_set_pmk(wlc_fbt_info_t *fbt_info, struct wlc_bsscfg *cfg, wsec_pmk_t *pmk, bool assoc)
 {
@@ -2412,3 +3305,2492 @@ wlc_fbt_get_kck_kek(wlc_fbt_info_t *fbt_info, struct wlc_bsscfg *cfg, uint8 *key
 	memcpy(key, fbt_bss_priv->wpa->eapol_mic_key, WPA_MIC_KEY_LEN);
 	memcpy(key + WPA_MIC_KEY_LEN, fbt_bss_priv->wpa->eapol_encr_key, WPA_ENCR_KEY_LEN);
 }
+#endif /* STA && FBT_STA */
+
+bool
+wlc_fbt_enabled(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
+{
+	bss_fbt_info_t *fbt_cfg;
+
+	fbt_cfg = FBT_BSSCFG_CUBBY(fbt_info, cfg);
+	if (!fbt_cfg) {
+		return FALSE;
+	}
+
+#ifdef AP
+	if (fbt_cfg->fbt_mode)
+		return TRUE;
+#endif /* AP */
+
+	return FALSE;
+}
+
+bool
+wlc_fbt_fbtoverds_flag(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg)
+{
+	wlc_fbt_info_t *fbt_info = wlc->fbt;
+	bss_fbt_info_t *fbt_bsscfg;
+
+	fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+	if (!fbt_bsscfg) {
+		return FALSE;
+	}
+
+#ifdef AP
+	if (fbt_bsscfg->fbt_over_ds)
+		return TRUE;
+#endif /* AP */
+
+	return FALSE;
+}
+
+bool
+wlc_fbt_fbtoverds_enable(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg, bool fbt_over_ds)
+{
+	wlc_fbt_info_t *fbt_info = wlc->fbt;
+	bss_fbt_info_t *fbt_bsscfg;
+
+	fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+	if (!fbt_bsscfg) {
+		return FALSE;
+	}
+
+#ifdef AP
+	if (fbt_over_ds == fbt_bsscfg->fbt_over_ds)
+		return TRUE;
+	fbt_bsscfg->fbt_over_ds = fbt_over_ds;
+	if (fbt_bsscfg->fbt_mode) {
+		wlc_bss_update_beacon(wlc, bsscfg);
+		wlc_bss_update_probe_resp(wlc, bsscfg, FALSE);
+	}
+#endif /* AP */
+	return TRUE;
+}
+
+#ifdef AP
+static int
+wlc_fbt_scb_init(void *context, struct scb *scb)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)context;
+	wlc_fbt_priv_t	*fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc_info_t *wlc = fbt_priv->wlc;
+	wlc_bsscfg_t *bsscfg = scb->bsscfg;
+	wlc_fbt_scb_cubby_t *fbt_scb_cubby;
+	wlc_fbt_scb_t *fbt_scb;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+
+		fbt_scb = (wlc_fbt_scb_t *)MALLOCZ(fbt_priv->osh, sizeof(wlc_fbt_scb_t));
+		if (!fbt_scb)
+		{
+			WL_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
+			UNIT(fbt_priv), __FUNCTION__, MALLOCED(fbt_priv->osh)));
+			return BCME_NOMEM;
+		}
+		fbt_scb_cubby = FBT_SCB_CUBBY(fbt_info, scb);
+		fbt_scb_cubby->cubby = fbt_scb;
+		memset(fbt_scb, 0, sizeof(wlc_fbt_scb_cubby_t));
+		memcpy(fbt_scb->macaddr.octet, scb->ea.octet, ETHER_ADDR_LEN);
+	}
+
+	return BCME_OK;
+}
+
+static void
+wlc_fbt_scb_deinit(void *context, struct scb *scb)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)context;
+	wlc_fbt_priv_t	*fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc_info_t *wlc = fbt_priv->wlc;
+	wlc_fbt_scb_t *fbt_scb = FBT_SCB(fbt_info, scb);
+	wlc_fbt_scb_cubby_t *fbt_scb_cubby = FBT_SCB_CUBBY(fbt_info, scb);
+
+	if (!fbt_scb)
+		return;
+	if (fbt_scb->auth_resp_ies) {
+		MFREE(wlc->osh, fbt_scb->auth_resp_ies, fbt_scb->auth_resp_ielen);
+		fbt_scb->auth_resp_ielen = 0;
+		fbt_scb->auth_resp_ies = NULL;
+	}
+	wlc_fbtap_free_fbties(wlc, &(fbt_scb->fbties_assoc));
+	MFREE(fbt_priv->osh, fbt_scb, sizeof(wlc_fbt_scb_t));
+	fbt_scb_cubby->cubby = NULL;
+}
+
+#ifdef BCMDBG
+static void
+wlc_fbt_scb_dump(void *context, struct scb *scb, struct bcmstrbuf *b)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)context;
+	char eabuf[ETHER_ADDR_STR_LEN];
+	wlc_fbt_scb_t *fbt_scb = FBT_SCB(fbt_info, scb);
+
+	if (fbt_scb == NULL)
+		return;
+
+	bcm_bprintf(b, "FBT Etheraddr %s\n", bcm_ether_ntoa(&scb->ea, eabuf));
+	bcm_bprhex(b, "\t\tPMK_R1Name: ", TRUE, fbt_scb->pmk_r1_name, WPA2_PMKID_LEN);
+	bcm_bprhex(b, "\t\tptk: ", TRUE, fbt_scb->ptk.tk1, WPA2_PMKID_LEN);
+	bcm_bprhex(b, "\t\tgtk: ", TRUE, fbt_scb->gtk.key, fbt_scb->gtk.key_len);
+	if (fbt_scb->auth_resp_ies) {
+		bcm_bprhex(b, "\t\tIEs: ", TRUE, fbt_scb->auth_resp_ies, fbt_scb->auth_resp_ielen);
+	}
+	bcm_bprintf(b, "Auth Time:%d\n", fbt_scb->auth_time);
+}
+#endif /* BCMDBG */
+
+static int
+wlc_fbtap_process_auth_resp(wlc_info_t *wlc, wlc_fbt_info_t *fbt_info,
+	struct scb *scb, wlc_fbt_auth_resp_t *fbt_auth_resp)
+{
+	wlc_bsscfg_t *bsscfg = scb->bsscfg;
+	wlc_fbt_scb_t *fbt_scb = FBT_SCB(fbt_info, scb);
+
+	ASSERT(scb != NULL);
+
+	if (!(SCB_AUTHENTICATING(scb))) {
+		WL_ERROR(("wl%d: %s: Sending Deauth scb state not pending \n",
+			wlc->pub->unit, __FUNCTION__));
+		goto deauth;
+	}
+
+	if (fbt_scb->auth_resp_ies) {
+		MFREE(wlc->osh, fbt_scb->auth_resp_ies, fbt_scb->auth_resp_ielen);
+		fbt_scb->auth_resp_ielen = 0;
+		fbt_scb->auth_resp_ies = NULL;
+	}
+
+	if (fbt_auth_resp->status != DOT11_SC_SUCCESS) {
+		WL_ERROR(("wl%d: %s: Sending Deauth status %d \n",
+			wlc->pub->unit, __FUNCTION__, fbt_auth_resp->status));
+		wlc_sendauth(bsscfg, &scb->ea, &bsscfg->BSSID, scb,
+			DOT11_FAST_BSS, 2, fbt_auth_resp->status,
+			NULL, DOT11_CAP_SHORT);
+		goto deauth;
+	}
+
+	fbt_scb->auth_resp_ies = (uint8 *) MALLOCZ(wlc->osh, fbt_auth_resp->ie_len);
+	WL_FBT(("wl%d: %s: Recvd auth len %d \n", wlc->pub->unit, __FUNCTION__,
+			fbt_scb->auth_resp_ielen));
+
+	if (fbt_scb->auth_resp_ies == NULL) {
+		WL_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
+			wlc->pub->unit, __FUNCTION__, fbt_auth_resp->ie_len));
+		wlc_sendauth(bsscfg, &scb->ea, &bsscfg->BSSID, scb,
+			DOT11_FAST_BSS, 2, fbt_auth_resp->status,
+			NULL, DOT11_CAP_SHORT);
+		goto deauth;
+	}
+	fbt_scb->auth_resp_ielen = fbt_auth_resp->ie_len;
+	bcopy(&(fbt_auth_resp->ies[0]), fbt_scb->auth_resp_ies, fbt_scb->auth_resp_ielen);
+
+	bcopy(&(fbt_auth_resp->pmk_r1_name), fbt_scb->pmk_r1_name, WPA2_PMKID_LEN);
+	bcopy(&(fbt_auth_resp->ptk), &(fbt_scb->ptk), sizeof(wpa_ptk_t));
+	bcopy(&(fbt_auth_resp->gtk), &(fbt_scb->gtk), sizeof(wpa_gtk_t));
+#if defined(BCMDBG)
+	if (WL_FBT_ON()) {
+		prhex("FBT AUTH RESP ies", fbt_scb->auth_resp_ies, fbt_auth_resp->ie_len);
+		prhex("pmk r1 name in iov", fbt_scb->pmk_r1_name, 16);
+		prhex("pmk ptk kck iov", fbt_scb->ptk.kck, 16);
+		prhex("pmk ptk kek iov", fbt_scb->ptk.kek, 16);
+		prhex("pmk ptk tk1 iov", fbt_scb->ptk.tk1, 16);
+		prhex("pmk ptk tk1 iov", fbt_scb->ptk.tk2, 16);
+		prhex("pmk gtk in iov", fbt_scb->gtk.key, 32);
+	}
+#endif
+
+	fbt_scb->status = fbt_auth_resp->status;
+
+	wlc_scb_clearstatebit_bsscfg(scb, PENDING_AUTH, WLC_BSSCFG_IDX(bsscfg));
+	wlc_scb_setstatebit_bsscfg(scb, AUTHENTICATED, WLC_BSSCFG_IDX(bsscfg));
+	WL_FBT(("wl%d: %s:  sending auth resp success %d \n", wlc->pub->unit, __FUNCTION__,
+		fbt_scb->auth_resp_ielen));
+	wlc_ap_sendauth(wlc->ap, bsscfg, scb, DOT11_FAST_BSS, 2,
+		fbt_auth_resp->status, NULL, DOT11_CAP_SHORT, TRUE);
+
+	return BCME_OK;
+deauth:
+	wlc_scbfree(wlc, scb);
+	return BCME_ERROR;
+}
+
+static int
+wlc_fbtap_process_ds_auth_resp(wlc_info_t *wlc, wlc_fbt_info_t *fbt_info,
+	wlc_bsscfg_t *bsscfg, wlc_fbt_auth_resp_t *fbt_auth_resp)
+{
+	char eabuf[ETHER_ADDR_STR_LEN];
+	struct ether_addr ea;
+	char *sa;
+	uint8 *tlvs;
+	uint tlvs_len;
+	wlc_fbt_ies_t fbties;
+	wlc_fbt_scb_t *fbt_scb;
+	uint status = DOT11_SC_SUCCESS;
+	struct scb *scb = NULL;
+	uint32 reassoc_deadline = 0;
+	bss_fbt_info_t *fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+	int err = BCME_OK;
+
+	memcpy(ea.octet, fbt_auth_resp->macaddr, ETHER_ADDR_LEN);
+	sa = bcm_ether_ntoa(&ea, eabuf);
+
+	wlc_scbfind_delete(wlc, bsscfg, (struct ether_addr *)&fbt_auth_resp->macaddr);
+
+	tlvs = fbt_auth_resp->ies;
+	tlvs_len = fbt_auth_resp->ie_len;
+
+	wlc_fbtap_parse_fbties(wlc, bsscfg, tlvs, tlvs_len, &fbties);
+
+	if ((status = wlc_fbtap_validate_auth_fbties(wlc, fbt_bsscfg, fbties, sa)) !=
+		DOT11_SC_SUCCESS) {
+		err = BCME_ERROR;
+		goto send_result;
+	}
+
+	/* allocate an scb */
+	if (!(scb = wlc_scblookup(wlc, bsscfg, (struct ether_addr *) &ea))) {
+		WL_ERROR(("wl%d: %s: out of scbs for %s\n", wlc->pub->unit, __FUNCTION__,
+			sa));
+		err = BCME_NOMEM;
+		status = DOT11_SC_FAILURE;
+		goto send_result;
+	}
+
+	fbt_scb = FBT_SCB(fbt_info, scb);
+
+	if (fbt_scb->auth_resp_ies) {
+		MFREE(wlc->osh, fbt_scb->auth_resp_ies, fbt_scb->auth_resp_ielen);
+		fbt_scb->auth_resp_ielen = 0;
+		fbt_scb->auth_resp_ies = NULL;
+	}
+
+	fbt_scb->auth_resp_ies = (uint8 *) MALLOCZ(wlc->osh, fbt_auth_resp->ie_len);
+
+	if (fbt_scb->auth_resp_ies == NULL) {
+		err = BCME_NOMEM;
+		WL_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
+			wlc->pub->unit, __FUNCTION__, fbt_auth_resp->ie_len));
+		goto send_result;
+	}
+
+	fbt_scb->auth_resp_ielen = fbt_auth_resp->ie_len;
+	bcopy(fbt_auth_resp->pmk_r1_name, fbt_scb->pmk_r1_name, WPA2_PMKID_LEN);
+	bcopy(&(fbt_auth_resp->ptk), &(fbt_scb->ptk), sizeof(wpa_ptk_t));
+	bcopy(&(fbt_auth_resp->gtk), &(fbt_scb->gtk), sizeof(wpa_gtk_t));
+	bcopy(fbt_auth_resp->ies, fbt_scb->auth_resp_ies, fbt_scb->auth_resp_ielen);
+
+send_result:
+	if (status == DOT11_SC_SUCCESS) {
+		fbt_scb->auth_time = OSL_SYSUPTIME();
+		reassoc_deadline = ((fbt_bsscfg->reassoc_time) * DOT11_TU_TO_US)/1000;
+		wlc_fbtap_add_timer(wlc, scb, reassoc_deadline);
+		wlc_scb_setstatebit_bsscfg(scb, AUTHENTICATED, WLC_BSSCFG_IDX(bsscfg));
+		wlc_scb_clearstatebit_bsscfg(scb, PENDING_AUTH, WLC_BSSCFG_IDX(bsscfg));
+		scb->auth_alg = DOT11_FAST_BSS;
+		wlc_bss_mac_event(wlc, bsscfg, WLC_E_AUTH_IND, &scb->ea, WLC_E_STATUS_SUCCESS,
+				DOT11_SC_SUCCESS, scb->auth_alg, 0, 0);
+	}
+	else {
+		if (scb) {
+			wlc_scbfree(wlc, scb);
+		}
+	}
+	wlc_fbtap_free_fbties(wlc, &fbties);
+	return err;
+}
+
+static void
+wlc_fbtap_add_timer(wlc_info_t *wlc, struct scb *scb, uint timeval)
+{
+	wlc_fbt_info_t *fbt_info = wlc->fbt;
+	wlc_bsscfg_t *bsscfg = scb->bsscfg;
+	bss_fbt_info_t *fbt_bsscfg;
+
+	fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+	if (fbt_bsscfg->fbt_timer_set)
+		return;
+	wl_add_timer(wlc->wl, fbt_info->fbt_timer, timeval, 0);
+	fbt_bsscfg->fbt_timer_set = TRUE;
+}
+
+static int
+wlc_fbtap_parse_rde_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_info_t *wlc;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_bsscfg_t *cfg = data->cfg;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	struct scb *scb = ftpparm->assocreq.scb;
+	wlc_fbt_scb_t *fbt_scb;
+	int len, ric_elem_count;
+	uint8 *ricend;
+	bool found = FALSE;
+
+	if (!BSSCFG_AP(cfg))
+		return BCME_OK;
+
+	if (!scb)
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	if (data->ie == NULL)
+		return BCME_OK;
+
+	ASSERT(ftpparm != NULL);
+
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, cfg) && scb) {
+		fbt_scb = FBT_SCB(fbt_info, scb);
+
+		/* In intial association only mdid is validated */
+		if (scb->auth_alg == DOT11_OPEN_SYSTEM) {
+			return BCME_OK;
+		}
+
+		found = wlc_fbt_parse_ric(data->ie, data->ie_len, &ricend, &ric_elem_count);
+		if (found && fbt_scb) {
+			len = ricend - data->ie;
+			if (fbt_scb->fbties_assoc.ricie) {
+				MFREE(wlc->osh, fbt_scb->fbties_assoc.ricie,
+					fbt_scb->fbties_assoc.ric_len);
+				fbt_scb->fbties_assoc.ric_len = 0;
+				fbt_scb->fbties_assoc.ric_elem_count = 0;
+				fbt_scb->fbties_assoc.ricie = NULL;
+			}
+			fbt_scb->fbties_assoc.ricie = (uint8 *) MALLOC(wlc->osh, len);
+			memcpy(fbt_scb->fbties_assoc.ricie, data->ie, len);
+			fbt_scb->fbties_assoc.ric_len = len;
+			fbt_scb->fbties_assoc.ric_elem_count = ric_elem_count;
+		}
+
+		wlc_fbt_set_ea(fbt_info, cfg, &scb->ea);
+
+		/* Do the MIC calculation to validate FT IE when RDE IE is present */
+		if (!wlc_fbt_reassoc_validate_ftie(fbt_info, cfg, scb, data->ie,
+			data->ie_len, (dot11_ft_ie_t *)ftpparm->assocreq.ft_ie,
+			(bcm_tlv_t *)ftpparm->assocreq.md_ie,
+			(bcm_tlv_t *)ftpparm->assocreq.wpa2_ie,
+			FT_MIC_ASSOC_REQUEST_TSN)) {
+			WL_ERROR(("wl%d: %s failed, ignoring reassoc request\n",
+			   wlc->pub->unit, __FUNCTION__));
+			ftpparm->assocreq.status = DOT11_SC_INVALID_FTIE;
+			return BCME_ERROR;
+		}
+	}
+
+	return BCME_OK;
+}
+
+static int
+wlc_fbtap_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_info_t *wlc;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_bsscfg_t *cfg = data->cfg;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	struct scb *scb = ftpparm->assocreq.scb;
+	wlc_fbt_scb_t *fbt_scb;
+#ifdef BCMDBG
+	char eabuf[ETHER_ADDR_STR_LEN];
+#endif
+	uint8 *ptr;
+	dot11_ft_ie_t *fbtieptr;
+	bcm_tlv_t *ie;
+	int len = 0;
+	dot11_ft_ie_t *fbt_auth;
+	wlc_fbt_ies_t fbties_assoc;
+	wlc_fbt_ies_t fbties_auth;
+	uint8 *tlvs_auth;
+	uint tlvs_auth_len;
+
+	if (!BSSCFG_AP(cfg))
+		return BCME_OK;
+
+	if (!scb)
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	if (data->ie == NULL)
+		return BCME_OK;
+
+	ASSERT(ftpparm != NULL);
+
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, cfg)) {
+		ie = (bcm_tlv_t *)data->ie;
+		memset(&fbties_assoc, 0, sizeof(fbties_assoc));
+
+		fbtieptr = (dot11_ft_ie_t *)ie;
+
+		/* Parse the optional sub elements and update the scb */
+		 len = fbtieptr->len + TLV_HDR_LEN - sizeof(dot11_ft_ie_t);
+		ptr = (uint8 *)ie + sizeof(dot11_ft_ie_t);
+
+		/* parse optional FTIE elements */
+		while (len > TLV_HDR_LEN) {
+			/* PMKR1 Key Holder */
+			if (ptr[DOT11_SUBELEM_ID_OFF] == DOT11_FBT_SUBELEM_ID_R1KH_ID) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_R1KH_ID);
+				if (ie != NULL) {
+					fbties_assoc.r1kh_id = ie->data;
+					fbties_assoc.r1kh_id_len = ie->len;
+				}
+			}
+			/* GTK */
+			else if (ptr[DOT11_SUBELEM_ID_OFF] == DOT11_FBT_SUBELEM_ID_GTK) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_GTK);
+				if (ie != NULL) {
+					fbties_assoc.gtk = ie->data;
+					fbties_assoc.gtk_len = ie->len;
+				}
+			}
+			/* PMKR0 Key Holder */
+			else if (ptr[DOT11_SUBELEM_ID_OFF] == DOT11_FBT_SUBELEM_ID_R0KH_ID) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_R0KH_ID);
+				if (ie != NULL) {
+					fbties_assoc.r0kh_id = ie->data;
+					fbties_assoc.r0kh_id_len = ie->len;
+				}
+			}
+			/* IGTK Holder */
+			else if (ptr[DOT11_SUBELEM_ID_OFF] == DOT11_FBT_SUBELEM_ID_IGTK) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_IGTK);
+				if (ie != NULL) {
+					fbties_assoc.igtk = ie->data;
+					fbties_assoc.igtk_len = ie->len;
+				}
+			}
+			len = len - ie->len - TLV_HDR_LEN;
+			ptr += ie->len + TLV_HDR_LEN;
+		}
+
+		/* In intial association only mdid is validated */
+		if (scb->auth_alg == DOT11_OPEN_SYSTEM) {
+			return BCME_OK;
+		}
+
+		/* Get FBT IEs sent in FBT Authentication Response */
+		fbt_scb = FBT_SCB(fbt_info, scb);
+		tlvs_auth = fbt_scb->auth_resp_ies;
+		tlvs_auth_len = fbt_scb->auth_resp_ielen;
+
+		memset(&fbties_auth, 0, sizeof(wlc_fbt_ies_t));
+		wlc_fbtap_parse_fbties(wlc, cfg, tlvs_auth, tlvs_auth_len, &fbties_auth);
+
+		fbt_auth = (dot11_ft_ie_t *)fbties_auth.ftie;
+		if ((memcmp(fbt_auth->snonce, fbtieptr->snonce, sizeof(fbt_auth->snonce)) != 0)||
+			(memcmp(fbt_auth->anonce, fbtieptr->anonce,
+			sizeof(fbt_auth->anonce) != 0))) {
+			ftpparm->assocreq.status = DOT11_SC_INVALID_FTIE;
+			WL_FBT(("wl%d: %s: Recvd assoc frame FBT w/invalid SNONCE or ANONCE "
+				"from sta %s\n", wlc->pub->unit, __FUNCTION__,
+				bcm_ether_ntoa(&scb->ea, eabuf)));
+			wlc_fbtap_free_fbties(wlc, &fbties_auth);
+			return BCME_ERROR;
+		}
+		if ((fbties_auth.r0kh_id_len != fbties_assoc.r0kh_id_len) ||
+			(fbties_auth.r1kh_id_len != fbties_assoc.r1kh_id_len)) {
+			ftpparm->assocreq.status = DOT11_SC_INVALID_FTIE;
+			WL_FBT(("wl%d: %s: Recvd assoc frame FBT w/invalid r0kh or r1kh "
+				"from sta %s\n", wlc->pub->unit, __FUNCTION__,
+				bcm_ether_ntoa(&scb->ea, eabuf)));
+			wlc_fbtap_free_fbties(wlc, &fbties_auth);
+			return BCME_ERROR;
+		}
+		if ((fbties_assoc.r0kh_id != NULL) &&
+			(fbties_auth.r0kh_id != NULL) &&
+			((memcmp(fbties_auth.r0kh_id, fbties_assoc.r0kh_id,
+			fbties_assoc.r0kh_id_len) != 0) ||
+			(memcmp(fbties_auth.r1kh_id, fbties_assoc.r1kh_id,
+			fbties_assoc.r1kh_id_len) != 0))) {
+			ftpparm->assocreq.status = DOT11_SC_INVALID_FTIE;
+			WL_FBT(("wl%d: %s: Recvd assoc frame FBT w/invalid r0kh or r1kh "
+				"from sta %s\n", wlc->pub->unit, __FUNCTION__,
+				bcm_ether_ntoa(&scb->ea, eabuf)));
+			wlc_fbtap_free_fbties(wlc, &fbties_auth);
+			return BCME_ERROR;
+		}
+		wlc_fbtap_free_fbties(wlc, &fbties_auth);
+
+		if (data->ft == FC_REASSOC_REQ) {
+			uint8 *tlvs;
+			uint tlvs_len;
+			uint8 *ricie = NULL;
+
+			/* Check if RDE IE is present in reassoc request */
+			tlvs = data->buf;
+			tlvs_len = data->buf_len;
+			ricie = (uint8*)bcm_parse_tlvs(tlvs, tlvs_len, DOT11_MNG_RDE_ID);
+			if (ricie != NULL) {
+				/* RDE IE is present, save FT IE for MIC calculation
+				 * while processing RDE IE.
+				 */
+				ftpparm->assocreq.ft_ie = data->ie;
+			}
+			else {
+				wlc_fbt_set_ea(fbt_info, cfg, &scb->ea);
+				/* RDE IE is absent. Do the MIC calculation here without RDE */
+				if (!wlc_fbt_reassoc_validate_ftie(fbt_info, cfg, scb, NULL, 0,
+					(dot11_ft_ie_t *)data->ie,
+					(bcm_tlv_t *)ftpparm->assocreq.md_ie,
+					(bcm_tlv_t *)ftpparm->assocreq.wpa2_ie,
+					FT_MIC_ASSOC_REQUEST_TSN)) {
+					WL_ERROR(("wl%d: %s failed, ignoring reassoc request\n",
+					   wlc->pub->unit, __FUNCTION__));
+					ftpparm->assocreq.status = DOT11_SC_INVALID_FTIE;
+					return BCME_ERROR;
+				}
+			}
+		}
+	}
+
+	return BCME_OK;
+}
+
+static int
+wlc_fbtap_auth_parse_ft_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_info_t *wlc;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_bsscfg_t *cfg = data->cfg;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	struct scb *scb = ftpparm->auth.scb;
+#ifdef BCMDBG
+	char eabuf[ETHER_ADDR_STR_LEN];
+#endif
+	uint8 *ptr;
+	dot11_ft_ie_t *fbtieptr;
+	bcm_tlv_t *ie;
+	int len = 0;
+	wlc_fbt_ies_t fbties;
+	uint reassoc_deadline;
+	bss_fbt_info_t *fbt_bsscfg;
+	wlc_fbt_scb_t *fbt_scb;
+
+	if (!BSSCFG_AP(cfg))
+		return BCME_OK;
+
+	if (!scb)
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	if (data->ie == NULL)
+		return BCME_OK;
+
+	ASSERT(ftpparm != NULL);
+
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, cfg)) {
+
+		/* In initial association only mdid is validated */
+		if (ftpparm->auth.alg == DOT11_OPEN_SYSTEM) {
+			return BCME_OK;
+		}
+
+		fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, cfg);
+		ie = (bcm_tlv_t *)data->ie;
+		memset(&fbties, 0, sizeof(fbties));
+
+		fbtieptr = (dot11_ft_ie_t *)ie;
+
+		/* Parse the optional sub elements and update the scb */
+		len = fbtieptr->len + TLV_HDR_LEN - sizeof(dot11_ft_ie_t);
+		ptr = (uint8 *)ie + sizeof(dot11_ft_ie_t);
+
+		/* parse optional FTIE elements */
+		while (len > TLV_HDR_LEN) {
+			/* PMKR1 Key Holder */
+			if (ptr[0] == DOT11_FBT_SUBELEM_ID_R1KH_ID) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_R1KH_ID);
+				if (ie != NULL) {
+					fbties.r1kh_id = ie->data;
+					fbties.r1kh_id_len = ie->len;
+				}
+			}
+			/* GTK */
+			else if (ptr[0] == DOT11_FBT_SUBELEM_ID_GTK) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_GTK);
+				if (ie != NULL) {
+					fbties.gtk = ie->data;
+					fbties.gtk_len = ie->len;
+				}
+			}
+			/* PMKR0 Key Holder */
+			else if (ptr[0] == DOT11_FBT_SUBELEM_ID_R0KH_ID) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_R0KH_ID);
+				if (ie != NULL) {
+					fbties.r0kh_id = ie->data;
+					fbties.r0kh_id_len = ie->len;
+				}
+			}
+			/* IGTK Holder */
+			else if (ptr[0] == DOT11_FBT_SUBELEM_ID_IGTK) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_IGTK);
+				if (ie != NULL) {
+					fbties.igtk = ie->data;
+					fbties.igtk_len = ie->len;
+				}
+			}
+			len = len - ie->len - TLV_HDR_LEN;
+			ptr += ie->len + TLV_HDR_LEN;
+		}
+
+		if ((ftpparm->auth.alg == DOT11_FAST_BSS) &&
+			(fbties.r0kh_id == NULL)) {
+			ftpparm->auth.status = DOT11_SC_INVALID_FTIE;
+			WL_FBT(("wl%d: %s: Recvd auth frame FBT w/invalid r0kh "
+				"from sta %s\n", wlc->pub->unit, __FUNCTION__,
+				bcm_ether_ntoa(&scb->ea, eabuf)));
+			return BCME_ERROR;
+		}
+
+		if (ftpparm->auth.alg == DOT11_FAST_BSS) {
+			wlc_scb_setstatebit_bsscfg(scb, PENDING_AUTH,
+			                           WLC_BSSCFG_IDX(cfg));
+			/* Notify application, send all IEs to application */
+			wlc_bss_mac_event(wlc, cfg, WLC_E_FBT_AUTH_REQ_IND, &scb->ea,
+				WLC_E_STATUS_SUCCESS, 0, 0,
+				(void *)data->buf, data->buf_len);
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			fbt_scb->auth_time = OSL_SYSUPTIME();
+			reassoc_deadline = ((fbt_bsscfg->reassoc_time) * DOT11_TU_TO_US)/1000;
+			WL_FBT(("wl%d: %s: starting reassoc timer %d for sta %s\n",
+			wlc->pub->unit, __FUNCTION__, reassoc_deadline,
+			bcm_ether_ntoa(&scb->ea, eabuf)));
+
+			wlc_fbtap_add_timer(wlc, scb, reassoc_deadline);
+		}
+	}
+
+	return BCME_OK;
+}
+
+static int
+wlc_fbtap_parse_rsn_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_info_t *wlc;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_bsscfg_t *cfg = data->cfg;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	struct scb *scb = ftpparm->assocreq.scb;
+	wlc_fbt_scb_t *fbt_scb;
+	uint8 *ptr;
+	wpa_suite_ucast_t *ucast;
+	wpa_suite_auth_key_mgmt_t *mgmt;
+	uint32 WPA_auth = cfg->WPA_auth;
+	wpa_pmkid_list_t *pmk;
+	wpa_pmkid_t arpmklist;
+	bcm_tlv_t *ie;
+	int len = 0;
+	int count = 0;
+
+	if (!BSSCFG_AP(cfg))
+		return BCME_OK;
+
+	if (!scb)
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	if (data->ie == NULL)
+		return BCME_OK;
+
+	ASSERT(ftpparm != NULL);
+
+	wlc = fbt_priv->wlc;
+	fbt_scb = FBT_SCB(fbt_info, scb);
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, cfg) && fbt_scb) {
+#ifdef BCMDBG
+		char eabuf[ETHER_ADDR_STR_LEN], *sa = bcm_ether_ntoa(&scb->ea, eabuf);
+#endif
+		ie = (bcm_tlv_t *)data->ie;
+		ptr = (uint8 *)ie;
+		/* Increment ptr by rsn fixed and multicast suite length */
+		ptr += sizeof(wpa_rsn_ie_fixed_t) + sizeof(wpa_suite_mcast_t);
+		/* Increment ptr by ucast fixed suite length */
+		ucast = (wpa_suite_ucast_t *)ptr;
+		count = ltoh16_ua(&ucast->count);
+
+		ptr += count * WPA_SUITE_LEN + sizeof(ucast->count);
+		/* Increment ptr by AKM length */
+		mgmt = (wpa_suite_auth_key_mgmt_t *)ptr;
+		count = ltoh16_ua(&mgmt->count);
+		ptr += count * WPA_SUITE_LEN + sizeof(mgmt->count);
+		/* Increment by RSN Capability length */
+		ptr += RSN_CAP_LEN;
+		len = (ie->len + TLV_HDR_LEN) - (ptr - data->ie);
+
+		/* Check the AKM */
+		if ((scb->auth_alg == DOT11_FAST_BSS) &&
+		    ((count != 1) ||
+			!((bcmp(mgmt->list[0].oui, WPA2_OUI, DOT11_OUI_LEN) == 0) &&
+			(((mgmt->list[0].type == RSN_AKM_FBT_1X) &&
+			(WPA_auth & WPA2_AUTH_UNSPECIFIED)) ||
+			((mgmt->list[0].type == RSN_AKM_FBT_PSK) &&
+			(WPA_auth & WPA2_AUTH_PSK)))))) {
+			WL_ERROR(("wl%d: %s: bad AKM in WPA2 IE.\n",
+				wlc->pub->unit, __FUNCTION__));
+			ftpparm->assocreq.status = DOT11_SC_INVALID_AKMP;
+			return BCME_ERROR;
+		}
+
+		memset(&arpmklist, 0, sizeof(wpa_pmkid_t));
+		if (len != 0) {
+			pmk = (wpa_pmkid_list_t *)ptr;
+			if (pmk->count.low != 0 || pmk->count.high != 0) {
+				memcpy(&arpmklist, pmk->list, WPA2_PMKID_LEN);
+			}
+		}
+
+		/* In initial association only mdid is validated */
+		if (scb->auth_alg == DOT11_OPEN_SYSTEM) {
+			return BCME_OK;
+		}
+
+		if ((scb->auth_alg == DOT11_FAST_BSS) &&
+			(!(data->ft == FC_REASSOC_REQ))) {
+			WL_FBT(("wl%d: %s: Recvd assoc frame for FBT auth from sta %s\n",
+				wlc->pub->unit, __FUNCTION__, sa));
+			ftpparm->assocreq.status = DOT11_SC_FAILURE;
+			return BCME_ERROR;
+		}
+
+		if (memcmp(&arpmklist, fbt_scb->pmk_r1_name, WPA2_PMKID_LEN) != 0) {
+			WL_FBT(("wl%d: %s: Recvd assoc frame FBT with invalid PMKID from sta %s\n",
+				wlc->pub->unit, __FUNCTION__, sa));
+			ftpparm->assocreq.status = DOT11_SC_INVALID_PMKID;
+			return BCME_ERROR;
+		}
+
+		/* save wpa2 ie for MIC calc */
+		ftpparm->assocreq.wpa2_ie = data->ie;
+	}
+
+	return BCME_OK;
+}
+
+static int
+wlc_fbtap_auth_parse_rsn_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_info_t *wlc;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_bsscfg_t *cfg = data->cfg;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	struct scb *scb = ftpparm->auth.scb;
+	wlc_fbt_scb_t *fbt_scb;
+	uint8 *ptr;
+	wpa_suite_ucast_t *ucast;
+	wpa_suite_auth_key_mgmt_t *mgmt;
+	uint32 WPA_auth = cfg->WPA_auth;
+	wpa_pmkid_list_t *pmk = NULL;
+	wpa_pmkid_t arpmklist;
+	bcm_tlv_t *ie;
+	int len = 0;
+	int count = 0;
+
+	if (!BSSCFG_AP(cfg))
+		return BCME_OK;
+
+	if (!scb)
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	if (data->ie == NULL)
+		return BCME_OK;
+
+	ASSERT(ftpparm != NULL);
+
+	wlc = fbt_priv->wlc;
+	fbt_scb = FBT_SCB(fbt_info, scb);
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, cfg) && fbt_scb) {
+#ifdef BCMDBG
+		char eabuf[ETHER_ADDR_STR_LEN], *sa = bcm_ether_ntoa(&scb->ea, eabuf);
+#endif
+		/* In initial association only mdid is validated */
+		if (ftpparm->auth.alg == DOT11_OPEN_SYSTEM) {
+			return BCME_OK;
+		}
+
+		ie = (bcm_tlv_t *)data->ie;
+		ptr = (uint8 *)ie;
+		/* Increment ptr by rsn fixed and multicast suite length */
+		ptr += sizeof(wpa_rsn_ie_fixed_t) + sizeof(wpa_suite_mcast_t);
+		/* Increment ptr by ucast fixed suite length */
+		ucast = (wpa_suite_ucast_t *)ptr;
+		count = ltoh16_ua(&ucast->count);
+
+		ptr += count * WPA_SUITE_LEN + sizeof(ucast->count);
+		/* Increment ptr by AKM length */
+		mgmt = (wpa_suite_auth_key_mgmt_t *)ptr;
+		count = ltoh16_ua(&mgmt->count);
+		ptr += count * WPA_SUITE_LEN + sizeof(mgmt->count);
+		/* Increment by RSN Capability length */
+		ptr += RSN_CAP_LEN;
+		len = (ie->len + TLV_HDR_LEN) - (ptr - data->ie);
+
+		/* Check the AKM */
+		if ((count != 1) ||
+			!((bcmp(mgmt->list[0].oui, WPA2_OUI, DOT11_OUI_LEN) == 0) &&
+			(((mgmt->list[0].type == RSN_AKM_FBT_1X) &&
+			(WPA_auth & WPA2_AUTH_UNSPECIFIED)) ||
+			((mgmt->list[0].type == RSN_AKM_FBT_PSK) &&
+			(WPA_auth & WPA2_AUTH_PSK))))) {
+			WL_ERROR(("wl%d: %s: bad AKM in WPA2 IE.\n",
+				wlc->pub->unit, __FUNCTION__));
+			ftpparm->auth.status = DOT11_SC_INVALID_AKMP;
+			return BCME_ERROR;
+		}
+
+		memset(&arpmklist, 0, sizeof(wpa_pmkid_t));
+		if (len != 0) {
+			pmk = (wpa_pmkid_list_t *)ptr;
+			if (pmk->count.low != 0 || pmk->count.high != 0) {
+				memcpy(&arpmklist, pmk->list, WPA2_PMKID_LEN);
+			}
+		}
+
+		if ((ftpparm->auth.alg == DOT11_FAST_BSS) &&
+			(pmk == NULL || pmk->list == NULL)) {
+			WL_FBT(("wl%d: %s: FBT auth from sta %s has invalid pmkid\n",
+				wlc->pub->unit, __FUNCTION__, sa));
+			ftpparm->auth.status = DOT11_SC_INVALID_PMKID;
+			return BCME_ERROR;
+		}
+
+	}
+
+	return BCME_OK;
+}
+
+static int
+wlc_fbtap_parse_md_ie(void *ctx, wlc_iem_parse_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *cfg = data->cfg;
+	wlc_iem_ft_pparm_t *ftpparm = data->pparm->ft;
+	struct scb *scb = NULL;
+	dot11_mdid_ie_t mdie;
+	bss_fbt_info_t *fbt_bsscfg;
+	wlc_fbt_priv_t *fbt_priv;
+
+	if (!BSSCFG_AP(cfg))
+		return BCME_OK;
+
+	if (data->ft == FC_AUTH) {
+		scb = ftpparm->auth.scb;
+	}
+	else {
+		scb = ftpparm->assocreq.scb;
+	}
+
+	if (!scb)
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	if (data->ie == NULL)
+		return BCME_OK;
+
+	ASSERT(ftpparm != NULL);
+
+	if (WLFBT_ENAB(fbt_priv->wlc->pub) && wlc_fbt_enabled(fbt_info, cfg)) {
+		fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, cfg);
+		memcpy(&mdie, data->ie, sizeof(dot11_mdid_ie_t));
+
+		if (ltoh16(mdie.mdid) != fbt_bsscfg->mdid) {
+#ifdef BCMDBG
+			char eabuf[ETHER_ADDR_STR_LEN], *sa = bcm_ether_ntoa(&scb->ea, eabuf);
+#endif
+			WL_FBT(("wl%d: %s: MDID %d Invalid MDID %d from sta %s\n",
+			fbt_priv->wlc->pub->unit, __FUNCTION__,
+			fbt_bsscfg->mdid, ltoh16(mdie.mdid), sa));
+			if (data->ft == FC_AUTH) {
+				ftpparm->auth.status = DOT11_SC_INVALID_MDID;
+			}
+			else {
+				ftpparm->assocreq.status = DOT11_SC_INVALID_MDID;
+			}
+			return BCME_ERROR;
+		}
+
+		if (data->ft != FC_AUTH) {
+			/* save md ie for MIC calc */
+			ftpparm->assocreq.md_ie = data->ie;
+		}
+	}
+
+	return BCME_OK;
+}
+
+static void
+wlc_fbtap_parse_fbties(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg,
+	uchar *tlvs, uint tlvs_len, wlc_fbt_ies_t *fbt_ies)
+{
+	bcm_tlv_t *ie;
+	dot11_mdid_ie_t *mdieptr;
+	dot11_ft_ie_t *fbtieptr;
+	int len, ric_elem_count, count;
+	uint8 *ptr;
+	uint8 *ricend;
+	bool found = FALSE;
+	wpa_suite_ucast_t *ucast;
+	wpa_suite_auth_key_mgmt_t *key_mgmt;
+	wpa_pmkid_list_t *pmk;
+
+	memset(fbt_ies, 0, sizeof(wlc_fbt_ies_t));
+	ie = bcm_parse_tlvs(tlvs, tlvs_len, DOT11_MNG_MDIE_ID);
+	if (ie != NULL) {
+		mdieptr = (dot11_mdid_ie_t *)ie;
+		memcpy(&(fbt_ies->mdie), mdieptr, sizeof(dot11_mdid_ie_t));
+	}
+
+	ie = (bcm_tlv_t *)bcm_parse_tlvs(tlvs, tlvs_len, DOT11_MNG_RSN_ID);
+	if (ie != NULL) {
+		fbt_ies->rsnie = (uint8 *) MALLOC(wlc->osh, ie->len + TLV_HDR_LEN);
+		if (fbt_ies->rsnie == NULL) {
+			WL_FBT(("wl%d: %s: Unable to allocate memory for RSNIE \n",
+				wlc->pub->unit, __FUNCTION__));
+			return;
+		}
+		memcpy(fbt_ies->rsnie, ie, ie->len + TLV_HDR_LEN);
+		fbt_ies->rsnie_len = ie->len + TLV_HDR_LEN;
+		ptr = fbt_ies->rsnie;
+		/* Increment ptr by rsn fixed and multicast suite length */
+		ptr += sizeof(wpa_rsn_ie_fixed_t) + sizeof(wpa_suite_mcast_t);
+		/* Increment ptr by ucast fixed suite length */
+		ucast = (wpa_suite_ucast_t *)ptr;
+		count = ltoh16_ua(&ucast->count);
+		ptr += count * WPA_SUITE_LEN + sizeof(ucast->count);
+		/* Increment ptr by AKM length */
+		key_mgmt = (wpa_suite_auth_key_mgmt_t *)ptr;
+		count = ltoh16_ua(&key_mgmt->count);
+		ptr += count * WPA_SUITE_LEN + sizeof(key_mgmt->count);
+		/* Increment by RSN Capability length */
+		ptr += RSN_CAP_LEN;
+		len = fbt_ies->rsnie_len - (ptr - fbt_ies->rsnie);
+		if (len != 0) {
+			pmk = (wpa_pmkid_list_t *)ptr;
+			if (pmk->count.low != 0 || pmk->count.high != 0) {
+				fbt_ies->pmkid = (uint8 *) MALLOC(wlc->osh, WPA2_PMKID_LEN);
+				fbt_ies->pmkid_len = WPA2_PMKID_LEN;
+				memcpy(fbt_ies->pmkid, pmk->list, WPA2_PMKID_LEN);
+			}
+		}
+	}
+
+	ie = (bcm_tlv_t *) bcm_parse_tlvs(tlvs, tlvs_len, DOT11_MNG_FTIE_ID);
+	if (ie != NULL) {
+		fbt_ies->ftie = (uint8 *) MALLOC(wlc->osh, ie->len + TLV_HDR_LEN);
+		fbtieptr = (dot11_ft_ie_t *)ie;
+		memcpy(fbt_ies->ftie, fbtieptr, fbtieptr->len + TLV_HDR_LEN);
+		fbt_ies->ftie_len = fbtieptr->len + TLV_HDR_LEN;
+
+		/* Parse the optional sub elements and update the scb */
+		len = fbt_ies->ftie_len + TLV_HDR_LEN - sizeof(dot11_ft_ie_t);
+		ptr = (uint8 *)ie + sizeof(dot11_ft_ie_t);
+
+		/* parse optional FTIE elements */
+		while (len > TLV_HDR_LEN) {
+			/* PMKR1 Key Holder */
+			if (ptr[0] == DOT11_FBT_SUBELEM_ID_R1KH_ID) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_R1KH_ID);
+				fbt_ies->r1kh_id = (uint8 *) MALLOC(wlc->osh, ie->len);
+				if (fbt_ies->r1kh_id != NULL) {
+					memcpy(fbt_ies->r1kh_id, ie->data, ie->len);
+					fbt_ies->r1kh_id_len = ie->len;
+				}
+			}
+			/* GTK */
+			else if (ptr[0] == DOT11_FBT_SUBELEM_ID_GTK) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_GTK);
+				fbt_ies->gtk = (uint8 *) MALLOC(wlc->osh, ie->len);
+				if (fbt_ies->gtk != NULL) {
+					memcpy(fbt_ies->gtk, ie->data, ie->len);
+					fbt_ies->gtk_len = ie->len;
+				}
+			}
+			/* PMKR0 Key Holder */
+			else if (ptr[0] == DOT11_FBT_SUBELEM_ID_R0KH_ID) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_R0KH_ID);
+				if (ie != NULL) {
+					fbt_ies->r0kh_id = (uint8 *) MALLOC(wlc->osh, ie->len);
+					if (fbt_ies->r0kh_id != NULL) {
+						memcpy(fbt_ies->r0kh_id, ie->data, ie->len);
+						fbt_ies->r0kh_id_len = ie->len;
+					}
+				}
+			}
+			/* IGTK Holder */
+			else if (ptr[0] == DOT11_FBT_SUBELEM_ID_IGTK) {
+				ie = bcm_parse_tlvs(ptr, len, DOT11_FBT_SUBELEM_ID_IGTK);
+				fbt_ies->igtk = (uint8 *) MALLOC(wlc->osh, ie->len);
+				if (fbt_ies->igtk != NULL) {
+					memcpy(fbt_ies->igtk, ie->data, ie->len);
+					fbt_ies->igtk_len = ie->len;
+				}
+			}
+			len = len - ie->len - TLV_HDR_LEN;
+			ptr += ie->len + TLV_HDR_LEN;
+		}
+	}
+
+	ie = bcm_parse_tlvs(tlvs, tlvs_len, DOT11_MNG_RDE_ID);
+	if (ie != NULL) {
+		found = wlc_fbt_parse_ric((uint8 *)ie, tlvs_len - ((uint8 *)ie - tlvs),
+			&ricend, &ric_elem_count);
+		if (found) {
+			/* ie = (bcm_tlv_t *)bcm_parse_tlvs(tlvs, tlvs_len, DOT11_MNG_RDE_ID); */
+			len = ricend - (uint8 *)ie;
+			fbt_ies->ricie = (uint8 *) MALLOC(wlc->osh, len);
+			memcpy(fbt_ies->ricie, ie, len);
+			fbt_ies->ric_len = len;
+			fbt_ies->ric_elem_count = ric_elem_count;
+		}
+	}
+}
+
+static void
+wlc_fbtap_free_fbties(wlc_info_t *wlc, wlc_fbt_ies_t *fbties)
+{
+	if (fbties->ftie) {
+		MFREE(wlc->osh, fbties->ftie, fbties->ftie_len);
+		fbties->ftie_len = 0;
+	}
+	if (fbties->r0kh_id) {
+		MFREE(wlc->osh, fbties->r0kh_id, fbties->r0kh_id_len);
+		fbties->r0kh_id_len = 0;
+	}
+	if (fbties->r1kh_id) {
+		MFREE(wlc->osh, fbties->r1kh_id, fbties->r1kh_id_len);
+		fbties->r1kh_id_len = 0;
+	}
+	if (fbties->gtk) {
+		MFREE(wlc->osh, fbties->gtk, fbties->gtk_len);
+		fbties->gtk_len = 0;
+	}
+	if (fbties->pmkid) {
+		MFREE(wlc->osh, fbties->pmkid, fbties->pmkid_len);
+		fbties->pmkid_len = 0;
+	}
+	if (fbties->igtk) {
+		MFREE(wlc->osh, fbties->igtk, fbties->igtk_len);
+		fbties->igtk_len = 0;
+	}
+	if (fbties->ricie) {
+		MFREE(wlc->osh, fbties->ricie, fbties->ric_len);
+		fbties->ric_len = 0;
+	}
+	if (fbties->rsnie) {
+		MFREE(wlc->osh, fbties->rsnie, fbties->rsnie_len);
+		fbties->rsnie_len = 0;
+	}
+}
+
+static void
+wlc_fbtap_reassociation_timer(void *arg)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *) arg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	uint cur_time = OSL_SYSUPTIME();
+	uint least_reassoc_timer = 0, i;
+	struct scb *scb;
+	struct scb *next_scb = NULL;
+	struct scb_iter scbiter;
+	wlc_bsscfg_t *bsscfg;
+	wlc_fbt_scb_t *fbt_scb;
+	int reassoc_deadline;
+	bss_fbt_info_t *fbt_bsscfg;
+#ifdef BCMDBG
+	char eabuf[ETHER_ADDR_STR_LEN];
+#endif
+
+	if (!fbt_info)
+		return;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	FOREACH_UP_AP(wlc, i, bsscfg)
+	{
+		fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+
+		if (!fbt_bsscfg || !fbt_bsscfg->fbt_mode)
+			continue;
+		reassoc_deadline = ((fbt_bsscfg->reassoc_time) * DOT11_TU_TO_US)/1000;
+		FOREACH_BSS_SCB(wlc->scbstate, &scbiter, bsscfg, scb)
+		{
+			if (SCB_AUTHENTICATING(scb) || SCB_AUTHENTICATED(scb)) {
+				fbt_scb = FBT_SCB(fbt_info, scb);
+				if (!fbt_scb)
+					continue;
+				if (SCB_ASSOCIATED(scb)) {
+					fbt_scb->auth_time = 0;
+					continue;
+				}
+				if ((fbt_scb->auth_time != 0) &&
+				(cur_time - fbt_scb->auth_time > reassoc_deadline)) {
+					WL_FBT(("wl%d: %s: Reassoc timeout for sta %s\n",
+					wlc->pub->unit, __FUNCTION__,
+					bcm_ether_ntoa(&scb->ea, eabuf)));
+					wlc_scbfree(wlc, scb);
+				}
+				else if (fbt_scb->auth_time != 0) {
+					if (fbt_scb->auth_time < least_reassoc_timer) {
+						least_reassoc_timer = fbt_scb->auth_time;
+						next_scb = scb;
+					}
+					if (least_reassoc_timer == 0) {
+						least_reassoc_timer = fbt_scb->auth_time;
+						next_scb = scb;
+					}
+				}
+			}
+		} /* SCB Iterator */
+		fbt_bsscfg->fbt_timer_set = FALSE;
+		if (least_reassoc_timer) {
+			least_reassoc_timer = cur_time - least_reassoc_timer;
+			wlc_fbtap_add_timer(wlc, next_scb, least_reassoc_timer);
+		}
+		least_reassoc_timer = 0;
+	} /* BSSCFG Iterator */
+}
+
+static int
+wlc_fbtap_validate_auth_fbties(wlc_info_t *wlc, bss_fbt_info_t *fbt_bsscfg,
+	wlc_fbt_ies_t fbties, char *sa)
+{
+	if (ltoh16(fbties.mdie.mdid) != fbt_bsscfg->mdid) {
+		WL_FBT(("wl%d: %s: MDID %d Invalid MDIE %d from sta %s\n", wlc->pub->unit,
+			__FUNCTION__, fbt_bsscfg->mdid, ltoh16(fbties.mdie.mdid), sa));
+		return DOT11_SC_INVALID_MDID;
+	}
+
+	if (fbties.r0kh_id == NULL) {
+		WL_FBT(("wl%d: %s: Invalid FBTIE from sta %s\n", wlc->pub->unit,
+			__FUNCTION__, sa));
+		return DOT11_SC_INVALID_FTIE;
+	}
+
+	if (fbties.pmkid == NULL) {
+		WL_FBT(("wl%d: %s: Invalid RSNIE from sta %s\n", wlc->pub->unit,
+			__FUNCTION__, sa));
+		return DOT11_SC_INVALID_PMKID;
+	}
+
+	return DOT11_SC_SUCCESS;
+}
+
+static uint
+wlc_fbtap_calc_rsn_ie_len(void *ctx, wlc_iem_calc_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->assocresp.scb;
+	wlc_fbt_scb_t *fbt_scb;
+	uint8 buf[257];
+	uint8 *cp = buf;
+	uint ielen = 0;
+
+	if (!BSSCFG_AP(bsscfg))
+		return 0;
+
+	if (!fbt_info)
+		return 0;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg) && scb) {
+		fbt_scb = FBT_SCB(fbt_info, scb);
+
+		if (scb->auth_alg == DOT11_FAST_BSS && fbt_scb) {
+			cp = wlc_fbt_write_rsn_ie_safe(wlc, bsscfg, cp, sizeof(buf));
+			ielen = cp - buf + sizeof(wpa_pmkid_list_t);
+		}
+	}
+
+	return ielen;
+}
+
+static int
+wlc_fbtap_write_rsn_ie(void *ctx, wlc_iem_build_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	uint8 *cp = data->buf;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	struct scb *scb = ftcbparm->assocresp.scb;
+	wlc_fbt_scb_t *fbt_scb;
+	wpa_pmkid_list_t *wpa_pmkid;
+	bcm_tlv_t *wpa2ie;
+	int count = 0;
+
+	if (!BSSCFG_AP(bsscfg))
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg) && scb) {
+		fbt_scb = FBT_SCB(fbt_info, scb);
+		wpa2ie = (bcm_tlv_t *)cp;
+
+		if (scb->auth_alg == DOT11_FAST_BSS && fbt_scb) {
+			cp = wlc_fbt_write_rsn_ie_safe(wlc, bsscfg, cp, data->buf_len);
+			wpa_pmkid = (wpa_pmkid_list_t *)cp;
+			count = 1;
+			wpa_pmkid->count.low = (uint8)count;
+			wpa_pmkid->count.high = (uint8)(count>>8);
+			bcopy(fbt_scb->pmk_r1_name, &wpa_pmkid->list[0], WPA2_PMKID_LEN);
+			cp += sizeof(wpa_pmkid_list_t);
+			wpa2ie->len = cp - data->buf - TLV_HDR_LEN;
+
+			/* save wpa2 ie for MIC calc */
+			ftcbparm->assocresp.wpa2_ie = data->buf;
+		}
+	}
+
+	return BCME_OK;
+}
+
+static uint
+wlc_fbtap_calc_md_ie_len(void *ctx, wlc_iem_calc_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	uint ielen = 0;
+
+	if (!BSSCFG_AP(bsscfg))
+		return 0;
+
+	if (!fbt_info)
+		return 0;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		/* bcn/prbresp/assocresp/reassocresp */
+		ielen = sizeof(dot11_mdid_ie_t);
+	}
+
+	return ielen;
+}
+
+static int
+wlc_fbtap_write_md_ie(void *ctx, wlc_iem_build_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	dot11_mdid_ie_t *mdie = (dot11_mdid_ie_t *)data->buf;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	bss_fbt_info_t *fbt_cfg;
+
+	if (!BSSCFG_AP(bsscfg))
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		fbt_cfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+		memset(mdie, 0, sizeof(dot11_mdid_ie_t));
+		/* bcn/prbresp/assocresp/reassocresp */
+		mdie->id = DOT11_MNG_MDIE_ID;
+		mdie->len = sizeof(mdie->mdid) + sizeof(mdie->cap);
+		mdie->mdid = htol16(fbt_cfg->mdid);
+		//if (bsscfg->flags & WLC_BSSCFG_ALLOW_FTOVERDS)
+		if (fbt_cfg->fbt_over_ds) //MIST changes
+			mdie->cap |= FBT_MDID_CAP_OVERDS;
+		if (fbt_cfg->fbt_res_req_cap)
+			mdie->cap |= FBT_MDID_CAP_RRP;
+		/* assocresp/reassocresp */
+		if (data->ft == FC_REASSOC_RESP || data->ft == FC_ASSOC_RESP) {
+			/* save md ie for MIC calc */
+			ftcbparm->assocresp.md_ie = data->ie;
+		}
+	}
+
+	return BCME_OK;
+}
+
+static uint
+wlc_fbtap_auth_calc_rsn_ie_len(void *ctx, wlc_iem_calc_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->auth.scb;
+	uint ielen = 0;
+	wlc_fbt_scb_t *fbt_scb;
+	bcm_tlv_t *ie;
+
+	if (!BSSCFG_AP(bsscfg))
+		return 0;
+
+	if (!fbt_info)
+		return 0;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(ftcbparm->auth.alg == DOT11_FAST_BSS) &&
+			(ftcbparm->auth.seq == 2)) {
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			if (fbt_scb && fbt_scb->auth_resp_ies) {
+				ie = bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+					fbt_scb->auth_resp_ielen, DOT11_MNG_RSN_ID);
+				if (ie) {
+					ielen = ie->len + TLV_HDR_LEN;
+				}
+			}
+		}
+	}
+
+	return ielen;
+}
+
+static int
+wlc_fbtap_auth_write_rsn_ie(void *ctx, wlc_iem_build_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->auth.scb;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_fbt_scb_t *fbt_scb;
+	bcm_tlv_t *ie;
+
+	if (!BSSCFG_AP(bsscfg))
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(ftcbparm->auth.alg == DOT11_FAST_BSS) &&
+			(ftcbparm->auth.seq == 2)) {
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			if (fbt_scb && fbt_scb->auth_resp_ies) {
+				ie = bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+					fbt_scb->auth_resp_ielen, DOT11_MNG_RSN_ID);
+				if (ie) {
+					memcpy(data->buf, ie, (ie->len + TLV_HDR_LEN));
+				}
+			}
+		}
+	}
+
+	return BCME_OK;
+}
+
+static uint
+wlc_fbtap_auth_calc_md_ie_len(void *ctx, wlc_iem_calc_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->auth.scb;
+	uint ielen = 0;
+	wlc_fbt_scb_t *fbt_scb;
+	bcm_tlv_t *ie;
+
+	if (!BSSCFG_AP(bsscfg))
+		return 0;
+
+	if (!fbt_info)
+		return 0;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(ftcbparm->auth.alg == DOT11_FAST_BSS) &&
+			(ftcbparm->auth.seq == 2)) {
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			if (fbt_scb && fbt_scb->auth_resp_ies) {
+				ie = bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+					fbt_scb->auth_resp_ielen, DOT11_MNG_MDIE_ID);
+				if (ie) {
+					ielen = ie->len + TLV_HDR_LEN;
+				}
+			}
+		}
+	}
+
+	return ielen;
+}
+
+static int
+wlc_fbtap_auth_write_md_ie(void *ctx, wlc_iem_build_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->auth.scb;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_fbt_scb_t *fbt_scb;
+	bcm_tlv_t *ie;
+
+	if (!BSSCFG_AP(bsscfg))
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(ftcbparm->auth.alg == DOT11_FAST_BSS) &&
+			(ftcbparm->auth.seq == 2)) {
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			if (fbt_scb && fbt_scb->auth_resp_ies) {
+				ie = bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+					fbt_scb->auth_resp_ielen, DOT11_MNG_MDIE_ID);
+				if (ie) {
+					memcpy(data->buf, ie, (ie->len + TLV_HDR_LEN));
+				}
+			}
+		}
+	}
+
+	return BCME_OK;
+}
+
+static uint
+wlc_fbtap_auth_calc_ft_ie_len(void *ctx, wlc_iem_calc_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->auth.scb;
+	uint ielen = 0;
+	wlc_fbt_scb_t *fbt_scb;
+	bcm_tlv_t *ie;
+
+	if (!BSSCFG_AP(bsscfg))
+		return 0;
+
+	if (!fbt_info)
+		return 0;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(ftcbparm->auth.alg == DOT11_FAST_BSS) &&
+			(ftcbparm->auth.seq == 2)) {
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			if (fbt_scb && fbt_scb->auth_resp_ies) {
+				ie = bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+					fbt_scb->auth_resp_ielen, DOT11_MNG_FTIE_ID);
+				if (ie) {
+					ielen = ie->len + TLV_HDR_LEN;
+				}
+			}
+		}
+	}
+
+	return ielen;
+}
+
+static int
+wlc_fbtap_auth_write_ft_ie(void *ctx, wlc_iem_build_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->auth.scb;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_fbt_scb_t *fbt_scb;
+	bcm_tlv_t *ie;
+
+	if (!BSSCFG_AP(bsscfg))
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(ftcbparm->auth.alg == DOT11_FAST_BSS) &&
+			(ftcbparm->auth.seq == 2)) {
+			fbt_scb = FBT_SCB(fbt_info, scb);
+			if (fbt_scb && fbt_scb->auth_resp_ies) {
+				ie = bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+					fbt_scb->auth_resp_ielen, DOT11_MNG_FTIE_ID);
+				if (ie) {
+					memcpy(data->buf, ie, (ie->len + TLV_HDR_LEN));
+				}
+			}
+		}
+	}
+
+	return BCME_OK;
+}
+
+static uint
+wlc_fbtap_calc_ft_ie_len(void *ctx, wlc_iem_calc_data_t *data)
+{
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	bss_fbt_info_t *fbt_bsscfg;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->assocresp.scb;
+	bool reassoc = (data->ft == FC_REASSOC_RESP);
+	uint ielen = 0;
+	uint padding, key_len;
+	wlc_fbt_scb_t *fbt_scb;
+	uint8 key_data[EAPOL_WPA_MAX_KEY_SIZE];
+
+	if (!BSSCFG_AP(bsscfg))
+		return 0;
+
+	if (!fbt_info)
+		return 0;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (!WLFBT_ENAB(wlc->pub) || !wlc_fbt_enabled(fbt_info, bsscfg) ||
+		scb == NULL) {
+		return 0;
+	}
+
+	fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+
+	ASSERT(fbt_bsscfg != NULL);
+
+	fbt_scb = FBT_SCB(fbt_info, scb);
+
+	ASSERT(fbt_scb != NULL);
+
+	if (scb->auth_alg == DOT11_OPEN_SYSTEM) {
+		ielen += sizeof(dot11_ft_ie_t);
+		/* sub element R1KH_ID */
+		ielen += ETHER_ADDR_LEN + TLV_HDR_LEN;
+		/* sub element R0KH_ID */
+		ielen += fbt_bsscfg->fbt_r0kh_id_len + TLV_HDR_LEN;
+		return ielen;
+	}
+
+	if (scb->auth_alg == DOT11_FAST_BSS && !reassoc) {
+		return 0;
+	}
+
+	ielen += sizeof(dot11_ft_ie_t);
+
+	/* copy sub element R1KH_ID */
+	ielen += ETHER_ADDR_LEN + TLV_HDR_LEN;
+
+	/* copy sub element GTK. 11A.8.5 802.11r
+	The Key field shall be padded before encrypting if the key length is less
+	than 16 octets or if it is not a multiple of 8.
+	*/
+
+	padding = fbt_scb->gtk.key_len % 8;
+	if (padding)
+		padding = 8 - padding;
+	if (fbt_scb->gtk.key_len + padding < 16)
+		padding += 8;
+
+	memset(key_data, 0, sizeof(key_data));
+	bcopy(fbt_scb->gtk.key, key_data, fbt_scb->gtk.key_len);
+	key_len = fbt_scb->gtk.key_len;
+
+	if (padding) {
+		key_data[fbt_scb->gtk.key_len] = 0xdd;
+		key_len += padding;
+	}
+
+	/* aes wrap increases key size by 8 bytes. */
+	ielen += sizeof(uint16) /* key_info */ + 8 /* rsc */ +
+		sizeof(uint8) + key_len + 8;
+	ielen += TLV_HDR_LEN;
+
+	/* copy sub element R0KH_ID */
+	ielen += fbt_bsscfg->fbt_r0kh_id_len + TLV_HDR_LEN;
+
+	if (scb->auth_alg == DOT11_FAST_BSS) {
+		if (fbt_scb->fbties_assoc.ricie && fbt_scb->fbties_assoc.ric_len) {
+			ielen += fbt_scb->fbties_assoc.ric_len;
+		}
+	}
+
+	return ielen;
+}
+
+static int
+wlc_fbtap_write_ft_ie(void *ctx, wlc_iem_build_data_t *data)
+{
+	bss_fbt_priv_t *fbt_bss_priv;
+	wlc_fbt_info_t *fbt_info = (wlc_fbt_info_t *)ctx;
+	wlc_bsscfg_t *bsscfg = data->cfg;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	bss_fbt_info_t *fbt_bsscfg;
+	wlc_iem_ft_cbparm_t *ftcbparm = data->cbparm->ft;
+	struct scb *scb = ftcbparm->assocresp.scb;
+	bool reassoc = (data->ft == FC_REASSOC_RESP);
+	dot11_ft_ie_t *fbtie = (dot11_ft_ie_t *)data->buf;
+	uint8 *cp = data->buf;
+	dot11_ft_ie_t *fbtie_scb = NULL;
+	uint8 *ptr;
+	bcm_tlv_t *tlv;
+	uint padding, key_len;
+	wlc_fbt_scb_t *fbt_scb;
+	uint8 key_data[EAPOL_WPA_MAX_KEY_SIZE];
+	uint8 encrypted_key_data[EAPOL_WPA_KEY_DATA_LEN];
+	dot11_gtk_ie_t *gtk_ie;
+	uint8 *ricdata = NULL;
+	uint ric_ie_count = 0, ricdata_len = 0;
+#ifdef BCMDBG
+	char eabuf[ETHER_ADDR_STR_LEN];
+#endif /* BCMDBG */
+	union {
+		int index;
+		uint8 rsc[EAPOL_WPA_KEY_RSC_LEN];
+	} u;
+
+	if (!BSSCFG_AP(bsscfg))
+		return BCME_OK;
+
+	if (!fbt_info)
+		return BCME_OK;
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+	wlc = fbt_priv->wlc;
+
+	if (!WLFBT_ENAB(wlc->pub) || !wlc_fbt_enabled(fbt_info, bsscfg) ||
+		scb == NULL) {
+		return BCME_OK;
+	}
+
+	fbt_bsscfg = FBT_BSSCFG_CUBBY(fbt_info, bsscfg);
+
+	ASSERT(fbt_bsscfg != NULL);
+
+	fbt_scb = FBT_SCB(fbt_info, scb);
+
+	ASSERT(fbt_scb != NULL);
+
+	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, bsscfg);
+
+	memset(fbtie, 0, sizeof(dot11_ft_ie_t));
+	fbtie->id = DOT11_MNG_FTIE_ID;
+	if (scb->auth_alg == DOT11_OPEN_SYSTEM) {
+		ptr = cp + sizeof(dot11_ft_ie_t);
+		tlv = (bcm_tlv_t *)ptr;
+
+		/* copy sub element R1KH_ID */
+		tlv->id = DOT11_FBT_SUBELEM_ID_R1KH_ID;
+		tlv->len = ETHER_ADDR_LEN;
+		bcopy(fbt_bsscfg->fbt_r1kh_id, tlv->data, ETHER_ADDR_LEN);
+		ptr += tlv->len + TLV_HDR_LEN;
+		tlv = (bcm_tlv_t *)ptr;
+
+		/* copy sub element R0KH_ID */
+		tlv->id = DOT11_FBT_SUBELEM_ID_R0KH_ID;
+		tlv->len = fbt_bsscfg->fbt_r0kh_id_len;
+		bcopy(fbt_bsscfg->fbt_r0kh_id, tlv->data, fbt_bsscfg->fbt_r0kh_id_len);
+		ptr += tlv->len + TLV_HDR_LEN;
+
+		fbtie->len = ptr - cp - TLV_HDR_LEN;
+		cp += fbtie->len + TLV_HDR_LEN;
+		return BCME_OK;
+	}
+
+	if (scb->auth_alg == DOT11_FAST_BSS && !reassoc) {
+		return BCME_OK;
+	}
+
+	if (fbt_scb->auth_resp_ies) {
+		fbtie_scb = (dot11_ft_ie_t *)bcm_parse_tlvs(fbt_scb->auth_resp_ies,
+			fbt_scb->auth_resp_ielen, DOT11_MNG_FTIE_ID);
+	}
+
+	if (fbtie_scb) {
+		bcopy(fbtie_scb->anonce, fbtie->anonce, EAPOL_WPA_KEY_NONCE_LEN);
+		bcopy(fbtie_scb->snonce, fbtie->snonce, EAPOL_WPA_KEY_NONCE_LEN);
+	}
+
+	ptr = cp + sizeof(dot11_ft_ie_t);
+	tlv = (bcm_tlv_t *)ptr;
+
+	/* copy sub element R1KH_ID */
+	tlv->id = DOT11_FBT_SUBELEM_ID_R1KH_ID;
+	tlv->len = ETHER_ADDR_LEN;
+	bcopy(fbt_bsscfg->fbt_r1kh_id, tlv->data, ETHER_ADDR_LEN);
+	ptr += tlv->len + TLV_HDR_LEN;
+
+	/* copy sub element GTK. 11A.8.5 802.11r
+	The Key field shall be padded before encrypting if the key length is less
+	than 16 octets or if it is not a multiple of 8.
+	*/
+
+	padding = fbt_scb->gtk.key_len % 8;
+	if (padding)
+		padding = 8 - padding;
+	if (fbt_scb->gtk.key_len + padding < 16)
+		padding += 8;
+
+	memset(key_data, 0, sizeof(key_data));
+	bcopy(fbt_scb->gtk.key, key_data, fbt_scb->gtk.key_len);
+	key_len = fbt_scb->gtk.key_len;
+
+	if (padding) {
+		key_data[fbt_scb->gtk.key_len] = 0xdd;
+		key_len += padding;
+	}
+
+	if (aes_wrap(sizeof(fbt_scb->ptk.kek), fbt_scb->ptk.kek,
+		key_len, key_data, encrypted_key_data)) {
+		WL_FBT(("wl%d: %s: GTK Key encrypt failed for %s\n",
+			wlc->pub->unit, __FUNCTION__,
+			bcm_ether_ntoa(&fbt_scb->macaddr, eabuf)));
+		return BCME_OK;
+	}
+	gtk_ie = (dot11_gtk_ie_t *) ptr;
+
+	gtk_ie->id = DOT11_FBT_SUBELEM_ID_GTK;
+	/* aes wrap increases key size by 8 bytes. */
+	gtk_ie->len = sizeof(gtk_ie->key_info) + sizeof(gtk_ie->rsc) +
+		sizeof(gtk_ie->key_len) + key_len + 8;
+	htol16_ua_store(fbt_scb->gtk.idx & WPA2_GTK_INDEX_MASK, &(gtk_ie->key_info));
+	gtk_ie->key_len = fbt_scb->gtk.key_len;
+
+	u.index = fbt_scb->gtk.idx;
+	if (wlc_ioctl(wlc, WLC_GET_KEY_SEQ, &u, sizeof(gtk_ie->rsc), bsscfg->wlcif) != 0) {
+		WL_FBT(("wl%d: %s: Failed to get Key Sequence. Setting to 0 \n",
+			wlc->pub->unit, __FUNCTION__));
+		memset(gtk_ie->rsc, 0, sizeof(gtk_ie->rsc));
+	}
+	bcopy(u.rsc, gtk_ie->rsc, EAPOL_WPA_KEY_RSC_LEN);
+	bcopy(encrypted_key_data, gtk_ie->data, key_len + 8);
+	ptr += gtk_ie->len + TLV_HDR_LEN;
+	tlv = (bcm_tlv_t *)ptr;
+
+	/* copy sub element R0KH_ID */
+	tlv->id = DOT11_FBT_SUBELEM_ID_R0KH_ID;
+	tlv->len = fbt_bsscfg->fbt_r0kh_id_len;
+	bcopy(fbt_bsscfg->fbt_r0kh_id, tlv->data, fbt_bsscfg->fbt_r0kh_id_len);
+	ptr += tlv->len + TLV_HDR_LEN;
+
+	fbtie->len = ptr - cp - TLV_HDR_LEN;
+	cp += fbtie->len + TLV_HDR_LEN;
+
+	/* handle RDE IE */
+	if (scb->auth_alg == DOT11_FAST_BSS) {
+		if (fbt_scb->fbties_assoc.ricie && fbt_scb->fbties_assoc.ric_len) {
+			ricdata = cp;
+			cp = wlc_fbtap_write_ric_ie(wlc, bsscfg, &fbt_scb->fbties_assoc, scb, cp,
+				&ricdata_len, &ric_ie_count);
+			if (cp == ricdata || ricdata_len == 0) {
+				ricdata = NULL;
+			}
+		}
+
+		if ((ftcbparm->assocresp.md_ie != NULL) &&
+			(ftcbparm->assocresp.wpa2_ie != NULL)) {
+			wlc_fbt_ft_calc_mic(fbt_bss_priv, bsscfg, scb, (dot11_ft_ie_t *)fbtie,
+				(bcm_tlv_t *)ftcbparm->assocresp.md_ie,
+				(bcm_tlv_t *)ftcbparm->assocresp.wpa2_ie,
+				ricdata, ricdata_len, ric_ie_count, FT_MIC_REASSOC_RESPONSE_TSN);
+		}
+	}
+
+	return BCME_OK;
+}
+
+static uint8 *
+wlc_fbtap_write_ric_ie(wlc_info_t *wlc, wlc_bsscfg_t *bsscfg,
+	wlc_fbt_ies_t *fbties_assoc, struct scb *scb, uint8 *cp,
+	uint *ricdata_len, uint *ric_ie_count)
+{
+	uint8 *ricptr, *start;
+	uint8 *end = NULL;
+	uint _ric_ie_count = 0, count = 0;
+	bool found = FALSE;
+	uint status = DOT11_SC_FAILURE;
+	wlc_iem_ft_cbparm_t ftcbparm;
+	wlc_iem_cbparm_t cbparm;
+	int cp_len = 0;
+
+	/* prepare IE mgmt calls */
+	bzero(&ftcbparm, sizeof(ftcbparm));
+	ftcbparm.fbtric.ts_count = 0;
+	ftcbparm.fbtric.rde_count = 0;
+	bzero(&cbparm, sizeof(cbparm));
+	cbparm.ft = &ftcbparm;
+
+	start = cp;
+	ricptr = fbties_assoc->ricie;
+	end = ricptr + fbties_assoc->ric_len;
+	while (ricptr < end) {
+		bcm_tlv_t *ie = (bcm_tlv_t*)ricptr;
+		int ie_len = TLV_HDR_LEN + ie->len;
+		ricptr += ie_len;
+		if (ie->id == DOT11_MNG_RDE_ID) {
+			int i;
+			dot11_rde_ie_t *rde = (dot11_rde_ie_t*)ie;
+
+			/* Include RDE in MIC calculations. */
+			_ric_ie_count += 1;
+			count = rde->rd_count;
+
+			for (i = 0; i < count; i++) {
+				bcm_tlv_t *ie = (bcm_tlv_t*)ricptr;
+				if (!found) {
+					/* if tspec is accepted 1 resource descriptor is sent
+						Refer 802.11r 11A.11.3.2 for state machine
+					*/
+					status = wlc_cac_ap_write_ricdata(wlc, bsscfg, scb,
+						(uint8 *)ie, ie->len + TLV_HDR_LEN, &ftcbparm);
+					if (!status) {
+						ftcbparm.fbtric.rde_id = rde->rde_id;
+						/* length of a single Resource request in RIC */
+						cp_len = wlc_ier_calc_len(wlc->ier_ric, bsscfg,
+							0, NULL);
+						if (wlc_ier_build_frame(wlc->ier_ric, bsscfg,
+							WLC_IEM_FC_UNK, &cbparm, cp, cp_len)
+							!= BCME_OK) {
+							WL_ERROR(("wl%d: %s: wlc_ier_build_frame "
+							"failed\n", wlc->pub->unit, __FUNCTION__));
+							status = DOT11_SC_FAILURE;
+							return cp;
+						}
+						/* Point to the next Resource request in RIC */
+						cp += cp_len;
+						found = TRUE;
+
+						/* Include protected elements too. */
+						_ric_ie_count += 1;
+					}
+				}
+				ricptr += TLV_HDR_LEN + ie->len;
+			}
+
+			found = FALSE;
+			status = DOT11_SC_FAILURE;
+		}
+	}
+	*ric_ie_count = _ric_ie_count;
+	*ricdata_len = cp - start;
+	return cp;
+}
+
+static int
+wlc_fbtap_process_action_resp(wlc_info_t *wlc, wlc_fbt_info_t *fbt_info,
+	wlc_bsscfg_t *bsscfg, wlc_fbt_action_resp_t *fbt_action_resp)
+{
+	int plen;
+	void *p;
+	struct ether_addr ea;
+	uint8 *pbody;
+	wlc_txq_info_t *qi;
+	struct scb *scb;
+	int err = BCME_OK;
+#ifdef BCMDBG
+	char eabuf[ETHER_ADDR_STR_LEN];
+#endif /* BCMDBG */
+
+	bcopy(fbt_action_resp->macaddr, ea.octet, ETHER_ADDR_LEN);
+	scb = wlc_scbfind(wlc, bsscfg, &ea);
+	if (scb == NULL) {
+		WL_FBT(("wl%d: %s: scb not found to send FBT Action resp %s\n",
+			wlc->pub->unit, __FUNCTION__,
+			bcm_ether_ntoa((struct ether_addr *)&fbt_action_resp->macaddr, eabuf)));
+		err = BCME_BADARG;
+		return err;
+	}
+	/* Allocate FBT Action Response Frame */
+	plen = fbt_action_resp->data_len;
+
+	p = wlc_frame_get_mgmt(wlc, FC_ACTION, &ea, &bsscfg->cur_etheraddr,
+		&bsscfg->BSSID, plen, (uint8 **) &pbody);
+	if (p == NULL) {
+		WL_ERROR(("wl%d: %s: out of mem, malloced %d bytes\n", wlc->pub->unit,
+			__FUNCTION__, MALLOCED(wlc->osh)));
+		err = BCME_NOMEM;
+		return err;
+	}
+	memcpy(pbody, &fbt_action_resp->data[0], fbt_action_resp->data_len);
+
+#if defined(BCMDBG)
+	if (WL_FBT_ON()) {
+		prhex("fbt_resp", pbody, plen);
+	}
+#endif /* defined(BCMDBG) */
+		/*
+		  Send using the bsscfg queue the FBT resp will go out on the current
+		  channel
+		 */
+	qi = bsscfg->wlcif->qi;
+
+	if (!wlc_queue_80211_frag(wlc, p, qi, scb, (scb ? scb->bsscfg : NULL),
+		FALSE, NULL, 0)) {
+	WL_ERROR(("wl%d: %s: wlc_queue_80211_frag failed\n", wlc->pub->unit, __FUNCTION__));
+		return BCME_ERROR;
+	}
+
+	return err;
+}
+
+void
+wlc_fbt_recv_overds_req(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *bsscfg,
+	struct dot11_management_header *hdr, void *body, uint body_len)
+{
+	wlc_info_t *wlc = bsscfg->wlc;
+#ifdef BCMDBG
+	char eabuf[ETHER_ADDR_STR_LEN], *sa = bcm_ether_ntoa(&hdr->sa, eabuf);
+#endif
+	dot11_ft_req_t *fbt_req = (dot11_ft_req_t *)body;
+	struct scb *scb;
+	struct ether_addr sta_mac;
+	wl_event_fbt_t *pevent;
+	uint16 event_len = sizeof(*pevent) + body_len;
+
+	WL_FBT(("wl%d: %s\n", wlc->pub->unit, __FUNCTION__));
+
+	/* Is this request for an AP config or a STA config? */
+	if (!BSSCFG_AP(bsscfg)) {
+		WL_FBT(("wl%d: %s: FC_ACTION FBT Response: unknown bsscfg _ap %d\n",
+		WLCWLUNIT(wlc), __FUNCTION__, bsscfg->_ap));
+		return; /* We couldn't match the incoming frame to a BSS config */
+	}
+
+	if (!wlc_fbt_fbtoverds_flag(wlc, bsscfg)) {
+		WL_FBT(("wl%d: %s FBT Action Req from sta %s FBT over ds not enabled \n",
+			wlc->pub->unit, __FUNCTION__, sa));
+		return;
+	}
+
+	memcpy(sta_mac.octet, fbt_req->sta_addr, ETHER_ADDR_LEN);
+	scb = wlc_scbfind(wlc, bsscfg, &sta_mac);
+
+	if (scb == NULL) {
+		WL_FBT(("wl%d: %s FBT Action Req from unknown sta %s \n",
+			wlc->pub->unit, __FUNCTION__, sa));
+		return;
+	}
+
+	if (!(pevent = (wl_event_fbt_t *) MALLOCZ(wlc->osh, event_len))) {
+		WL_FBT(("wl%d: %s: out of mem, malloced %d bytes\n",
+				wlc->pub->unit, __FUNCTION__, MALLOCED(wlc->osh)));
+		return;
+	}
+
+	pevent->version = WL_EVENT_FBT_VER_1;
+	pevent->length = event_len;
+	pevent->type = WL_E_FBT_TYPE_FBT_OTD_AUTH;
+	pevent->data_offset = sizeof(*pevent);
+
+	if (body_len > 0 && body != NULL) {
+		memcpy(pevent->data, body, body_len);
+	}
+
+	/* Notify application, send all IEs to application */
+	wlc_bss_mac_event(wlc, bsscfg, WLC_E_FBT, &scb->ea,
+		WLC_E_STATUS_SUCCESS, 0, 0,
+		(void *)pevent, event_len);
+
+	MFREE(wlc->osh, pevent, event_len);
+}
+
+static uint8 *
+wlc_fbt_write_rsn_ie_safe(wlc_info_t *wlc, wlc_bsscfg_t *cfg, uint8 *buf, int buflen)
+{
+	/* Infrastructure WPA info element */
+	uint WPA_len = 0;	/* tag length */
+	bcm_tlv_t *wpa2ie = (bcm_tlv_t *)buf;
+	wpa_suite_mcast_t *mcast;
+	wpa_suite_ucast_t *ucast;
+	wpa_suite_auth_key_mgmt_t *auth;
+	uint16 count;
+	uint8 *cap;
+	uint8 *orig_buf = buf;
+	int totlen;
+	uint16 WPA_auth = cfg->WPA_auth;
+	uint wsec = cfg->wsec;
+	int wpacap = 0;
+
+	if (!bcmwpa_includes_wpa2_auth(WPA_auth) || ! WSEC_ENABLED(wsec))
+		return buf;
+
+	WL_WSEC(("wl%d: %s: adding RSN IE, wsec = 0x%x\n", wlc->pub->unit, __FUNCTION__, wsec));
+
+	/* perform length check */
+	/* if buffer too small, return untouched buffer */
+	totlen = (int)(&wpa2ie->data[WPA2_VERSION_LEN] - &wpa2ie->id) +
+		WPA_SUITE_LEN + WPA_IE_SUITE_COUNT_LEN;
+	BUFLEN_CHECK_AND_RETURN(totlen, buflen, orig_buf);
+	buflen -= totlen;
+
+	/* fixed portion */
+	wpa2ie->id = DOT11_MNG_RSN_ID;
+	wpa2ie->data[0] = (uint8)WPA2_VERSION;
+	wpa2ie->data[1] = (uint8)(WPA2_VERSION>>8);
+	WPA_len = WPA2_VERSION_LEN;
+
+	/* multicast suite */
+	mcast = (wpa_suite_mcast_t *)&wpa2ie->data[WPA2_VERSION_LEN];
+
+	bcopy(WPA2_OUI, mcast->oui, DOT11_OUI_LEN);
+	mcast->type = wlc_wpa_mcast_cipher(wlc, cfg);
+
+	WPA_len += WPA_SUITE_LEN;
+
+	/* unicast suite list */
+	ucast = (wpa_suite_ucast_t *)&mcast[1];
+	count = 0;
+
+	WPA_len += WPA_IE_SUITE_COUNT_LEN;
+
+	if (WSEC_AES_ENABLED(wsec)) {
+		/* length check */
+		/* if buffer too small, return untouched buffer */
+		BUFLEN_CHECK_AND_RETURN(WPA_SUITE_LEN, buflen, orig_buf);
+
+		bcopy(WPA2_OUI, ucast->list[count].oui, DOT11_OUI_LEN);
+		ucast->list[count++].type = WPA_CIPHER_AES_CCM;
+		WPA_len += WPA_SUITE_LEN;
+		buflen -= WPA_SUITE_LEN;
+	}
+	if (WSEC_TKIP_ENABLED(wsec)) {
+		/* length check */
+		/* if buffer too small, return untouched buffer */
+		BUFLEN_CHECK_AND_RETURN(WPA_SUITE_LEN, buflen, orig_buf);
+
+		bcopy(WPA2_OUI, ucast->list[count].oui, DOT11_OUI_LEN);
+		ucast->list[count++].type = WPA_CIPHER_TKIP;
+		WPA_len += WPA_SUITE_LEN;
+		buflen -= WPA_SUITE_LEN;
+	}
+	ASSERT(count);
+	ucast->count.low = (uint8)count;
+	ucast->count.high = (uint8)(count>>8);
+
+	/* authenticated key management suite list */
+	auth = (wpa_suite_auth_key_mgmt_t *)&ucast->list[count];
+	count = 0;
+
+	/* length check */
+	/* if buffer too small, return untouched buffer */
+	BUFLEN_CHECK_AND_RETURN(WPA_IE_SUITE_COUNT_LEN, buflen, orig_buf);
+
+	WPA_len += WPA_IE_SUITE_COUNT_LEN;
+	buflen -= WPA_IE_SUITE_COUNT_LEN;
+
+	if (WPA_auth & WPA2_AUTH_UNSPECIFIED) {
+		if (BSSCFG_IS_FBT_1X(cfg)) {
+			/* length check */
+			/* if buffer too small, return untouched buffer */
+			BUFLEN_CHECK_AND_RETURN(WPA_SUITE_LEN, buflen, orig_buf);
+			bcopy(WPA2_OUI, auth->list[count].oui, DOT11_OUI_LEN);
+			auth->list[count++].type = RSN_AKM_FBT_1X;
+			WPA_len += WPA_SUITE_LEN;
+			buflen -= WPA_SUITE_LEN;
+		}
+	}
+	if (WPA_auth & WPA2_AUTH_PSK) {
+		if (BSSCFG_IS_FBT_PSK(cfg)) {
+			/* length check */
+			/* if buffer too small, return untouched buffer */
+			BUFLEN_CHECK_AND_RETURN(WPA_SUITE_LEN, buflen, orig_buf);
+			bcopy(WPA2_OUI, auth->list[count].oui, DOT11_OUI_LEN);
+			auth->list[count++].type = RSN_AKM_FBT_PSK;
+			WPA_len += WPA_SUITE_LEN;
+			buflen -= WPA_SUITE_LEN;
+		}
+	}
+
+	ASSERT(count);
+	auth->count.low = (uint8)count;
+	auth->count.high = (uint8)(count>>8);
+
+	/* WPA capabilities */
+	cap = (uint8 *)&auth->list[count];
+	/* length check */
+	/* if buffer too small, return untouched buffer */
+	BUFLEN_CHECK_AND_RETURN(WPA_CAP_LEN, buflen, orig_buf);
+	wlc_iovar_op(wlc, "wpa_cap", NULL, 0, &wpacap, sizeof(wpacap), IOV_GET, cfg->wlcif);
+	wpacap = hton32(wpacap);
+	memcpy(cap, &wpacap, WPA_CAP_LEN);
+
+	WPA_len += WPA_CAP_LEN;
+	buflen -= WPA_CAP_LEN;
+
+	/* update tag length */
+	wpa2ie->len = (uint8)WPA_len;
+
+	if (WPA_len)
+		buf += TLV_HDR_LEN + WPA_len;
+
+	return (buf);
+}
+
+static void wlc_fbtap_scb_state_upd(wlc_fbt_info_t *fbt_info,
+        scb_state_upd_data_t *data)
+{
+	wlc_bsscfg_t *bsscfg;
+	scb_t *scb;
+	wlc_fbt_priv_t *fbt_priv;
+	wlc_info_t *wlc;
+	wlc_fbt_scb_t *fbt_scb = NULL;
+
+	scb = data->scb;
+
+	ASSERT(scb != NULL);
+
+	bsscfg = SCB_BSSCFG(scb);
+
+	if (!BSSCFG_AP(bsscfg))
+		return;
+
+	fbt_priv = WLC_FBT_PRIV_INFO(fbt_info);
+
+	wlc = fbt_priv->wlc;
+
+	fbt_scb = FBT_SCB(wlc->fbt, scb);
+
+	if (fbt_scb == NULL)
+		return;
+	if (WLFBT_ENAB(wlc->pub) && wlc_fbt_enabled(fbt_info, bsscfg)) {
+		if ((scb != NULL) &&
+			(scb->auth_alg == DOT11_FAST_BSS && fbt_scb) &&
+			(SCB_ASSOCIATED(scb))) {
+			wlc_ioctl(wlc, WLC_SCB_AUTHORIZE, &(fbt_scb->macaddr),
+					ETHER_ADDR_LEN, bsscfg->wlcif);
+		}
+	}
+
+	return;
+}
+#endif /* AP */
+
+#if defined(STA) && defined(FBT_STA)
+/* This function is to update FTIE in M2 appropriately if AP initiates 4-way handshake
+ * after PTK timeout following a fast transition.
+ */
+static bool
+wlc_fbt_update_ftie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
+{
+	bss_fbt_priv_t *fbt_bss_priv;
+	bss_fbt_info_t *fbt_bss = FBT_BSSCFG_CUBBY(fbt_info, cfg);
+#if defined(FT_REKEY_FTIE_REORDER_WAR)
+	uint8 *r0khid, *r1khid;
+	uint16 r0khid_len, r1khid_len;
+#endif /* FT_REKEY_FTIE_REORDER_WAR */
+	uint8 *pbody;
+
+	if (!fbt_bss)
+		return FALSE;
+	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
+	pbody = fbt_bss_priv->ftie;
+
+	/* If M1 comes after fast transition, MIC, Snonce and Anonce in FTIE are non-zero.
+	 * So clear out the fields.
+	 */
+	pbody += TLV_HDR_LEN;
+	memset(pbody, 0, sizeof(dot11_ft_ie_t) - TLV_HDR_LEN);
+
+#if defined(FT_REKEY_FTIE_REORDER_WAR)
+	/* WAR: 802.11r spec does not specify the order in which R0KH-ID and R1KH-ID should be
+	 * present in FT IE. However some APs expect the order to be R0KH-ID followed by R1KH-ID
+	 * and report invalid FTIE in M2 error otherwise. Forcing the order as R0KHID before R1KHID.
+	 * The WAR can be removed when the issue is fixed on the AP side.
+	 */
+	if (fbt_bss_priv->r0khid == NULL || fbt_bss_priv->r1khid == NULL)
+		return FALSE;
+
+	r0khid_len = fbt_bss_priv->r0khid->len + TLV_HDR_LEN;
+	r0khid = MALLOC(fbt_bss_priv->osh, r0khid_len);
+	if (!r0khid) {
+		WL_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
+		   UNIT(fbt_bss_priv), __FUNCTION__, MALLOCED(fbt_bss_priv->osh)));
+		return FALSE;
+	}
+	r1khid_len = fbt_bss_priv->r1khid->len + TLV_HDR_LEN;
+	r1khid = MALLOC(fbt_bss_priv->osh, r1khid_len);
+	if (!r1khid) {
+		WL_ERROR(("wl%d: %s: out of memory, malloced %d bytes\n",
+		   UNIT(fbt_bss_priv), __FUNCTION__, MALLOCED(fbt_bss_priv->osh)));
+		MFREE(fbt_bss_priv->osh, r0khid, r0khid_len);
+		return FALSE;
+	}
+
+	memcpy(r0khid, fbt_bss_priv->r0khid, r0khid_len);
+	memcpy(r1khid, fbt_bss_priv->r1khid, r1khid_len);
+
+	pbody += sizeof(dot11_ft_ie_t) - TLV_HDR_LEN;
+	fbt_bss_priv->r0khid = (bcm_tlv_t *)pbody;
+	memcpy(pbody, r0khid, r0khid_len);
+
+	pbody += r0khid_len;
+	fbt_bss_priv->r1khid = (bcm_tlv_t *)pbody;
+	memcpy(pbody, r1khid, r1khid_len);
+
+	MFREE(fbt_bss_priv->osh, r0khid, r0khid_len);
+	MFREE(fbt_bss_priv->osh, r1khid, r1khid_len);
+#endif /* FT_REKEY_FTIE_REORDER_WAR */
+	return TRUE;
+}
+#endif /* STA && FBT_STA */
+
+#ifdef WLRSDB
+static int
+wlc_fbt_info_get(void *ctx, wlc_bsscfg_t *cfg, uint8 *data, int *len)
+{
+	wlc_fbt_info_copy_t *cp = (wlc_fbt_info_copy_t *)data;
+	cp->cfg = cfg;
+	return BCME_OK;
+}
+
+static int
+wlc_fbt_info_set(void *ctx, wlc_bsscfg_t *cfg, const uint8 *data, int len)
+{
+	wlc_fbt_info_copy_t *cp = (wlc_fbt_info_copy_t *)data;
+	wlc_bsscfg_t *from_cfg, *to_cfg;
+
+	from_cfg = cp->cfg;
+	to_cfg = cfg;
+
+	if (!from_cfg || !to_cfg)
+		return BCME_ERROR;
+
+	if (FBT_BSSCFG_CUBBY(from_cfg->wlc->fbt, from_cfg)) {
+		bss_fbt_priv_t *from_fbt_bss_priv = NULL;
+		bss_fbt_priv_t *to_fbt_bss_priv = NULL;
+
+		from_fbt_bss_priv = wlc_fbt_get_bsscfg(from_cfg->wlc->fbt, from_cfg);
+		if (!from_fbt_bss_priv)
+			return BCME_ERROR;
+		to_fbt_bss_priv = wlc_fbt_get_bsscfg(to_cfg->wlc->fbt, to_cfg);
+		if (!to_fbt_bss_priv)
+			return BCME_ERROR;
+		to_fbt_bss_priv->use_sup_wpa  = from_fbt_bss_priv->use_sup_wpa;
+		wlc_fbt_bsscfg_init(to_cfg->wlc->fbt, to_cfg);
+
+		if (FBT_BSSCFG_CUBBY(to_cfg->wlc->fbt, to_cfg)) {
+			/* clone bss_fbt_pub */
+			bss_fbt_info_t *from_fbt_bss =
+			FBT_BSSCFG_CUBBY(from_cfg->wlc->fbt, from_cfg);
+			bss_fbt_info_t *to_fbt_bss =
+				FBT_BSSCFG_CUBBY(to_cfg->wlc->fbt, to_cfg);
+
+			if (!from_fbt_bss || !to_fbt_bss) {
+				WL_ERROR(("FBT BSSCFG cubby not found\n"));
+				return BCME_ERROR;
+			}
+
+			to_fbt_bss->bss_pub.ini_fbt =
+				from_fbt_bss->bss_pub.ini_fbt;
+
+			/* Clone bss_fbt_priv  */
+			memcpy(to_fbt_bss_priv->wpa, from_fbt_bss_priv->wpa, sizeof(wpapsk_t));
+			if (from_fbt_bss_priv->wpa->auth_wpaie) {
+				to_fbt_bss_priv->wpa->auth_wpaie =
+				(uchar *)MALLOCZ(to_fbt_bss_priv->osh,
+				from_fbt_bss_priv->wpa->auth_wpaie_len);
+
+				if (to_fbt_bss_priv->wpa->auth_wpaie != NULL)
+					memcpy(to_fbt_bss_priv->wpa->auth_wpaie,
+					from_fbt_bss_priv->wpa->auth_wpaie,
+					from_fbt_bss_priv->wpa->auth_wpaie_len);
+			}
+			if (from_fbt_bss_priv->wpa->sup_wpaie) {
+				to_fbt_bss_priv->wpa->sup_wpaie =
+				(uchar *)MALLOCZ(to_fbt_bss_priv->osh,
+				from_fbt_bss_priv->wpa->sup_wpaie_len);
+
+				if (to_fbt_bss_priv->wpa->sup_wpaie != NULL)
+					memcpy(to_fbt_bss_priv->wpa->sup_wpaie,
+					from_fbt_bss_priv->wpa->sup_wpaie,
+					from_fbt_bss_priv->wpa->sup_wpaie_len);
+			}
+
+			memcpy(&to_fbt_bss_priv->peer_ea,
+				&from_fbt_bss_priv->peer_ea, sizeof(struct ether_addr));
+
+			to_fbt_bss_priv->mdie_len  = from_fbt_bss_priv->mdie_len;
+			if (from_fbt_bss_priv->mdie_len) {
+				to_fbt_bss_priv->mdie =
+				(uchar *)MALLOCZ(to_fbt_bss_priv->osh,
+				from_fbt_bss_priv->mdie_len);
+
+				if (to_fbt_bss_priv->mdie != NULL)
+					memcpy(to_fbt_bss_priv->mdie, from_fbt_bss_priv->mdie,
+						from_fbt_bss_priv->mdie_len);
+
+			}
+			to_fbt_bss_priv->ftie_len  = from_fbt_bss_priv->ftie_len;
+			if (from_fbt_bss_priv->ftie_len) {
+				to_fbt_bss_priv->ftie =
+				(uchar *)MALLOCZ(to_fbt_bss_priv->osh,
+				from_fbt_bss_priv->ftie_len);
+				if (to_fbt_bss_priv->ftie != NULL)
+					memcpy(to_fbt_bss_priv->ftie, from_fbt_bss_priv->ftie,
+					from_fbt_bss_priv->ftie_len);
+
+			}
+			if (from_fbt_bss_priv->r0khid && from_fbt_bss_priv->r1khid) {
+				uchar *tlvs;
+				uint tlv_len;
+				tlvs = (uchar *)((uintptr)to_fbt_bss_priv->ftie +
+					sizeof(dot11_ft_ie_t));
+				tlv_len = to_fbt_bss_priv->ftie_len - sizeof(dot11_ft_ie_t);
+				to_fbt_bss_priv->r0khid = bcm_parse_tlvs(tlvs, tlv_len, 3);
+				to_fbt_bss_priv->r1khid = bcm_parse_tlvs(tlvs, tlv_len, 1);
+			}
+
+			memcpy(to_fbt_bss_priv->pmkr0name, from_fbt_bss_priv->pmkr0name,
+				WPA2_PMKID_LEN);
+			memcpy(to_fbt_bss_priv->pmkr1name, from_fbt_bss_priv->pmkr1name,
+				WPA2_PMKID_LEN);
+			to_fbt_bss_priv->current_akm_type  = from_fbt_bss_priv->current_akm_type;
+			to_fbt_bss_priv->use_sup_wpa  = from_fbt_bss_priv->use_sup_wpa;
+		}
+	}
+	return BCME_OK;
+}
+#endif /* WLRSDB */
+
+#if defined(STA) && defined(FBT_STA)
+static void
+wlc_fbt_upd_authie(wlc_fbt_info_t *fbt_info, wlc_bsscfg_t *cfg)
+{
+	bss_fbt_info_t *fbt_bss = FBT_BSSCFG_CUBBY(fbt_info, cfg);
+	bss_fbt_priv_t *fbt_bss_priv;
+	bcm_tlv_t *wpa2ie;
+	wpa_suite_ucast_t *ucast;
+	wpa_suite_auth_key_mgmt_t *auth;
+	uint16 ucast_count, akm_count;
+	ccx_ext_cap_ie_t *ccx_ext_cap_ie;
+	uint8 type = CCX_EXT_CAP_IE_TYPE;
+	uint8 *auth_ies, *sup_ies;
+	uint auth_ies_len, sup_ies_len;
+	uint i;
+	int len;
+
+	if (!fbt_bss)
+		return;
+	fbt_bss_priv = FBT_BSSCFG_CUBBY_PRIV(fbt_info, cfg);
+
+	/* Get the beacon IEs */
+	wlc_find_sup_auth_ies(fbt_bss_priv->wlc->idsup, cfg, &sup_ies, &sup_ies_len,
+			&auth_ies, &auth_ies_len);
+
+	/* Get the CCX extended capability IE from the beacon */
+	ccx_ext_cap_ie = (ccx_ext_cap_ie_t *)bcm_find_vendor_ie(auth_ies, auth_ies_len,
+		CISCO_AIRONET_OUI, &type, sizeof(type));
+
+	/* If FT adaptive mode is enabled, update the non-FT AKM suite to FT in beacon RSN IE */
+	if (ccx_ext_cap_ie && (ccx_ext_cap_ie->cap & CCX_CAP_FBT)) {
+		WL_WSEC(("wl%d: FBT adaptive mode, update supplicant auth_ie \n",
+				WLCWLUNIT(fbt_bss_priv->wlc)));
+
+		/* Update fbt_bss_priv->wpa->auth_wpaie which points to suppicant auth_ie */
+		wpa2ie = (bcm_tlv_t *)fbt_bss_priv->wpa->auth_wpaie;
+		len = wpa2ie->len;
+
+		/* length for mcast suite */
+		len -= (WPA2_VERSION_LEN + WPA_SUITE_LEN);
+
+		/* Check for unicast suite(s) */
+		if (len < WPA_IE_SUITE_COUNT_LEN) {
+			WL_INFORM(("wl%d: no unicast suite\n", fbt_bss_priv->wlc->pub->unit));
+			return;
+		}
+		/* unicast suite list */
+		ucast = (wpa_suite_ucast_t *)&wpa2ie->data[WPA2_VERSION_LEN +
+			sizeof(wpa_suite_mcast_t)];
+		ucast_count = ltoh16_ua(&ucast->count);
+		len -= (WPA_IE_SUITE_COUNT_LEN + (ucast_count * WPA_SUITE_LEN));
+
+		if (len < 0) {
+			WL_INFORM(("wl%d: Bad length for ucast suite\n",
+			   fbt_bss_priv->wlc->pub->unit));
+			return;
+		}
+		/* Check for auth key management suite(s) */
+		if (len < WPA_IE_SUITE_COUNT_LEN) {
+			WL_INFORM(("wl%d: no auth key mgmt suite\n", fbt_bss_priv->wlc->pub->unit));
+			return;
+		}
+		/* authenticated key management suite list */
+		auth = (wpa_suite_auth_key_mgmt_t *)&ucast->list[ucast_count];
+		akm_count = ltoh16_ua(&auth->count);
+		len -= WPA_IE_SUITE_COUNT_LEN;
+		for (i = 0; i < akm_count && len >= WPA_SUITE_LEN;
+			 i++, len -= WPA_SUITE_LEN) {
+			if (!bcmp(auth->list[i].oui, WPA2_OUI, DOT11_OUI_LEN)) {
+				if (auth->list[i].type == RSN_AKM_UNSPECIFIED) {
+					auth->list[i].type = RSN_AKM_FBT_1X;
+				}
+				else if (auth->list[i].type == RSN_AKM_PSK) {
+					auth->list[i].type = RSN_AKM_FBT_PSK;
+				}
+			}
+		}
+	}
+}
+#endif /* STA && FBT_STA */

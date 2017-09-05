@@ -22,13 +22,6 @@
 #define MAX_STR_LEN		128
 #define MILLISEC		1000
 
-struct cmd_handler_clnt {
-        char *command;
-        int cmdno;
-        void (*pack)(unsigned char *data, int datalen, unsigned char *pdu, int *pdulen);
-        void (*unpack)(unsigned char *data, int datalen);
-};
-
 struct cmd_handler_svr {
 	char *command;
 	int cmdno;
@@ -37,8 +30,7 @@ struct cmd_handler_svr {
 };
 
 extern void print_data_topic(char *topic, int length);
-extern int ble_encrypt_clnt(unsigned char *input, unsigned char *output, size_t input_len);
+extern void print_data_info(uint8_t *value, int val_len, int row_len, int val_index, int flag);
 extern int ble_encrypt_svr(unsigned char *input, unsigned char *output, size_t input_len);
 extern void ble_key_act(char *type,  char *action);
-extern void print_data_info(uint8_t *value, int val_len, int row_len, int val_index, int flag);
 #endif	//__BLEENCRYPT_H___

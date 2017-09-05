@@ -66,6 +66,11 @@ struct pj_stun_sock
     pj_uint16_t		 tsx_id[6];	/* .. to match STUN msg	    */
     pj_stun_session	*stun_sess;	/* STUN session		    */
     pj_grp_lock_t	*grp_lock;	/* Session group lock	    */
+
+    /**
+     * Last error (if session was terminated because of error)
+     */
+    pj_status_t	    last_status;
 };
 
 /* 
@@ -206,6 +211,7 @@ PJ_DEF(pj_status_t) pj_stun_sock_create( pj_stun_config *stun_cfg,
     stun_sock->sock_fd = PJ_INVALID_SOCKET;
     pj_memcpy(&stun_sock->stun_cfg, stun_cfg, sizeof(*stun_cfg));
     pj_memcpy(&stun_sock->cb, cb, sizeof(*cb));
+	stun_sock->last_status = 0;
 
     stun_sock->ka_interval = cfg->ka_interval;
     if (stun_sock->ka_interval == 0)
@@ -617,7 +623,10 @@ PJ_DEF(pj_status_t) pj_stun_sock_get_info( pj_stun_sock *stun_sock,
 
     PJ_ASSERT_RETURN(stun_sock && info, PJ_EINVAL);
 
-    pj_grp_lock_acquire(stun_sock->grp_lock);
+	pj_grp_lock_acquire(stun_sock->grp_lock);
+
+	/* Prepare last status */
+	info->last_status = stun_sock->last_status;
 
     /* Copy STUN server address and mapped address */
     pj_memcpy(&info->srv_addr, &stun_sock->srv_addr,
@@ -828,7 +837,10 @@ static void sess_on_request_complete(pj_stun_session *sess,
     PJ_UNUSED_ARG(tdata);
     PJ_UNUSED_ARG(token);
     PJ_UNUSED_ARG(src_addr);
-    PJ_UNUSED_ARG(src_addr_len);
+	PJ_UNUSED_ARG(src_addr_len);
+
+	/* Save last status */
+	stun_sock->last_status = status;
 
     /* Check if this is a keep-alive or the first Binding request */
     if (pj_sockaddr_has_addr(&stun_sock->mapped_addr))
@@ -1087,4 +1099,8 @@ PJ_DEF(void) pj_stun_sock_set_previous_local_addr(pj_stun_sock *stun_sock, pj_so
 
 PJ_DEF(int) pj_stun_sock_get_addr_family(pj_stun_sock *stun_sock) {
 	return stun_sock->af;
+}
+
+PJ_DEF(pj_status_t) pj_stun_sock_get_last_status(pj_stun_sock *stun_sock) {
+	return stun_sock->last_status;
 }

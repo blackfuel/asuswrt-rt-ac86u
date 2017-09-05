@@ -2,7 +2,7 @@
  * 802.11v protocol implementation for
  * Broadcom 802.11bang Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -10,7 +10,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_wnm.c 650653 2016-07-22 05:37:32Z $
+ * $Id: wlc_wnm.c 676062 2016-12-20 08:40:49Z $
  */
 
 
@@ -4324,6 +4324,11 @@ wlc_wnm_parse_tfs_req_ie(wlc_info_t *wlc, struct scb *scb, uint8 *body,
 	else {
 		/* delete wnm_tfs_req and attached subelement/tclas element */
 		wlc_wnm_tfs_req_free(wlc->wnm_info, &tfs_list, -1);
+
+		/* free wnm_tfs_req for failed case */
+		if ((!valid) && wnm_tfs_req) {
+			MFREE(wlc->osh, wnm_tfs_req, sizeof(wnm_tfs_req_t));
+		}
 	}
 
 	return err;

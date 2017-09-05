@@ -1,6 +1,7 @@
 include ../common.mak
 include $(SRCBASE)/.config
 
+TNSA_SMBD :=
 DSTDIR = $(INSTALLDIR)/lib/modules/$(LINUX_KERNEL)/kernel/fs
 
 ifeq ($(RTCONFIG_RALINK),y)
@@ -13,6 +14,7 @@ ifeq ($(RTCONFIG_SOC_QCA9557),y)
 SRCFILE = $(if $(RT4GAC55U),qca_4gac55u,qca)
 else ifeq ($(RTCONFIG_SOC_IPQ8064),y)
 SRCFILE = qca_ipq806x
+TNSA_SMBD = $(SRCFILE)/tnsa/smbd
 else ifeq ($(RTCONFIG_SOC_IPQ40XX),y)
 SRCFILE = qca_ipq40xx
 else
@@ -119,6 +121,10 @@ ifeq ($(RTCONFIG_BCM_7114),y)
 	install -D $(SRCFILE)/samba/smbd $(INSTALLDIR)/usr/bin/smbd
 endif
 endif
+endif
+ifneq ($(TNSA_SMBD),)
+	# NOTE: Destination path of smbd is different from Broadcom platform!
+	[ -e $(TNSA_SMBD) ] && install -D $(TNSA_SMBD) $(INSTALLDIR)/usr/bin/smbd
 endif
 
 .phony: all clean install

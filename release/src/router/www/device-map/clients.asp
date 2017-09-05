@@ -98,6 +98,8 @@ function initial(){
 	generate_wireless_band_list();
 	updateClientList();
 	updateClientListBackground();
+
+	reset_NM_height();
 }
 
 function convRSSI(val){

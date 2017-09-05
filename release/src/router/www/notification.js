@@ -321,7 +321,7 @@ var notification = {
 		if(wan_diag_state == "4"){               //case11
 			notification.array[11] = 'noti_send_debug_log';
 			notification.send_debug_log = 1;
-			notification.desc[11] = "-	Diagnostic DSL debug log capture completed.";
+			notification.desc[11] = "-	The debug log of diagnostic DSL captured.";
 			notification.action_desc[11] = "Send debug log now";
 			notification.clickCallBack[11] = "setTimeout('notification.redirectFeedbackInfo()', 1000);";
 		

@@ -80,7 +80,15 @@ function wl_chanspec_list_change(){
 												}		
 										}
 										else{		// for 802.11n, RT-N66U
-											wl_channel_list_5g[i] = wlextchannel_fourty(wl_channel_list_5g[i]);							
+											if((country == "EU" || country == "E0") && parseInt(wl_channel_list_5g[i]) == 116){
+												wl_channel_list_5g[i] = wl_channel_list_5g[i];
+											}
+											else if(country == "AU" && (parseInt(wl_channel_list_5g[i]) == 116)){
+												wl_channel_list_5g[i] = wl_channel_list_5g[i];
+											}
+											else{
+												wl_channel_list_5g[i] = wlextchannel_fourty(wl_channel_list_5g[i]);	
+											}								
 										}										
 								}									
 						}
@@ -392,7 +400,7 @@ function wl_chanspec_list_change(){
 														wl_channel_list_5g_2.splice(wl_channel_list_5g_2.getIndexByValue(wl_channel_list_5g_2[i]),1);
 												}else if(country == "TW" && parseInt(wl_channel_list_5g_2[i]) >= 56 && parseInt(wl_channel_list_5g_2[i]) <= 64){	// rm 80MHz invalid channel														
 														wl_channel_list_5g_2.splice(wl_channel_list_5g_2.getIndexByValue(wl_channel_list_5g_2[i]),1);
-												}else if(based_modelid == "RT-AC3200" && country == "JP" && parseInt(wl_channel_list_5g_2[i]) >= 132 && parseInt(wl_channel_list_5g_2[i]) <= 140){	// rm 80MHz invalid channel
+												}else if(country == "JP" && parseInt(wl_channel_list_5g_2[i]) >= 132 && parseInt(wl_channel_list_5g_2[i]) <= 140){	// rm 80MHz invalid channel
 														wl_channel_list_5g_2.splice(wl_channel_list_5g_2.getIndexByValue(wl_channel_list_5g_2[i]),1);
 												}else{																																																										
 														wl_channel_list_5g_2[i] = wl_channel_list_5g_2[i]+"/80";
@@ -406,7 +414,7 @@ function wl_chanspec_list_change(){
 									wl_channel_list_5g_2.splice(index, 1);
 								}
 
-								if(wl_channel_list_5g_2.indexOf("116") != -1 && !(based_modelid == "RT-AC3200" && country == "JP")){			// remove channel 116, 
+								if(wl_channel_list_5g_2.indexOf("116") != -1 && !(country == "JP")){			// remove channel 116, 
 									var index = wl_channel_list_5g_2.indexOf("116");
 									wl_channel_list_5g_2.splice(index, 1);
 								}

@@ -195,6 +195,7 @@ int wlcscan_main(void)
 	foreach (word, nvram_safe_get("wl_ifnames"), next)
 #endif
 	{	
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
 #if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 		snprintf(prefix, sizeof(prefix), "wl%d_", i);
 		if (!nvram_match(strcat_r(prefix, "mode", tmp), "wds"))
@@ -245,7 +246,7 @@ _dprintf("%s: Start to run...\n", __FUNCTION__);
 	int wanduck_notify = NOTIFY_IDLE;
 #if defined(RTCONFIG_BLINK_LED)
 	int unit = nvram_get_int("wlc_band");
-	char *led_gpio = unit? "led_5g_gpio" : "led_2g_gpio";
+	char *led_gpio = get_wl_led_gpio_nv(unit);
 #endif
 
 	int wlc_wait_time = nvram_get_int("wl_time") ? : 5;
@@ -371,6 +372,7 @@ void repeater_pap_disable(void)
 	i = 0;
 
 	foreach(word, nvram_safe_get("wl_ifnames"), next) {
+		SKIP_ABSENT_BAND_AND_INC_UNIT(i);
 		if (nvram_get_int("wlc_band") == i) {
 			eval("ebtables", "-t", "filter", "-I", "FORWARD", "-i", word, "-j", "DROP");
 			break;
@@ -389,9 +391,15 @@ void update_wifi_led_state_in_wlcmode(void)
 	if (!repeater_mode() && !mediabridge_mode())
 		return;
 
-	for (band = 0; band < 2; ++band) {
-		id = band? LED_5G : LED_2G;
-		led_gpio = band? "led_5g_gpio" : "led_2g_gpio";
+	for (band = 0; band < MAX_NR_WL_IF; ++band) {
+		SKIP_ABSENT_BAND(band);
+		if (band >= 2) {
+			/* 2-nd 5G LED and 11ad LED have not been supported! */
+			dbg("%s: Unknown LED for wl%d\n", __func__, band);
+			continue;
+		}
+		id = get_wl_led_id(band);
+		led_gpio = get_wl_led_gpio_nv(band);
 		if (band != wlc_band) {
 			if (mediabridge_mode())
 				led_control(id, LED_OFF);

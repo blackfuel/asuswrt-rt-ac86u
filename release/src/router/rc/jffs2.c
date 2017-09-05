@@ -80,6 +80,8 @@ unsigned int get_root_type(void)
 		case MODEL_RTAC1200GU:
 		case MODEL_RTAC1200:
 		case MODEL_RTN11P_B1:
+		case MODEL_RPAC53:
+		case MODEL_RPAC55:
 			return 0x73717368;      /* squashfs */
 		case MODEL_GTAC5300:
 		case MODEL_RTAC86U:

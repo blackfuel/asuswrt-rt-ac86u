@@ -3,7 +3,7 @@
  *
  * Common headers for transmit datapath components
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -11,7 +11,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_tx.h 654084 2016-08-11 03:54:02Z $
+ * $Id: wlc_tx.h 682548 2017-02-02 09:15:49Z $
  *
  */
 #ifndef _wlc_tx_c
@@ -25,6 +25,12 @@
  */
 
 #define WLPKTTIME(p) (WLPKTTAG(p)->pktinfo.atf.pkt_time)
+
+/* scb+prec based txq pktq filter */
+extern void wlc_txq_pktq_scb_pfilter(wlc_info_t *wlc, int prec, struct pktq *pq, struct scb *scb);
+/* scb based txq pktq filter */
+extern void wlc_txq_pktq_scb_filter(wlc_info_t *wlc, uint prec_bmp, struct pktq *pq,
+	struct scb *scb);
 
 extern uint16 wlc_get_txmaxpkts(wlc_info_t *wlc);
 extern void wlc_set_txmaxpkts(wlc_info_t *wlc, uint16 txmaxpkts);
@@ -83,9 +89,10 @@ extern txq_t* wlc_low_txq_alloc(txq_info_t *txqi,
                                 uint nswq, int high, int low);
 extern void wlc_low_txq_free(txq_info_t *txqi, txq_t* txq);
 extern void wlc_low_txq_flush(txq_info_t *txqi, txq_t* txq);
-#ifdef NEW_TXQ
 extern void wlc_low_txq_scb_flush(wlc_info_t *wlc, wlc_txq_info_t *qi, struct scb *remove);
-#endif /* NEW_TXQ */
+#if defined(WL_MULTIQUEUE)
+extern void wlc_tx_fifo_scb_flush(wlc_info_t *wlc, struct scb *remove);
+#endif /* WL_MULTIQUEUE */
 extern void wlc_txq_fill(txq_info_t *txqi, txq_t *txq);
 extern void wlc_txq_complete(txq_info_t *txqi, txq_t *txq, uint fifo_idx,
                              int complete_pkts, int complete_time);
@@ -135,6 +142,9 @@ extern void wlc_txfifo_complete(wlc_info_t *wlc, uint fifo, uint16 txpktpend);
 #define WLC_LOWEST_SCB_RSPEC(scb) 0
 #define WLC_LOWEST_BAND_RSPEC(band) 0
 #endif /* TXQ_MUX */
+#ifdef AP
+extern void wlc_tx_fifo_sync_bcmc_reset(wlc_info_t *wlc);
+#endif /* AP */
 extern uint16 wlc_get_txh_frameid(wlc_info_t* wlc, void* pkt);
 extern void wlc_get_txh_info(wlc_info_t* wlc, void* pkt, wlc_txh_info_t* tx_info);
 extern void wlc_set_txh_info(wlc_info_t* wlc, void* pkt, wlc_txh_info_t* tx_info);
@@ -192,4 +202,7 @@ extern void wlc_txq_flush_flowid_pkts(wlc_info_t *wlc, uint16 flowid);
 #if defined(WLAMPDU_MAC)
 extern void wlc_epoch_upd(wlc_info_t *wlc, void *pkt, uint8 *flipEpoch, uint8 *lastEpoch);
 #endif /* WLAMPDU_MAC */
+
+bool wlc_is_packet_fragmented(wlc_info_t *wlc, struct scb *scb,
+		wlc_bsscfg_t *bsscfg, void *lb);
 #endif /* _wlc_tx_c */

@@ -24,10 +24,10 @@
 #define DHD_D2H_SOFT_DOORBELL_SUPPORT
 
 /**
-  * DHD runner add-on features
-  * Used by upper layers to query and enable
-  */
-//#define DHD_RNR_LBR_AGGR
+ * DHD runner add-on features
+ * Used by upper layers to query and enable
+ */
+#define DHD_RNR_LBR_AGGR
 #define DHD_RNR_NO_NONACCPKT_TXSTSOFFL
 
 #endif /* BCM_DHD_RUNNER */
@@ -84,12 +84,8 @@ typedef enum dhd_runner_ops
 	H2R_FLRING_ENAB_NOTIF,  /* Host notifies Runner to enable a flowring */
 	H2R_FLRING_DISAB_NOTIF, /* Host notifies Runner to disable a flowring */
 	H2R_FLRING_FLUSH_NOTIF, /* Host notifies Runner to flush a flowring */
-#if defined(DHD_RNR_LBR_AGGR)
 	H2R_AGGR_CONFIG_NOTIF,  /* Host notifies Runner to configure aggregation */
-#endif /* DHD_RNR_LBR_AGGR */
-#if defined(DHD_RNR_NO_NONACCPKT_TXSTSOFFL)
 	H2R_TXSTS_CONFIG_NOTIF, /* Host notifies Runner to send nonaccpkt TXSTS */
-#endif /* DHD_RNR_NO_NONACCPKT_TXSTSOFFL */
 
 	/* Host DHD to Runner Requests (H ---> R) */
 	H2R_IDX_BUF_RD_REQUEST, /* Host requests Runner to read DMA index buffer */
@@ -102,14 +98,12 @@ typedef enum dhd_runner_ops
 
 } dhd_runner_ops_t;
 
-#if defined(DHD_RNR_LBR_AGGR)
 /* configuration structure used for H2R_AGGR_CONFIG_NOTIF */
 typedef struct dhd_runner_aggr_config {
 	uint32 en_mask;       /* aggregation enable bit mask */
 	uint32 len;           /* aggregation number of packets */
 	uint32 timeout;       /* aggregation release timeout in msec */
 } dhd_runner_aggr_config_t;
-#endif /* DHD_RNR_LBR_AGGR */
 
 /**
  * H2R_TXSTS_CONFIG_NOTIF bitmap values
@@ -128,6 +122,7 @@ typedef enum dhd_runner_iovar {
 	DHD_RNR_IOVAR_RXOFFL,     /* id for rx offload configuration */
 	DHD_RNR_IOVAR_RNR_STATS,  /* id for dhd runner intf stats */
 	DHD_RNR_IOVAR_DUMP,       /* id for dhd runner dump */
+	DHD_RNR_IOVAR_STATUS,     /* id for dhd runner flowrings */
 	DHD_RNR_MAX_IOVARS        /* delimiter */
 } dhd_runner_iovar_t;
 
@@ -139,6 +134,22 @@ typedef struct dhd_helper_rnr_stats {
 	uint32 mcast_bytes;      /* TX multicast bytes */
 	uint32 dropped_pkts;     /* dropped TX packets */
 } dhd_helper_rnr_stats_t;
+
+typedef struct dhd_helper_feat {
+	uint32 txoffl:1;                  /* Tx post offload */
+	uint32 rxoffl:1;                  /* Rx post,complete offload */
+	uint32 txcmpl2host:1;             /* Tx complete to host for nonaccpkts */
+	uint32 dhdhdr:1;                  /* add llcsnap header */
+	uint32 lbraggr:1;                 /* lbr aggregation */
+} dhd_helper_feat_t;
+
+/* buffer structure used for DHD_RNR_IOVAR_RNR_STATUS */
+typedef struct dhd_helper_status {
+	dhd_helper_feat_t sup_features;   /* supported runner features */
+	dhd_helper_feat_t en_features;    /* enabled runner features */
+	uint16 hw_flowrings;              /* Total HW flowrings */
+	uint16 sw_flowrings;              /* Total SW flowrings */
+} dhd_helper_status_t;
 
 /* structure used for sending non-accelerated TXSTS messages to prot layer */
 typedef struct dhd_runner_txsts {

@@ -189,17 +189,6 @@ int bwdpi_main(int argc, char **argv)
 			return wrs_url_main();
 		}
 	}
-	else if (!strcmp(argv[1], "checksize")){
-		if(argc != 4)
-		{
-			printf("  bwpdi checksize path size\n");
-			return 0;
-		}
-		else
-		{
-			return check_filesize_main(argv[2], argv[3]);
-		}
-	}
 	else if (!strcmp(argv[1], "get_app_patrol")){
 		if(argc != 2)
 		{

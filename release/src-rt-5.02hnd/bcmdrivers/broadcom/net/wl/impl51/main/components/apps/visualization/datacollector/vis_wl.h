@@ -1,7 +1,7 @@
 /*
  * Site survey statistics header for visualization tool
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: vis_wl.h 606349 2015-12-15 07:15:11Z $
+ * $Id: vis_wl.h 672659 2016-11-29 10:24:01Z $
  */
 #ifndef _vis_wl_h_
 #define _vis_wl_h_
@@ -32,7 +32,7 @@ extern int wl_ioctl(void *wl, int cmd, void *buf, int len, bool set);
 
 extern int wl_scan(void *wl);
 
-extern networks_list_t* wl_dump_networks(void *wl);
+extern networks_list_t* wl_dump_networks(void *wl, uint32 *errinfo);
 
 extern int wl_is_AP(void *wl, dut_info_t *dut_info);
 

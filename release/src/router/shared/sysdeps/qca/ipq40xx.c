@@ -50,7 +50,7 @@ enum {
 	LAN4_PORT=4,
 	WAN_PORT=5,
 	P6_PORT=5,
-#elif defined(MAPAC1300) || defined(MAPAC2200)
+#elif defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
 	CPU_PORT=0,
 	LAN1_PORT=4,
 	LAN2_PORT=3,
@@ -910,6 +910,92 @@ rtkswitch_Reset_Storm_Control(void)
 
 	return 0;
 }
+
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+int read_vlan_bmp(int iface)
+{
+	FILE *fp;
+        char cmd[100], buf[128];
+        int rlen,uport,dport;
+	
+        sprintf(cmd, "cat /proc/sys/net/edma/default_group%d_bmp",iface);
+
+        if ((fp = popen(cmd, "r")) == NULL) {
+                return 0;
+        }
+        rlen = fread(buf, 1, sizeof(buf), fp);
+        pclose(fp);
+        if (rlen <= 1)
+                return 0;
+
+        buf[rlen-1] = '\0';
+        //_dprintf("=> vlan1 group=%d\n",atoi(buf));
+
+	rlen=0;
+	if(0x20 & atoi(buf))
+		rlen|=0x2;  //port5		
+	if(0x16 & atoi(buf))
+		rlen|=0x1;  //port4
+	uport=nvram_get_int("upstream_port");
+	dport=nvram_get_int("downstream_port");
+	if(iface==1)//eth0
+	{
+		uport|= rlen;
+		dport&=!rlen;
+	}		
+	else
+	{
+		dport|= rlen;
+		uport&=!rlen;
+	}
+	sprintf(cmd,"%d",uport);
+	nvram_set("upstream_port",cmd);
+	sprintf(cmd,"%d",dport);
+	nvram_set("downstream_port",cmd);
+	return rlen;
+}
+
+int cap_lanport_status(void)
+{
+	return rtkswitch_lanPorts_phyStatus();
+}
+
+//upstram and downstream port
+int re_port_status(int re_iface)
+{
+	int i,res,member;
+	phyState pS;
+
+	for (i = 0; i < NR_WANLAN_PORT; i++) {
+		pS.link[i] = 0;
+		pS.speed[i] = 0;
+		get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i]);
+	}
+	res=0;member=0;
+	if(re_iface==0)
+		member=read_vlan_bmp(1); //for members of eth0(vlan1) 
+	else
+		member=read_vlan_bmp(2); //for members of eth1(vlan2) 
+	if(member != 0)
+	{
+		if(pS.link[0]==1 && member&0x2) 
+			res|=0x2;
+
+		if(pS.link[1]==1 && member&0x1) 
+			res|=0x1;
+	}
+	return res;	 
+}
+#else
+int cap_lanport_status(void)
+{
+	return 0;
+}
+int re_port_status(int re_iface)
+{
+	return 0;
+}
+#endif
 
 void ATE_port_status(void)
 {

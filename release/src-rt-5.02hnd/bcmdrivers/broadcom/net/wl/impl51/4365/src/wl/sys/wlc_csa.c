@@ -4,7 +4,7 @@
  * 802.11h Channel Switch Announcement and Extended Channel Switch Announcement module
  * Broadcom 802.11abgn Networking Device Driver
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_csa.c 670191 2016-11-14 23:56:19Z $
+ * $Id: wlc_csa.c 670189 2016-11-14 23:48:13Z $
  */
 
 /**
@@ -1521,102 +1521,101 @@ wlc_parse_csa_ie(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg, uint8 *params, int len
 	}
 
 #ifdef WL11AC
-			/* Look for the Channel Switch Wrapper IE for additional CSA info */
-			if ((params < end) &&
-			(tag = bcm_parse_tlvs(params, len, DOT11_MNG_CHANNEL_SWITCH_WRAPPER_ID)) != NULL) {
-			dot11_wide_bw_chan_switch_ie_t *wide_bw_ie;
-	
-			/* search for the Wide Bandwidth Channel Switch sub-element for
-			 * wide channel width info
-			 */
-			wide_bw_ie = (dot11_wide_bw_chan_switch_ie_t *)
-					bcm_parse_tlvs_min_bodylen(tag->data, tag->len,
-											   DOT11_MNG_WIDE_BW_CHANNEL_SWITCH_ID,
-											   DOT11_WIDE_BW_SWITCH_IE_LEN);
-			if (wide_bw_ie == NULL) {
-				WL_REGULATORY(("wl%d: %s: WIDE BANDWIDTH IE == NULL\n",
-							   wlc->pub->unit, __FUNCTION__));
-			}
-	
-			/* determine the wide bw chanspec if the wide_bw_ie
-			 * was found (and valid len)
-			 */
-			if (csa_ie_found && wide_bw_ie != NULL) {
-				uint bw;
-				uint primary20_channel;
-				uint seg0 = wide_bw_ie->center_frequency_segment_0;
-				uint seg1 = wide_bw_ie->center_frequency_segment_1;
-	
-				/* the csa struct has the chanspec so far,
-				 * so we can get the primary 20 channel
-				 */
-				primary20_channel = wf_chspec_ctlchan(csa->csa.chspec);
-	
-				bw = channel_width_to_bw(wide_bw_ie->channel_width);
-	
-				/* create the wide bw chanspec differently for the 40MHz case
-				 * vs wider cases
-				 * 40MHz is needs some care because there are overlapping
-				 * 40MHz channels in 2.4G, so both center channel and primary20
-				 * are needed to create the chanspec.
-				 */
-				if (bw == WL_CHANSPEC_BW_40) {
-					uint sb;
-					uint center_channel;
-	
-					/* the wide_bw_ie has the 40MHz center channel */
-					center_channel = seg0;
-	
-					/* determine the primary channel sideband from the
-					 * relative values of the the primary channel and
-					 * the center channel
-					 */
-					if (primary20_channel > center_channel) {
-						sb = WL_CHANSPEC_CTL_SB_UPPER;
-					} else {
-						sb = WL_CHANSPEC_CTL_SB_LOWER;
-					}
-	
-					csa->csa.chspec = CH40MHZ_CHSPEC(center_channel, sb);
-				} else {
-	
-					/* Note: 802.11REVmc_D6.0 has additional rules to
-					 * convey 160MHz and 80+80MHz BW.
-					 * If BW field is 1 (80MHz), the seg0/1 values
-					 * can indicate 160/80+80
-					 */
-					if (wide_bw_ie->channel_width == VHT_OP_CHAN_WIDTH_80) {
-						/* using the rules from 802.11REVmc_D6.0, see if the
-						 * seg0/1 values can be interpreted as
-						 * indicating 160/80+80 MHz
-						 */
-						if (seg1 > 0) {
-							if (ABS((int)(seg0 - seg1)) == CH_40MHZ_APART) {
-								bw = WL_CHANSPEC_BW_160;
-							} else if (ABS((int)(seg0 - seg1)) > CH_80MHZ_APART) {
-								bw = WL_CHANSPEC_BW_8080;
-							}
-						}
-						/* otherwise, leave bw as initially determined from
-						 * channel_width field, 80, 160, or 80+80
-						 */
-					}
-	
-					if (bw == WL_CHANSPEC_BW_8080) {
-						bw = WL_CHANSPEC_BW_80;
-					}
-	
-					/* bw 80 or 160 can use wlc_get_vht_chanspec() utility */
-					csa->csa.chspec = wlc_get_vht_chanspec(wlc, (uint8)primary20_channel, bw);
-				}
-			}
-		} 
-		else {
-			WL_REGULATORY(("wl%d: %s: DOT11_MNG_CHANNEL_SWITCH_WRAPPER_ID = NULL\n",
-						   (uint8)wlc->pub->unit, __FUNCTION__));
-		}
-#endif /* WL11AC */
+        /* Look for the Channel Switch Wrapper IE for additional CSA info */
+        if ((params < end) &&
+	    (tag = bcm_parse_tlvs(params, len, DOT11_MNG_CHANNEL_SWITCH_WRAPPER_ID)) != NULL) {
+		dot11_wide_bw_chan_switch_ie_t *wide_bw_ie;
 
+		/* search for the Wide Bandwidth Channel Switch sub-element for
+		 * wide channel width info
+		 */
+		wide_bw_ie = (dot11_wide_bw_chan_switch_ie_t *)
+		        bcm_parse_tlvs_min_bodylen(tag->data, tag->len,
+		                                   DOT11_MNG_WIDE_BW_CHANNEL_SWITCH_ID,
+		                                   DOT11_WIDE_BW_SWITCH_IE_LEN);
+		if (wide_bw_ie == NULL) {
+			WL_REGULATORY(("wl%d: %s: WIDE BANDWIDTH IE == NULL\n",
+			               wlc->pub->unit, __FUNCTION__));
+		}
+
+		/* determine the wide bw chanspec if the wide_bw_ie
+		 * was found (and valid len)
+		 */
+		if (csa_ie_found && wide_bw_ie != NULL) {
+			uint bw;
+			uint primary20_channel;
+			uint seg0 = wide_bw_ie->center_frequency_segment_0;
+			uint seg1 = wide_bw_ie->center_frequency_segment_1;
+
+			/* the csa struct has the chanspec so far,
+			 * so we can get the primary 20 channel
+			 */
+			primary20_channel = wf_chspec_ctlchan(csa->csa.chspec);
+
+			bw = channel_width_to_bw(wide_bw_ie->channel_width);
+
+			/* create the wide bw chanspec differently for the 40MHz case
+			 * vs wider cases
+			 * 40MHz is needs some care because there are overlapping
+			 * 40MHz channels in 2.4G, so both center channel and primary20
+			 * are needed to create the chanspec.
+			 */
+			if (bw == WL_CHANSPEC_BW_40) {
+				uint sb;
+				uint center_channel;
+
+				/* the wide_bw_ie has the 40MHz center channel */
+				center_channel = seg0;
+
+				/* determine the primary channel sideband from the
+				 * relative values of the the primary channel and
+				 * the center channel
+				 */
+				if (primary20_channel > center_channel) {
+					sb = WL_CHANSPEC_CTL_SB_UPPER;
+				} else {
+					sb = WL_CHANSPEC_CTL_SB_LOWER;
+				}
+
+				csa->csa.chspec = CH40MHZ_CHSPEC(center_channel, sb);
+			} else {
+
+				/* Note: 802.11REVmc_D6.0 has additional rules to
+				 * convey 160MHz and 80+80MHz BW.
+				 * If BW field is 1 (80MHz), the seg0/1 values
+				 * can indicate 160/80+80
+				 */
+				if (wide_bw_ie->channel_width == VHT_OP_CHAN_WIDTH_80) {
+					/* using the rules from 802.11REVmc_D6.0, see if the
+					 * seg0/1 values can be interpreted as
+					 * indicating 160/80+80 MHz
+					 */
+					if (seg1 > 0) {
+						if (ABS((int)(seg0 - seg1)) == CH_40MHZ_APART) {
+							bw = WL_CHANSPEC_BW_160;
+						} else if (ABS((int)(seg0 - seg1)) > CH_80MHZ_APART) {
+							bw = WL_CHANSPEC_BW_8080;
+						}
+					}
+					/* otherwise, leave bw as initially determined from
+					 * channel_width field, 80, 160, or 80+80
+					 */
+				}
+
+				if (bw == WL_CHANSPEC_BW_8080) {
+					bw = WL_CHANSPEC_BW_80;
+				}
+
+				/* bw 80 or 160 can use wlc_get_vht_chanspec() utility */
+				csa->csa.chspec = wlc_get_vht_chanspec(wlc, (uint8)primary20_channel, bw);
+			}
+		}
+	} 
+	else {
+		WL_REGULATORY(("wl%d: %s: DOT11_MNG_CHANNEL_SWITCH_WRAPPER_ID = NULL\n",
+		               (uint8)wlc->pub->unit, __FUNCTION__));
+	}
+#endif /* WL11AC */
 
 	/* Should reset the csa.count back to zero if csa_ie not found */
 	if (!csa_ie_found && csa->csa.count) {
@@ -1705,7 +1704,7 @@ wlc_recv_csa_action(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 	bcm_tlv_t *ies;
 	uint ies_len;
 	uint8 extch = DOT11_EXT_CH_NONE;
-#if defined(BCMDBG) && defined(AP)
+#if (defined(BCMDBG) && defined(AP)) || defined(CLIENT_CSA)
 #ifdef WL11AC
 	bcm_tlv_t *wide_bw_ie;
 	uint8 channel_width = VHT_OP_CHAN_WIDTH_20_40;
@@ -1753,7 +1752,7 @@ wlc_recv_csa_action(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 		}
 	}
 
-#if defined(BCMDBG) && defined(AP)
+#if (defined(BCMDBG) && defined(AP)) || defined(CLIENT_CSA)
 #ifdef WL11AC
 	/* check if we have an wide bandwidth channel switch ie */
 	if (VHT_ENAB(wlc->pub)) {
@@ -1777,7 +1776,7 @@ wlc_recv_csa_action(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 	               wlc->pub->unit, csa_ie->mode, csa_ie->channel, csa_ie->count, extch));
 	BCM_REFERENCE(extch);
 
-#if defined(BCMDBG) && defined(AP)
+#if (defined(BCMDBG) && defined(AP)) || defined(CLIENT_CSA)
 	if (BSSCFG_AP(cfg)) {
 		chanspec_t chspec;
 #ifdef WL11AC
@@ -1983,6 +1982,16 @@ wlc_csa_do_switch(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg, chanspec_t chspec)
 	wlc_csa_apply_channel_switch(csam, cfg);
 }
 #endif /* AP */
+
+#ifdef CLIENT_CSA
+int wlc_send_unicast_action_switch_channel(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
+	const struct ether_addr *dst, wl_chan_switch_t *csa, uint8 action_id)
+{
+	int ret;
+	ret = wlc_send_action_switch_channel_ex(csam, cfg, dst, csa, action_id);
+	return ret;
+}
+#endif /* CLIENT_CSA */
 
 static int
 wlc_send_action_switch_channel_ex(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,

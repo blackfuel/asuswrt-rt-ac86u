@@ -427,12 +427,14 @@ static pj_bool_t options_on_rx_request(pjsip_rx_data *rdata)
 			  (pjsip_hdr*) pjsip_hdr_clone(tdata->pool, cap_hdr));
 	}
 
+#if !defined(PJMEDIA_DISABLE_SCTP) || (PJMEDIA_DISABLE_SCTP == 0)
 	/* Add Tnl-Supported header */
 	cap_hdr = pjsip_endpt_get_capability(pjsua_var[inst_id].endpt, PJSIP_H_TNL_SUPPORTED, NULL);
 	if (cap_hdr) {
 		pjsip_msg_add_hdr(tdata->msg, 
 			(pjsip_hdr*) pjsip_hdr_clone(tdata->pool, cap_hdr));
 	}
+#endif
 
     /* Add Allow-Events header from the evsub module */
     cap_hdr = pjsip_evsub_get_allow_events_hdr(NULL);

@@ -157,6 +157,7 @@ typedef struct {
 
 struct apinfo apinfos[MAX_NUMBER_OF_APINFO];
 char buf[WLC_IOCTL_MAXLEN];
+static char scan_result[WLC_SCAN_RESULT_BUF_LEN];
 
 /* Helper routine to print the infrastructure mode while pretty printing the BSS list */
 #if 0
@@ -2673,6 +2674,7 @@ ej_wps_info_2g(int eid, webs_t wp, int argc, char_t **argv)
 	return wl_wps_info(eid, wp, argc, argv, 0);
 }
 
+#if 0
 static int wpa_key_mgmt_to_bitfield(const unsigned char *s)
 {
 	if (memcmp(s, WPA_AUTH_KEY_MGMT_UNSPEC_802_1X, WPA_SELECTOR_LEN) == 0)
@@ -3001,8 +3003,6 @@ static const char * wpa_key_mgmt_txt(int key_mgmt, int proto)
 	}
 }
 
-static char scan_result[WLC_SCAN_RESULT_BUF_LEN];
-
 int
 ej_SiteSurvey(int eid, webs_t wp, int argc, char_t **argv)
 {
@@ -3067,8 +3067,6 @@ ej_SiteSurvey(int eid, webs_t wp, int argc, char_t **argv)
 
 	nvram_set("ap_selecting", "1");
 	fprintf(stderr, "Please wait (web hook) ");
-	fprintf(stderr, ".");
-	sleep(1);
 	fprintf(stderr, ".");
 	sleep(1);
 	fprintf(stderr, ".\n\n");
@@ -3479,6 +3477,7 @@ ap_list:
 
 	return retval;
 }
+#endif
 
 int
 ej_urelease(int eid, webs_t wp, int argc, char_t **argv)

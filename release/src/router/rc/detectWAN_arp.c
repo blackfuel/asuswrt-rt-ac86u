@@ -23,6 +23,8 @@
 #include <netinet/ether.h>
 #include <netpacket/packet.h>
 #include <linux/sockios.h>
+#include <string.h>
+#include <sys/ioctl.h>
 
 //#include <nvram/bcmnvram.h>
 #include <bcmnvram.h>

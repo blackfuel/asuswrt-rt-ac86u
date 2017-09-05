@@ -54,7 +54,7 @@ extern char *strsep(char **stringp, char *delim);
 /* CGI hash table */
 static struct hsearch_data htab;
 
-static void
+void
 unescape(char *s)
 {
 	unsigned int c;
@@ -95,8 +95,9 @@ get_cgi_json(char *name, json_object *root)
 		value = get_cgi(name);
 		return value;
 	}else{
-		struct json_object *json_value;
-		json_value = json_object_object_get(root, name);
+		struct json_object *json_value = NULL;
+		json_object_object_get_ex(root, name, &json_value);
+
 		return (char *)json_object_get_string(json_value);
 	}
 }
@@ -110,10 +111,10 @@ safe_get_cgi_json(char *name, json_object *root)
 		value = get_cgi(name);
 
 	}else{
-		struct json_object *json_value;
-		json_value = json_object_object_get(root, name);
+		struct json_object *json_value = NULL;
+		json_object_object_get_ex(root, name, &json_value);
 
-		value = json_object_get_string(json_value);
+		value = (char *) json_object_get_string(json_value);
 	}
 	return value ? value : "";
 }
@@ -167,7 +168,7 @@ init_cgi(char *query)
 		/* Assign variable */
 		name = strsep(&value, "=");
 		if (value) {
-//			printf("set_cgi: name=%s, value=%s.\n", name , value);	// N12 test
+			//printf("set_cgi: name=%s, value=%s.\n", name , value);	// N12 test
 			set_cgi(name, value);
 		}
 	}

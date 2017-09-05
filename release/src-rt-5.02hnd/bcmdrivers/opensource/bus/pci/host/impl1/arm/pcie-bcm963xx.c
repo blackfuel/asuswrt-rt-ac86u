@@ -1672,7 +1672,6 @@ static int __init bcm963xx_pcie_probe(struct platform_device *pdev)
 	    }
 		pdev->id = core;
 	}
-
 #endif
 #ifdef CHANGE_PROBE_ORDER
 	core = (uint32)pid2core[pdev->id];

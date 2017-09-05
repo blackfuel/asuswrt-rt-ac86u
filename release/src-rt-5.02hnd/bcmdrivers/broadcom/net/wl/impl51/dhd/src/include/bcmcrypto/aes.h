@@ -3,7 +3,7 @@
  * AES encrypt/decrypt wrapper functions used around Rijndael reference
  * implementation
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above

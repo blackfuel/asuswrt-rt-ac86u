@@ -4,7 +4,7 @@
  *
  * Beamforming support
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  * or duplicated in any form, in whole or in part, without the prior
  * written permission of Broadcom.
  *
- * $Id: wlc_txbf.h 647057 2016-07-01 22:56:25Z $
+ * $Id: wlc_txbf.h 669540 2016-11-10 01:23:08Z $
  */
 
 
@@ -46,6 +46,7 @@
 #define TXBF_MAX_LINK  7
 #define TXBF_MAX_LINK_EXT  16
 #define TXBF_MU_MAX_LINKS 8
+#define TXBF_MAX_SU_USRIDX_GE64	12	/* max su BFI idx block */
 
 #ifdef WL_BEAMFORMING
 #define TXBF_ACTIVE(wlc) (TXBF_ENAB((wlc)->pub) && ((wlc)->txbf->mode) &&((wlc)->txbf->active))
@@ -84,11 +85,6 @@ extern bool wlc_txbf_sel(wlc_txbf_info_t *txbf, ratespec_t rspec, struct scb *sc
 	txpwr204080_t* txpwrs);
 extern bool wlc_txbf_bfen(wlc_txbf_info_t *txbf, struct scb *scb, ratespec_t rspec,
         txpwr204080_t* txpwrs, bool is_imp);
-/* these two doesn't need to be external */
-extern bool wlc_txbf_exp_sel(wlc_txbf_info_t *txbf, ratespec_t rspec, struct scb *scb,
-        uint8 *shm_index, txpwr204080_t* txpwrs);
-extern bool wlc_txbf_imp_sel(wlc_txbf_info_t *txbf, ratespec_t rspec, struct scb *scb,
-        txpwr204080_t* txpwrs);
 extern void wlc_txbf_fix_rspec_plcp(wlc_txbf_info_t *txbf, ratespec_t *prspec, uint8 *plcp,
 wl_tx_chains_t txbf_chains);
 extern void wlc_txbf_clear_init_pending(wlc_txbf_info_t *txbf, struct scb *scb);
@@ -112,11 +108,9 @@ extern bool wlc_txbf_bfrspexp_enable(wlc_txbf_info_t *txbf);
 extern uint8 wlc_txbf_get_bfi_idx(wlc_txbf_info_t *txbf, struct scb *scb);
 #ifdef WL_PSMX
 extern uint8 wlc_txbf_get_mubfi_idx(wlc_txbf_info_t *txbf, struct scb *scb);
-extern int wlc_txbf_mu_cap_stas(wlc_txbf_info_t *txbf, wlc_bsscfg_t *bsscfg);
+extern int wlc_txbf_mu_cap_stas(wlc_txbf_info_t *txbf);
 extern uint8 wlc_txbf_get_free_su_bfr_links(wlc_txbf_info_t *txbf);
 extern void wlc_txbf_scb_ps_notify(wlc_txbf_info_t *txbf, struct scb *scb, bool ps_on);
-extern wlc_bsscfg_t *wlc_txbf_get_mu_bsscfg(wlc_txbf_info_t *txbf);
-extern void wlc_txbf_set_mu_bsscfg(wlc_txbf_info_t *txbf, wlc_bsscfg_t *bsscfg);
 #else
 #define wlc_txbf_get_mubfi_idx(a, b) BF_SHM_IDX_INV
 #define wlc_txbf_scb_ps_notify(a, b, c) do {} while (0)

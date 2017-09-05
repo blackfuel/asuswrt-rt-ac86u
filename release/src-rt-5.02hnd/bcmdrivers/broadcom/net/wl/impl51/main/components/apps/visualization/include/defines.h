@@ -1,7 +1,7 @@
 /*
  * Linux Visualization System common defines header
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -12,7 +12,7 @@
  *
  * <<Broadcom-WL-IPTag/Proprietary:>>
  *
- * $Id: defines.h 622375 2016-03-02 12:21:04Z $
+ * $Id: defines.h 672659 2016-11-29 10:24:01Z $
  */
 
 #ifndef _VIS_DEFINES_H_
@@ -134,6 +134,15 @@
 #define PACKET_ERR_DB_READ		4
 #define PACKET_ERR_DB_WRITE		5
 
+/* Error bit flags */
+#define VIS_SCAN_ERROR			(1 << 0) /* Scan error bit. */
+#define VIS_SCAN_DONE			(1 << 1) /* Scan happened or not bit. */
+
+/* Helper macros to set/clear/check bit operations  */
+#define VIS_SET_BIT(mask, bit)		((mask) |= (bit))
+#define VIS_CLEAR_BIT(mask, bit)	((mask) &= (~(bit)))
+#define VIS_CHECK_BIT(mask, bit)	((mask) & (bit))
+
 /* RRM report bit flags */
 #define RRM_BIT_CHLOAD		(1 << 0)
 #define RRM_BIT_STASTAT0	(1 << 1)
@@ -215,6 +224,7 @@
 #define TAG_MCAST_RSN		"MCastRSN"
 #define TAG_UCAST_RSN		"UCastRSN"
 #define TAG_AKM			"AKM"
+#define TAG_ERR_INFO		"ErrInfo"
 #define TAG_ASSOCIATEDSTA	"AssociatedSTA"
 #define TAG_STA			"STA"
 #define TAG_PHYRATE		"PhyRate"

@@ -1,7 +1,7 @@
 /*
  * ACPHY Noise module interface (to other PHY modules).
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -40,6 +40,12 @@ void phy_ac_noise_unregister_impl(phy_ac_noise_info_t *ac_info);
 
 /* ACI (start) */
 #define ACPHY_ACI_CHAN_LIST_SZ 3
+
+/* 
+   Placeholder in case we want to ever make min desense non-zero 
+   Future use: Keep atleast X dB desense (when high glitches) to disable lesi & increase mf threshold 
+*/
+#define ACPHY_ACI_MIN_DESENSE_OFDM_DB 0
 
 #define ACPHY_ACI_MAX_DESENSE_BPHY_DB 24
 #define ACPHY_ACI_MAX_DESENSE_OFDM_DB 48

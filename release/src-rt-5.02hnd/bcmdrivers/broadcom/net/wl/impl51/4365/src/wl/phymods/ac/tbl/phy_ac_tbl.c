@@ -1,7 +1,7 @@
 /*
  * ACPHY PHYTableInit module implementation
  *
- * Broadcom Proprietary and Confidential. Copyright (C) 2016,
+ * Broadcom Proprietary and Confidential. Copyright (C) 2017,
  * All Rights Reserved.
  * 
  * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
@@ -993,8 +993,16 @@ wlc_phy_ac_stbc_capable(phy_info_t *pi)
 /** Return True if PHY is capable of 160 */
 static bool wlc_phy_ac_160_capable(phy_info_t *pi)
 {
-	return (ACMAJORREV_4(pi->pubpi.phy_rev) || ACMAJORREV_GE33(pi->pubpi.phy_rev))
-		? TRUE: FALSE;
+	/* Disable 160Mhz support for 4365 3x3 */
+	if (BCM4365_CHIP(pi->sh->chip) &&
+		pi->sromi->sr13_en_sw_txrxchain_mask &&
+		(pi->sromi->sw_txchain_mask != 0xf) &&
+		(pi->sromi->sw_rxchain_mask != 0xf)) {
+		return FALSE;
+	} else {
+		return (ACMAJORREV_4(pi->pubpi.phy_rev) || ACMAJORREV_GE33(pi->pubpi.phy_rev))
+			? TRUE: FALSE;
+	}
 }
 #endif /* WL11AC_160 */
 
@@ -1002,8 +1010,16 @@ static bool wlc_phy_ac_160_capable(phy_info_t *pi)
 /** Return True if PHY is capable of 80p80 */
 static bool wlc_phy_ac_80p80_capable(phy_info_t *pi)
 {
-	return (ACMAJORREV_4(pi->pubpi.phy_rev) || ACMAJORREV_GE33(pi->pubpi.phy_rev))
-		? TRUE: FALSE;
+	/* Disable 160Mhz support for 4365 3x3 */
+	if (BCM4365_CHIP(pi->sh->chip) &&
+		pi->sromi->sr13_en_sw_txrxchain_mask &&
+		(pi->sromi->sw_txchain_mask != 0xf) &&
+		(pi->sromi->sw_rxchain_mask != 0xf)) {
+		return FALSE;
+	} else {
+		return (ACMAJORREV_4(pi->pubpi.phy_rev) || ACMAJORREV_GE33(pi->pubpi.phy_rev))
+			? TRUE: FALSE;
+	}
 }
 #endif /* WL11AC_80P80 */
 
@@ -1124,7 +1140,6 @@ WLBANDINITFN(wlc_phy_init_acphy)(phy_info_t *pi)
 #endif
 #if defined(WL_BEAMFORMING)
 	uint32 txbf_stall_val;
-	uint32 svmp_addr[4] = {0x12001000, 0x16001400, 0x1A001800, 0x1E001C00};
 	uint32 mlbf_lut[64] = {0x19003af, 0x19003af, 0x1d10390, 0x8f03f6, 0x12b03d3, 0x8f03f6,
 		0xe603e6, 0x11a03d8, 0x2d402d4, 0x2d402d4, 0x2d402d4, 0x2d402d4, 0x400, 0x400,
 		0x400, 0x400, 0x19003af, 0x19003af, 0x1d10390, 0x8f03f6, 0x12b03d3, 0x8f03f6,
@@ -1134,6 +1149,8 @@ WLBANDINITFN(wlc_phy_init_acphy)(phy_info_t *pi)
 		0x400, 0x400, 0x1d10390, 0x1d10390, 0x2d402d4, 0x400, 0x23d0351, 0x12b03d3,
 		0x1f00380, 0x22e035b, 0x2d402d4, 0x2d402d4, 0x2d402d4, 0x2d402d4, 0x400,
 		0x400, 0x400, 0x400};
+	uint32 bfmuserdx_lut[8] = {0x11141000, 0x133c1228, 0x15641450, 0x178c1678, 0x19b418a0,
+		0x1bdc1ac8, 0x1e041cf0, 0x1f18};
 	uint32 mu_vmaddr[1] = {0x0e000c00};
 #endif
 	PHY_TRACE(("wl%d: %s\n", pi->sh->unit, __FUNCTION__));
@@ -1346,12 +1363,11 @@ WLBANDINITFN(wlc_phy_init_acphy)(phy_info_t *pi)
 		WRITE_PHYREG(pi, BfrMuConfigReg1, 0x1000);
 		WRITE_PHYREG(pi, BfmMuConfig3, 0x1000);
 		WRITE_PHYREG(pi, BfeMuConfigReg1, 0x1000);
-
-		WRITE_PHYREG(pi, BfrMuConfigReg2, 0x2000);
-		WRITE_PHYREG(pi, BfmMuConfig4, 0x2000);
-		WRITE_PHYREG(pi, BfeMuConfigReg2, 0x2000);
-		MOD_PHYREG(pi, BfrMuConfigReg0, useTxbfIndexAddr, 1);
-		MOD_PHYREG(pi, BfeMuConfigReg0, useTxbfIndexAddr, 1);
+		WRITE_PHYREG(pi, BfrMuConfigReg2, 0x1f92);
+		WRITE_PHYREG(pi, BfmMuConfig4, 0x1f92);
+		WRITE_PHYREG(pi, BfeMuConfigReg2, 0x1f92);
+		MOD_PHYREG(pi, BfrMuConfigReg0, useTxbfIndexAddr, 0);
+		MOD_PHYREG(pi, BfeMuConfigReg0, useTxbfIndexAddr, 0);
 
 		MOD_PHYREG(pi, BfmMuConfig0, mlbfEnable, 1);
 
@@ -1368,7 +1384,8 @@ WLBANDINITFN(wlc_phy_init_acphy)(phy_info_t *pi)
 			//	PHY_BITSCNT(pi->sh->phytxchain) - 1);
 		}
 
-		wlc_phy_table_write_acphy(pi, ACPHY_TBL_ID_BFMUSERINDEX, 4, 0x1000, 32, svmp_addr);
+		wlc_phy_table_write_acphy(pi, ACPHY_TBL_ID_BFMUSERINDEX, 8, 0x1000, 32,
+			bfmuserdx_lut);
 		wlc_phy_table_write_acphy(pi, ACPHY_TBL_ID_BFMUSERINDEX, 64, 0x1040, 32, mlbf_lut);
 		wlc_phy_table_write_acphy(pi, ACPHY_TBL_ID_BFMUSERINDEX, 1, 0x1020, 32, mu_vmaddr);
 		ACPHY_ENABLE_STALL(pi, txbf_stall_val);

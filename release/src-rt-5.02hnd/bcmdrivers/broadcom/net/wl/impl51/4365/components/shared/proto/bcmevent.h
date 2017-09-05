@@ -3,7 +3,7 @@
  *
  * Dependencies: proto/bcmeth.h
  *
- * Copyright (C) 2016, Broadcom. All Rights Reserved.
+ * Copyright (C) 2017, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,7 +20,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: bcmevent.h 650917 2016-07-23 01:48:16Z $
+ * $Id: bcmevent.h 663438 2016-10-05 10:48:01Z $
  *
  */
 
@@ -163,9 +163,6 @@ typedef union bcm_event_msg_u {
 #define WLC_E_UNICAST_DECODE_ERROR	50	/* Unsupported unicast encrypted frame */
 #define WLC_E_MULTICAST_DECODE_ERROR	51	/* Unsupported multicast encrypted frame */
 #define WLC_E_TRACE		52
-#ifdef WLBTAMP
-#define WLC_E_BTA_HCI_EVENT	53	/* BT-AMP HCI event */
-#endif
 #define WLC_E_IF		54	/* I/F change (for dongle host notification) */
 #define WLC_E_P2P_DISC_LISTEN_COMPLETE	55	/* listen state expires */
 #define WLC_E_RSSI		56	/* indicate RSSI change based on configured levels */
@@ -260,7 +257,7 @@ typedef union bcm_event_msg_u {
 #define WLC_E_MACDBG			147	/* Ucode debugging event */
 #define WLC_E_RESERVED			148	/* reserved */
 #define WLC_E_PRE_ASSOC_RSEP_IND	149	/* assoc resp received */
-#define WLC_E_ID_AUTH			150	/* ID AUTH WPA2-PSK 4 WAY Handshake failure */
+#define WLC_E_PSK_AUTH			150	/* PSK AUTH WPA2-PSK 4 WAY Handshake failure */
 #define WLC_E_TKO			151     /* TCP keepalive offload */
 #define WLC_E_SDB_TRANSITION            152     /* SDB mode-switch event */
 #define WLC_E_NATOE_NFCT		153     /* natoe event */
@@ -278,9 +275,10 @@ typedef union bcm_event_msg_u {
 #define WLC_E_DMA_TXFLUSH_COMPLETE		165	/* TxFlush done before changing
 											* tx/rxchain
 											*/
-#define WLC_E_LAST			166	/* highest val + 1 for range checking */
-#if (WLC_E_LAST > 166)
-#error "WLC_E_LAST: Invalid value for last event; must be <= 165."
+#define WLC_E_FBT			166	/* FBT event */
+#define WLC_E_LAST			167	/* highest val + 1 for range checking */
+#if (WLC_E_LAST > 167)
+#error "WLC_E_LAST: Invalid value for last event; must be <= 166."
 #endif /* WLC_E_LAST */
 
 /* define an API for getting the string name of an event */
@@ -318,6 +316,20 @@ void wl_event_to_network_order(wl_event_msg_t * evt);
 #define WLC_E_STATUS_CS_ABORT		15	/* abort channel select */
 #define WLC_E_STATUS_ERROR		16	/* request failed due to error */
 #define WLC_E_STATUS_INVALID 0xff  /* Invalid status code to init variables. */
+
+/* 4-way handshake event type */
+#define WLC_E_PSK_AUTH_SUB_EAPOL_START		1	/* EAPOL start */
+#define WLC_E_PSK_AUTH_SUB_EAPOL_DONE		2	/* EAPOL end */
+/* GTK event type */
+#define	WLC_E_PSK_AUTH_SUB_GTK_DONE		3	/* GTK end */
+
+/* 4-way handshake event status code */
+#define WLC_E_STATUS_PSK_AUTH_WPA_TIMOUT	1	/* operation timed out */
+#define WLC_E_STATUS_PSK_AUTH_MIC_WPA_ERR		2	/* MIC error */
+#define WLC_E_STATUS_PSK_AUTH_IE_MISMATCH_ERR		3	/* IE Missmatch error */
+#define WLC_E_STATUS_PSK_AUTH_REPLAY_COUNT_ERR		4
+#define WLC_E_STATUS_PSK_AUTH_PEER_BLACKISTED	5	/* Blaclisted peer */
+#define WLC_E_STATUS_PSK_AUTH_GTK_REKEY_FAIL	6	/* GTK event status code */
 
 /* SDB transition status code */
 #define WLC_E_STATUS_SDB_START          1
@@ -464,10 +476,6 @@ typedef struct wl_event_data_natoe {
 #define WLC_E_IF_ROLE_WDS		2	/* WDS link */
 #define WLC_E_IF_ROLE_P2P_GO		3	/* P2P Group Owner */
 #define WLC_E_IF_ROLE_P2P_CLIENT	4	/* P2P Client */
-#ifdef WLBTAMP
-#define WLC_E_IF_ROLE_BTA_CREATOR	5	/* BT-AMP Creator */
-#define WLC_E_IF_ROLE_BTA_ACCEPTOR	6	/* BT-AMP Acceptor */
-#endif
 #define WLC_E_IF_ROLE_IBSS              8       /* IBSS */
 #define WLC_E_IF_ROLE_NAN              9       /* NAN */
 
@@ -668,33 +676,41 @@ typedef struct wl_dpsta_intf_event {
 
 /*  **********  NAN protocol events/subevents  ********** */
 #define NAN_EVENT_BUFFER_SIZE 512 /* max size */
-/* nan application events to the host driver */
-typedef enum nan_app_events {
-	WL_NAN_EVENT_START = 1,     /* NAN cluster started */
-	WL_NAN_EVENT_JOIN = 2,      /* Joined to a NAN cluster */
-	WL_NAN_EVENT_ROLE = 3,      /* Role or State changed */
+/* NAN Events sent by firmware */
+typedef enum wl_nan_events {
+	WL_NAN_EVENT_START = 1,		/* NAN cluster started */
+	WL_NAN_EVENT_JOIN = 2,		/* Joined to a NAN cluster */
+	WL_NAN_EVENT_ROLE = 3,	/* Role changed */
 	WL_NAN_EVENT_SCAN_COMPLETE = 4,
 	WL_NAN_EVENT_DISCOVERY_RESULT = 5,
 	WL_NAN_EVENT_REPLIED = 6,
 	WL_NAN_EVENT_TERMINATED = 7,	/* the instance ID will be present in the ev data */
 	WL_NAN_EVENT_RECEIVE = 8,
-	WL_NAN_EVENT_STATUS_CHG = 9,  /* generated on any change in nan_mac status */
-	WL_NAN_EVENT_MERGE = 10,      /* Merged to a NAN cluster */
-	WL_NAN_EVENT_STOP = 11,       /* NAN stopped */
-	WL_NAN_EVENT_P2P = 12,       /* NAN P2P EVENT */
+	WL_NAN_EVENT_STATUS_CHG = 9,	/* generated on any change in nan_mac status */
+	WL_NAN_EVENT_MERGE = 10,	/* Merged to a NAN cluster */
+	WL_NAN_EVENT_STOP = 11,		/* NAN stopped */
+	WL_NAN_EVENT_P2P = 12,		/* NAN P2P EVENT */
 	WL_NAN_EVENT_WINDOW_BEGIN_P2P = 13, /* Event for begin of P2P further availability window */
 	WL_NAN_EVENT_WINDOW_BEGIN_MESH = 14,
 	WL_NAN_EVENT_WINDOW_BEGIN_IBSS = 15,
 	WL_NAN_EVENT_WINDOW_BEGIN_RANGING = 16,
-	WL_NAN_EVENT_POST_DISC = 17, /* Event for post discovery data */
-	WL_NAN_EVENT_DATA_IF_ADD = 18, /* Event for Data IF add */
+	WL_NAN_EVENT_POST_DISC = 17,	/* Event for post discovery data */
+	WL_NAN_EVENT_DATA_IF_ADD = 18,	/* Event for Data IF add */
 	WL_NAN_EVENT_DATA_PEER_ADD = 19, /* Event for peer add */
 	/* nan 2.0 */
-	WL_NAN_EVENT_DATA_IND = 20, /* Data Indication to Host */
-	WL_NAN_EVENT_DATA_CONF = 21, /* Data Response to Host */
+	WL_NAN_EVENT_DATA_IND = 20, /* Will be removed after source code is committed. */
+	WL_NAN_EVENT_PEER_DATAPATH_IND = 20, /* Peer's Datapath request Indication to Host */
+	WL_NAN_EVENT_DATA_CONF = 21, /* Will be removed after source code is committed. */
+	WL_NAN_EVENT_DATAPATH_ESTB = 21, /* Datapath Established to Host */
 	WL_NAN_EVENT_SDF_RX = 22,	/* entire service discovery frame */
-	WL_NAN_EVENT_DATA_END = 23,
+	WL_NAN_EVENT_DATA_END = 23,	/* Will be removed after source code is committed. */
+	WL_NAN_EVENT_DATAPATH_END = 23,	/* Data End to Host */
 	WL_NAN_EVENT_BCN_RX = 24,	/* received beacon payload */
+	WL_NAN_EVENT_PEER_DATAPATH_RESP = 25, /* Peer's Data Response indication to Host */
+	WL_NAN_EVENT_PEER_DATAPATH_CONF = 26, /* Peer's Data Confirm indication to Host */
+	WL_NAN_EVENT_RNG_REQ_IND = 27,  /* Range Request Indication to Host */
+	WL_NAN_EVENT_RNG_RPT_IND = 28,  /* Range Report Indication to Host */
+	WL_NAN_EVENT_RNG_TERM_IND = 29,  /* Range Termination Indication to Host */
 	WL_NAN_EVENT_INVALID	/* delimiter for max value */
 } nan_app_events_e;
 
@@ -799,6 +815,22 @@ typedef struct {
 	int8 rssi;		/* RSSI of the STA */
 	uint8 traffic;		/* internal metric of traffic */
 } wl_event_mode_switch_dyn160;
+
+#define WL_EVENT_FBT_VER_1		1
+
+#define WL_E_FBT_TYPE_FBT_OTD_AUTH	1
+
+/* event structure for WLC_E_FBT */
+typedef struct {
+	uint16 version;
+	uint16 length;	/* size including 'data' field */
+	uint16 type; /* value 0: unknown, 1: FBT OTD Auth Req */
+	uint16 data_offset;	/* offset to 'data' from beginning of this struct.
+				 * fields may be added between data_offset and data
+				 */
+	/* ADD NEW FIELDS HERE */
+	uint8 data[];	/* type specific data; could be empty */
+} wl_event_fbt_t;
 
 /* TWT Setup Completion is designed to notify the user of TWT Setup process
  * status. When 'status' field is value of BCME_OK, the user must check the

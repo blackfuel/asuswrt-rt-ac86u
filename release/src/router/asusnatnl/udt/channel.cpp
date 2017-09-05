@@ -473,6 +473,13 @@ int CChannel::recvfrom(sockaddr* addr, CPacket& packet) const
 					int len = rb->len - sizeof(NO_CTL_SESS_MGR_HEADER_MAGIC);
 					natnl_handle_recv_msg(call->index, call->tnl_stream->med_tp, data, len);
 			} else */if (!check_packet_integrity(rb)) {
+
+#ifdef HTTP_DEBUG
+        char *pkt_char = (char *)&rb->buff[UDT_DATA_CHUNK_TOTAL_HEADER_SIZE];
+        if (strstr(pkt_char, "HTTP/1.1") != NULL) {
+            PJ_LOG(4, ("channel.cpp", "UDT::CChannel::recvfrom. rbuff_cnt=%d, len=%d %.*s", stream->rbuff_cnt, rb->len, rb->len, pkt_char));
+        }
+#endif
 				int ds = UMIN(packet.m_PacketVector[1].iov_len, rb->len - sizeof(natnl_hdr) - CPacket::m_iPktHdrSize);
 				memcpy(packet.m_PacketVector[0].iov_base, &rb->buff[sizeof(natnl_hdr)], packet.m_PacketVector[0].iov_len);
 				memcpy(packet.m_PacketVector[1].iov_base, &rb->buff[packet.m_PacketVector[0].iov_len+sizeof(natnl_hdr)], ds);

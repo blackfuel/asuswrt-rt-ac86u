@@ -28,6 +28,8 @@
 #include <rtconfig.h>
 #include <bcmnvram.h>
 
+#include <shared.h>
+
 #include "nvram_mode.h"
 
 #define PROFILE_HEADER		"HDR1"
@@ -116,6 +118,53 @@ static int export_mode(char* mode, char* buf_ap, char* buf)
 
 	return 0;
 }
+
+static int nvram_dec_all(char* buf_ap, char* buf)
+{
+	struct nvram_tuple *t;
+	extern struct nvram_tuple router_defaults[];
+	char *ptr, *item, *value;
+	char name[128], nv[128];
+	int len;
+	char output[1024];
+	memset(output, 0, sizeof(output));
+
+
+	if (!buf_ap || !buf)
+		return -1;
+
+	ptr = buf_ap;
+
+	for (item = buf; *item; item += strlen(item) + 1) {
+		value = strchr(item, '=');
+		if (!value)
+			continue;
+		len = value - item;
+		if (len < 0 || len > sizeof(name) - 1)
+			continue;
+
+		strncpy(name, item, len);
+		name[len] = '\0';
+		value++;
+
+		for (t = router_defaults; t->name; t++)
+		{
+			if (strcmp(name, t->name) == 0 && t->enc == 1) {
+				dec_nvram(t->name, value, output);
+				value = output;
+			}
+		}
+
+		snprintf(nv, sizeof(nv), "%s=%s", name, value);
+		ptr = stpcpy(ptr, nv) + 1;
+#ifdef ASUS_DEBUG
+				puts(nv);
+#endif
+	}
+
+	return 0;
+}
+
 /*******************************************************************
 * NAME: _secure_romfile
 * AUTHOR: Andy Chiu
@@ -525,7 +574,19 @@ main(int argc, char **argv)
 			if (*++argv)
 			{
 				nvram_getall(buf, NVRAM_SPACE);
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+				char *tmp_dnv = malloc(MAX_NVRAM_SPACE);
+				if (!tmp_dnv) {
+					fprintf(stderr, "Can NOT alloc memory!!!");
+					return 0;
+				}
+				memset(tmp_dnv, 0, MAX_NVRAM_SPACE);
+				nvram_dec_all(tmp_dnv, buf);
+				nvram_save_new(*argv, tmp_dnv);
+				free(tmp_dnv);
+#else
 				nvram_save_new(*argv, buf);
+#endif
 			}
 		} else if (!strncmp(*argv, "save_ap", 7) ||
 			   !strncmp(*argv, "save_rp", 7)) {
@@ -538,7 +599,19 @@ main(int argc, char **argv)
 				}
 				memset(tmp_export, 0, MAX_NVRAM_SPACE);
 				nvram_getall(buf, NVRAM_SPACE);
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+				char *tmp_dnv = malloc(MAX_NVRAM_SPACE);
+				if (!tmp_dnv) {
+					fprintf(stderr, "Can NOT alloc memory!!!");
+					return 0;
+				}
+				memset(tmp_dnv, 0, MAX_NVRAM_SPACE);
+				nvram_dec_all(tmp_dnv, buf);
+				export_mode(mode, tmp_export, tmp_dnv);
+				free(tmp_dnv);
+#else
 				export_mode(mode, tmp_export, buf);
+#endif
 				nvram_save_new(*argv, tmp_export);
 				free(tmp_export);
 			}

@@ -1,9 +1,9 @@
 var Untranslated = {
 	fw_size_higher_mem : 'Memory space is NOT enough to upgrade on internet. Please wait for rebooting.',
 	the_array_is_end : "end here.",
-	ASUSGATE_note9 : "Your DSL line appears to be unstable. DLA (Dynamic Line Adjustment) which enabled by default already adopted necessary changes and ensure stability. However if interruption continues please submit a feedback form for our analysis.",
-	ASUSGATE_note6 : "Your DSL line appears to be unstable. We strongly recommend that you submit a feedback form for our analysis.",
-	ASUSGATE_note7 : "If you are experiencing any DSL related issues or have any comments / suggestions, please feel free to inform our support team.",
+	ASUSGATE_note9 : "Your DSL (Digital Suscriber Line) seems unstable. DLA (Dynamic Line Adjustment) enabled by default has modified the necessary setting to improve the network stability. If failed, please submit feedback to our support team.",
+	ASUSGATE_note6 : "Your DSL (Digital Suscriber Line) seems unstable. We strongly recommend that you submit feedback to our support team.",
+	ASUSGATE_note7 : "If you are experiencing any DSL related issues or you have any comments, please feel free to inform our support team.",
 	JS_validclientname : "Client device name only accept alphanumeric characters, under line and dash symbol. The first character cannot be dash \"-\" or under line \"_\".",
 	ASUSGATE_act_feedback : "Feedback now",
 	ASUSGATE_DSL_setting : "Go setting DSL",
@@ -236,10 +236,12 @@ function overHint(itemNum){
 		statusmenu ="<span><#Adaptive_Custom_desc#></span>";
 	}
 	else if(itemNum == 86){
-		statusmenu ="<span><#Adaptive_Game_desc#><br><#Adaptive_Category1#></span>";
+		//statusmenu ="<span><#Adaptive_Game_desc#><br><#Adaptive_Category1#></span>";
+		statusmenu ="<span>For optimize online gaming process bandwidth including  Diablo, WOW, Steam games and XBOX, ect.<br><#Adaptive_Category1#></span>";		/* untranslated */
 	}
 	else if(itemNum == 87){
-		statusmenu ="<span><#Adaptive_Stream_desc#><br><#Adaptive_Category2#></span>";
+		//statusmenu ="<span><#Adaptive_Stream_desc#><br><#Adaptive_Category2#></span>";
+		statusmenu ="<span>For faster video streaming experience including Youtube, Netflix and Spotify, ect.<br><#Adaptive_Category2#></span>";	/* untranslated */
 	}
 	else if(itemNum == 88){
 		statusmenu ="<span><#Adaptive_WebSurf_desc#><br><#Adaptive_Category4#></span>";
