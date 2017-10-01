@@ -817,7 +817,7 @@ width:122px;
 }
 .menu_PermissionManagement{
 	background: url(images/New_ui/icon_indexes.png);
-	background-position: -0px -86px;
+	background-position: -0px -288px;
 }
 .menu_Report{
 	background: url(images/New_ui/icon_menues.png);
@@ -859,7 +859,6 @@ width:122px;
 	background: url(images/New_ui/icon_indexes.png);
 	background-position: 0px -252px;
 }
-
 .menu_Wireless{
 	background: url(images/New_ui/icon_menues.png);
 	background-position: 0px 0px;
@@ -900,7 +899,7 @@ width:122px;
 	background: url(images/New_ui/icon_menues.png);
 	background-position: 0px -288px;
 }
-.menu_SmartHome{
+.menu_Alexa_IFTTT{
 	background: url(images/New_ui/icon_menues.png);
 	background-position: 0px -324px;
 }

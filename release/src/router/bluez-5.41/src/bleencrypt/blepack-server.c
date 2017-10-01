@@ -198,6 +198,9 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 					nvram_set(strcat_r(prefix, "channel", tmp), "0");
 				unit++;
 			}
+#ifdef RTCONFIG_LANTIQ
+			nvram_set_int("wave_flag", WAVE_FLAG_QIS);
+#endif
 
 			break;
 		case BLE_COMMAND_SET_WAN_PORT:
@@ -267,6 +270,13 @@ void UnpackBLEDataToNvram(struct param_handler_svr *param_handler, unsigned char
 			break;
 		case BLE_COMMAND_APPLY:
 			is_change_lanip = 0;
+#ifdef RTCONFIG_LANTIQ
+			while(nvram_get_int("wave_ready") == 0){
+				fprintf(stderr, "[BLE] wireless not ready, waiting...\n");
+				sleep(5);
+			}
+			nvram_set_int("wave_action", 3);
+#endif
 			if (nvram_match("sw_mode", "3"))
 			{
 
@@ -696,6 +706,7 @@ void PackBLEResponseGetMacBleVersion(int cmdno, int status, unsigned char *pdu, 
 	PackBLEResponseData(cmdno, status, (unsigned char*)tmp, sizeof(tmp), pdu, pdulen, BLE_RESPONSE_FLAGS|BLE_FLAG_WITH_ENCRYPT);
 }
 
+#if defined(RTCONFIG_QCA)
 void PackBLEResponseGetAth1Chan(int cmdno, int status, unsigned char *pdu, int *pdulen)
 {
 	FILE *fp;
@@ -760,6 +771,7 @@ void PackBLEResponseGetAth1Chan(int cmdno, int status, unsigned char *pdu, int *
 
 	PackBLEResponseData(cmdno, status, (unsigned char*)tmp, sizeof(tmp), pdu, pdulen, BLE_RESPONSE_FLAGS|BLE_FLAG_WITH_ENCRYPT);
 }
+#endif
 
 void PackBLEResponseGetWanStatus(int cmdno, int status, unsigned char *pdu, int *pdulen)
 {

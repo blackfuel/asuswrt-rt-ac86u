@@ -3905,6 +3905,11 @@ wlc_scan_sendprobe(scan_info_t *scan_info)
 			bssid = &wlc_scan_info->bssid;
 		}
 #endif /* WLFMC */
+		/* support to do unicast probe if bssid is specified */
+		else if (!ETHER_ISMULTI(&wlc_scan_info->bssid)) {
+			da = &wlc_scan_info->bssid;
+			bssid = &wlc_scan_info->bssid;
+		}
 		_wlc_scan_sendprobe(scan_info, cfg, ssid->SSID, ssid->SSID_len,
 		              da, bssid, SCAN_PROBE_TXRATE(scan_info), NULL, 0);
 		if (!scan_info->extdscan)

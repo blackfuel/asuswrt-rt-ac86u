@@ -477,6 +477,11 @@ set_wsec(char *ifname, void *credential, int mode)
 		}
 		sprintf(buf, "key%d", cred->wepIndex);
 		set_wep_key(strcat_r(prefix, buf, tmp), cred->nwKey, cred->nwKeyLen);
+		if (wps_ui_act_enroll) {
+			set_wep_key(strcat_r(pfcred, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
+			set_wep_key(strcat_r(pfcred0, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
+			set_wep_key(strcat_r(pfcred1, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
+		}
 		if ((cred->nwKeyLen == 5) || (cred->nwKeyLen == 10)) {
 			if (wps_ui_act_enroll)
 			{

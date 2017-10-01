@@ -213,6 +213,14 @@ function add_group(flag, target){
 		return false;
 	}
 
+	var alert_str = validator.hostName(document.getElementById("group_name"));
+
+	if(alert_str != ""){
+		alert(alert_str);
+		document.getElementById("group_name").focus();
+		return false;
+	}
+
 	if(flag != "modify"){
 		for(i=0;i<info.group.length;i++){
 			var group_index = info.group[i];

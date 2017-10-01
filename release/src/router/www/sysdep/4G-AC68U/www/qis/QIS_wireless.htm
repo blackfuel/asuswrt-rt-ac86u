@@ -12,6 +12,9 @@
 <script type="text/javascript" src="/validator.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
 <script>
+var wanstate = -1;
+var wansbstate = -1;
+var wanauxstate = -1;
 var wl0_ssid_orig = decodeURIComponent('<% nvram_char_to_ascii("", "wl0_ssid"); %>');
 var wl1_ssid_orig = decodeURIComponent('<% nvram_char_to_ascii("", "wl1_ssid"); %>');
 var wl2_ssid_orig = decodeURIComponent('<% nvram_char_to_ascii("", "wl2_ssid"); %>');
@@ -165,7 +168,7 @@ function QKWireless_load_body(){
 			setTimeout(function(){document.form.wl0_ssid.focus();}, 1);
 		}
 
-		if(smart_connect_support){
+		if(smart_connect_support && (parent.document.QKform.sw_mode.value == 1 || parent.document.QKform.sw_mode.value == 3)){
 			if('<% nvram_get("x_Setting"); %>' == '0')
 					document.form.smart_connect_t[0].checked = true;
 
@@ -177,7 +180,7 @@ function QKWireless_load_body(){
 			document.getElementById("field_general").style.display = "";
 	}
 
-	if((parent.document.QKform.sw_mode.value == 1) && (is_TW_sku || is_CN_sku)){	
+	if((parent.document.QKform.sw_mode.value == 1) && (is_TW_sku || is_CN_sku) && parent.flag_manual != 1){
 		check_wan_state();
 	}	
 
@@ -214,18 +217,13 @@ function check_wan_state(){
 		},
 		success: function(response){
 			setTimeout("check_wan_state();", 1000);
-			if((wanstate  == 1 && wansbstate == 0 && wanauxstate == 0) || (wanstate  == 6 && wansbstate == 0 && wanauxstate == 0) || (wanstate  == 4 && wansbstate == 2 && wanauxstate == 0)){
-				if(!parent.flag_manual)
+			if(wanstate == 4 && wansbstate == 2 && wanauxstate == 0){
 					parent.pppoe_failed_flag = true;
 			}
-			else if(wanstate == 4 && wansbstate == 4 && wanauxstate == 0){
+			else{
 				parent.pppoe_failed_flag = false;
+				if(wanstate == 4 && wansbstate == 4 && wanauxstate == 0)
 				parent.changeSubnet = true;
-			}
-			else{	
-				if(wanstate  == 2 && wansbstate == 0 && wanauxstate == 0){
-					parent.pppoe_failed_flag = false;
-				}
 			}
 		}
 	});	
@@ -237,7 +235,7 @@ function submitForm(){
 	var wl_confirm = 0;
 	changeiuiBackground(1);
 
-		if(smart_connect_support && smartcon_skip_t == 0){
+		if(smart_connect_support && smartcon_skip_t == 0 && (parent.document.QKform.sw_mode.value == 1 || parent.document.QKform.sw_mode.value == 3)){
 			if(band5g_support){
 				inputCtrl(document.form.wl1_ssid,1);
 				inputCtrl(document.form.wl1_wpa_psk,1);
@@ -313,8 +311,8 @@ function submitForm(){
 				if(!confirm("<#JS_common_passwd#>")){
 					document.form.wl0_wpa_psk.focus();
 					document.form.wl0_wpa_psk.select();
-					return false;   
-				}       
+					return false;
+				}
 			}
 		}else
 		{
@@ -414,8 +412,8 @@ function submitForm(){
 						if(!confirm("<#JS_common_passwd#>")){
 							document.form.wl1_wpa_psk.focus();
 							document.form.wl1_wpa_psk.select();
-							return false;   
-						}       
+							return false;
+						}
 					}
 				}
 				else{
@@ -725,7 +723,7 @@ function submitForm(){
 			document.getElementById("wl2_key4").name = "wl2.1_key4";
 		}
 
-		if(sdk_7){
+		if(sdk_7 || sdk_9){
 			document.form.sw_mode.value = 3;
 			document.form.wlc_psta.value = 2;
 		}else{
@@ -776,7 +774,7 @@ function submitForm(){
 		document.form.http_passwd.disabled = false;
 	}
 
-	if(smart_connect_support){
+	if(smart_connect_support && (document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3")){
 			if(document.form.smart_connect_t[0].checked == true){
 				document.form.smart_connect_x.value = 1;
 				document.form.wl1_wpa_psk.value = document.form.wl0_wpa_psk.value;
@@ -812,7 +810,7 @@ function submitForm(){
 	}
 
 	document.form.submit();
-	if((document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3") && !parent.pppoe_failed_flag){
+	if((document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3") && !(!parent.flag_manual && parent.pppoe_failed_flag)){
 		setTimeout(function(){
 			location.href = "/qis/QIS_finish.htm";
 		}, 500)
@@ -911,7 +909,7 @@ function gotoIndex_wireless(){
 		return false;
 	}
 	else
-		parent.location.href = '/index.asp';
+		parent.location.href = '<% abs_index_page(); %>';
 }
 
 var retValHandler = {
@@ -945,7 +943,7 @@ var retValHandler = {
 
 	"__checkWlcStatus" : function(_status){
 		if(_status.wlc_state == 2 && _status.wlc_sbstate == 0){ // connected
-			top.location.href = '/index.asp';
+			top.location.href = '<% abs_index_page(); %>';
 		}
 		else{
 			top.location.href = '/error_page.htm?flag=8';

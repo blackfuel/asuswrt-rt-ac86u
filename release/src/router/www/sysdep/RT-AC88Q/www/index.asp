@@ -379,7 +379,7 @@ function initial(){
 	/*
 	if(smart_connect_support){
 		if(localAP_support && (isSwMode("rt") || isSwMode("ap"))){
-			if((based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300") && '<% nvram_get("smart_connect_x"); %>' !=0)
+			if((based_modelid == "RT-AC5300") && '<% nvram_get("smart_connect_x"); %>' !=0)
 			show_smart_connect_status();
 		}
 	}

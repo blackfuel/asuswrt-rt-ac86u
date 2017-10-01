@@ -26,8 +26,8 @@ function initial(){
 }
 
 function redirect_page(redirect_flag){
-	document.redirectForm.action = "/qis/QIS_"+redirect_flag+".htm";
-	document.redirectForm.submit();
+	var location_url = "/qis/QIS_"+redirect_flag+".htm"
+	location.href = location_url;
 }
 
 function submitenter(myfield,e)
@@ -54,7 +54,7 @@ function detect_if_wan_plug(flag){
 			detect_if_wan_plug();		
 		},
 		success: function(response){
-			if(autodet_state == 4){ // ethernet did not plug
+			if(autodet_state == 4 || parent.noWAN_support){ // ethernet did not plug
 				if(sim_state == 1 || sim_state == 2){
 					redirect_page("admin_pass");
 				}

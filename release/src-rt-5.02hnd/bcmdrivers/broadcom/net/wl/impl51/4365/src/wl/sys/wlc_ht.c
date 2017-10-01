@@ -3743,8 +3743,12 @@ void
 wlc_ht_checkadd_rifs_permitted(wlc_ht_info_t *hti, int8 n_cfg, uint8* byte1)
 {
 	wlc_info_t* wlc = WLC_HT_INFO_PRIV(hti)->wlc;
+
 	/* A VHT AP shall set the RIFS Mode field in the HT Operation element to 0. */
-	if (!VHT_ENAB(wlc->pub) && wlc_ht_get_rifs_advert(hti) &&
+	if (VHT_ENAB(wlc->pub) && BAND_5G(wlc->band->bandtype))
+		return;
+
+	if (wlc_ht_get_rifs_advert(hti) &&
 		(n_cfg != WLC_N_PROTECTION_MIXEDMODE)) {
 		*byte1 |= HT_RIFS_PERMITTED;
 	}

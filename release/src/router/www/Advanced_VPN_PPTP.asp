@@ -173,6 +173,9 @@ function initial(){
 		delete vpn_server_array.IPSEC;
 	}
 	$('#divSwitchMenu').html(gen_switch_menu(vpn_server_array, "PPTP"));
+
+	//set FAQ URL
+	set_FAQ_link("faq_port_forwarding", "1033906", "privateIP");//this id is include in string : #vpn_privateIP_hint#
 }
 
 var MAX_RETRY_NUM = 5;

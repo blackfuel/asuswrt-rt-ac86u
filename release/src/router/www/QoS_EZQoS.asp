@@ -254,6 +254,11 @@ else
 var dsl_DataRateDown = parseInt("<% nvram_get("dsllog_dataratedown"); %>");
 var dsl_DataRateUp = parseInt("<% nvram_get("dsllog_datarateup"); %>");
 
+//HND_ROUTER HW NAT (fc_disable/runner_disable) ON: 0/0 ; OFF: 1/1
+var fc_disable_orig = '<% nvram_get("fc_disable"); %>';
+var runner_disable_orig = '<% nvram_get("runner_disable"); %>';
+
+
 var bwdpi_app_rulelist = "<% nvram_get("bwdpi_app_rulelist"); %>".replace(/&#60/g, "<");
 var category_title = ["", "<#Adaptive_Game#>", "<#Adaptive_Stream#>","<#Adaptive_Message#>", "<#Adaptive_WebSurf#>","<#Adaptive_FileTransfer#>", "<#Adaptive_Others#>"];
 var cat_id_array = [[9,20], [8], [4], [0,5,6,15,17], [13,24], [1,3,14], [7,10,11,21,23]];
@@ -628,7 +633,7 @@ function submitQoS(){
 			show_tm_eula();
 		}
 		else{
-			if(ctf_disable == 1){
+			if(ctf_disable == 1 || (fc_disable_orig != '' && runner_disable_orig != '')){	//HW NAT [OFF] or HND ROUTER
 				document.form.action_script.value = "restart_qos;restart_firewall";
 			}
 			else{

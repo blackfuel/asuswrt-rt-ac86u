@@ -886,7 +886,6 @@ enum {
 #endif
 	IOV_ASSOC_DECISION, /* association decision */
 	IOV_WET_ENAB,		 /* wep enable/disable */
-	IOV_CUSTOM_OUI, /* oui for STA customization */
 	IOV_LAST		/* In case of a need to check max ID number */
 };
 
@@ -1786,9 +1785,6 @@ static const bcm_iovar_t wlc_iovars[] = {
 	(IOVF_SET_DOWN), IOVT_BOOL, 0
 	},
 #endif
-	{"custom_oui", IOV_CUSTOM_OUI,
-	(IOVF_SET_UP), IOVT_BUFFER, 0
-	},
 	{NULL, 0, 0, 0, 0}
 };
 
@@ -22108,13 +22104,6 @@ wlc_doiovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *name,
 			err = BCME_UNSUPPORTED;
 		break;
 #endif	/* WET */
-	case IOV_GVAL(IOV_CUSTOM_OUI):
-		bcopy(&bsscfg->custom_oui, arg, DOT11_OUI_LEN);
-		break;
-
-	case IOV_SVAL(IOV_CUSTOM_OUI):
-		bcopy(arg, &bsscfg->custom_oui, DOT11_OUI_LEN);
-		break;
 
 	default:
 		err = BCME_UNSUPPORTED;

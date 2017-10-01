@@ -1146,7 +1146,7 @@ function shadeHandle(flag){
 										<table width="700px" style="margin-left:25px;">
 											<tr>
 												<td style="font-size:14px;">
-													<div>AiProtection with Trend Micro protects against network exploit to secure your network from malicious access, ransomware or cybercriminal attakcs.</div>
+													<div><#AiProtection_desc#></div>
 													<div><a style="text-decoration:underline;" href="http://www.asus.com/support/FAQ/1008719/" target="_blank"><#AiProtection_title#> FAQ</a></div>
 												</td>
 											</tr>									
@@ -1211,7 +1211,7 @@ function shadeHandle(flag){
 											</tr>						
 											<tr style="height:10px;"></tr>
 											<tr class="block_bg block_line" style="height:120px;">
-												<td style="padding:10px;border-radius:10px 0px 0px 10px;cursor:pointer;" onclick="location.href='AiProtection_IntrusionPreventionSystem.asp'">
+												<td style="padding:10px;border-radius:10px 0px 0px 10px;cursor:pointer;" onclick="location.href='AiProtection_MaliciousSitesBlocking.asp'">
 													<div>
 														<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_sites_blocking#></div>
 														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_sites_block_desc#></div>
@@ -1261,7 +1261,7 @@ function shadeHandle(flag){
 												<td style="padding:10px;border-radius:10px 0px 0px 10px;cursor:pointer;" onclick="location.href='AiProtection_IntrusionPreventionSystem.asp'">
 													<div>
 														<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_two-way_IPS#></div>
-														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_two-way_IPS#></div>
+														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_two-way_IPS_desc#></div>
 													</div>								
 												</td>
 												 <td width="6px">
@@ -1304,7 +1304,7 @@ function shadeHandle(flag){
 											
 											<tr style="height:10px;"></tr>										
 											<tr class="block_bg" style="height:120px;">
-												<td style="padding:10px;border-radius:10px 0px 0px 10px;cursor:pointer" onclick="location.href='AiProtection_IntrusionPreventionSystem.asp'">
+												<td style="padding:10px;border-radius:10px 0px 0px 10px;cursor:pointer" onclick="location.href='AiProtection_InfectedDevicePreventBlock.asp'">
 													<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_detection_blocking#></div>
 													<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;;padding-top:5px;"><#AiProtection_detection_block_desc#></div>
 												</td>
@@ -1335,7 +1335,7 @@ function shadeHandle(flag){
 													<div><img src="/images/line.png"></div>
 												</td>
 												<td style="width:20%;border-radius:0px 10px 10px 0px;cursor:pointer;">
-													<div style="position:relative" onclick="location.href='AiProtection_IntrusionPreventionSystem.asp'">
+													<div style="position:relative" onclick="location.href='AiProtection_InfectedDevicePreventBlock.asp'">
 														<div id="infected_count_shade" style="position:absolute;width:140px;height:115px;background-color:#505050;opacity:0.6;z-index:5;margin-top:-14px;display:none"></div>
 														<div style="text-align:center;">
 															<div id="infected_count" style="width:45px;height:45px;margin:0 auto;line-height: 45px;font-size:38px;color:#FC0;text-shadow:1px 1px 0px black"></div>

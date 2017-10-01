@@ -249,15 +249,7 @@
 			
 			function patchUntranslatedString(){	
 				var untranslatedString = {
-					"untran_id_03": "By using ASUS Lyra, you agree to the ",
-					"untran_id_05": "Summary",
-					"untran_id_06": "Congratulations! Lyra is creating new WiFi network for you, wait until solid blue light shows up, Lyra is ready.",
-					"untran_id_07": "Tips",
-					"untran_id_08": "You can now press \"Pair button\" of first and second Lyra to setup another Lyra.",
-					"untran_id_09": "During pair process, blinking green light means Lyra is communicating to each other.",
-					"untran_id_10": "Wait until all Lyra show solid blue, means the system is ready.",
-					"untran_id_11": "You can repeat the steps to add another Lyra, please be noted, pair only works for First Lyra.",
-					"untran_id_12": "You can also download [ASUS Lyra] to connect another Lyra to the first Lyra."
+					"": ""
 				}
 
 				$.each($(".untranString"), function(idx, obj){
@@ -983,7 +975,7 @@
 				
 				<div class="tos">
 					<input id="tosCheckbox" type="checkbox">
-					<span id="tosTitle"><div id="untran_id_03" class="untranString"></div></span>
+					<span id="tosTitle"><#lyra_welcome_agree#></span>
 					<a href="#" onclick="goTo.AsusPP()">ASUS Privacy Policy</a>, 
 					<a href="#" onclick="goTo.AsusToS()">ASUS Terms of Use</a>, 
 					<a href="#" onclick="goTo.TMToS()">Trend Micro End User License Agreement</a>.
@@ -1651,13 +1643,11 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;"><div id="untran_id_05" class="untranString"></div></div>
+					<div style="font-size:60px;"><#QIS_finish_Summary#></div>
 				</div>
 			</div>
 			<div class="table_td">
-				<div class="pageDesc">
-					<div id="untran_id_06" class="untranString"></div>
-				</div>
+				<div class="pageDesc"><#QIS_finish_wait#></div>
 
 				<div>
 					<div class="flashingColor"></div>
@@ -1723,14 +1713,14 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;"><div id="untran_id_07" class="untranString"></div></div>
+					<div style="font-size:60px;"><#QIS_finish_Tips#></div>
 				</div>
 			</div>
 			<div class="table_td">
 				<div class="pageDesc">
-					<div id="untran_id_08" class="untranString"></div>
+					<#lyra_pairing_desc1#>
 					<br/>
-					<div id="untran_id_09" class="untranString"></div>
+					<#lyra_pairing_desc2#>
 				</div>
 
 				<div>
@@ -1783,14 +1773,14 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Tips</div>
+					<div style="font-size:60px;"><#QIS_finish_Tips#></div>
 				</div>
 			</div>
 			<div class="table_td">
 				<div class="pageDesc">
-					<div id="untran_id_10" class="untranString"></div>
+					<#lyra_pairing_desc3#>
 					<br/>
-					<div id="untran_id_11" class="untranString"></div>
+					<#lyra_pairing_desc4#>
 				</div>
 
 				<div>
@@ -1844,12 +1834,12 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Tips</div>
+					<div style="font-size:60px;"><#QIS_finish_Tips#></div>
 				</div>
 			</div>
 			<div class="table_td">
 				<div class="pageDesc">
-					<div id="untran_id_12" class="untranString"></div>
+					<#lyra_download_app#>
 
 					<div class="lyraGood"></div>
 					<div>

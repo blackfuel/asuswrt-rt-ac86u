@@ -843,7 +843,6 @@ struct wlc_bsscfg {
 #endif /* ACKSUPR_MAC_FILTER */
 	struct wl_timer *pilot_timer;     /* Measurement Piolt timer */
 	uint8 mp_period;
-	uint8 custom_oui[DOT11_OUI_LEN];
 };
 
 /* wlc_bsscfg_t flags */

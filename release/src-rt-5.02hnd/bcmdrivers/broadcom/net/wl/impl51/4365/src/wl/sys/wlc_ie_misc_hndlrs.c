@@ -170,6 +170,7 @@
 #include <wlc_ie_mgmt_ft.h>
 #include <wlc_ie_mgmt_vs.h>
 #include <wlc_ie_reg.h>
+#include <wlc_ie_helper.h>
 #include <wlc_akm_ie.h>
 #include <wlc_ht.h>
 #ifdef ANQPO
@@ -797,16 +798,30 @@ wlc_bss_parse_wme_ie(void *ctx, wlc_iem_parse_data_t *data)
 	bcm_tlv_t *wme_ie = (bcm_tlv_t *)data->ie;
 	wlc_wme_t *wme = cfg->wme;
 
+	scb = wlc_iem_parse_get_assoc_bcn_scb(data);
+	ASSERT(scb != NULL);
+
+	/* Do not parse IE if TLV length doesn't matches the size of the structure */
+	if (wme_ie != NULL &&
+		(BSSCFG_STA(cfg) ? (wme_ie->len != sizeof(wme_param_ie_t)) : (wme_ie->len != sizeof(wme_ie_t)))) {
+		WL_ERROR(("%s Incorrect TLV - IE len: %d size of WME data: %d\n",
+			__FUNCTION__, wme_ie->len,
+			BSSCFG_STA(cfg) ? (uint)sizeof(wme_param_ie_t) : (uint)sizeof(wme_ie_t)));
+		if (BSS_WME_ENAB(wlc, cfg)) {
+			/* clear WME flags */
+			scb->flags &= ~(SCB_WMECAP | SCB_APSDCAP);
+			cfg->flags &= ~WLC_BSSCFG_WME_ASSOC;
+
+			/* Clear Qos Info by default */
+			wlc_qosinfo_update(scb, 0, TRUE);
+		}
+		return BCME_OK;
+	}
+
 	switch (data->ft) {
 #ifdef AP
 	case FC_ASSOC_REQ:
 	case FC_REASSOC_REQ:
-		ASSERT(data->pparm != NULL);
-		ftpparm = data->pparm->ft;
-		ASSERT(ftpparm != NULL);
-		scb = ftpparm->assocreq.scb;
-		ASSERT(scb != NULL);
-
 		/* Handle WME association */
 		scb->flags &= ~(SCB_WMECAP | SCB_APSDCAP);
 
@@ -835,12 +850,6 @@ wlc_bss_parse_wme_ie(void *ctx, wlc_iem_parse_data_t *data)
 	case FC_REASSOC_RESP: {
 		wlc_pm_st_t *pm = cfg->pm;
 		bool upd_trig_delv;
-
-		ASSERT(data->pparm != NULL);
-		ftpparm = data->pparm->ft;
-		ASSERT(ftpparm != NULL);
-		scb = ftpparm->assocresp.scb;
-		ASSERT(scb != NULL);
 
 		/* If WME is enabled, check if response indicates WME association */
 		scb->flags &= ~SCB_WMECAP;
@@ -900,11 +909,6 @@ wlc_bss_parse_wme_ie(void *ctx, wlc_iem_parse_data_t *data)
 	case FC_BEACON:
 		/* WME: check if the AP has supplied new acparams */
 		/* WME: check if IBSS WME_IE is present */
-		ASSERT(data->pparm != NULL);
-		ftpparm = data->pparm->ft;
-		ASSERT(ftpparm != NULL);
-		scb = ftpparm->bcn.scb;
-
 		if (!BSS_WME_AS(wlc, cfg))
 			break;
 

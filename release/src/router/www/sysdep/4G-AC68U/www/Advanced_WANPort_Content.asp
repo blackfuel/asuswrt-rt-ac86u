@@ -115,7 +115,7 @@ function initial(){
 	addWANOption(document.form.wans_primary, wans_caps_primary.split(" "));
 	addWANOption(document.form.wans_second, wans_caps_secondary.split(" "));
 
-    if(based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"){
+    if(based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"){
 		document.getElementById("fo_detection_count_hd").innerHTML = "<#Failover_retry_count#>";
 		document.getElementById("fo_seconds").style.display = "none";
 		document.getElementById("fo_tail_msg").style.display = "";
@@ -132,6 +132,11 @@ function initial(){
 	if(based_modelid == "RT-AC87U"){ //MODELDEP: RT-AC87 : Quantenna port
                 document.form.wans_lanport1.remove(0);   //Primary LAN1
                 document.form.wans_lanport2.remove(0);   //Secondary LAN1
+	}else if(based_modelid == "4G-AC53U"){
+		document.form.wans_lanport1.remove(3);
+		document.form.wans_lanport1.remove(2);
+		document.form.wans_lanport2.remove(3);
+		document.form.wans_lanport2.remove(2);
 	}
 
 	update_detection_time();
@@ -184,7 +189,10 @@ function form_show(v){
 					document.form.wans_second.value = "usb";
 				else
 					document.form.wans_second.value = "lan";
-
+			}
+			else if(wans_dualwan_array[0] == "usb"){
+				if(wans_caps.search("lan") >= 0)
+					document.form.wans_second.value = "lan";
 			}
 			else{
 				if(wans_caps.search("wan") >= 0)
@@ -197,12 +205,6 @@ function form_show(v){
 		appendLANoption1(document.form.wans_primary);
 		appendLANoption2(document.form.wans_second);
 
-		if(document.form.wans_mode.value == "lb")
-			document.getElementById("wans_mode_option").value = "lb";
-		else{
-			document.getElementById("wans_mode_option").value = "fo";
-		}
-
 		appendModeOption(document.form.wans_mode.value);
 		show_wans_rules();
 		document.getElementById("wans_mode_tr").style.display = "";
@@ -213,7 +215,7 @@ function applyRule(){
 	if(wans_flag == 1){
 		document.form.wans_dualwan.value = document.form.wans_primary.value +" "+ document.form.wans_second.value;
 		
-		if(!dsl_support && (document.form.wans_dualwan.value == "usb lan" || document.form.wans_dualwan.value == "lan usb")){
+		if(!dsl_support && !noWAN_support && (document.form.wans_dualwan.value == "usb lan" || document.form.wans_dualwan.value == "lan usb")){
 			alert("WAN port should be selected in Dual WAN.");
 			document.form.wans_primary.focus();
 			return;
@@ -302,7 +304,7 @@ function applyRule(){
 	if (document.form.wans_primary.value == "dsl") document.form.next_page.value = "Advanced_DSL_Content.asp";
 	if (document.form.wans_primary.value == "lan") document.form.next_page.value = "Advanced_WAN_Content.asp";
 	if (document.form.wans_primary.value == "usb"){
-		if(based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U")
+		if(based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U")
 			document.form.next_page.value = "Advanced_MobileBroadband_Content.asp";
 		else
 			document.form.next_page.value = "Advanced_Modem_Content.asp";
@@ -372,7 +374,7 @@ function addWANOption(obj, wanscapItem){
 				wanscapName = "Ethernet WAN";
 			else if(wanscapName == "LAN")
 				wanscapName = "Ethernet LAN";
-			else if(wanscapName == "USB" && (based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"))
+			else if(wanscapName == "USB" && (based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"))
 				wanscapName = "<#Mobile_title#>";
 			obj.options[i] = new Option(wanscapName, wanscapItem[i]);
 		}	
@@ -399,7 +401,13 @@ function changeWANProto(obj){
 				}
 				else{
 					if(wans_caps.search("wan") >= 0)
-						document.form.wans_second.value = "wan";					
+						document.form.wans_second.value = "wan";
+					else if(noWAN_support){
+						if(obj.value == "usb")
+							document.form.wans_second.value = "lan";
+						else
+							document.form.wans_second.value = "usb";
+					}
 				}
 			}
 			else if(obj.name == "wans_second"){
@@ -417,6 +425,12 @@ function changeWANProto(obj){
 						document.form.wans_primary.value = "dsl";
 					else if(wans_caps.search("wan") >= 0)
 						document.form.wans_primary.value = "wan";
+					else if(noWAN_support){
+						if(obj.value == "usb")
+							document.form.wans_primary.value = "lan";
+						else
+							document.form.wans_primary.value = "usb";
+					}
 				}
 			}			
 		}
@@ -854,7 +868,7 @@ function add_option_count(obj, obj_t, selected_flag){
 				
 				free_options(obj_t);
 				for(var i=1; i<100; i++){
-						if(based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U")
+						if(based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U")
 							str0= i;
 						else
 							str0 = i*parseInt(obj.value);
@@ -896,7 +910,7 @@ function update_consume_bytes(){
     var consume_bytes;
     var MBytes = 1024*1024;
 
-    if(based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"){
+    if(based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"){
     consume_bytes = 86400/interval_value*128*30;
 	consume_bytes = Math.ceil(consume_bytes/MBytes);
     consume_warning_str = "<#Detect_consume_warning1#> "+consume_bytes+" <#Detect_consume_warning2#>";
@@ -1037,14 +1051,21 @@ function remain_origins(){
 														 function() {
 															if(wans_caps_primary.indexOf("wan") >= 0 && wans_dualwan_array[0] == "lan"){
 																var cur_parimary_wan = wans_dualwan_array[0].toUpperCase() + " Port " + wans_lanport_orig;
-																var confirm_str = "The current primary wan is \"" + cur_parimary_wan + "\". Disable dual wan will change primary wan to \"Ethernet WAN\", are you sure to do it?"; //untranslated
+																var confirm_str = "";
+																if(noWAN_support)
+																	confirm_str = "The current primary wan is \"" + cur_parimary_wan + "\". Disable dual wan will change primary wan to \"Mobile Broadband\", are you sure to do it?"; //untranslated
+																else
+																	confirm_str = "The current primary wan is \"" + cur_parimary_wan + "\". Disable dual wan will change primary wan to \"Ethernet WAN\", are you sure to do it?"; //untranslated
 																if(!confirm(confirm_str)){
 																	curState = "1";
 																	$('#ad_radio_dualwan_enable').find('.iphone_switch').animate({backgroundPosition: 0}, "slow");
 																	return false;
 																}
 																else{
-																	wans_dualwan_array[0] = "wan";
+																	if(noWAN_support)
+																		wans_dualwan_array[0] = "usb";
+																	else
+																		wans_dualwan_array[0] = "wan";
 																}
 															}
 															curState = "0";

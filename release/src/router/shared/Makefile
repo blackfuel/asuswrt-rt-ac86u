@@ -305,6 +305,12 @@ else
 vpath %.c sysdeps/broadcom  $(SRCBASE)/shared/bcmwifi/src
 endif
 
+ifeq ($(RTCONFIG_SW_HW_AUTH),y)
+OBJS += sw_auth.o hw_auth.o
+CFLAGS  += -I$(TOP)/sw-hw-auth
+vpath %.c $(TOP)/sw-hw-auth
+endif
+
 all: libshared.so libshared.a
 
 libshared.so: $(OBJS)
@@ -335,6 +341,16 @@ clean:
 private.o:
 ifneq ($(wildcard ./prebuild/private.o),)
 	@-cp -f ./prebuild/private.o .
+endif
+
+sw_auth.o:
+ifeq ($(wildcard $(SRCBASE)/router/sw-hw-auth/*.c),)
+	cp -f $(TOP)/sw-hw-auth/prebuild/sw_auth.o ./
+endif
+
+hw_auth.o:
+ifeq ($(wildcard $(SRCBASE)/router/sw-hw-auth/*.c),)
+	cp -f $(TOP)/sw-hw-auth/prebuild/hw_auth.o ./
 endif
 
 ifeq ($(RTCONFIG_USB),y)

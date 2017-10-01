@@ -97,10 +97,13 @@ wps_pb_update_pushtime(char *mac, uint8 *uuid)
 	wps_pb_check_pushtime(now);
 
 	for (i = 0; i < PBC_OVERLAP_CNT; i++) {
-		if (memcmp(mac, pbc_info[i].mac, 6) == 0) {
+		if ((memcmp(mac, pbc_info[i].mac, 6) == 0) || 
+		/* handle the case of dual band STA with different MAC for each band */
+		(uuid && memcmp(uuid, pbc_info[i].uuid, SIZE_16_BYTES) == 0)) {
 			/* Confirmed in PF #3 */
 			/* Do update new time, see test case 4.2.13 */
 			pbc_info[i].last_time = now;
+			memcpy(pbc_info[i].mac, mac, 6);
 			return;
 		}
 	}

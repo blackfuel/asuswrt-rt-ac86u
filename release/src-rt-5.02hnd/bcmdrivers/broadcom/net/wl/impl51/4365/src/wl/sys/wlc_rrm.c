@@ -422,6 +422,8 @@ typedef struct rrm_nbr_rep {
 } rrm_nbr_rep_t;
 
 /* AP Channel Report */
+#define VALID_NBR_CHAN(_chan) (((_chan) > 0) && ((_chan) < MAXCHANNEL))
+#define VALID_NBR_REP_CHAN(_nrep) VALID_NBR_CHAN((_nrep)->nbr_elt.channel)
 typedef struct reg_nbr_count {
 	struct reg_nbr_count *next;
 	uint8 reg;
@@ -4413,6 +4415,9 @@ wlc_rrm_remove_regclass_nbr_cnt(wlc_rrm_info_t *rrm_info, rrm_nbr_rep_t *nbr_rep
 	int i;
 
 	*channel_removed = FALSE;
+	if (!VALID_NBR_REP_CHAN(nbr_rep)) {
+		return;
+	}
 
 	nbr_cnt = rrm_cfg->nbr_cnt_head;
 	while (nbr_cnt) {
@@ -4460,6 +4465,11 @@ wlc_rrm_add_neighbor_cmn(wlc_rrm_info_t *rrm_info, nbr_element_t *nbr_elt, struc
 
 	wlc = rrm_info->wlc;
 	rrm_nbr_rep_headp = (RRM_NBR_REP_HEADPTR(rrm_cfg, addtype));
+
+	if (!VALID_NBR_CHAN(nbr_elt->channel) ||
+		!wlc_valid_chanspec_db(wlc->cmi, nbr_elt->channel)) {
+		return;
+	}
 
 	/* Find Neighbor Report element from list */
 	nbr_rep = *rrm_nbr_rep_headp;
@@ -4529,6 +4539,10 @@ wlc_rrm_add_regclass_neighbor_count(wlc_rrm_info_t *rrm_info, rrm_nbr_rep_t *nbr
 
 	wlc = rrm_info->wlc;
 	*channel_added = FALSE;
+
+	if (!VALID_NBR_REP_CHAN(nbr_rep)) {
+		return;
+	}
 
 	nbr_cnt = rrm_cfg->nbr_cnt_head;
 	while (nbr_cnt) {
@@ -5128,6 +5142,11 @@ wlc_rrm_regclass_neighbor_count(wlc_rrm_info_t *rrm_info, rrm_nbr_rep_t *nbr_rep
 
 	ASSERT(rrm_cfg != NULL);
 
+	/* XXX critical fix */
+	if (!VALID_NBR_REP_CHAN(nbr_rep)) {
+		return;
+	}
+
 	if ((found = wlc_rrm_regclass_match(rrm_info, nbr_rep, cfg)))
 		return;
 
@@ -5142,6 +5161,7 @@ wlc_rrm_regclass_neighbor_count(wlc_rrm_info_t *rrm_info, rrm_nbr_rep_t *nbr_rep
 	}
 
 	nbr_cnt->reg = nbr_rep->nbr_elt.reg;
+
 	nbr_cnt->nbr_count_by_channel[nbr_rep->nbr_elt.channel] += 1;
 
 	/* Add this reg_nbr_count_t to the list */
@@ -5155,6 +5175,11 @@ wlc_rrm_regclass_match(wlc_rrm_info_t *rrm_info, rrm_nbr_rep_t *nbr_rep, wlc_bss
 	rrm_bsscfg_cubby_t *rrm_cfg = RRM_BSSCFG_CUBBY(rrm_info, cfg);
 
 	ASSERT(rrm_cfg != NULL);
+
+	if (!VALID_NBR_REP_CHAN(nbr_rep)) {
+		return FALSE;
+	}
+
 	nbr_cnt = rrm_cfg->nbr_cnt_head;
 
 	while (nbr_cnt) {
@@ -5265,6 +5290,14 @@ wlc_rrm_recv_nrrep(wlc_rrm_info_t *rrm_info, wlc_bsscfg_t *cfg, struct scb *scb,
 
 			tlvs = bcm_next_tlv(tlvs, &tlv_len);
 
+			continue;
+		}
+
+		if (!VALID_NBR_CHAN(nbr_rep_ie->channel) ||
+			!wlc_valid_chanspec_db(wlc->cmi, nbr_rep_ie->channel)) {
+			WL_ERROR(("wl%d: Bad channel %d in Neighbor Report\n",
+				wlc->pub->unit, nbr_rep_ie->channel));
+			tlvs = bcm_next_tlv(tlvs, &tlv_len);
 			continue;
 		}
 

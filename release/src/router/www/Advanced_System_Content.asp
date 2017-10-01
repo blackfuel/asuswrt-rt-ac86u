@@ -58,10 +58,11 @@ time_mon = uptimeStr.substring(9,12);
 time_time = uptimeStr.substring(18,20);
 dstoffset = '<% nvram_get("time_zone_dstoff"); %>';
 
+var orig_shell_timeout_x = Math.floor(parseInt("<% nvram_get("shell_timeout"); %>")/60);
 var orig_enable_acc_restriction = '<% nvram_get("enable_acc_restriction"); %>';
 var orig_restrict_rulelist_array = [];
 var restrict_rulelist_array = [];
-var accounts = [<% get_all_accounts(); %>];
+var accounts = [<% get_all_accounts(); %>][0];
 for(var i=0; i<accounts.length; i++){
 	accounts[i] = decodeURIComponent(accounts[i]);
 }
@@ -231,8 +232,7 @@ function initial(){
 		document.form.telnetd_enable[1].disabled = false;
 	}
 	// load shell_timeout_x
-	var orig_shell_timeout = parseInt("<% nvram_get("shell_timeout"); %>");
-	document.form.shell_timeout_x.value = Math.floor(orig_shell_timeout/60);
+	document.form.shell_timeout_x.value = orig_shell_timeout_x;
 
 	if(pwrsave_support){
 		document.getElementById("pwrsave_tr").style.display = "";
@@ -566,7 +566,7 @@ function validForm(){
 		document.form.sshd_port.disabled = true;
 	}
 
-	if(!validator.rangeAllowZero(document.form.shell_timeout_x, 10, 999, parseInt('<% nvram_get("shell_timeout"); %>')/60))
+	if(!validator.rangeAllowZero(document.form.shell_timeout_x, 10, 999, orig_shell_timeout_x))
 		return false;
 	
 	if(isPortConflict(document.form.misc_httpport_x.value)){
@@ -606,7 +606,24 @@ function validForm(){
 
 	if(document.form.http_passwd2.value.length > 0)	//password setting changed
 		alert("<#File_Pop_content_alert_desc10#>");
-		
+	
+	//Not allowed no Web UI in restrict_rulelist_array
+	var WebUI_selected=0
+	if(document.form.http_client_radio[0].checked && restrict_rulelist_array.length >0){  //Allow only specified IP address
+		for(var x=0;x<restrict_rulelist_array.length;x++){
+			if(restrict_rulelist_array[x][0] == 1 &&        //enabled rule && Web UI included
+				(restrict_rulelist_array[x][2] == 1 || restrict_rulelist_array[x][2] == 3 || restrict_rulelist_array[x][2] == 5 || restrict_rulelist_array[x][2] == 7)){
+				WebUI_selected++;
+			}
+		}
+
+		if(WebUI_selected <= 0){
+			alert("Please select at least one Web UI of Access Type and enable it in [Allow only specified IP address]");   //Untranslated 2017/08
+			document.form.http_client_ip_x_0.focus();
+			return false;
+		}
+	}
+	
 	return true;
 }
 
@@ -1116,7 +1133,7 @@ function enable_wan_access(flag){
 }
 
 function check_wan_access(http_enable){
-	if(http_enable == "0" && document.form.misc_http_x.value == "1"){
+	if(http_enable == "0" && document.form.misc_http_x[0].checked == true){	//While Accesss from WAN enabled, not allow to set HTTP only
 		alert("When \"Web Access from WAN\" is enabled, HTTPS must be enabled.");
 		document.form.http_enable.selectedIndex = 2;
 		hide_https_lanport(document.form.http_enable.value);
@@ -1569,7 +1586,7 @@ function change_hddSpinDown(obj_value) {
 					</td>
 				</tr>
 				<tr id="sshd_port_tr">
-					<th width="40%">SSH Port</th><!--untranslated-->
+					<th width="40%"><#Port_SSH#></th>
 					<td>
 						<input type="text" class="input_6_table" maxlength="5" name="sshd_port" onKeyPress="return validator.isNumber(this,event);" value='<% nvram_get("sshd_port"); %>' autocorrect="off" autocapitalize="off">
 					</td>
@@ -1601,14 +1618,14 @@ function change_hddSpinDown(obj_value) {
 					</td>
 				</tr-->
 				<tr id="sshd_password_tr">
-					<th>Allow Password Login</th><!--untranslated-->
+					<th><#Allow_PWLogin#></th>
 					<td>
 						<input type="radio" name="sshd_pass" class="input" value="1" <% nvram_match("sshd_pass", "1", "checked"); %>><#checkbox_Yes#>
 						<input type="radio" name="sshd_pass" class="input" value="0" <% nvram_match("sshd_pass", "0", "checked"); %>><#checkbox_No#>
 					</td>
 				</tr>
 				<tr id="auth_keys_tr">
-					<th>Authorized Keys</th><!--untranslated-->
+					<th><#Authorized_Keys#></th>
 					<td>
 						<textarea rows="5" cols="55" class="textarea_ssh_table"  name="sshd_authkeys" maxlength="2999"><% nvram_get("sshd_authkeys"); %></textarea>
 					</td>

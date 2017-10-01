@@ -194,19 +194,26 @@ function initial(){
 	//When redirect page from Free WiFi or Captive Portal, auto go to anchor tag
 	var gn_idx = cookie.get("captive_portal_gn_idx");
 	if(gn_idx != "" && gn_idx != null) {
-		var type_hint = "";
-		switch(parseInt(gn_idx)) {
-			case 5 :
-				type_hint = "Captive Portal";
-				break;
-			case 6 :
-				type_hint = "Free W-Fi";
-				break;
+		var gn_idx_array = gn_idx.split(">");
+		if(gn_idx_array.length == 2) {
+			var gn_num = gn_idx_array[0];
+			var type_hint = "";
+			switch(gn_idx_array[1]) {
+				case "captivePortal" :
+					type_hint = "Captive Portal";
+					break;
+				case "freeWiFi" :
+					type_hint = "Free W-Fi";
+					break;
+			}
+			if(based_modelid == "BRT-AC828")
+				window.location.hash = "guest_block_anchor_" + gn_num;
+			else
+				window.location.hash = "guest_block_anchor";
+			setTimeout(function(){
+				alert("Guest Network – " + gn_num + " will used by " + type_hint);
+			}, 100);
 		}
-		window.location.hash = "guest_block_anchor_" + gn_idx;
-		setTimeout(function(){
-			alert("Guest Network – " + gn_idx + " will used by " + type_hint);
-		}, 100);
 		cookie.unset("captive_portal_gn_idx");
 	}
 }
@@ -934,18 +941,13 @@ function applyRule(){
 		{
 			document.form.qos_enable.value = 1;
 			document.form.qos_type.value = 2;
-			if(confirm("QoS function of traffic manager will be enable and set as bandwidth limiter mode by default.")){	/* Untranslated */
-				if(ctf_disable_orig == '0'){	//brcm NAT Acceleration turned ON
-					document.form.action_script.value = "saveNvram;reboot";
-					document.form.action_wait.value = "<% get_default_reboot_time(); %>";
-				}
-				else{
-					document.form.action_script.value = "restart_wireless;restart_qos;restart_firewall;";
-				}	
+			if(ctf_disable_orig == '0'){	//brcm NAT Acceleration turned ON
+				document.form.action_script.value = "saveNvram;reboot";
+				document.form.action_wait.value = "<% get_default_reboot_time(); %>";
 			}
 			else{
-				return;	
-			}		
+				document.form.action_script.value = "restart_wireless;restart_qos;restart_firewall;";
+			}
 		}
 		else if(unit_bw_enabled != document.form.wl_bw_enabled.value //bandwidth limiter settings changed OR re-enable mSSID with bandwidth limiter
 				|| unit_bw_ul != document.form.wl_bw_ul.value 
@@ -1322,12 +1324,24 @@ function setClientmac(macaddr){
 function show_bandwidth(flag){	
 	if(flag == "1"){
 		document.form.bw_enabled_x[0].checked = true;
+		var show_hint_content = "";
 		if(ctf_disable_orig == '0'){	//brcm NAT Acceleration turned ON
-			document.getElementById("QoS_hint").innerHTML = "NAT acceleration will be disable for more precise packet inspection.";	/* untranslated */
-			document.getElementById("QoS_hint").style.display = "";	
+			show_hint_content += "<br>NAT acceleration will be disable for more precise packet inspection.";	/* untranslated */			
+		}
+
+		if(QoS_enable_orig == "0"){
+			show_hint_content += "<br>QoS function of traffic manager will be enable and set as Bandwidth Limiter mode by default.";	/* untranslated */
+		}
+		else if(QoS_type_orig != "2"){
+			show_hint_content += "<br>QoS function of traffic manager will set as Bandwidth Limiter mode.";	/* untranslated */
+		}
+
+		if(show_hint_content.length <= 0){
+			document.getElementById("QoS_hint").style.display = "none";
 		}
 		else{
-			document.getElementById("QoS_hint").style.display = "none";	
+			document.getElementById("QoS_hint").innerHTML = show_hint_content;
+			document.getElementById("QoS_hint").style.display = "";
 		}
 		document.getElementById("gnset_wl_bw_setting").style.display = "";
 	}
@@ -1590,7 +1604,7 @@ function bandwidth_code(o,event){
 		</div>
 		<div id="gnset_wl_bw_enabled" class="gnset_setting_item_bg">
 			<div class='gnset_setting_item_titleName'>
-				Enable Bandwidth Limiter<!-- Untranslated -->
+				<#Bandwidth_Limiter#>
 			</div>
 			<div class='gnset_setting_item_content'>
 				<div class="gnset_setting_content_bg">
@@ -1606,16 +1620,16 @@ function bandwidth_code(o,event){
 		</div>
 		<div id="gnset_wl_bw_setting" class="gnset_setting_item_bg">
 			<div class='gnset_setting_item_titleName'>
-				<#Bandwidth_Limiter#>
+				<#Bandwidth_Setting#>
 			</div>
 			<div class='gnset_setting_item_content'>
 				<div class="gnset_setting_content_bg">
-					<span class="gnset_setting_content"><#option_download#></span>
+					<span class="gnset_setting_content"><#download_bandwidth#></span>
 					<input type="text" id="wl_bw_dl_x" name="wl_bw_dl_x" maxlength="12" onkeypress="return bandwidth_code(this, event);" class="gnset_setting_input_text_short" value="">
 					<span class="gnset_setting_content">Mb/s</span>
 				</div>
 				<div class="gnset_setting_content_bg">
-					<span class="gnset_setting_content"><#option_upload#></span>
+					<span class="gnset_setting_content"><#upload_bandwidth#></span>
 					<input type="text" id="wl_bw_ul_x" name="wl_bw_ul_x" maxlength="12" onkeypress="return bandwidth_code(this, event);" class="gnset_setting_input_text_short" value="">
 					<span class="gnset_setting_content">Mb/s</span>
 				</div>

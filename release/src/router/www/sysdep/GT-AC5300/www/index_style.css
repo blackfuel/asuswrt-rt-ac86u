@@ -806,6 +806,10 @@ width:122px;
 	line-height:36px;
 	font-size:14px;
 }
+.menu_Alexa_IFTTT{
+	background: url(images/New_ui/icon_menues.png);
+	background-position: 0px -324px;
+}
 .menu_QIS{
 	background: url(images/New_ui/icon_indexes.png);
 	background-position: -0px -0px;
@@ -820,7 +824,7 @@ width:122px;
 }
 .menu_PermissionManagement{
 	background: url(images/New_ui/icon_indexes.png);
-	background-position: -0px -180px;
+	background-position: -0px -288px;
 }
 .menu_BandwidthMonitor{
 	background: url(images/New_ui/icon_indexes.png);

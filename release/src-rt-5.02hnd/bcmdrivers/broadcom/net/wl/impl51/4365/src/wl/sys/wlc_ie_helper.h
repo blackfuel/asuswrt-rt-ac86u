@@ -46,5 +46,6 @@ extern wlc_iem_pparm_t *wlc_iem_parse_get_parm(wlc_iem_parse_data_t *parse);
  */
 extern wlc_bss_info_t *wlc_iem_calc_get_assocreq_target(wlc_iem_calc_data_t *calc);
 extern wlc_bss_info_t *wlc_iem_build_get_assocreq_target(wlc_iem_build_data_t *build);
+extern struct scb* wlc_iem_parse_get_assoc_bcn_scb(wlc_iem_parse_data_t *parse);
 
 #endif /* _wlc_ie_helper_h_ */

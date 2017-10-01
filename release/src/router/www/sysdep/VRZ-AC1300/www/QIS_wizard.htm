@@ -944,22 +944,20 @@
 				</table>
 			</div>
 			<div>
-				<div style="font-family:Uni Sans Thin, Helvetica W01 Light, Arial;font-size:5em;color:#FFF;margin:50px 46px 0 46px;text-align:center;">
-					Welcome To Lyra
-				</div>
+				<div style="font-family:Uni Sans Thin, Helvetica W01 Light, Arial;font-size:5em;color:#FFF;margin:50px 46px 0 46px;text-align:center;"><#lyra_welcome_title#></div>
 				<!--div style="font-family:Uni Sans Thin, Helvetica W01 Light, Arial;font-size:2.5em;color:#999;text-align:center;margin:0px 20px 0 40px;">
 					Lyra makes sure your connection stable, well-covered and secure.
 				</div-->
 				<div id="model_image" class="model_image"></div>
 				<div id="model_welcome_field" style="text-align:center;color:#0ECDA4;font-size:30pt;font-family:HelveticaNeueW10-35Thin,Helvetica W01 Light,Arial;line-height:23px;margin:21px 0"></div>
 				<div style="text-align:center;margin:31px 0">
-					<div id="welcome_button" style="cursor:pointer;width:600px;height:88px;border-radius:4px;color:#FFF;background-color:#27D1A4;border:1px solid #27D1A4;font-size:2.25em;margin:auto;line-height:88px;" onclick="start_welcome();">Create A New Lyra Network</div>
+					<div id="welcome_button" style="cursor:pointer;width:600px;height:88px;border-radius:4px;color:#FFF;background-color:#27D1A4;border:1px solid #27D1A4;font-size:2.25em;margin:auto;line-height:88px;" onclick="start_welcome();"><#lyra_welcome_create#></div>
 				</div>
-				<div style="color:#FFF;font-size:2em;text-align:center;"><a href="#" style="color:#27D1A4" onclick="apply.checkAddMore()">Or sign in to your existing Lyra network</a></div>
+				<div style="color:#FFF;font-size:2em;text-align:center;"><a href="#" style="color:#27D1A4" onclick="apply.checkAddMore()"><#lyra_welcome_onboard#></a></div>
 				
 				<div class="tos">
 					<input id="tosCheckbox" type="checkbox">
-					<span id="tosTitle">By using ASUS Lyra, you agree to the</span>
+					<span id="tosTitle"><#lyra_welcome_agree#></span>
 					<a href="#" onclick="goTo.AsusPP()">ASUS Privacy Policy</a>, 
 					<a href="#" onclick="goTo.AsusToS()">ASUS Terms of Use</a> and 
 					<a href="#" onclick="goTo.TMToS()">Trend Micro End User License Agreement</a>.
@@ -1003,7 +1001,7 @@
 				</div>
 			</div>
 			<div class="table_td">
-				<div id="login_desc" class="pageDesc">Create your Lyra account. The username and password will be used to login and manage your Lyra network.</div>
+				<div id="login_desc" class="pageDesc"><#lyra_user_desc#></div>
 				<div id="login_field">
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
@@ -1627,13 +1625,11 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Summary</div>
+					<div style="font-size:60px;"><#QIS_finish_Summary#></div>
 				</div>
 			</div>
 			<div class="table_td">
-				<div class="pageDesc">
-					Congratulations! Lyra is creating new WiFi network for you, wait until solid blue light shows up, Lyra is ready.
-				</div>
+				<div class="pageDesc"><#QIS_finish_wait#></div>
 
 				<div>
 					<div class="flashingColor"></div>
@@ -1699,14 +1695,14 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Tips</div>
+					<div style="font-size:60px;"><#QIS_finish_Tips#></div>
 				</div>
 			</div>
 			<div class="table_td">
 				<div class="pageDesc">
-					<div>You can now press "Pair button" of first and second Lyra to setup another Lyra.</div>
+					<#lyra_pairing_desc1#>
 					<br/>
-					<div>During pair process, blinking green light means Lyra is communicating to each other.</div>
+					<#lyra_pairing_desc2#>
 				</div>
 
 				<div>
@@ -1759,14 +1755,14 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Tips</div>
+					<div style="font-size:60px;"><#QIS_finish_Tips#></div>
 				</div>
 			</div>
 			<div class="table_td">
 				<div class="pageDesc">
-					<div>Wait until all Lyra show solid blue, means the system is ready.</div>
+					<#lyra_pairing_desc3#>
 					<br/>
-					<div>You can repeat the steps to add another Lyra, please be noted, pair only works for First Lyra.</div>
+					<#lyra_pairing_desc4#>
 				</div>
 
 				<div>
@@ -1820,12 +1816,12 @@
 			</div>
 			<div class="desktop_left_field">
 				<div>
-					<div style="font-size:60px;">Tips</div>
+					<div style="font-size:60px;"><#QIS_finish_Tips#></div>
 				</div>
 			</div>
 			<div class="table_td">
 				<div class="pageDesc">
-					<div>You can also download [ASUS Lyra] to connect another Lyra to the first Lyra.</div>
+					<#lyra_download_app#>
 
 					<div class="lyraGood"></div>
 					<div>

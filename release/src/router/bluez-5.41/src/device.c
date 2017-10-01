@@ -3999,8 +3999,11 @@ int device_addr_type_cmp(gconstpointer a, gconstpointer b)
 	 * (doesn't matter whether LE or BR/EDR, then consider this a
 	 * match.
 	 */
-	if (!cmp && addr_is_public(addr->bdaddr_type) &&
-					addr_is_public(dev->bdaddr_type))
+	if (!cmp 
+#ifndef RTCONFIG_LANTIQ
+		&& addr_is_public(addr->bdaddr_type) && addr_is_public(dev->bdaddr_type)
+#endif
+	)
 		return 0;
 
 	if (addr->bdaddr_type == BDADDR_BREDR) {

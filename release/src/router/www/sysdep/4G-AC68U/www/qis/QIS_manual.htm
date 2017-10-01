@@ -127,7 +127,10 @@ function submitForm(){
 		document.form.submit();
 	}
 	else{
-		document.form.action = "/qis/QIS_internet_type.htm";
+		if(parent.noWAN_support)
+			document.form.action = "/qis/QIS_wireless.htm";
+		else
+			document.form.action = "/qis/QIS_internet_type.htm";
 		document.form.submit();
 	}
 }

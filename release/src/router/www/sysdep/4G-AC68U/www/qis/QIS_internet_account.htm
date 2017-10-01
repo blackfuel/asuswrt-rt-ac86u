@@ -162,7 +162,6 @@ function QKaccount_load_body(){
 	}
 
 	if(parent.pppoe_failed_flag){
-		check_pppoe_state();
 		document.getElementById("pppoe_fail_desc").style.display = "";
 	}
 
@@ -178,6 +177,7 @@ function QKaccount_load_body(){
 	}
 }
 
+var retryCounter = 0;
 function check_pppoe_state(){
 	$.ajax({
 		url: '/result_of_get_changed_status_QIS.asp',
@@ -186,6 +186,7 @@ function check_pppoe_state(){
 			check_pppoe_state();
 		},
 		success: function(response){
+			setTimeout("check_pppoe_state();", 1000);
 			if(parent.dual_ewan || parent.dualwan_enabled){
 				if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0)){
 					wanstate = first_wanstate;
@@ -199,22 +200,28 @@ function check_pppoe_state(){
 				}
 			}
 
-			if((wanstate  == 1 && wansbstate == 0 && wanauxstate == 0) || (wanstate  == 6 && wansbstate == 0 && wanauxstate == 0) || (wanstate  == 4 && wansbstate == 2 && wanauxstate == 0)){
-				setTimeout("check_pppoe_state();", 1000);
-				parent.pppoe_failed_flag = true;
-				document.getElementById("loadingIcon").style.display = "";
-				document.getElementById("pppoe_fail_desc").style.display = "none";
-				if(wanstate  == 4 && wansbstate == 2 && wanauxstate == 0){
-					document.getElementById("loadingIcon").style.display = "none";
-					document.getElementById("pppoe_fail_desc").style.display = "";
-				}
-			}
-			else if(wanstate  == 2 && wansbstate == 0 && wanauxstate == 0){
+			if(wanstate  == 2 && wansbstate == 0 && wanauxstate == 0){
 				parent.pppoe_failed_flag = false;
 				location.href = "/qis/QIS_finish.htm";
 			}
+			if(wanstate  == 4 && wansbstate == 2 && wanauxstate == 0){
+				parent.pppoe_failed_flag = true;
+				document.getElementById("loadingIcon").style.display = "none";
+				document.getElementById("pppoe_fail_desc").style.display = "";
+			}
+			else{
+				if(retryCounter > 5){
+					parent.pppoe_failed_flag = false;
+					location.href = "/qis/QIS_finish.htm";
+				}
+				else{
+					retryCounter++;
+					document.getElementById("loadingIcon").style.display = "";
+					document.getElementById("pppoe_fail_desc").style.display = "none";
+				}
+			}
 		}
-	});	
+	});
 }
 
 function get_value_from_parent(){
@@ -411,11 +418,13 @@ function submitForm(o, s){
 		else
 			document.form.flag.value = "pppoe";
 
-		if(parent.dual_ewan || parent.gobi_support){
+		if(parent.dual_ewan || (parent.gobi_support && (parent.sim_state == "1" || parent.sim_state == "2"))){
+			document.form.flag.value = "sim";
 			document.form.next_page.value = "/QIS_detect.htm";
 		}
 		else
 			document.form.next_page.value = "/QIS_wireless.htm";
+
 		document.form.submit();
 	}
 	else if( (!parent.dual_ewan && !parent.dualwan_enabled && (document.form.wan_proto.value == 'pppoe' || document.form.wan_proto.value == '')) ||
@@ -459,8 +468,9 @@ function submitForm(o, s){
 					}
 					document.form.next_page.value = "/QIS_detect.htm";
 				}
-				else if(parent.gobi_support){
-					document.form.next_page.value = "/QIS_verify_detect.htm";
+				else if(parent.gobi_support && (parent.sim_state == "1" || parent.sim_state == "2")){
+					document.form.flag.value = "sim";
+					document.form.next_page.value = "/QIS_detect.htm";
 				}
 				else{
 					document.form.flag.value = "pppoe";
@@ -482,9 +492,12 @@ function submitForm(o, s){
 				document.form.wan1_pppoe_passwd.value = document.form.wan_pppoe_passwd.value;
 				document.form.wan_unit.value = "1";
 			}
-			document.form.wan_hwaddr_x.disabled = true;
-			document.form.wan_pppoe_username.disabled = true;
-			document.form.wan_pppoe_passwd.disabled = true;
+
+			if(!parent.pppoe_failed_flag){
+				document.form.wan_hwaddr_x.disabled = true;
+				document.form.wan_pppoe_username.disabled = true;
+				document.form.wan_pppoe_passwd.disabled = true;
+			}
 		}
 
 		document.form.submit();

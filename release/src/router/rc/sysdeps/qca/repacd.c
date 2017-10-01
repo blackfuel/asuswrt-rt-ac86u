@@ -43,8 +43,10 @@
 #endif 
 
 //#define DETECT_5G 1
+//#define RADAR_FAILOVER
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
 //parameter control
 #define wifi_son_mode 1
 int hive_daisy_chain=1;  //if 0 , topology is star mode.
@@ -192,29 +194,6 @@ int get_phyrate(int band)
 		}
 	}
 	return 0;
-}
-
-
-int get_ch(int freq)
-{
-#define IS_CHAN_IN_PUBLIC_SAFETY_BAND(_c) ((_c) > 4940 && (_c) < 4990)
-	if (freq < 2412)
-		return 0;
-    	if (freq == 2484)
-       		return 14;
-   	if (freq < 2484)
-        	return (freq - 2407) / 5;
-    	if (freq < 5000) {
-       		if (IS_CHAN_IN_PUBLIC_SAFETY_BAND(freq)) {
-            		return ((freq * 10) +
-                	(((freq % 5) == 2) ? 5 : 0) - 49400)/5;
-        	} else if (freq > 4900) {
-            		return (freq - 4000) / 5;
-       		} else {
-            		return 15 + ((freq - 2512) / 20);
-        	}
-    	}
-    	return (freq - 5000) / 5;
 }
 
 
@@ -1841,7 +1820,9 @@ int start_cap(int c)
 			wsplcd_enable();
 			sleep(6);
 			nvram_set("cap_syncing","1");
+#if !defined(MAPAC1800)
 			lp55xx_leds_proc(LP55XX_GREENERY_LEDS, LP55XX_WIFI_PARAM_SYNC);
+#endif
 		} else
 			return 1;
 	}
@@ -1865,7 +1846,9 @@ int start_cap(int c)
 		nvram_set("cap_syncing","0");
 		sleep(30); //estimate wifi-restart time
 		//_dprintf("=>CAP: config change stop\n");
+#if !defined(MAPAC1800)
 		lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#endif
 	}
 	return 0;
 }
@@ -1970,7 +1953,9 @@ void start_re(int c)
 		wpa_cli_set_bssid(0,nvram_get("wl0_sta_bssid"));
 #endif
 		//_dprintf("RE: config change stop\n");
+#if !defined(MAPAC1800)
 		lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#endif
 		check_wsc_enrollee_status(20);
 	}
 	//gen config and run daemon
@@ -2155,15 +2140,29 @@ int sta_is_assoc(int band)
 			{
 				if(get_role()) //RE
 				{
-					if(ch!=0xff && ch!=get_ch(get_freq(band)))
+					int ath1, sta1;
+
+					ath1 = get_channel(get_wififname(band));
+					sta1 = get_channel(get_staifname(band));
+
+					if(ath1 <= 0 || sta1 <= 0)
 					{
-						iface = nvram_safe_get(strcat_r(prefix_wl, "ifname", tmp));
-						 if(!nvram_get_int("dfs_check_period"))   
-							doSystem("iwconfig %s channel %d",iface,get_ch(get_freq(band)));
-						_dprintf("=> RE: channel conflict on ath%d/sta%d. fix it.\n",band,band);
+						logmessage(__func__, "RE: get_channel error. band(%d) wififname(%s): %d staifname(%s): %d\n", band, get_wififname(band), ath1, get_staifname(band), sta1);
+						return 0;
+					}
+
+					if(ch!=0xff && ch != sta1)
+					{
 						sprintf(tmp,"wl%d_channel",band);
-						sprintf(tmpch,"%d",get_ch(get_freq(band)));
-						nvram_set(tmp,tmpch);
+						nvram_set_int(tmp, sta1);
+					}
+
+					if(ath1 != sta1)
+					{
+						logmessage(__func__, "RE: channel conflict on band(%d) wififname(%s): %d staifname(%s): %d. fix it.\n", band, get_wififname(band), ath1, get_staifname(band), sta1);
+						iface = nvram_safe_get(strcat_r(prefix_wl, "ifname", tmp));
+						doSystem("iwconfig %s channel %d",iface, sta1);
+						_dprintf("RE: channel conflict on band(%d) wififname(%s): %d staifname(%s): %d. fix it.\n", band, get_wififname(band), ath1, get_staifname(band), sta1);
 					}
 				}
 				return 1;
@@ -2911,6 +2910,19 @@ int detect_loop(void) //only for 5G
 	return 0;
 }
 
+int check_nol()
+{
+	char *outpt;
+	int nolnum=0;
+	if (outpt=get_qca_iwpriv("wifi1", "get_nolcnt")) 
+	{
+		nolnum= atoi(outpt);
+		free(outpt);
+	}
+	//_dprintf("RE => get nolnum=[%d]\n", nolnum);
+	return nolnum;	
+}
+
 #if defined(RTCONFIG_CSU2_2)
 void start_wifimon_check(int delay)
 {
@@ -2989,7 +3001,7 @@ void start_wifimon_check(int delay)
 			default:
 				break;
 		}
-	
+
 		if(nvram_get_int("dfs_check_period")&& assoc_timeout!=0) //not-assoc in DFS
 		{
 			sleep(check_period-30);
@@ -3065,8 +3077,18 @@ void start_wifimon_check(int delay)
 #endif
 				{
 					_dprintf("=> RE: 5G is not assoc.Reset wpa_supplicant for 5G!!\n");
-					wpa_supplicant_stop(1);
-					wpa_supplicant_start(1);
+#ifdef RADAR_FAILOVER
+					if(nvram_get_int("dfs_check_period") && check_nol())
+					{
+						_dprintf("=> RE: restart wireless for radar fail-over\n");
+						restart_wireless();
+					}
+					else
+#endif
+					{
+						wpa_supplicant_stop(1);
+						wpa_supplicant_start(1);
+					}
 					force_down_2g();
 #ifdef DETECT_5G
 					detect_5g=1;
@@ -3082,7 +3104,9 @@ void start_wifimon_check(int delay)
 		if(!pids("watchdog"))
 		{
 			 nvram_set("wps_syncing","0");
+#if !defined(MAPAC1800)
                          lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#endif
 			 start_watchdog();
 		}
 
@@ -3258,7 +3282,9 @@ void start_wifimon_check(int delay)
 		if(!pids("watchdog"))
 		{
 			 nvram_set("wps_syncing","0");
+#if !defined(MAPAC1800)
                          lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#endif
 			 start_watchdog();
 		}
 

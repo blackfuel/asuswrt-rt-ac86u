@@ -133,37 +133,12 @@ function QKinternettype_load_body(){
 		if(parent.get_internet_type_reducedmode() == "enable")
 			blocking("dhcppppoe_sec", false);
 	
-		if( parent.based_modelid != "BRT-AC828" &&
-			parent.based_modelid != "RT-AC5300" &&
-			parent.based_modelid != "RT-AC3200" &&
-			parent.based_modelid != "RT-AC3100" &&
-			parent.based_modelid != "RT-AC1200G+" &&
-			parent.based_modelid != "RT-AC88U" &&
-            parent.based_modelid != "RT-AC87U" &&
-            parent.based_modelid != "RT-AC68U" &&
-            parent.based_modelid != "RT-AC66U" &&
-			parent.based_modelid != "RT-AC56U" &&
-            parent.based_modelid != "RT-AC51U" &&
-            parent.based_modelid != "RT-N66U" &&
-            parent.based_modelid != "RT-N18U"
-                ){
+		if( !parent.meoVoda_support ){
 			document.getElementById('meoOption').outerHTML = "";
 			document.getElementById('vodafoneOption').outerHTML = "";
 		}
 
-		if( parent.based_modelid != "BRT-AC828" &&
-			parent.based_modelid != "RT-AC5300" &&
-			parent.based_modelid != "RT-AC3200" &&
-			parent.based_modelid != "RT-AC3100" &&
-			parent.based_modelid != "RT-AC1200G+" &&
-			parent.based_modelid != "RT-AC88U" &&
-			parent.based_modelid != "RT-AC87U" &&
-			parent.based_modelid != "RT-AC68U" &&
-			parent.based_modelid != "RT-AC66U" &&
-			parent.based_modelid != "RT-AC56U" &&
-			parent.based_modelid != "RT-N66U" &&
-			parent.based_modelid != "RT-N18U"
-	        ){
+		if( !parent.movistarTriple_support ){
 			document.getElementById('movistarOption').outerHTML = "";
 		}
 

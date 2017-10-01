@@ -37,7 +37,9 @@ struct cmd_handler_svr cmd_handlers_svr[] = {
 	{ "setswmode",		BLE_COMMAND_SET_SW_MODE,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
 	{ "setwandnsenable",	BLE_COMMAND_SET_WAN_DNS_ENABLE,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
 	{ "getmacbleversion",	BLE_COMMAND_GET_MAC_BLE_VERSION,	UnpackBLECommandReq,			PackBLEResponseGetMacBleVersion },
+#if defined(RTCONFIG_QCA)
 	{ "getath1chan",	BLE_COMMAND_GET_ATH1_CHAN,		UnpackBLECommandReq,			PackBLEResponseGetAth1Chan },
+#endif
 	{ "setath1chan",	BLE_COMMAND_SET_ATH1_CHAN,		UnpackBLEDataToNvram,			PackBLEResponseOnly },
 	{ NULL,			-1,					NULL,					NULL }
 };

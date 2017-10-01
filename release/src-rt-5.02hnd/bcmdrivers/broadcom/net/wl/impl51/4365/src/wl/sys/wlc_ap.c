@@ -212,28 +212,6 @@ typedef struct wlc_radio_pwrsave {
 	wlc_pwrsave_t pwrsave;
 } wlc_radio_pwrsave_t;
 
-#define CUSTOM_OUI_MAX 10
-
-typedef struct custom_oui {
-	uint8 oui[DOT11_OUI_LEN];
-} custom_oui_t;
-
-custom_oui_t custom_ouis[CUSTOM_OUI_MAX] = {
-	{{0x00, 0x03, 0x47}},
-	{{0x00, 0x11, 0x75}},
-	{{0x00, 0x13, 0xe8}},
-	{{0x00, 0x13, 0x02}},
-	{{0xe4, 0xf8, 0x9c}},
-	{{0xa4, 0x02, 0xb9}},
-	{{0x4c, 0x34, 0x88}},
-	{{0x00, 0x15, 0x00}},
-	{{0x00, 0x00, 0x00}},
-	{{0x00, 0x00, 0x00}}};
-
-uint8 custom_oui_all[] = {0xff, 0xff, 0xff};
-uint8 custom_oui_pool[] = {0xff, 0xff, 0xfd};
-uint8 custom_oui_null[] = {0x00, 0x00, 0x00};
-
 #ifdef RXCHAIN_PWRSAVE
 
 #define RXCHAIN_PWRSAVE_ENAB_BRCM_NONHT	1
@@ -619,8 +597,6 @@ static int wlc_wlancoex_upd(wlc_info_t *wlc, wlc_ap_info_t *ap, bool coex_en);
 static void wlc_bcmc_mux_free(wlc_bsscfg_t *cfg);
 static int wlc_bcmc_mux_alloc(wlc_bsscfg_t *cfg);
 #endif
-
-static bool wlc_ap_is_scb_custom(struct ether_addr *ea);
 
 /* This includes the auto generated ROM IOCTL/IOVAR patch handler C source file (if auto patching is
  * enabled). It must be included after the prototypes and declarations above (since the generated
@@ -2685,42 +2661,6 @@ static void wlc_ap_process_assocreq_done(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg
 		WLC_VHT_FEATURES_GET(wlc->pub, WL_VHT_FEATURES_1024QAM) &&
 		SCB_1024QAM_CAP(scb))
 		mcsallow |= WLC_MCS_ALLOW_1024QAM;
-
-	/* Force to enable MCS 0-9 for intel clients in 2G */
-	if (bcmp(bsscfg->custom_oui, custom_oui_null, DOT11_OUI_LEN) &&
-		BSS_VHT_ENAB(wlc, bsscfg) &&
-		BAND_2G(wlc->band->bandtype) &&
-		!SCB_VHT_CAP(scb)) {
-		int i, nss_rx = 0;
-		bool enable_mcs_0_9 = FALSE;
-		uint16 mcsmap = VHT_CAP_MCS_MAP_NONE_ALL;
-
-		if (!bcmp(bsscfg->custom_oui, custom_oui_all, DOT11_OUI_LEN)) {
-			enable_mcs_0_9 = TRUE;
-		} else if (!bcmp(bsscfg->custom_oui, custom_oui_pool, DOT11_OUI_LEN)) {
-			enable_mcs_0_9 = wlc_ap_is_scb_custom(&scb->ea);
-		} else {
-			if (!bcmp(bsscfg->custom_oui, &scb->ea, DOT11_OUI_LEN))
-				enable_mcs_0_9 = TRUE;
-		}
-
-		if (enable_mcs_0_9) {
-			for (i = 0; i < MCSSET_LEN; i++) {
-				if (scb->rateset.mcs[i])
-					nss_rx ++;
-			}
-
-			/* Only apply for 2-Rx clients */
-			if (nss_rx == 2) {
-				mcsallow |= WLC_MCS_ALLOW_VHT;
-
-				for (i = 0; i < nss_rx; i++)
-					VHT_MCS_MAP_SET_MCS_PER_SS(i+1, VHT_CAP_MCS_MAP_0_9, mcsmap); 
-
-				req_rates->vht_mcsmap = mcsmap;
-			}
-		}
-	}
 
 	/* req_rates => scb->rateset */
 	wlc_rateset_filter(req_rates, &scb->rateset, FALSE, rates, RATE_MASK, mcsallow);
@@ -6572,19 +6512,6 @@ wlc_bcmc_mux_free(wlc_bsscfg_t *cfg)
 	}
 }
 #endif /* TXQ_MUX */
-
-static bool
-wlc_ap_is_scb_custom(struct ether_addr *ea)
-{
-	int i;
-
-	for (i = 0; i < CUSTOM_OUI_MAX; i++)
-		if (!bcmp(custom_ouis[i].oui, ea->octet, DOT11_OUI_LEN)) {
-			return TRUE;
-		}
-
-	return FALSE;
-}
 
 #ifdef USBAP
 bool

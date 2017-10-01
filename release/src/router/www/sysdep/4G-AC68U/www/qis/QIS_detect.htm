@@ -10,8 +10,6 @@
 <script type="text/JavaScript" src="/js/jquery.js"></script>
 <script type="text/javascript">
 
-<% start_autodet(); %>
-
 var now_flag = '<% get_parameter("flag"); %>';
 var new_wan_link_str = "";
 var detectType = "";
@@ -64,6 +62,9 @@ var wans_mode = '<% nvram_get("wans_mode"); %>';
 var g3err_pin = '<% nvram_get("g3err_pin"); %>';
 var pin_remaining_count = '<% nvram_get("usb_modem_act_auth_pin"); %>';
 var puk_remaining_count = '<% nvram_get("usb_modem_act_auth_puk"); %>';
+var x_Setting = '<% nvram_get("x_Setting"); %>';
+if(x_Setting == "1")
+	do_autodet();
 
 <% dual_wanstate(); %>
 
@@ -81,6 +82,49 @@ function QKDetect_load_body(){
 	if(parent.gobi_support && (pin_remaining_count == "" || pin_remaining_count == "0")){
 		getSimAuth();
 	}
+}
+
+function do_autodet(){
+	$.ajax({
+		url: '/start_autodet.asp',
+		dataType: 'script',
+		error: function(xhr){
+			do_autodet();
+		},
+		success: function(response){
+			check_autodet_state();
+		}
+	});
+}
+
+function check_autodet_state(){
+	$.ajax({
+		url: '/appGet.cgi?hook=nvram_get(autodet_state)%3bnvram_get(autodet_auxstate)%3bnvram_get(autodet1_state)%3bnvram_get(autodet1_auxstate)',
+		dataType: "html",
+
+		error: function(xhr){
+			check_autodet_state();
+		},
+		success: function(response){
+			var resJson = JSON.parse(response);
+			if(parent.dual_ewan){
+				autodet_state = resJson.autodet_state;
+				autodet_auxstate = resJson.autodet_auxstate;
+				autodet1_state =  resJson.autodet1_state;
+				autodet1_auxstate = resJson.autodet1_auxstate;
+			}
+			else{
+				if(parent.dualwan_enabled){
+					autodet_state = (parent.ewan_index == 0)? resJson.autodet_state : resJson.autodet1_state;
+					autodet_auxstate = (parent.ewan_index == 0)? resJson.autodet_auxstate : resJson.autodet1_auxstate;
+				}
+				else{
+					autodet_state = resJson.autodet_state;
+					autodet_auxstate = resJson.autodet_auxstate;
+				}
+			}
+		}
+	});
 }
 
 function getDualWANState(){
@@ -112,7 +156,7 @@ function getDualWANState(){
 }
 
 var wait_autoisp = 2;
-var run_update_apn = 1;
+var run_update_apn = 0;
 var wait_sim_connect = 2;
 function getWANStatus(){
 	$.ajax({
@@ -162,7 +206,7 @@ function getWANStatus(){
 			}
 
 			if(!parent.dual_ewan){
-				if(autodet_state == "" || autodet_state == "0" || autodet_state == "1"){
+				if((autodet_state == "" || autodet_state == "0" || autodet_state == "1") && !noWAN_support){
 					setTimeout('getWANStatus();', 500);
 				}
 				else if( qtn_ready_t != "1" && '<% nvram_get("productid"); %>' == "RT-AC87U"){
@@ -210,12 +254,14 @@ function getWANStatus(){
 						else if(wan_wanstate == 2 && wan_wansbstate == 0 && wan_wanauxstate == 0){
 							if(sim_state == 1){
 								if(modem_autoapn == "1"){
+									document.getElementById("waitdesc").innerHTML = "Searching APN...";
 									if(run_update_apn){
 										parent.update_apn_progress();
 										run_update_apn = 0;
 									}
 
 									if(usb_modem_auto_spn.length != 0){
+										document.getElementById("waitdesc").innerHTML = "<#Connecting_str#>";
 										if(wait_sim_connect > 0){
 											setTimeout('getWANStatus();', 1000);
 											wait_sim_connect--;
@@ -279,14 +325,14 @@ function getWANStatus(){
 								}; 
 							}
 							else
-								redirect_page("dualconnect_status");
+								redirect_page("wireless");
 						}
 						else if(usb_wanstate == 2 && usb_wansbstate == 0 && usb_wanauxstate == 0){
 							if(autodet_state == "2" && wan_wanauxstate != "1"){
 								redirect_page("internet_type");
 							}
 							else{
-								redirect_page("dualconnect_status");
+								redirect_page("wireless");
 							}
 						}	
 					}
@@ -296,21 +342,29 @@ function getWANStatus(){
 					   setTimeout('redirect_page("wireless");', 1000);
 					}
 				}			
-				else if(autodet_state == 4 && parent.hadPlugged("modem")){ // ethernet did not plug
+				else if(parent.hadPlugged("modem")){
 					if(parent.gobi_support){
 						if(sim_state == 1){
 							if(modem_autoapn == "1"){
+								document.getElementById("waitdesc").innerHTML = "Searching APN...";
 								if(run_update_apn){
 									parent.update_apn_progress();
 									run_update_apn = 0;
 								}
 									
 								if(usb_modem_auto_spn.length != 0){
+									document.getElementById("waitdesc").innerHTML = "<#Connecting_str#>";
 									setTimeout('getWANStatus();', 1000);
+									if(wait_sim_connect > 0){
+										setTimeout('getWANStatus();', 1000);
+										wait_sim_connect--;
+									}
+									else
+										redirect_page("wireless");
 								}
 								else{
 									if(usb_modem_auto_running.length == 0 || usb_modem_auto_lines.length == 0 ){
-											setTimeout('getWANStatus();', 2000);
+										setTimeout('getWANStatus();', 2000);
 									}
 									else{
 										if(usb_modem_auto_running != usb_modem_auto_lines)
@@ -476,8 +530,8 @@ function GoToPPPoESetting(){
 }
 
 function redirect_page(redirect_flag){
-	document.form.action = "/qis/QIS_"+redirect_flag+".htm";
-	document.form.submit();
+	var location_url = "/qis/QIS_"+redirect_flag+".htm"
+	location.href = location_url;
 }
 
 function setPin(){
@@ -487,6 +541,7 @@ function setPin(){
 			document.getElementById("pincode_status").style.display="";
 		}
 		else{
+			document.getElementById("waitdesc").innerHTML = "Setting "+"<#PIN_code#>"+"...";
 			document.getElementById("tblsetting_1").style.display = "";
 			document.getElementById("sim_pin").style.display = "none";
 			document.simact_form.g3err_pin.value = "0";
@@ -567,7 +622,6 @@ function getSimAuth(){
 <input type="hidden" name="wan_proto" value="">
 <input type="hidden" name="wan_dhcpenable_x" id="wan_dhcpenable_x" value="1" disabled>
 <input type="hidden" name="wan_dnsenable_x" id="wan_dnsenable_x" value="1" disabled>
-<input type="hidden" name="x_Setting" id="x_Setting" value="" disabled>
 <input type="hidden" name="action_script" value="">
 <input type="hidden" name="g3err_pin" value="">
 <input name="foilautofill" style="display: none;" type="password">
@@ -605,7 +659,7 @@ function getSimAuth(){
 		</td>     
 		<td class="test_css">
 			<strong>
-				<span><#QKSet_detect_waitdesc#></span>
+				<span id="waitdesc"><#QKSet_detect_waitdesc#></span>
 			</strong>
 		</td>
 	</tr>

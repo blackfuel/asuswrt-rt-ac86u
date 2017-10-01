@@ -186,7 +186,7 @@ function genWANSoption(){
 			wans_dualwan_NAME = "Ethernet WAN";
 		else if(wans_dualwan_NAME == "LAN")
 			wans_dualwan_NAME = "Ethernet LAN";
-		if(wans_dualwan_NAME == "USB" && (based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"))
+		if(wans_dualwan_NAME == "USB" && (based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U"))
 			wans_dualwan_NAME = "<#Mobile_title#>";
 		document.form.wan_unit.options[i] = new Option(wans_dualwan_NAME, i);
 	}

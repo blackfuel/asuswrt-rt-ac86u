@@ -97,32 +97,12 @@ function QKaccount_load_body(){
 			document.form.wan_proto.value = "pppoe";
 	}
 
-	if( parent.based_modelid != "BRT-AC828" &&
-		parent.based_modelid != "RT-AC3200" &&
-		parent.based_modelid != "RT-AC87U" && 
-		parent.based_modelid != "RT-AC68U" &&
-		parent.based_modelid != "RT-AC66U" &&
-		parent.based_modelid != "RT-AC51U" &&
-		parent.based_modelid != "RT-N66U" &&
-		parent.based_modelid != "RT-N18U"
-	){	// MODELDEP: RT-AC3200, RT-AC87U, RT-AC68U, RT-AC66U, RT-AC51U, RT-N66U, RT-N18U
+	if( !parent.meoVoda_support ){	// MODELDEP: RT-AC3200, RT-AC87U, RT-AC68U, RT-AC66U, RT-AC51U, RT-N66U, RT-N18U
 		document.getElementById('meoOption').outerHTML = "";
 		document.getElementById('vodafoneOption').outerHTML = "";
 	}
 	
-	if( parent.based_modelid != "BRT-AC828" &&
-		parent.based_modelid != "RT-AC5300" &&
-		parent.based_modelid != "RT-AC3200" &&
-		parent.based_modelid != "RT-AC3100" &&
-		parent.based_modelid != "RT-AC88U" &&
-		parent.based_modelid != "RT-AC87U" && 
-		parent.based_modelid != "RT-AC68U" &&
-		parent.based_modelid != "RT-AC66U" &&
-		parent.based_modelid != "RT-AC56U" &&
-		//based_modelid != "RT-AC51U" &&
-		parent.based_modelid != "RT-N66U" &&
-		parent.based_modelid != "RT-N18U"
-        ){      
+	if( !parent.movistarTriple_support ){
 		document.getElementById('movistarOption').outerHTML = "";
 	}
 

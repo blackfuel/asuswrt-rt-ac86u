@@ -69,6 +69,14 @@ var wep_x_5_2 = '<% nvram_get("wl2_wep_x"); %>';
 var key_x_5_2 = '<% nvram_get("wl2_key"); %>';
 var wpa_mode_5_2 = '<% nvram_get("wl2_wpa_mode"); %>';
 
+var first_wanstate = -1;
+var first_wansbstate = -1;
+var first_wanauxstate = -1;
+var second_wanstate = -1;
+var second_wansbstate = -1;
+var second_wanauxstate = -1;
+<% dual_wanstate(); %>
+
 if(parent.tmo_support)
         var theUrl = "cellspot.router"; 
 else
@@ -1020,7 +1028,10 @@ function QKfinish_load_body(){
 				}
 				else{
 					document.getElementById("wanip").style.display = "none";
-					document.getElementById("wanstatus1").innerHTML = "<#Status_Inactive#>";
+					if( wan_primary == "wan0" && first_wanstate == "1" && first_wansbstate == "0" && first_wanauxstate == "0" )
+						document.getElementById("wanstatus1").innerHTML = "<#Connecting_str#>";
+					else
+						document.getElementById("wanstatus1").innerHTML = "<#Status_Inactive#>";
 				}
 				
 				if(parent.wans_dualwan_array[1] != "none"){
@@ -1037,7 +1048,10 @@ function QKfinish_load_body(){
 					}
 					else{
 						document.getElementById("wanip2").style.display = "none";
-						document.getElementById("wanstatus2").innerHTML = "<#Status_Inactive#>";
+						if( wan_primary == "wan1" && second_wanstate == "1" && second_wansbstate == "0" && second_wanauxstate == "0" )
+							document.getElementById("wanstatus1").innerHTML = "<#Connecting_str#>";
+						else
+							document.getElementById("wanstatus2").innerHTML = "<#Status_Inactive#>";
 					}
 				}
 			}

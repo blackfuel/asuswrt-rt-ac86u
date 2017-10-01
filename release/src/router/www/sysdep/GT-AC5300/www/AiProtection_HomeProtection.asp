@@ -1050,7 +1050,7 @@ function shadeHandle(flag){
 						</td>
 					</tr>
 					<tr>
-						<th>Notification Item</th>
+						<th><#Notification_Item#></th>
 						<td>
 							<div>							
 								<input type="checkbox" class="" id="mal_website_item" value="">

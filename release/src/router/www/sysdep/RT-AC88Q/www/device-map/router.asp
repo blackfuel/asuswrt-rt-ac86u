@@ -1029,7 +1029,7 @@ function limit_auth_method(){
 			</td>
 			<td>
 				<div id="t_status" class="tab_NW" align="center" style="font-weight: bolder; margin-right:2px; width:90px;" onclick="tabclickhandler('status')">
-					<span id="span_status" style="cursor:pointer;font-weight: bolder;">Status</span>
+					<span id="span_status" style="cursor:pointer;font-weight: bolder;"><#Status_Str#></span>
 				</div>
 			</td>
 		</table>

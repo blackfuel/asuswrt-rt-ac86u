@@ -2129,7 +2129,7 @@ var validator = {
 		}
 	},
 
-	domainName: function(_value) {
+	domainName_flag: function(_value) {
 		//domin name
 		var domainNameFormat = /^((?:(?:(?:\w[\.\-\+]?)*)\w)+)((?:(?:(?:\w[\.\-\+]?){0,62})\w)+)\.(\w{2,6})$/; 
 		if(domainNameFormat.test(_value))

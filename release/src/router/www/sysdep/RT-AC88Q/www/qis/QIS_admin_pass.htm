@@ -23,7 +23,7 @@
 <script type="text/JavaScript" language="JavaScript" src="/js/jquery.js"></script>
 <script type="text/JavaScript" language="JavaScript" src="/validator.js"></script>
 <script type="text/javascript">
-var accounts = [<% get_all_accounts(); %>];
+var accounts = [<% get_all_accounts(); %>][0];
 var wanstate = -1;
 var wansbstate = -1;
 var wanauxstate = -1;
@@ -63,7 +63,6 @@ for(var i=0; i<accounts.length; i++){
 		accounts[i] = decodeURIComponent(accounts[i]);	
 }
 
-<% dual_wanstate(); %>
 var wans_mode = '<% nvram_get("wans_mode"); %>';
 
 function QKinternettype_load_body(){
@@ -132,7 +131,7 @@ function QKinternettype_load_body(){
 var retry_times = 3;
 function check_autodet_state(){
 	$.ajax({
-		url: '/appGet.cgi?hook=nvram_get(autodet_state)%3bnvram_get(autodet_auxstate)%3bnvram_get(autodet1_state)%3bnvram_get(autodet1_auxstate)',
+		url: '/appGet.cgi?hook=nvram_get(autodet_state)%3bnvram_get(autodet_auxstate)%3bnvram_get(autodet1_state)%3bnvram_get(autodet1_auxstate)%3bnvram_get(wan0_state_t)%3bnvram_get(wan0_sbstate_t)%3bnvram_get(wan0_auxstate_t)%3bnvram_get(wan1_state_t)%3bnvram_get(wan1_sbstate_t)%3bnvram_get(wan1_auxstate_t)%3bnvram_get(wan0_primary)%3bnvram_get(wan1_primary)',
 		dataType: "html",
 
 		error: function(xhr){
@@ -142,20 +141,76 @@ function check_autodet_state(){
 			var resJson = JSON.parse(response);
 			autodet_state = resJson.autodet_state;
 			autodet_auxstate = resJson.autodet_auxstate;
-			autodet1_state = resJson.autodet1_state;
-			autodet1_auxstate = resJson.autodet1_auxstate;
-			if( (autodet_state == "0"  || autodet_state == "1") && retry_times > 0 ){
-				setTimeout('check_autodet_state();', 500);
-				retry_times--;
+			if(parent.dual_ewan){
+				autodet1_state = resJson.autodet1_state;
+				autodet1_auxstate = resJson.autodet1_auxstate;
 			}
-			else
-				submitForm();
+
+			first_wanstate = resJson.wan0_state_t;
+			first_wansbstate = resJson.wan0_sbstate_t;
+			first_wanauxstate = resJson.wan0_auxstate_t;
+			second_wanstate = resJson.wan1_state_t;
+			second_wansbstate = resJson.wan1_sbstate_t;
+			second_wanauxstate = resJson.wan1_auxstate_t;
+
+			if(parent.dual_ewan){
+				if(wans_mode == "lb"){
+					if(parent.cur_wan_unit == 0){
+						wanstate = first_wanstate;
+						wansbstate = first_wansbstate;
+						wanauxstate = first_wanauxstate;
+					}
+					else if(parent.cur_wan_unit == 1){
+						wanstate = second_wanstate;
+						wansbstate = second_wansbstate;
+						wanauxstate = second_wanauxstate;
+					}
+				}
+				else{
+					if(resJson.wan0_primary == "1"){
+						wanstate = first_wanstate;
+						wansbstate = first_wansbstate;
+						wanauxstate = first_wanauxstate;
+					}
+					else if(resJson.wan1_primary == "1"){
+						wanstate = second_wanstate;
+						wansbstate = second_wansbstate;
+						wanauxstate = second_wanauxstate;
+					}
+				}
+			}
+			else{
+				if(parent.dualWAN_support && wans_mode != "lb"){
+					if(resJson.wan0_primary == "1"){
+						wanstate = first_wanstate;
+						wansbstate = first_wansbstate;
+						wanauxstate = first_wanauxstate;
+					}
+					else if(resJson.wan1_primary == "1"){
+						wanstate = second_wanstate;
+						wansbstate = second_wansbstate;
+						wanauxstate = second_wanauxstate;
+					}
+				}
+				else{
+					wanstate = resJson.wan0_state_t;
+					wansbstate = resJson.wan0_sbstate_t;
+					wanauxstate = resJson.wan0_auxstate_t;
+				}
+			}
 		}
 	});
 }
 
 function submitForm(){
 	changeiuiBackground(1);
+
+	check_autodet_state();
+	if( (autodet_state == "0"  || autodet_state == "1") && retry_times > 0 ){
+		setTimeout('submitForm();', 500);
+		retry_times--;
+		return false;
+	}
 
 	showtext(document.getElementById("alert_msg1"), "");
 	if(parent.ISMOBILE)
@@ -319,7 +374,6 @@ function submitForm(){
 	else if(parent.flag_manual == "modem")
 		document.form.action = "/qis/QIS_modem.htm";
 	else if(parent.document.QKform.sw_mode.value == "1"){
-		//document.form.action = "/qis/QIS_detect.htm";
 		if(!parent.dual_ewan){
 			if(autodet_state == "6" || autodet_auxstate == "6"){
 				if((wanstate  == 2 && wansbstate == 0 && wanauxstate == 0) && (link_internet == "2" || wan0_realip_state == "2" || wan1_realip_state == "2")){
@@ -473,7 +527,7 @@ function paste_password(){
 </script>
 </head>  
 <body onLoad="QKinternettype_load_body();" onunload="">
-<form method="post" name="form" action="/start_apply.htm" target="" onsubmit="return check_autodet_state();">
+<form method="post" name="form" action="/start_apply.htm" target="" onsubmit="return submitForm();">
 <input type="hidden" name="current_page" value="/qis/QIS_admin_pass.htm">
 <input type="hidden" name="next_page" value="/QIS_wizard.htm">   
 <input type="hidden" name="prev_page" value="/QIS_wizard.htm">
@@ -563,7 +617,7 @@ function paste_password(){
 <br>
 
 <fieldset class="theFieldset" id="theFieldset2" style="display:none;">
-	<div class="row"><a id="loadingIcon_iui" class="iuiA" onclick="check_autodet_state();"><#CTL_next#></a></div>
+	<div class="row"><a id="loadingIcon_iui" class="iuiA" onclick="submitForm();"><#CTL_next#></a></div>
 	<div class="row_end"><a id="loadingIcon_skip" class="iuiA" onclick="skipsetting();"><#CTL_Skip#></a></div>
 </fieldset>
 

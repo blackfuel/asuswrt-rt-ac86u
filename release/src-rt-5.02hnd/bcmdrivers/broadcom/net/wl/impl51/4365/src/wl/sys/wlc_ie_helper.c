@@ -37,6 +37,11 @@
 #include <wlc_ie_mgmt_types.h>
 #include <wlc_ie_mgmt_ft.h>
 #include <wlc_ie_helper.h>
+#include <wlc_key.h>
+#include <siutils.h>
+#include <wlc.h>
+#include <wlc_scb.h>
+#include <wlc_bsscfg.h>
 
 /* Accessors */
 
@@ -173,4 +178,48 @@ wlc_iem_build_get_assocreq_target(wlc_iem_build_data_t *build)
 	}
 
 	return NULL;
+}
+
+/*
+ * 'parse' Frame Type specific scb structure decode accessors.
+ */
+struct scb*
+wlc_iem_parse_get_assoc_bcn_scb(wlc_iem_parse_data_t *parse)
+{
+	wlc_iem_ft_pparm_t *ftpparm;
+	struct scb *scb = NULL;
+
+	switch (parse->ft) {
+	case FC_ASSOC_REQ:
+	case FC_REASSOC_REQ:
+		ASSERT(parse->pparm != NULL);
+		ftpparm = parse->pparm->ft;
+		ASSERT(ftpparm != NULL);
+		scb = ftpparm->assocreq.scb;
+		ASSERT(scb != NULL);
+		break;
+	case FC_ASSOC_RESP:
+	case FC_REASSOC_RESP:
+		ASSERT(parse->pparm != NULL);
+		ftpparm = parse->pparm->ft;
+		ASSERT(ftpparm != NULL);
+		scb = ftpparm->assocresp.scb;
+		ASSERT(scb != NULL);
+		break;
+	case FC_BEACON:
+		ASSERT(parse->pparm != NULL);
+		ftpparm = parse->pparm->ft;
+		ASSERT(ftpparm != NULL);
+		if (ftpparm->bcn.scb != NULL && SCB_WDS(ftpparm->bcn.scb))
+			scb = ftpparm->bcn.scb;
+		else if (BSSCFG_STA(parse->cfg))
+			scb = ftpparm->bcn.scb;
+		ASSERT(scb != NULL);
+		break;
+	default:
+		ASSERT(0);
+		break;
+	}
+
+	return scb;
 }

@@ -223,7 +223,7 @@ var band5g_support = (rc_support.search("5G") == -1) ? false : true;
 var Rawifi_support = (rc_support.search("rawifi") == -1) ? false : true;
 var Qcawifi_support = (rc_support.search("qcawifi") == -1) ? false : true;
 var isDefault = ('<% nvram_get("x_Setting"); %>' == 0) ? true : false;
-var accounts = [<% get_all_accounts(); %>];
+var accounts = [<% get_all_accounts(); %>][0];
 for(var i=0; i<accounts.length; i++){
 	accounts[i] = decodeURIComponent(accounts[i]);	
 }
@@ -2615,7 +2615,7 @@ function genOptions(){
 			</tr>
 		</table>
 	</div>
-	<div class="desktop_left_field" style="font-size:50px">Summary</div>
+	<div class="desktop_left_field" style="font-size:50px"><#QIS_finish_Summary#></div>
 	<div id="led_field" class="table_td" style="display:block">
 		<!--div id="summary_desc" style="font-family:Helvetica,Arial;font-size:2em;color:#FFF;margin:34px 0 0 46px;text-align:left;">Congratulation!<br>You can now follow information below and connect to extended Wi-Fi network</div-->
 		<div id="summary_desc" style="font-family:Helvetica,Arial;font-size:2em;color:#FFF;text-align:center;">You can turn on/off LED by touching ASUS logo.</div>

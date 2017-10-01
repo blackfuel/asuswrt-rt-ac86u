@@ -438,10 +438,10 @@ add_option (char *p[], int line, int unit)
 	{
 		nvram_pf_set(prefix, "cipher", p[1]);
 	}
-	//else if (streq (p[0], "auth") && p[1])
-	//{
-		//nvram_pf_set(prefix, "digest", p[1]);
-	//}
+	else if (streq (p[0], "auth") && p[1])
+	{
+		nvram_pf_set(prefix, "digest", p[1]);
+	}
 	else if (streq (p[0], "verb") && p[1])
 	{
 		nvram_pf_set(prefix, "verb", p[1]);

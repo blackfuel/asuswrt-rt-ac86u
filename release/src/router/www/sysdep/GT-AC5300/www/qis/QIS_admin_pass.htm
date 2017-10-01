@@ -23,7 +23,7 @@
 <script type="text/JavaScript" language="JavaScript" src="/js/jquery.js"></script>
 <script type="text/JavaScript" language="JavaScript" src="/validator.js"></script>
 <script type="text/javascript">
-var accounts = [<% get_all_accounts(); %>];
+var accounts = [<% get_all_accounts(); %>][0];
 <% wanstate(); %>
 var autodet_state = '<% nvram_get("autodet_state"); %>';
 var autodet_auxstate = '<% nvram_get("autodet_auxstate"); %>';
