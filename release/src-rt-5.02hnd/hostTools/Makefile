@@ -69,9 +69,13 @@ ifneq ($(wildcard ./prebuilt/addvtoken),)
 addvtoken:
 	@-cp -f ./prebuilt/addvtoken .
 else
+LBITS := $(shell getconf LONG_BIT)
+ifeq ($(LBITS),64)
+BITSFLAGS = -m32
+endif
 addvtoken: addvtoken.c
 	rm -rf addvtoken
-	$(CC) $(CFLAGS) -o addvtoken addvtoken.c
+	$(CC) $(CFLAGS) $(BITSFLAGS) -o addvtoken addvtoken.c
 endif
 gencrc32: gencrc32.c
 	$(CC) $(CFLAGS) -o gencrc32 gencrc32.c 

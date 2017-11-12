@@ -187,8 +187,10 @@ int _ifconfig(const char *name, int flags, const char *addr, const char *netmask
 #ifdef RTCONFIG_LANTIQ
 	if(strcmp(name, "wlan0") == 0 ||
 		strcmp(name, "wlan2") == 0){
-		_dprintf("[%s][%d]skip name:[%s]\n", __func__, __LINE__, name);
-		return -1;
+		if(flags == 0){
+			_dprintf("[%s][%d]skip name:[%s]\n", __func__, __LINE__, name);
+			return -1;
+		}
 	}
 	if(strcmp(name, "eth0_1") == 0 ||
 		strcmp(name, "eth0_2") == 0 ||
@@ -458,6 +460,7 @@ int start_vlan(void)
 	char ea[ETHER_ADDR_LEN];
 
 	if ((strtoul(nvram_safe_get("boardflags"), NULL, 0) & BFL_ENETVLAN) == 0) return 0;
+	struct ifreq ifr_re;
 #endif
 #if !defined(BLUECAVE)
 	/* set vlan i/f name to style "vlan<ID>" */
@@ -491,7 +494,7 @@ int start_vlan(void)
 		for (j = 1; j <= DEV_NUMIFS; j ++) {
 			ifr.ifr_ifindex = j;
 			if (ioctl(s, SIOCGIFNAME, &ifr))
-				continue;
+				continue;		
 			if (ioctl(s, SIOCGIFHWADDR, &ifr))
 				continue;
 			if (ifr.ifr_hwaddr.sa_family != ARPHRD_ETHER)
@@ -506,6 +509,7 @@ int start_vlan(void)
 			ifr.ifr_data = (caddr_t)&info;
 			if (ioctl(s, SIOCETHTOOL, &ifr) < 0)
 				continue;
+
 			if (strcmp(info.driver, hwname) == 0)
 				break;
 #else
@@ -529,6 +533,14 @@ int start_vlan(void)
 		for (j = 0; j < VLAN_NUMPRIS; j ++) {
 			snprintf(prio, sizeof(prio), "%d", j);
 			eval("vconfig", "set_ingress_map", vlan_id, prio, prio);
+		}
+		if (nvram_get_int("re_mode") == 1 && strcmp(nvram_safe_get("eth_ifnames"), "")) {			
+			/* Assign hw address for upstream vlanX interface. */
+				memcpy(ifr_re.ifr_name, nvram_safe_get("eth_ifnames"), IFNAMSIZ);
+				memcpy(ifr_re.ifr_hwaddr.sa_data, ea, ETHER_ADDR_LEN);
+				ifr_re.ifr_hwaddr.sa_family = ARPHRD_ETHER;
+				ifr_re.ifr_hwaddr.sa_data[0] = ifr_re.ifr_hwaddr.sa_data[0] | 0x02;
+				ioctl(s, SIOCSIFHWADDR, &ifr_re);
 		}
 	}
 	close(s);
@@ -580,13 +592,13 @@ int start_vlan(void)
 #endif
 
 #if defined(HND_ROUTER)
-	if(!nvram_match("switch_wantag", "none")&&!nvram_match("switch_wantag", "")&&!nvram_match("switch_wantag", "hinet")) {
+	if(!nvram_match("switch_wantag", "") && (nvram_get_int("switch_stb_x") > 0 || nvram_match("switch_wantag", "unifi_biz") || nvram_match("switch_wantag", "manual"))) {
 		char *wan_base_if = "eth0";
 		ifconfig(wan_base_if, IFUP, NULL, NULL);
 		set_wan_tag(wan_base_if);
 	}
 #elif defined(BLUECAVE)
-	if(!nvram_match("switch_wantag", "")) {
+	if(!nvram_match("switch_wantag", "") && (nvram_get_int("switch_stb_x") > 0 || nvram_match("switch_wantag", "unifi_biz") || nvram_match("switch_wantag", "manual"))) {
 		char *wan_base_if = "eth1";
 		ifconfig(wan_base_if, IFUP, NULL, NULL);
 		set_wan_tag(wan_base_if);

@@ -134,6 +134,11 @@ function initial(){
 		document.getElementById("mbMode").style.display = "none";
 		document.getElementById("sw_mode4_radio").disabled = true;
 	}
+
+	if(!amesh_support) {
+		document.getElementById("AiMeshMode").style.display = "none";
+		document.getElementById("sw_mode5_radio").disabled = true;
+	}
 }
 
 function Senario_shift(){
@@ -221,6 +226,10 @@ function saveMode(){
 	}
 	else if(document.form.sw_mode.value == 4){
 		parent.location.href = '/QIS_wizard.htm?flag=sitesurvey_mb';
+		return false;
+	}
+	else if(document.form.sw_mode.value == 5){
+		parent.location.href = '/QIS_wizard.htm?flag=amasrole_page';
 		return false;
 	}
 	else{ // default router
@@ -479,6 +488,13 @@ function setScenerion(mode, express){
 		clearTimeout(id_WANunplungHint);
 		$("#Unplug-hint").css("display", "none");
 		document.form.sw_mode_radio[5].checked = true;
+	}
+	else if(mode == '5') {
+		document.form.sw_mode.value = 5;
+		$("#Senario").css({"height": "400px", "background": "url(/images/New_ui/amesh/house_final_dea.png) center no-repeat", "margin-bottom": "30px", "margin-left": "30px"});
+		var AiMesh_desc = "The AiMesh system is composed of ASUS routers. You will set up one router becomes AiMesh router and you can add another AiMesh node to expand your network.";/* untranslated */
+		$("#mode_desc").html(AiMesh_desc);
+		document.form.sw_mode_radio[6].checked = true;
 	}
 	else{ // Default: Router
 		document.form.sw_mode.value = 1;
@@ -748,6 +764,8 @@ function change_smart_con(v){
 										<input type="radio" id="sw_mode3_radio" name="sw_mode_radio" class="input" value="3" onclick="setScenerion(3, 0);" <% nvram_match("sw_mode", "3", "checked"); %>><label for="sw_mode3_radio"><#OP_AP_item#></label>
 										&nbsp;&nbsp;
 										<span id="mbMode"><input id="sw_mode4_radio" type="radio" name="sw_mode_radio" class="input" value="4" onclick="setScenerion(4, 0);" <% nvram_match("sw_mode", "4", "checked"); %>><label for="sw_mode4_radio"><#OP_MB_item#></label></span>
+										&nbsp;&nbsp;
+										<span id="AiMeshMode"><input id="sw_mode5_radio" type="radio" name="sw_mode_radio" class="input" value="5" onclick="setScenerion(5, 0);"><label for="sw_mode5_radio">AiMesh mode</label></span><!--untranslated string-->
 									</span>
 									<br/><br/>
 									<span style="word-wrap:break-word;word-break:break-all"><label id="mode_desc"></label></span>

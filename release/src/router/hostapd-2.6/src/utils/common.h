@@ -456,6 +456,9 @@ struct wpa_ssid_value {
 	size_t ssid_len;
 };
 
+#define FREQBAND_MAX_LEN	4
+#define NETMODE_MAX_LEN 	8
+
 int hwaddr_aton(const char *txt, u8 *addr);
 int hwaddr_masked_aton(const char *txt, u8 *addr, u8 *mask, u8 maskable);
 int hwaddr_compact_aton(const char *txt, u8 *addr);

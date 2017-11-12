@@ -58,10 +58,7 @@ function setScenerion(mode){
 		
 		parent.document.QKform.sw_mode.value = 2;
 		parent.localAP_support = true;
-		if(odmpid == "RT-AC66U V2")
-			$("#Senario").attr("src", "/images/RT-AC66U_V2/re.jpg");
-		else
-			$("#Senario").attr("src", "/images/New_ui/re.jpg");
+		$("#Senario").attr("src", "/images/New_ui/re.jpg");
 		$("#Senario").attr("style", "height:");
 		$("#mode_desc").html(pstaDesc);	
 		document.form.sw_mode_radio[1].focus();
@@ -69,10 +66,7 @@ function setScenerion(mode){
 	}
 	else if(mode == '3'){
 		parent.document.QKform.sw_mode.value = 3;
-		if(odmpid == "RT-AC66U V2")
-			$("#Senario").attr("src", "/images/RT-AC66U_V2/ap.jpg");
-		else
-			$("#Senario").attr("src", "/images/New_ui/ap.jpg");
+		$("#Senario").attr("src", "/images/New_ui/ap.jpg");
 		$("#Senario").attr("style", "height:");
 		$("#mode_desc").html("<#OP_AP_desc#><br><span style=\"color:#FC0\"><#deviceDiscorvy3#></span>");		
 		document.form.sw_mode_radio[2].focus();
@@ -90,10 +84,7 @@ function setScenerion(mode){
 
 		parent.document.QKform.sw_mode.value = 4;
 		parent.localAP_support = false;
-		if(odmpid == "RT-AC66U V2")
-			$("#Senario").attr("src", "/images/RT-AC66U_V2/mb.jpg");
-		else
-			$("#Senario").attr("src", "/images/New_ui/mb.jpg");
+		$("#Senario").attr("src", "/images/New_ui/mb.jpg");
 		$("#Senario").attr("style", "height:170px");
 		$("#mode_desc").html(pstaDesc);
 		document.form.sw_mode_radio[3].focus();
@@ -101,10 +92,7 @@ function setScenerion(mode){
 	}
 	else{
 		parent.document.QKform.sw_mode.value = 1;
-		if(odmpid == "RT-AC66U V2")
-			$("#Senario").attr("src", "/images/RT-AC66U_V2/rt.jpg");
-		else
-			$("#Senario").attr("src", "/images/New_ui/rt.jpg");
+		$("#Senario").attr("src", "/images/New_ui/rt.jpg");
 		$("#Senario").attr("style", "height:");
 		$("#mode_desc").html("<#OP_GW_desc#>");
 		document.form.sw_mode_radio[0].focus();

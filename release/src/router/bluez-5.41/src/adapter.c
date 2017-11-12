@@ -5682,6 +5682,8 @@ static void adapter_remove_connection(struct btd_adapter *adapter,
 //	conn_len = g_slist_length(adapter->connections);
 //	if(!conn_len)
 		lp55xx_leds_proc(LP55XX_WHITE_LEDS, LP55XX_ACT_NONE);
+#elif defined(MAPAC1750)
+	set_rgbled(RGBLED_WHITE);
 #endif
 
 	if (device_is_temporary(device) && !device_is_retrying(device)) {
@@ -7585,6 +7587,8 @@ static void connected_callback(uint16_t index, uint16_t length,
 */
 #if defined(RTCONFIG_LP5523)
 	lp55xx_leds_proc(LP55XX_WHITE_LEDS, LP55XX_ACT_SBLINK);
+#elif defined(MAPAC1750)
+	set_rgbled(RGBLED_WHITE_SBLINK);
 #endif
 
 	ba2str(&ev->addr.bdaddr, addr);

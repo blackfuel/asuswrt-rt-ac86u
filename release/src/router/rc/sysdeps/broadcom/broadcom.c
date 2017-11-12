@@ -40,7 +40,7 @@ typedef u_int8_t __u8;
 #include <wlscan.h>
 
 #include <bcmendian.h>
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 #include <bcmutils.h>
 #endif
 #include <security_ipc.h>
@@ -99,7 +99,7 @@ typedef u_int8_t __u8;
 //End
 char cmd[32];
 struct apinfo apinfos[MAX_NUMBER_OF_APINFO];
-
+bool g_swap = FALSE;
 #if defined(RTCONFIG_EXT_RTL8365MB) || defined(RTCONFIG_EXT_RTL8370MB)
 extern int ext_rtk_phyState(int v, char* BCMPorts);
 #endif
@@ -1434,10 +1434,6 @@ setWiFi5G(const char *act)
 	return 1;
 }
 
-/* The below macro handle endian mis-matches between wl utility and wl driver. */
-static bool g_swap = FALSE;
-#define htod32(i) (g_swap?bcmswap32(i):(uint32)(i))
-#define dtoh32(i) (g_swap?bcmswap32(i):(uint32)(i))
 #define	IW_MAX_FREQUENCIES	32
 
 int Get_channel_list(int unit)
@@ -1871,7 +1867,7 @@ int wlcscan_core(char *ofile, char *wif)
 	params->active_time = -1;
 	params->passive_time = -1;
 	params->home_time = -1;
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 	int band = WLC_BAND_ALL;
 	wl_ioctl(wif, WLC_GET_BAND, &band, sizeof(band));
 	if (band == WLC_BAND_5G)
@@ -1998,7 +1994,7 @@ int wlcscan_core(char *ofile, char *wif)
 	/* restore original scan channel time */
 	wl_ioctl(wif, WLC_SET_SCAN_CHANNEL_TIME, &org_scan_time, sizeof(org_scan_time));
 
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 	wait_time = 2;
 #endif
 	dbg("[rc] Please wait %d seconds ", wait_time);
@@ -2434,7 +2430,7 @@ next_info:
 	return retval;
 }
 
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 
 typedef struct escan_wksp_s {
 	uint8 packet[4096];
@@ -3134,7 +3130,11 @@ int get_psta_status(int unit)
 	int mac_list_size;
 	struct ether_addr bssid;
 	unsigned char bssid_null[6] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0 };
+#if 0
+	char macaddr[18];
+#endif
 	int ret = 0;
+	int debug = nvram_get_int("psta_status_debug");
 
 	if (unit == -1) return 0;
 
@@ -3151,7 +3151,7 @@ int get_psta_status(int unit)
 	else if (!memcmp(&bssid, bssid_null, 6))
 		goto PSTA_ERR;
 
-	dbg("[wlc] wl-associated\n");
+	//if (debug) dbg("[wlc] wl-associated\n");
 
 	/* buffers and length */
 	mac_list_size = sizeof(mac_list->count) + MAX_STA_COUNT * sizeof(struct ether_addr);
@@ -3181,12 +3181,19 @@ int get_psta_status(int unit)
 PSTA_ERR:
 	if (mac_list) free(mac_list);
 
-	if (ret == 2)
-		dbg("[wlc] authorized\n");
-	else if (ret == 1)
-		dbg("[wlc] not authorized\n");
-	else
-		dbg("[wlc] not associated\n");
+	if (ret == 2) {
+#if 0
+		if (debug) dbg("[wlc] authorized\n");
+		ether_etoa((const unsigned char *) &bssid, macaddr);
+		if (debug) dbg("psta send keepalive nulldata to %s\n", macaddr);
+		eval("wl", "-i", name, "send_nulldata", macaddr);
+#endif
+	}
+	else if (ret == 1) {
+		if (debug) dbg("[wlc] not authorized\n");
+	} else {
+		if (debug) dbg("[wlc] not associated\n");
+	}
 
 	return ret;
 }
@@ -3239,7 +3246,11 @@ ERROR:
  *  Return value:
  *  	2 = successfully connected to parent AP
  */
+#if defined(RTCONFIG_AMAS)
+int Pty_get_wlc_status(char *wif)	
+#else	
 int get_wlc_status(char *wif)
+#endif
 {
 	char ure_mac[18];
 	unsigned char bssid[6];
@@ -3250,11 +3261,24 @@ int get_wlc_status(char *wif)
 	int wl_associated = 0;
 	int wl_psk = 0;
 	wlc_ssid_t wst = {0, ""};
-
+#if defined(RTCONFIG_AMAS)
+	int j = 0;
+	char aif[256]={0}, *next = NULL;
+	char get_akm[32]={0};
+	if(strcmp(nvram_safe_get("sta_ifnames"), "")) {
+		foreach(aif, nvram_safe_get("sta_ifnames"), next) {
+			if(!strcmp(aif, wif))
+				break;
+			j++;
+		}
+	}
+	sprintf(get_akm, "wl%d_akm", j);
+	wl_psk = strstr(nvram_safe_get(get_akm), "psk") ? 1 : 0;
+#else
 	wl_psk = strstr(nvram_safe_get(wlc_nvname("akm")), "psk") ? 1 : 0;
-
+#endif
 	if (wl_ioctl(wif, WLC_GET_SSID, &wst, sizeof(wst))) {
-		dbg("[wlc] WLC_GET_SSID error\n");
+		//dbg("[wlc] WLC_GET_SSID error\n");
 		goto wl_ioctl_error;
 	}
 
@@ -3272,7 +3296,7 @@ int get_wlc_status(char *wif)
 					(unsigned char)bssid[5]);
 		}
 	} else {
-		dbg("[wlc] WLC_GET_BSSID error\n");
+		//dbg("[wlc] WLC_GET_BSSID error\n");
 		goto wl_ioctl_error;
 	}
 
@@ -3300,14 +3324,23 @@ int get_wlc_status(char *wif)
 		dbg("[wlc] not wl_associated\n");
 	}
 
-	dbg("[wlc] wl-associated [%d]\n", wl_associated);
-	dbg("[wlc] %s\n", wst.SSID);
-	dbg("[wlc] %s\n", nvram_safe_get(wlc_nvname("ssid")));
-
+	//dbg("[wlc] wl-associated [%d]\n", wl_associated);
+	//dbg("[wlc] %s\n", wst.SSID);
+	//dbg("[wlc] %s\n", nvram_safe_get(wlc_nvname("ssid")));
+#if defined(RTCONFIG_AMAS)
+	if (wl_associated)	
+#else	
 	if (wl_associated &&
-		!strncmp((const char *) wst.SSID, nvram_safe_get(wlc_nvname("ssid")), wst.SSID_len)) {
-		if (wl_psk) {
-			if (wl_authorized) {
+		!strncmp((const char *) wst.SSID, nvram_safe_get(wlc_nvname("ssid")), wst.SSID_len))
+#endif
+ 		{		
+		if (wl_psk  
+#ifdef RTCONFIG_DPSTA			
+			&& !dpsta_mode() && !dpsr_mode()
+#endif			
+			) {
+			if (wl_authorized) 
+			{
 				dbg("[wlc] wl_authorized\n");
 				return 2;
 			} else {
@@ -3315,7 +3348,7 @@ int get_wlc_status(char *wif)
 				return 1;
 			}
 		} else {
-			dbg("[wlc] wl_psk:[%d]\n", wl_psk);
+			//dbg("[wlc] wl_psk:[%d]\n",wl_psk);
 			return 2;
 		}
 	} else {
@@ -3326,6 +3359,7 @@ int get_wlc_status(char *wif)
 wl_ioctl_error:
 	return 0;
 }
+
 
 // TODO: wlcconnect_main
 //	wireless ap monitor to connect to ap
@@ -3355,8 +3389,11 @@ int wlcconnect_core(void)
 				wl_ioctl(word, WLC_SET_VAR, SEND_NULLDATA,
 					sizeof(SEND_NULLDATA));
 			}
-
+#if defined(RTCONFIG_AMAS)
+			ret = Pty_get_wlc_status(word);
+#else
 			ret = get_wlc_status(word);
+#endif			
 			dbg("[wlc][%s] get_wlc_status:[%d]\n", word, ret);
 
 			break;
@@ -3592,7 +3629,7 @@ wl_check_5g_band_group()
 }
 #endif
 
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 int wl_channel_valid(char *wif, int channel)
 {
 	int channels[MAXCHANNEL+1];
@@ -4109,7 +4146,10 @@ wl_vif_hwaddr_set(const char *name)
 	while (retry < 100) { /* maximum 100 millisecond waiting */
 		usleep(1000); /* 1 ms sleep */
 		if ((rc = soc_req(name, SIOCGIFHWADDR, &ifr)) < 0) {
-			fprintf(stderr, "NET: Error Getting hw for %s; returned %d\n", name, rc);
+			if (retry == 99)
+				fprintf(stderr, "\nNET: Error Getting hw for %s; returned %d\n", name, rc);
+			else
+				fprintf(stderr, ".");
 		}
 		if (memcmp(comp_mac_address, (unsigned char *)ifr.ifr_hwaddr.sa_data,
 			ETHER_ADDR_LEN) == 0) {
@@ -4470,6 +4510,94 @@ void led_bh_prep(int post)
 		default:
 			break;
 	}
+}
+#endif
+
+#if defined(RTCONFIG_AMAS)
+
+void Pty_start_wlc_connect(int band)
+{		
+	char tmp[NVRAM_BUFSIZE], prefix[] = "wlXXXXXXXXXX_";
+	char *name = NULL;
+
+	if (band < 0) return;
+
+	snprintf(prefix, sizeof(prefix), "wl%d_", band);
+
+	name = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+	eval("wl", "-i", name, "disassoc");
+	char *amode, *sec = nvram_safe_get(strcat_r(prefix, "akm", tmp));
+	char *argv[] = { "wl", "-i", name, "join", nvram_safe_get(strcat_r(prefix, "ssid", tmp)), "amode", NULL, NULL, NULL, NULL };
+	int index = 6;
+	unsigned char ea[ETHER_ADDR_LEN];
+
+	if (strstr(sec, "psk2")) amode = "wpa2psk";
+	else if (strstr(sec, "psk")) amode = "wpapsk";
+	else if (strstr(sec, "wpa2")) amode = "wpa2";
+	else if (strstr(sec, "wpa")) amode = "wpa";
+	else if (nvram_get_int(strcat_r(prefix, "auth", tmp))) amode = "shared";
+	else amode = "open";
+
+	argv[index++] = amode;
+	if (ether_atoe(nvram_safe_get("wlc_hwaddr"), ea)) {
+		argv[index++] = "-b";
+		argv[index++] = nvram_safe_get("wlc_hwaddr");
+	}
+
+	_eval(argv, NULL, 0, NULL);
+	
+	return;
+}
+
+void Pty_stop_wlc_connect(int band)
+{
+	char tmp[NVRAM_BUFSIZE], prefix[] = "wlXXXXXXXXXX_";
+	char *name = NULL;
+
+	snprintf(prefix, sizeof(prefix), "wl%d_", band);
+
+	name = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+	eval("wl", "-i", name, "disassoc");
+	return;
+}
+
+char buf[WLC_IOCTL_MAXLEN];
+int Pty_get_upstream_rssi(int band)
+{	
+	int ret = 0;
+	struct ether_addr bssid;
+	wl_bss_info_t *bi = NULL;
+	char tmp[128], prefix[] = "wlXXXXXXXXXX_";
+	char *name;
+
+	snprintf(prefix, sizeof(prefix), "wl%d_", band);
+	name = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+
+	if ((ret = wl_ioctl(name, WLC_GET_BSSID, &bssid, ETHER_ADDR_LEN)) == 0) {
+		/* The adapter is associated. */
+		*(uint32*)buf = htod32(WLC_IOCTL_MAXLEN);
+		if ((ret = wl_ioctl(name, WLC_GET_BSS_INFO, buf, WLC_IOCTL_MAXLEN)) < 0)
+			return 0;
+
+		bi = (wl_bss_info_t*)(buf + 4);
+		if (dtoh32(bi->version) == WL_BSS_INFO_VERSION ||
+		    dtoh32(bi->version) == LEGACY2_WL_BSS_INFO_VERSION ||
+		    dtoh32(bi->version) == LEGACY_WL_BSS_INFO_VERSION) {
+			//dbG("RSSI: %d dBm\t", (int16)(dtoh16(bi->RSSI)));	
+			return (int16)(dtoh16(bi->RSSI));
+		}
+#if 0		
+		else
+			dbG("Sorry, your driver has bss_info_version %d "
+				"but this program supports only version %d.\n",
+				bi->version, WL_BSS_INFO_VERSION);
+#endif				
+	} else {
+		;
+			//dbG("Not associated. Last associated with ");
+	}
+			
+	return 0;	
 }
 #endif
 

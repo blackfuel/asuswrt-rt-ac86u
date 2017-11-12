@@ -168,6 +168,12 @@ static int ieee802_11_parse_vendor_specific(const u8 *pos, size_t elen,
 		}
 		break;
 
+	case _OUI_ASUS:
+		printf("GOT ASUS OUI\n");
+		elems->vsie = pos;
+		elems->vsie_len = elen;
+		break;
+
 	default:
 		wpa_printf(MSG_EXCESSIVE, "unknown vendor specific "
 			   "information element ignored (vendor OUI "

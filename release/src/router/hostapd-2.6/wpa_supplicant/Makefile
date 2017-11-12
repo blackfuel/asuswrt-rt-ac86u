@@ -25,6 +25,11 @@ PKG_CONFIG ?= pkg-config
 CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
+CFLAGS += -I$(abspath ../../openssl/include)
+CFLAGS += -I$(abspath ../../libnl-bf/source/include)
+
+LDFLAGS += -L$(abspath ../../openssl)
+LDFLAGS += -L$(abspath ../../libnl-bf/source/lib/.libs)
 
 -include .config
 

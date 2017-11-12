@@ -3,7 +3,6 @@
 */
 
 #include "bleencrypt.h"
-#include "include/adv_string.h"
 
 #ifdef ENCRYPT
 #define SSL_VERSION     (SSLeay_version(SSLEAY_VERSION))
@@ -74,6 +73,46 @@ struct param_handler_svr param_handlers_svr[] = {
 	{ BLE_COMMAND_SET_ATH1_CHAN,		NULL,				"restart_wireless",             BLE_DATA_TYPE_STRING },
 	{ -1,					NULL,				NULL,				-1 }
 };
+
+static char* dumpHEX(
+	unsigned char *src,
+	unsigned long src_size)
+{
+	int c;
+	unsigned char *s = NULL, *ss = NULL;
+	char *P = NULL, *PP = NULL, sss[33];
+	unsigned long alloc_size = 0;
+	
+	if (src == NULL || src_size <= 0)
+	{
+		printf("\n");
+		return NULL;
+	}
+	
+	alloc_size = src_size * 4;
+	s = &src[0];
+	ss = &src[src_size];
+	P = (char *)malloc(alloc_size);
+	
+	if (P == NULL)
+	{
+		printf("\n");
+		return NULL;
+	}
+	
+	memset(P, 0, alloc_size);
+	for (c=0, PP=&P[0]; s<ss; s++)
+	{
+		memset(sss, 0, sizeof(sss));
+		snprintf(sss, sizeof(sss)-1, "%02X%c", *s, (c>=19)?'\x0a':'\x20');
+		strncpy(PP, sss, strlen(sss));
+		PP += strlen(sss);
+		if (c++>=19) c = 0;	
+	}
+	printf("%s\n", P);
+	free(P);
+	return NULL;	
+}
 
 /*
  * @func: Check if the file exists

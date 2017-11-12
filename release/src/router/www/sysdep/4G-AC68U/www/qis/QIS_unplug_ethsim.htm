@@ -42,7 +42,7 @@ function submitenter(myfield,e)
    		return false;
   	}
 	else
-   	return true;
+		return true;
 }
 
 function detect_if_wan_plug(flag){
@@ -51,10 +51,10 @@ function detect_if_wan_plug(flag){
 		dataType: 'script',
 		
 		error: function(xhr){
-			detect_if_wan_plug();		
+			detect_if_wan_plug();
 		},
 		success: function(response){
-			if(autodet_state == 4 || parent.noWAN_support){ // ethernet did not plug
+			if(autodet_state == "" || autodet_state == 4 || parent.noWAN_support){ // ethernet did not plug
 				if(sim_state == 1 || sim_state == 2){
 					redirect_page("admin_pass");
 				}
@@ -62,7 +62,6 @@ function detect_if_wan_plug(flag){
 					document.getElementById("loadingIcon").style.display = "none";
 					document.getElementById("skipButton").style.display = "";
 				}
-				setTimeout("detect_if_wan_plug(1)", 1000);
 			}
 			else if(autodet_state == 0){
 				document.getElementById("loadingIcon").style.display = "";

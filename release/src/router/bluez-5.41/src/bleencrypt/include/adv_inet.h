@@ -107,15 +107,6 @@ static unsigned long AdvInet_AtoN(
 }
 */
 //---------------------------------------------------------------------------
-static char *AdvInet_IToNC(
-	unsigned long value,
-	unsigned char *buff)
-{
-	buff = (unsigned char *)&value;
-
-	return buff;
-}
-//---------------------------------------------------------------------------
 static char *AdvInet_NCtoA(
 	unsigned char *inaddr,
 	char *buff)

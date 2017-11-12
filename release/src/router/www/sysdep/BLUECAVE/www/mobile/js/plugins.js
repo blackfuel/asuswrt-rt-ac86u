@@ -3,7 +3,17 @@ jQuery.fn.showTextHint = function(hintStr){
 
 	$("<div>")
 		.html(hintStr)
-		.attr("class", "hint")
+		.addClass("hint")
+		.appendTo(this.parent());
+}
+
+jQuery.fn.showSelectorHint = function(hintStr){
+	this.parent().children().remove(".hint");
+
+	$("<div>")
+		.html(hintStr)
+		.addClass("hint")
+		.addClass("selectorHint")
 		.appendTo(this.parent());
 }
 
@@ -107,8 +117,14 @@ function Get_Component_Loading(){
 var Get_Component_WirelessInput = function(wlArray){
 	var container = $("<div>");
 
-	wlArray.forEach(function(wl){
+	wlArray.forEach(function(wl, idx){
 		var wirelessAP = httpApi.nvramGet(["wl" + wl.ifname + "_ssid", "wl" + wl.ifname + "_wpa_psk"]);
+		// Do not use default value.
+		if(systemVariable.isDefault){
+			wirelessAP["wl" + wl.ifname + "_ssid"] = "";
+			wirelessAP["wl" + wl.ifname + "_wpa_psk"] = "";
+		}
+
 		var __container = $("<div>").addClass("wirelessBand");
 
 		$("<div>")
@@ -124,8 +140,17 @@ var Get_Component_WirelessInput = function(wlArray){
 					"type": "text",
 					"maxlength": "32",
 					"class": "textInput wlInput",
+					"autocomplete": "off",
+					"autocorrect": "off",
+					"autocapitalize": "off",
+					"spellcheck": "false",
 					"data-role": "none",
 					"data-clear-btn": "true"
+				})
+				.keyup(function(e){
+					if(e.keyCode == 13){
+						$(".wlInput")[idx*2+1].focus();
+					}
 				})
 				.val(wirelessAP["wl" + wl.ifname + "_ssid"])
 			)
@@ -145,8 +170,22 @@ var Get_Component_WirelessInput = function(wlArray){
 					"type": "password",
 					"maxlength": "64",
 					"class": "textInput wlInput",
+					"autocomplete": "off",
+					"autocorrect": "off",
+					"autocapitalize": "off",
+					"spellcheck": "false",
 					"data-role": "none",
 					"data-clear-btn": "true"
+				})
+				.keyup(function(e){
+					if(e.keyCode == 13){
+						try{
+							$(".wlInput")[idx*2+2].focus();
+						}
+						catch(e){
+							apply.wireless();
+						}
+					}
 				})
 				.val(wirelessAP["wl" + wl.ifname + "_wpa_psk"])
 			)
@@ -159,11 +198,18 @@ var Get_Component_WirelessInput = function(wlArray){
 }
 
 function handleSysDep(){
+	$("#welcomeTitle").html($("#welcomeTitle").html().replace("BLUE_CAVE", "BLUE CAVE"))
 	$(".amasSupport").toggle(isSupport("AMAS"));
+	$(".noAmasSupport").toggle(!isSupport("AMAS"));
 	$(".tosSupport").toggle(systemVariable.isDefault && isSupport("QISBWDPI"));
 	$(".repeaterSupport").toggle(isSupport("repeater"));
 	$(".pstaSupport").toggle(isSupport("psta"));
 	$(".dualbandSupport").toggle(isSupport("DUALBAND") || isSupport("TRIBAND"));
+	$(".bandStreeringSupport").toggle(isSupport("bandstr") || isSupport("smart_connect"));
+	$(".vpnClient").toggle(isSupport("VPNCLIENT"));
+	$(".iptv").toggle(isSupport("IPTV"));
+	$(".defaultSupport").toggle(systemVariable.isDefault);
+	$(".configuredSupport").toggle(!systemVariable.isDefault);
 }
 
 function setUpTimeZone(){
@@ -273,13 +319,23 @@ var isSupport = function(_ptn){
 			matchingResult = (systemVariable.rcSupport.search("amas") !== -1) ? true : false;
 			break;
 		case "QISBWDPI":
-			matchingResult = (systemVariable.rcSupport.search("bwdpi") !== -1) ? true : false;
+			// matchingResult = (systemVariable.rcSupport.search("bwdpi") !== -1) ? true : false;
+			matchingResult = false;
 			break;
 		case "DUALBAND":
 			matchingResult = (systemVariable.wirelessBand == 2) ? true : false;
 			break;
 		case "TRIBAND":
 			matchingResult = (systemVariable.wirelessBand == 3) ? true : false;
+			break;
+		case "VPNCLIENT":
+			matchingResult = (isSku("US") || isSku("CA") || isSku("TW") || isSku("CN")) ? false : true;
+			break;
+		case "IPTV":
+			matchingResult = (isSku("EU") || isSku("SG") || isSku("AA") || isSku("TW")) ? true : false;
+			break;
+		case "FORCEUPGRADE":
+			matchingResult = (systemVariable.rcSupport.search("fupgrade") !== -1) ? true : false;
 			break;
 		default:
 			matchingResult = ((systemVariable.rcSupport.search(_ptn) !== -1) || (systemVariable.productid.search(_ptn) !== -1)) ? true : false;
@@ -400,19 +456,9 @@ var isWeakString = function(pwd, flag){
 		return false;
 }
 
-function pageChecker(){
-	var pages = [], i = 0;
-
-	$.each($(".qisBackground"), function(idx, qisPage){pages.push(qisPage.id)});
-	$.each($(".qisBackgroundIndex"), function(idx, qisPage){pages.push(qisPage.id)});
-
-	setTimeout(function(){
-		console.log("page: " + pages[i]);
-		goTo.loadPage(pages[i], false);
-		i++;
-
-		if(i < pages.length) setTimeout(arguments.callee, 3000)
-	}, 2000)
-
-	console.clear();
+function addNewScript(scriptName){
+	var script = document.createElement("script");
+	script.type = "text/javascript";
+	script.src = scriptName;
+	document.getElementsByTagName("head")[0].appendChild(script);
 }

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 	<head>
 		<meta charset="utf-8">
@@ -14,7 +14,7 @@
 		<script type="text/javascript" src="./mobile/js/jquery.mobile.js"></script>
 		<script type="text/javascript" src="./require/require.min.js"></script>
 		<script type="text/javascript" src="./validator.js"></script>
-		<script type="text/javascript" src="./mobile/js/httpApi.js"></script>
+		<script type="text/javascript" src="./js/httpApi.js"></script>
 		<script type="text/javascript" src="./mobile/js/plugins.js"></script>
 		<script type="text/javascript" src="./mobile/js/qisData.js"></script>
 		<script type="text/javascript" src="./mobile/js/handler.js"></script>
@@ -29,7 +29,7 @@
 
 				// setup systemVariables
 				setTimeout(function(){
-					var initNvram = httpApi.nvramGet(["wan0_proto", "wan0_dnsenable_x", "sw_mode", "wlc_psta", "wl_ifnames", "wl_version", "productid", "rc_support", "x_Setting", "preferred_lang", "territory_code"]);
+					var initNvram = httpApi.nvramGet(["wan0_proto", "wan0_dnsenable_x", "sw_mode", "wlc_psta", "wl_ifnames", "wl_version", "productid", "rc_support", "x_Setting", "preferred_lang", "territory_code", "reboot_time", "lan_ipaddr"]);
 
 					systemVariable.originWanType = initNvram.wan0_proto;
 					systemVariable.wanDnsenable = initNvram.wan0_dnsenable_x;
@@ -47,6 +47,8 @@
 					systemVariable.isDefault = (function(){return (initNvram.x_Setting == '0' || initNvram.x_Setting == '') ? true : false;})();
 					systemVariable.uiLanguage = initNvram.preferred_lang;
 					systemVariable.territoryCode = initNvram.territory_code;
+					systemVariable.rebootTime = initNvram.reboot_time;
+					systemVariable.lanIpaddr = initNvram.lan_ipaddr;
 					systemVariable.forceChangePW = (httpApi.hookGet("check_pw").check_pw == '1') ? true : false;
 
 					handleSysDep();
@@ -70,6 +72,8 @@
 						case "wireless":
 							goTo.Wireless();
 						break;					
+						case "amasrole_page":
+							goTo.chooseRole();
 						default:
 							goTo.Welcome();
 						break;
@@ -114,13 +118,24 @@
 					<div><img src="./images/Model_product.png"></div>
 				</div>
 
-				<div style="text-align:center;margin:50px 0">
+				<div style="text-align:center;margin:50px 0" class="noAmasSupport">
 					<div id="welcome_button" onclick="apply.welcome();">Create A New Network</div>
 				</div>
-				<div style="text-align:center;" class="amasSupport">
-					<a href="#" id="amasSignin" onclick="goTo.WPS()">Or sign in to your existing network</a>
+
+				<div style="text-align:center;margin:50px 0" class="amasSupport">
+					<div id="aimesh_welcome_button" onclick="goTo.amasIntro();">Start</div>
 				</div>
-				
+	
+				<div style="margin:auto;width:600px;text-align:center;">
+					<a href="#"  class="advSetting" onclick="goTo.advSetting()">Manual Setup</a>
+					<!--div style="text-align:left;color:#FFF;" class="amasSupport">
+						<ul>
+							<li><a href="#" class="advSetting" onclick="goTo.chooseRole()">Sign in to your existing network</a></li>
+							<li><a href="#" class="advSetting" onclick="goTo.advSetting()">Go To Advanced Setting</a></li>
+						</ul>
+					</div-->
+				</div>
+		
 				<div class="tos tosSupport">
 					<input id="tosCheckbox" type="checkbox" />
 					<span id="tosTitle">By using ASUS AiProtection, you agree to the</span>
@@ -131,6 +146,113 @@
 			</div>
 		</div>
 		
+		<!-- Advanced Setting -->
+		<div id="advanced_setting" data-role="page" class="qisBackground">
+			<div class="headerBar">
+				<table style="width:100%">
+					<tr>
+						<td style="width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu"></div>
+								</a>
+							</div>
+						</td>
+						<td>
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td>
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="tableContainer">
+				<div class="desktop_left_field">
+					<div>
+						<div class="titleMain"><#Internet#></div>
+						<div class="titleSub"><#menu5_6_1#></div>
+					</div>
+				</div>
+				<div class="table_td">
+					<div class="amasSupport">
+						<div class="pageDesc">AiMesh combines more than one ASUS routers to form a AiMesh system, provides whole-home coverage and centralized management.</div>
+						<div>
+							<div class="selectorTopContainer">
+								<div class="selectorContainer">
+									<div class="selectorContainerDiv">
+										<div class="selectBar" onclick="goTo.chooseRole()">
+											AiMesh
+										</div>
+										<div class="narrowContainer">
+											<div class="icon_arrow_right" style="width:20px;height:32px;"></div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div style="height: 50px"></div>
+
+					<div class="pageDesc"><#OP_desc1#></div>
+					<div>
+						<div class="selectorTopContainer">
+							<div class="selectorContainer">
+								<div class="selectorContainerDiv">
+									<div class="selectBar" onclick="apply.changeOpMode()">
+										<#ASUSGATE_act_change#>
+									</div>
+									<div class="narrowContainer">
+										<div class="icon_arrow_right" style="width:20px;height:32px;"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div style="height: 50px"></div>
+
+					<div class="pageDesc"><#Setting_upload_itemdesc#></div>
+					<div>
+						<div class="selectorTopContainer" id="settingProfileBar">
+							<div class="selectorContainer">
+								<div class="selectorContainerDiv">
+									<div class="selectBar">
+										<label for="setting_profile"><#CTL_upload#></label>
+										<div style="display:none">
+											<input id="setting_profile" type="file" name="file" class="input" style="display:none" onchange="apply.upload();" />
+										</div>
+									</div>
+									<div class="narrowContainer">
+										<div class="icon_arrow_right" style="width:20px;height:32px;"></div>
+									</div>
+								</div>
+							</div>					
+						</div>					
+					</div>
+
+					<div>
+						<!-- Action Button -->
+						<div class="footer_desktop">
+							<div class="desktop_abortBtn" onclick='abort.advSetting()'><#CTL_prev#></div>
+						</div>
+						<div class="footer_mobile">
+							<table style="width:100%;" cellpadding="0" cellspacing="0">
+								<tr>
+									<td class="mobileAbort" style="width:100%;" onclick='abort.advSetting()'>
+										<div class="mobile_abortBtn"><#CTL_prev#></div>
+									</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Login Page -->	
 		<div id="login_name" data-role="page" class="qisBackground">
 			<div class="headerBar">
@@ -156,7 +278,7 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#CTL_login#></div>
 						<div class="titleSub"><#HSDPAConfig_Username_itemname#>/<#PPPConnection_Password_itemname#></div>
 						<div class="titleSub"><#Settings#></div>
@@ -170,7 +292,7 @@
 								<div class="inputTitle"><#Router_Login_Name#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="http_username" type="text" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="http_username" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 						<div>
@@ -179,7 +301,7 @@
 								<div class="secureInput icon_eye_close" for="http_passwd http_passwd_confirm"></div>
 							</div>
 							<div class="inputContainer">
-								<input id="http_passwd" type="password" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="http_passwd" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 						<div>
@@ -187,7 +309,7 @@
 								<div class="inputTitle"><#PASS_retype#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="http_passwd_confirm" type="password" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="http_passwd_confirm" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 						<!-- Action Button -->
@@ -207,6 +329,66 @@
 								</tr>
 							</table>
 						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Reset Modem -->
+		<div id="resetModem_page" data-role="page" class="qisBackground">
+			<div class="headerBar">
+				<table style="width:100%">
+					<tr>
+						<td style="width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu"></div>
+								</a>
+							</div>
+						</td>
+						<td>
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td>
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="tableContainer">
+				<div class="desktop_left_field">
+					<div>
+						<div class="titleMain"><#Internet#></div>
+						<div class="titleSub"><#QIS_step2#></div>
+					</div>
+				</div>
+				<div class="table_td">
+					<div class="pageDesc">
+						<div><#QIS_internet_success_desc4_1#></div>
+						<div><#QIS_internet_success_desc4#></div>
+					</div>
+					<div id="resetModemContainer">
+						<div class="unplug" id="resetModem"></div>
+					</div>
+
+					<!-- Action Button -->
+					<div class="footer_desktop">
+						<div class="desktop_abortBtn" onclick='abort.resetModem()'><#QKSet_detect_freshbtn#></div>
+						<div class="desktop_applyBtn" onclick="apply.manual();"><#Manual_Setting_btn#></div>
+					</div>
+					<div class="footer_mobile">
+						<table style="width:100%;" cellpadding="0" cellspacing="0">
+							<tr>
+								<td class="mobileAbort" style="width:50%" onclick='abort.resetModem()'>
+									<div class="mobile_abortBtn"><#QKSet_detect_freshbtn#></div>
+								</td>
+								<td class="mobileApply" onclick="apply.manual();">
+									<div class="mobile_applyBtn"><#Manual_Setting_btn#></div>
+								</td>
+							</tr>
+						</table>
 					</div>
 				</div>
 			</div>
@@ -237,7 +419,7 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#QKSet_detect_sanglass#></div>
 					</div>
@@ -269,12 +451,12 @@
 
 					<!-- Action Button -->
 					<div class="footer_desktop">
-						<div class="desktop_applyBtn" onclick="apply.waiting()"><#Manual_Setting_btn#></div>
+						<div class="desktop_applyBtn" onclick="apply.manual()"><#Manual_Setting_btn#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
 							<tr>
-								<td class="mobileApply" onclick="apply.waiting()">
+								<td class="mobileApply" onclick="apply.manual()">
 									<div class="mobile_applyBtn"><#Manual_Setting_btn#></div>
 								</td>
 							</tr>
@@ -358,16 +540,16 @@
 									</div>
 								</div>
 							</div>
-							<div class="selectorContainer amasSupport">
+							<!--div class="selectorContainer amasSupport">
 								<div class="selectorContainerDiv">
 									<div class="selectBar" onclick="goTo.meshMode()">
-										AMAS
+										AiMesh
 									</div>
 									<div class="narrowContainer">
 										<div class="icon_arrow_right" style="width:20px;height:32px;"></div>
 									</div>
 								</div>
-							</div>
+							</div-->
 						</div>
 
 						<!-- Action Button -->
@@ -413,7 +595,7 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#QIS_step2#></div>
 					</div>
@@ -424,12 +606,15 @@
 					</div>
 
 					<div>
-						<div class="noWanPic"></div>
-						<div id="noWanPlugHint" class="noWanEth"></div>
+						<div id="noWanContainer">
+							<div><img id="noWanPic" width="504" src="/images/WANunplug.png"></div>
+							<div><img id="noWanEth" width="504" src="/images/WANunplug_eth.png"></div>
+							<div><img id="noWanUsb" width="504" src="/images/WANunplug_usb.png"></div>
+						</div>
 						<!-- Action Button -->
 						<div class="footer_desktop">
 							<div class="desktop_abortBtn" onclick="abort.nowan()"><#CTL_prev#></div>
-							<div class="desktop_applyBtn" onclick="apply.nowan()"><#Manual_Setting_btn#></div>
+							<div class="desktop_applyBtn" onclick="apply.manual()"><#Manual_Setting_btn#></div>
 						</div>
 						<div class="footer_mobile">
 							<table style="width:100%;" cellpadding="0" cellspacing="0">
@@ -437,8 +622,86 @@
 									<td class="mobileAbort" style="width:50%" onclick='abort.nowan()'>
 										<div class="mobile_abortBtn"><#CTL_prev#></div>
 									</td>
-									<td class="mobileApply" onclick="apply.nowan()">
+									<td class="mobileApply" onclick="apply.manual()">
 										<div class="mobile_applyBtn"><#Manual_Setting_btn#></div>
+									</td>
+								</tr>
+							</table>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Account prompt -->
+		<div id="accountPrompt_setting" data-role="page" class="qisBackground">
+			<div class="headerBar">
+				<table style="width:100%">
+					<tr>
+						<td style="width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu"></div>
+								</a>
+							</div>
+						</td>
+						<td>
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td>
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="tableContainer">
+				<div class="desktop_left_field">
+					<div>
+						<div class="titleMain"><#Internet#></div>
+						<div class="titleSub"><#Connectiontype#></div>
+					</div>
+				</div>
+				<div class="table_td">
+					<div class="pageDesc"><#QIS_SmartConn_title1#></div>
+					<div>
+						<div class="selectorTopContainer" id="test">
+							<div class="selectorContainer">
+								<div class="selectorContainerDiv" onclick="goTo.dailIP()">
+									<div class="selectBar">
+										<#checkbox_Yes#>
+									</div>
+									<div class="narrowContainer">
+										<div class="icon_arrow_right" style="width:20px;height:32px;"></div>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="selectorTopContainer">
+							<div class="selectorContainer">
+								<div class="selectorContainerDiv">
+									<div class="selectBar" onclick="goTo.autoIP()">
+										<#checkbox_No#>
+									</div>
+									<div class="narrowContainer">
+										<div class="icon_arrow_right" style="width:20px;height:32px;"></div>
+									</div>
+								</div>
+							</div>
+						</div>		
+					</div>
+
+					<div>
+						<!-- Action Button -->
+						<div class="footer_desktop">
+							<div class="desktop_abortBtn" onclick='abort.wanType()'><#CTL_prev#></div>
+						</div>
+						<div class="footer_mobile">
+							<table style="width:100%;" cellpadding="0" cellspacing="0">
+								<tr>
+									<td class="mobileAbort" style="width:100%;" onclick='abort.wanType()'>
+										<div class="mobile_abortBtn"><#CTL_prev#></div>
 									</td>
 								</tr>
 							</table>
@@ -479,10 +742,10 @@
 					</div>
 				</div>
 				<div class="table_td">
-					<div class="pageDesc"><#QIS_type_desc1#></div>
+					<div class="pageDesc" id="connTypeDesc"><#QIS_type_desc1#></div>
 					<div>
 						<div class="selectorTopContainer">
-							<div class="selectorContainer">
+							<div class="selectorContainer autoIP">
 								<div class="selectorContainerDiv">
 									<div class="selectBar" onclick="goTo.DHCP()">
 										<#BOP_ctype_title1#>
@@ -492,7 +755,7 @@
 									</div>
 								</div>
 							</div>
-							<div class="selectorContainer">
+							<div class="selectorContainer dailIP">
 								<div class="selectorContainerDiv">
 									<div class="selectBar" onclick="goTo.PPPoE()">
 										PPPoE
@@ -502,7 +765,7 @@
 									</div>
 								</div>
 							</div>
-							<div class="selectorContainer">
+							<div class="selectorContainer autoIP">
 								<div class="selectorContainerDiv">
 									<div class="selectBar" onclick="goTo.Static()">
 										<#BOP_ctype_title5#>
@@ -512,7 +775,7 @@
 									</div>
 								</div>
 							</div>
-							<div class="selectorContainer">
+							<div class="selectorContainer dailIP vpnClient">
 								<div class="selectorContainerDiv">
 									<div class="selectBar" onclick="goTo.PPTP()">
 										PPTP
@@ -522,7 +785,7 @@
 									</div>
 								</div>
 							</div>
-							<div class="selectorContainer">
+							<div class="selectorContainer dailIP vpnClient">
 								<div class="selectorContainerDiv">
 									<div class="selectBar" onclick="goTo.L2TP()">
 										L2TP
@@ -534,7 +797,7 @@
 							</div>
 						</div>
 
-						<div class="labelContainer">
+						<div class="labelContainer iptv">
 							<label for="iptv_checkbox" class="labelInput"><#PPPConnection_x_HostNameForISP_sectionname#></label>
 			  				<input type="checkbox" id="iptv_checkbox" value="1" data-mini="true" />
 						</div>
@@ -654,24 +917,20 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#QKSet_account_webtitle#></div>
 					</div>
 				</div>
 				<div class="table_td">
-					<div id="pppoe_desc" class="pageDesc">
-						<#qis_pppoe_desc1#>
-						<br/>
-						<#qis_pppoe_desc2#>
-					</div>
+					<div id="pppoe_desc" class="pageDesc"><#QIS_SmartConn_ISPDesc2#></div>
 					<div id="pppoe_field">
 						<div>
 							<div class="inputTitleContainer">
 								<div class="inputTitle"><#HSDPAConfig_Username_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="wan_pppoe_username" type="text" maxlength="64" class="textInput pppInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="wan_pppoe_username" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput pppInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 						<div>
@@ -680,7 +939,7 @@
 								<div class="secureInput icon_eye_close" for="wan_pppoe_passwd"></div>
 							</div>
 							<div class="inputContainer">
-								<input id="wan_pppoe_passwd" type="password" maxlength="64" class="textInput pppInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="wan_pppoe_passwd" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput pppInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 
@@ -689,7 +948,7 @@
 								<div class="inputTitle"><#BOP_isp_heart_item#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="wan_heartbeat_x" type="text" maxlength="64" class="textInput pppInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="wan_heartbeat_x" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput pppInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 						<!-- Action Button -->
@@ -739,20 +998,20 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#BOP_ctype_title5#></div>
 					</div>
 				</div>
 				<div class="table_td">
-					<div class="pageDesc"><#BOP_ctype_item5#></div>
+					<div class="pageDesc"><#QIS_SmartConn_StaticDesc#></div>
 					<div>
 						<div>
 							<div class="inputTitleContainer">
 								<div class="inputTitle"><#IPConnection_ExternalIPAddress_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_ipaddr" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_ipaddr" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -760,7 +1019,7 @@
 								<div class="inputTitle"><#IPConnection_x_ExternalSubnetMask_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_subnet" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_subnet" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -768,7 +1027,7 @@
 								<div class="inputTitle"><#IPConnection_x_ExternalGateway_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_gateway" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_gateway" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -776,7 +1035,7 @@
 								<div class="inputTitle"><#IPConnection_x_DNSServer1_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_dns1" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_dns1" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -784,7 +1043,7 @@
 								<div class="inputTitle"><#IPConnection_x_DNSServer2_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_dns2" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_dns2" class="textInput staticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<!-- Action Button -->
@@ -834,7 +1093,7 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#QKSet_ISP_head#></div>
 					</div>
@@ -870,7 +1129,7 @@
 								<div class="inputTitle" id="iptv_voip_title">VoIP Port</div>
 							</div>
 							<div class="inputContainer">
-								<input class="textInput" id="iptv_voip" data-role="none" type="text" value="LAN3" disabled />
+								<input class="textInput" id="iptv_voip" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="LAN3" disabled />
 							</div>
 						</div>
 
@@ -879,7 +1138,7 @@
 								<div class="inputTitle" id="iptv_stb_title">IPTV STB Port</div>
 							</div>
 							<div class="inputContainer">
-								<input class="textInput" id="iptv_stb" data-role="none" type="text" value="LAN4" disabled />
+								<input class="textInput" id="iptv_stb" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="LAN4" disabled />
 							</div>
 						</div>
 
@@ -891,10 +1150,10 @@
 								<div class="inputContainer">
 									<div class="ui-grid-a">
 										<div class="ui-block-a">
-											VID: <input class="textInput textInputIptv" id="internet_vid" data-role="none" type="text" />
+											VID: <input class="textInput textInputIptv" id="internet_vid" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 										</div>
 										<div class="ui-block-b">
-											PRIO: <input class="textInput textInputIptv" id="internet_prio" data-role="none" type="text" />
+											PRIO: <input class="textInput textInputIptv" id="internet_prio" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 										</div>
 									</div>
 								</div>
@@ -906,10 +1165,10 @@
 								<div class="inputContainer">
 									<div class="ui-grid-a">
 										<div class="ui-block-a">
-											VID: <input class="textInput textInputIptv" id="stb_vid" data-role="none" type="text" />
+											VID: <input class="textInput textInputIptv" id="stb_vid" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 										</div>
 										<div class="ui-block-b">
-											PRIO: <input class="textInput textInputIptv" id="stb_prio" data-role="none" type="text" />
+											PRIO: <input class="textInput textInputIptv" id="stb_prio" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 										</div>
 									</div>
 								</div>
@@ -921,10 +1180,10 @@
 								<div class="inputContainer">
 									<div class="ui-grid-a">
 										<div class="ui-block-a">
-											VID: <input class="textInput textInputIptv" id="voip_vid" data-role="none" type="text" />
+											VID: <input class="textInput textInputIptv" id="voip_vid" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 										</div>
 										<div class="ui-block-b">
-											PRIO: <input class="textInput textInputIptv" id="voip_prio" data-role="none" type="text" />
+											PRIO: <input class="textInput textInputIptv" id="voip_prio" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 										</div>
 									</div>
 								</div>
@@ -937,7 +1196,7 @@
 									<div class="inputTitle"><#IPConnection_ExternalIPAddress_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_ipaddr" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+									<input id="iptv_ipaddr" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div>
@@ -945,7 +1204,7 @@
 									<div class="inputTitle"><#IPConnection_x_ExternalSubnetMask_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_netmask" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+									<input id="iptv_netmask" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div>
@@ -953,7 +1212,7 @@
 									<div class="inputTitle"><#IPConnection_x_ExternalGateway_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_gateway" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+									<input id="iptv_gateway" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div>
@@ -961,7 +1220,7 @@
 									<div class="inputTitle"><#IPConnection_x_DNSServer1_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_dns1" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+									<input id="iptv_dns1" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div>
@@ -969,7 +1228,7 @@
 									<div class="inputTitle"><#IPConnection_x_DNSServer2_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_dns2" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+									<input id="iptv_dns2" class="textInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 
@@ -989,7 +1248,7 @@
 									<div class="inputTitle"><#HSDPAConfig_Username_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_pppoe_username" type="text" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
+									<input id="iptv_pppoe_username" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
 								</div>
 							</div>
 							<div class="iptv_pppoe_setting">
@@ -998,7 +1257,7 @@
 									<div class="secureInput icon_eye_close" for="iptv_pppoe_passwd"></div>
 								</div>
 								<div class="inputContainer">
-									<input id="iptv_pppoe_passwd" type="password" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
+									<input id="iptv_pppoe_passwd" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true" />
 								</div>
 							</div>
 						</div>
@@ -1050,7 +1309,7 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#menu5_4_4#></div>
 					</div>
@@ -1116,7 +1375,7 @@
 									<div class="inputTitle"><#HSDPAConfig_private_apn_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="modem_apn" class="textInput" data-role="none" type="text" />
+									<input id="modem_apn" class="textInput" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div id="modem_dialnum_container">
@@ -1124,7 +1383,7 @@
 									<div class="inputTitle"><#HSDPAConfig_DialNum_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="modem_dialnum" class="textInput" data-role="none" type="text" />
+									<input id="modem_dialnum" class="textInput" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div>
@@ -1132,7 +1391,7 @@
 									<div class="inputTitle"><#HSDPAConfig_Username_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="modem_user" class="textInput" data-role="none" type="text" />
+									<input id="modem_user" class="textInput" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 							<div>
@@ -1140,7 +1399,7 @@
 									<div class="inputTitle"><#PPPConnection_Password_itemname#></div>
 								</div>
 								<div class="inputContainer">
-									<input id="modem_pass" class="textInput" data-role="none" type="text" />
+									<input id="modem_pass" class="textInput" data-role="none" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 								</div>
 							</div>
 						</div>
@@ -1164,7 +1423,7 @@
 								<div class="secureInput icon_eye_close" for="modem_pincode"></div>
 							</div>
 							<div class="inputContainer">
-								<input id="modem_pincode" class="textInput" data-role="none" type="password" data-clear-btn="true" />
+								<input id="modem_pincode" class="textInput" data-role="none" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-clear-btn="true" />
 							</div>
 						</div>
 						<div id="modem_ttlsid_container">
@@ -1172,7 +1431,7 @@
 								<div class="inputTitle">E-mail</div>
 							</div>
 							<div class="inputContainer">
-								<input id="modem_ttlsid" class="textInput" data-role="none" data-clear-btn="true" type="text" />
+								<input id="modem_ttlsid" class="textInput" data-role="none" data-clear-btn="true" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -1180,7 +1439,7 @@
 								<div class="inputTitle">USB MTU</div>
 							</div>
 							<div class="inputContainer">
-								<input id="modem_mtu" class="textInput" data-role="none" data-clear-btn="true" type="text" maxlength="5" />
+								<input id="modem_mtu" class="textInput" data-role="none" data-clear-btn="true" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="5" />
 							</div>
 						</div>
 
@@ -1313,20 +1572,20 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#Internet#></div>
 						<div class="titleSub"><#BOP_ctype_title5#></div>
 					</div>
 				</div>
 				<div class="table_td">
-					<div class="pageDesc"><#BOP_ctype_item5#></div>
+					<div class="pageDesc"><#QIS_SmartConn_StaticDesc#></div>
 					<div>
 						<div>
 							<div class="inputTitleContainer">
 								<div class="inputTitle"><#IPConnection_ExternalIPAddress_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_lan_ipaddr" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_lan_ipaddr" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -1334,7 +1593,7 @@
 								<div class="inputTitle"><#IPConnection_x_ExternalSubnetMask_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_lan_subnet" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_lan_subnet" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -1342,7 +1601,7 @@
 								<div class="inputTitle"><#IPConnection_x_ExternalGateway_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_lan_gateway" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_lan_gateway" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -1350,7 +1609,7 @@
 								<div class="inputTitle"><#IPConnection_x_DNSServer1_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_lan_dns1" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_lan_dns1" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<div>
@@ -1358,7 +1617,7 @@
 								<div class="inputTitle"><#IPConnection_x_DNSServer2_itemname#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="static_lan_dns2" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" />
+								<input id="static_lan_dns2" class="textInput lanStaticInput" data-role="none" onkeypress="return validator.isIPAddr(this, event);" maxlength="15" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
 							</div>
 						</div>
 						<!-- Action Button -->
@@ -1472,7 +1731,7 @@
 								<div class="secureInput icon_eye_close" for="wlc_wifiKey"></div>
 							</div>
 							<div class="inputContainer">
-								<input id="wlc_wifiKey" type="password" maxlength="64" class="textInput wlcInput" data-role="none" value="" data-clear-btn="true" />
+								<input id="wlc_wifiKey" type="password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="64" class="textInput wlcInput" data-role="none" value="" data-clear-btn="true" />
 							</div>
 						</div>
 					</div>
@@ -1529,17 +1788,16 @@
 				<div class="table_td">
 					<div class="pageDesc"><#qis_wireless_setting#></div>
 
-					<div class="labelContainer dualbandSupport">
-						<label for="wireless_checkbox" class="labelInput"><#qis_ssid_desc#></label>
-		  				<input type="checkbox" id="wireless_checkbox" value="1" data-mini="true" checked="true" />
-					</div>
-
 					<div id="wlInputField"></div>
+					<div class="labelContainer dualbandSupport bandStreeringSupport">
+						<label for="wireless_checkbox" class="labelInput">Separate 2.4GHz and 5GHz</label>
+		  				<input type="checkbox" id="wireless_checkbox" data-mini="true"/>
+					</div>
 
 					<!-- Action Button -->
 					<div class="footer_desktop">
 						<div class="desktop_abortBtn" onclick='abort.wireless();'><#CTL_prev#></div>
-						<div class="desktop_applyBtn" onclick="apply.wireless();"><#CTL_apply#></div>
+						<div class="desktop_applyBtn btn_wireless_apply" onclick="apply.wireless();"><#CTL_apply#></div>
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
@@ -1548,7 +1806,7 @@
 									<div class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
 								<td class="mobileApply" onclick="apply.wireless();">
-									<div class="mobile_applyBtn"><#CTL_apply#></div>
+									<div class="mobile_applyBtn btn_wireless_apply"><#CTL_apply#></div>
 								</td>
 							</tr>
 						</table>
@@ -1594,7 +1852,7 @@
 								<div class="inputTitle"><#ADSL_FW_item3#></div>
 							</div>
 							<div class="inputContainer">
-								<input id="newVersion" type="text" class="textInput" data-role="none" disabled />
+								<input id="newVersion" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="textInput" data-role="none" disabled />
 							</div>
 						</div>
 					</div>
@@ -1645,7 +1903,7 @@
 			</div>
 			<div class="tableContainer">
 				<div class="desktop_left_field">
-					<div id="login_title">
+					<div>
 						<div class="titleMain"><#menu5_6_3#></div>
 					</div>
 				</div>
@@ -1701,6 +1959,47 @@
 			</div>
 		</div>
 
+		<!-- Uploading -->
+		<div id="uploading_page" data-role="page" class="qisBackground">
+			<div class="headerBar">
+				<table style="width:100%">
+					<tr>
+						<td style="width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu"></div>
+								</a>
+							</div>
+						</td>
+						<td>
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td>
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="tableContainer">
+				<div class="desktop_left_field">
+					<div>
+						<div class="titleMain"><#CTL_upload#></div>
+					</div>
+				</div>
+				<div class="table_td">
+					<div class="pageDesc">
+						<div><#SET_ok_desc#></div>
+					</div>
+
+					<div class="loadingBarContainer">
+						<div class="loadingBar" id="profileLoadingBar"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Summary -->
 		<div id="summary_page" data-role="page" class="qisBackground">
 			<div class="headerBar">
@@ -1731,20 +2030,29 @@
 					</div>
 				</div>
 				<div class="table_td">
-					<div class="pageDesc"><#QIS_finish_wait#></div>
+					<div class="pageDesc"><#Congratulations#>&nbsp;<#QKSet_finish_desc#></div>
+					<div class="pageDesc">
+						<div style="font-size:1.4em;color: #007AFF;">Step 1</div>
+						<div><#DrSurf_sweet_advise1#></div>
+					</div>
 
 					<div>
 						<div id="wirelessFinishFiled"></div>
 					</div>
 
+					<div class="pageDesc">
+						<div style="font-size:1.4em;color: #007AFF;">Step 2</div>
+						<div><#qis_summary_description_step2#></div>
+					</div>
+						
 					<div id="finishButton" style="display:none">
 						<div class="footer_desktop">
-							<div class="desktop_applyBtn"><#CTL_finish#></div>
+							<div class="desktop_applyBtn" onclick="goTo.leaveQIS();"><#CTL_finish#></div>
 						</div>
 						<div class="footer_mobile">
 							<table style="width:100%;" cellpadding="0" cellspacing="0">
 								<tr>
-									<td class="mobileApply">
+									<td class="mobileApply" onclick="goTo.leaveQIS();">
 										<div class="mobile_applyBtn"><#CTL_finish#></div>
 									</td>
 								</tr>
@@ -1755,14 +2063,26 @@
 			</div>
 		</div>
 
-		<!-- WPS button -->
-		<div id="wps_page" data-role="page" class="qisBackground"></div>
+		<!-- AMAS Introduction -->
+		<div id="amasintro_page" data-role="page" class="qisBackground aimeshPages"></div>
 
-		<!-- Paring  -->
-		<div id="pair_page" data-role="page" class="qisBackground"></div>
+		<!-- AMAS Choose Role -->
+		<div id="amasrole_page" data-role="page" class="qisBackground aimeshPages"></div>
 
-		<!-- Reset  -->
-		<div id="reset_page" data-role="page" class="qisBackground"></div>
+		<!-- Connect to Cap -->
+		<div id="amasconncap_page" data-role="page" class="qisBackground aimeshPages"></div>
+
+		<!-- AMAS Node  -->
+		<div id="amasnode_page" data-role="page" class="qisBackground aimeshPages"></div>
+
+		<!-- AMAS Restore  -->
+		<div id="amasrestore_page" data-role="page" class="qisBackground aimeshPages"></div>
+
+		<!-- Err: Redirect Fail  -->
+		<div id="amaserr_connrouter_page" data-role="page" class="qisBackground aimeshPages"></div>
+
+		<!-- Err: What is AiMesh router  -->
+		<div id="amaserr_manual_page" data-role="page" class="qisBackground aimeshPages"></div>
 
 		<!-- TrendMicro TOS -->
 		<div id="tmtos_page" data-role="page" class="qisBackground"></div>

@@ -299,6 +299,8 @@ static void wpa_bss_copy_res(struct wpa_bss *dst, struct wpa_scan_res *src,
 	dst->tsf = src->tsf;
 	dst->est_throughput = src->est_throughput;
 	dst->snr = src->snr;
+	os_memcpy(dst->freqband, src->freqband, FREQBAND_MAX_LEN);
+	os_memcpy(dst->netmode, src->netmode, NETMODE_MAX_LEN);
 
 	calculate_update_time(fetch_time, src->age, &dst->last_update);
 }

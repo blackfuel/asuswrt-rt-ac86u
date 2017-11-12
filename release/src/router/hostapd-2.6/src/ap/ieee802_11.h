@@ -54,6 +54,7 @@ u8 * hostapd_eid_ht_capabilities(struct hostapd_data *hapd, u8 *eid);
 u8 * hostapd_eid_ht_capabilities_assoc_resp(struct hostapd_data *hapd, u8 *eid,
      struct sta_info *sta);
 u8 * hostapd_eid_ht_operation(struct hostapd_data *hapd, u8 *eid);
+u8 * hostapd_eid_overlapping_bss_scan_params(struct hostapd_data *hapd, u8 *eid);
 u8 * hostapd_eid_secondary_channel(struct hostapd_data *hapd, u8 *eid);
 u8 * hostapd_eid_vht_capabilities(struct hostapd_data *hapd, u8 *eid, u32 nsts);
 u8 * hostapd_eid_vht_operation(struct hostapd_data *hapd, u8 *eid);

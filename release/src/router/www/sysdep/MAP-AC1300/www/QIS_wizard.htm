@@ -33,6 +33,10 @@
 				$("<div class='hint'>" + hintStr + "</div>").appendTo(this.parent());
 			}
 
+			var isPage = function(page){
+				return $("#" + page).is(":visible");
+			}
+
 			var qisOriginData = {
 				/* user */
 				"http_username": '<% nvram_get("http_username"); %>',
@@ -245,6 +249,8 @@
 				});
 
 				patchUntranslatedString();
+
+				if(!isWLclient()) goTo.wiredHint()
 			});
 			
 			function patchUntranslatedString(){	
@@ -295,18 +301,20 @@
 					},
 					
 					success: function(response){
-						if(response.state === "2" || response.state === "5"){							
+						var wanTypeState = parseInt(response.state);
+
+						if(wanTypeState == 2 || wanTypeState == 5){							
 							wanType = "DHCP";
 						}
-						else if(response.state === "3" || response.state === "6"){
+						else if(wanTypeState == 3 || wanTypeState == 6){
 							wanType = "PPPoE";
 						}
 /*
-						else if(response.state == "1" || response.state === "4" || response.state === "7" || response.state === ""){
+						else if(wanTypeState == "1" || wanTypeState === "4" || wanTypeState === "7" || wanTypeState === ""){
 							wanType = "unKnown";
 						}
 */
-						else if(response.state === "0"){
+						else if(wanTypeState == 0){
 							wanType = "NoWan";
 						}
 						else{
@@ -336,7 +344,7 @@
 						goTo.Static();
 					}
 					else if(wanType == "unKnown"){
-						apply.manual();
+						goTo.resetModem();
 					}
 					else if(wanType == "NoWan"){
 						setTimeout(start_detect, 1000);
@@ -464,6 +472,23 @@
 						if(handler) handler.call(response);
 					}
 				});
+			};
+
+			var isWLclient = function(){  //detect login client is by wireless or wired
+				<% login_state_hook(); %>
+				var wireless = [<% wl_auth_list(); %>];	// [[MAC, associated, authorized], ...]
+				if(wireless[0] == undefined)
+					return false;
+
+				if(wireless.length > 0) {
+					for(var i = 0; i < wireless.length; i += 1) {
+						if(wireless[i][0].toUpperCase() == login_mac_str().toUpperCase()) {
+							return true;  //wireless
+						}
+					}
+				}
+
+				return false; //wired
 			};
 
 			function hasBlank(objArray){
@@ -712,6 +737,11 @@
 					}
 				},
 
+				"resetModem": function(){
+					setTimeout(start_detect, 2000);
+					$.mobile.changePage("#waiting_page", {transition: "slide", changeHash: false, reverse: true});	
+				},
+
 				"nowan": function(){
 					finishDetect();
 
@@ -833,7 +863,7 @@
 						goTo.Static();
 					}
 					else if(wanType == "unKnown"){
-						apply.manual();
+						goTo.resetModem();
 					}
 					else if(wanType == "NoWan"){
 						goTo.NoWan();
@@ -909,9 +939,28 @@
 					$.mobile.changePage("#welcome", {transition: "slide", changeHash: false, reverse: true});	
 				},
 
+				"resetModem": function(){
+					setTimeout(function(){
+						if($("#resetModem").hasClass("unplug")){
+							$("#resetModem").removeClass("unplug").addClass("plug")
+						}
+						else{
+							$("#resetModem").removeClass("plug").addClass("unplug")
+						}
+
+						if(isPage("resetModem_page")) setTimeout(arguments.callee, 1500);
+					}, 1500);
+
+					$.mobile.changePage("#resetModem_page", {transition: "slide", changeHash: false, reverse: false});	
+				},
+
 				"NoWan": function(){
 					start_detect();
 					$.mobile.changePage("#noWan_page", {transition: "slide", changeHash: false, reverse: false});	
+				},
+
+				"wiredHint": function(){
+					$.mobile.changePage("#wiredUser_page", {transition: "slide", changeHash: false, reverse: false});
 				},
 
 				"waiting": function(){
@@ -987,7 +1036,50 @@
 				</script>
 			</div>
 		</div>
-		
+
+		<!-- Wired User -->
+		<div id="wiredUser_page" data-role="page" class="qisBackground">
+			<div style="margin:30px 0 0 30px;">
+				<table style="width:100%">
+					<tr>
+						<td style="padding:0;width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu" style="width:17px;height:17px;display:none"></div>
+								</a>
+							</div>
+						</td>
+						<td style="padding:0;width:130px;">
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td style="padding:0;">
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="desktop_left_field">
+				<div id="login_title">
+					<div style="font-size:60px;">Tips</div>
+				</div>
+			</div>
+			<div class="table_td">
+				<div class="pageDesc">
+					<div>
+						Before creating a new Lyra network, please make sure you are connecting to primary Lyra via Wi-Fi.
+						If you are connecting to primary Lyra with Ethernet cable, please unplug the Ethernet cable on Lyra, 
+						then connect to primary Lyra via Wi-Fi “ASUS_XX_AMAPS” to continue.
+					</div>
+				</div>
+
+				<div style="text-align: center;">
+					<img width="70%" style="margin-top: 30px;" src="/images/qis/wiredUser.png">
+				</div>
+			</div>
+		</div>
+
 		<!-- Login Page -->	
 		<div id="login_name" data-role="page" class="qisBackground">
 			<div style="margin:30px 0 0 30px;">
@@ -1136,6 +1228,68 @@
 							</tr>
 						</table>
 					</div-->
+				</div>
+			</div>
+		</div>
+
+		<!-- Reset Modem -->
+		<div id="resetModem_page" data-role="page" class="qisBackground">
+			<div style="margin:30px 0 0 30px;">
+				<table style="width:100%">
+					<tr>
+						<td style="padding:0;width:17px;">
+							<div style="margin-right:20px;">
+								<a href="#navigation">
+									<div class="icon_menu" style="width:17px;height:17px;display:none"></div>
+								</a>
+							</div>
+						</td>
+						<td style="padding:0;width:130px;">
+							<div>
+								<div class="icon_logo"></div>
+							</div>
+						</td>
+						<td style="padding:0;">
+							<div class="model_welcome"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="desktop_left_field">
+				<div id="login_title">
+					<div style="font-size:60px;"><#Internet#></div>
+					<div style="font-size:32px;"><#Settings#></div>
+				</div>
+			</div>
+			<div class="table_td">
+				<div class="pageDesc">
+					<div><#QIS_internet_success_desc4_1#></div>
+					<div><#QIS_internet_success_desc4#></div>
+				</div>
+
+				<div>
+
+					<div id="resetModemContainer">
+						<div class="unplug" id="resetModem"></div>
+					</div>
+
+					<!-- Action Button -->
+					<div class="footer_desktop">
+						<div class="desktop_abortBtn" onclick="abort.resetModem()"><#QKSet_detect_freshbtn#></div>
+						<div class="desktop_applyBtn detectBtn" onclick="apply.manual()"><#Manual_Setting_btn#></div>
+					</div>
+					<div class="footer_mobile">
+						<table style="width:100%;" cellpadding="0" cellspacing="0">
+							<tr style="height:102px;text-align:center">
+								<td style="width:50%" onclick='abort.resetModem()'>
+									<div  class="mobile_abortBtn"><#QKSet_detect_freshbtn#></div>
+								</td>
+								<td style="width:50%;background:#27D1A4" onclick="apply.manual()">
+									<div  class="mobile_applyBtn detectBtn"><#Manual_Setting_btn#></div>
+								</td>
+							</tr>
+						</table>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -1400,11 +1554,13 @@
 				</div>
 			</div>
 			<div class="table_td">
-				<div id="pppoe_desc" class="pageDesc"><#qis_pppoe_desc1#></div>
+				<div class="pageDesc">
+					<div><#PPP_cfg_usersel_desc#></div>
+				</div>
 				<div id="pppoe_field">
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle"><#HSDPAConfig_Username_itemname#></div>
+							<div class="inputTitle"><#PPPConnection_UserName_itemname#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="wan_pppoe_username" type="text" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true"></input>
@@ -2267,7 +2423,7 @@
 					</table>
 					<br>
 					<ul>
-						<li>Web Beacons<br>     A web beacon is an often-transparent graphic 1x1 (pixel) GIF or PNG image that is implemented on websites or in an email to measure the effectiveness of campaigns. ASUS or our service providers may use web beacons to know if you visit certain pages or click links on our websites. We may implement web beacons in our marketing communications such as eDMs or ASUS newsletters to know which communication contents you have clicked or read. We will use the information from web beacons to improve our websites and SERVICE.</li>
+						<li>Web Beacons<br>	 A web beacon is an often-transparent graphic 1x1 (pixel) GIF or PNG image that is implemented on websites or in an email to measure the effectiveness of campaigns. ASUS or our service providers may use web beacons to know if you visit certain pages or click links on our websites. We may implement web beacons in our marketing communications such as eDMs or ASUS newsletters to know which communication contents you have clicked or read. We will use the information from web beacons to improve our websites and SERVICE.</li>
 					</ul>
 					<br>
 					<h4>Third-party links on our websites</h4>

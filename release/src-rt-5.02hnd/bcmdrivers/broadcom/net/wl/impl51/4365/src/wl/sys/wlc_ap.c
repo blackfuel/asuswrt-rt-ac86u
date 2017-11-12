@@ -1464,23 +1464,27 @@ wlc_ap_authresp(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
 	switch (auth_seq) {
 	case 1:
 		for (i = 0; i < (int)NBANDS(wlc); i++) {
+			int idx;
+			wlc_bsscfg_t *cfg;
 			/* Use band 1 for single band 11a */
 			if (IS_SINGLEBAND_5G(wlc->deviceid))
 				i = BAND_5G_INDEX;
 
-			scb = wlc_scbfindband(wlc, bsscfg, (struct ether_addr *)&hdr->sa, i);
-			if (scb) {
-				WL_ASSOC(("wl%d: %s: scb for the STA-%s already exists\n",
-				          wlc->pub->unit, __FUNCTION__, sa));
+			FOREACH_BSS(wlc, idx, cfg) {
+				scb = wlc_scbfindband(wlc, cfg, (struct ether_addr *)&hdr->sa, i);
+				if (scb) {
+					WL_ASSOC(("wl%d: %s: scb for the STA-%s"
+						  " already exists\n", wlc->pub->unit, __FUNCTION__, sa));
 #ifdef WLBTAMP
-				if ((scb->bsscfg == bsscfg) && BSS_BTA_ENAB(wlc, bsscfg)) {
-					WL_BTA(("wl%d: %s: preserving pre-existing "
-					        "BT-AMP peer %s\n",
-					        wlc->pub->unit, __FUNCTION__, sa));
-					goto btamp_sanity;
-				}
+					if ((scb->bsscfg == cfg) && BSS_BTA_ENAB(wlc, cfg)) {
+						WL_BTA(("wl%d: %s: preserving pre-existing "
+							"BT-AMP peer %s\n",
+							wlc->pub->unit, __FUNCTION__, sa));
+						goto btamp_sanity;
+					}
 #endif /* WLBTAMP */
-				wlc_scbfree(wlc, scb);
+					wlc_scbfree(wlc, scb);
+				}
 			}
 		}
 
@@ -3615,13 +3619,13 @@ wlc_ap_sta_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb, void 
 
 	scb->flags &= ~SCB_PENDING_PROBE;
 
-	/* Reprobe if the pkt is freed (txstatus 0) or the pkt txstatus updated right before
-	 * mac got suspended due to fifo flush
+	/* Reprobe if the pkt is freed in the middle of fifo flush.
+	 * SCB shouldn't be deleted then.
 	 */
 #ifdef WLC_LOW
 	infifoflush = (wlc->hw->mac_suspend_depth > 0);
 #endif /* WLC_LOW */
-	if (!txstatus || infifoflush) {
+	if (wlc->txfifo_detach_pending) {
 		WL_ERROR(("wl%d.%d: STA "MACF" probe bailed out. cnt %d txs 0x%x macsusp %d\n",
 			wlc->pub->unit, WLC_BSSCFG_IDX(SCB_BSSCFG(scb)), ETHER_TO_MACF(scb->ea),
 			scb->grace_attempts, txstatus, infifoflush));

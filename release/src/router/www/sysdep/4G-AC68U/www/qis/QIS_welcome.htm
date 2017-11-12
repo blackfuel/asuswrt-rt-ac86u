@@ -201,11 +201,15 @@ function QKinternettype_load_body(){
 	document.getElementById("btn_next_step").focus();
 	
 	if(!parent.dual_ewan){
-		if(wanauxstate != 1 || parent.sim_state == "1" || parent.sim_state == "2"){
-			location.href = "/qis/QIS_admin_pass.htm";
-		}
-		else{
+		if(parent.gobi_support)
 			document.getElementById("QISmain").style.display = "";
+		else{
+			if((wanauxstate != 1 && wanauxstate != -1) || parent.sim_state == "1" || parent.sim_state == "2"){
+				location.href = "/qis/QIS_admin_pass.htm";
+			}
+			else{
+				document.getElementById("QISmain").style.display = "";
+			}
 		}
 	}
 	else{
@@ -238,6 +242,7 @@ function submitForm(mode){
 	document.form.submit();
 }
 
+var autodet_retry_count = 5;
 function detect_if_wan_plug(flag){
 	if(parent.tmo_support && parent.ISMOBILE)
 		submitForm(1);
@@ -285,19 +290,23 @@ function detect_if_wan_plug(flag){
 						document.getElementById("loadingIcon").style.display = "none";
 						changeiuiBackground(0);
 					}
-					setTimeout("update_wan_info(1);", 2000);
 				}
 				else if(autodet_state == "0"  || autodet_state == "1"){
 					detect_if_wan_plug();
 					changeiuiBackground(1);
 				}
 				else if(autodet_state == ""){
-					if(flag == null)
-						update_wan_info();
-					else
-						update_wan_info(1);
+					if(autodet_retry_count > 0){
+						if(flag == null)
+							update_wan_info();
+						else
+							update_wan_info(1);
 
-					changeiuiBackground(1);
+						autodet_retry_count--;
+						changeiuiBackground(1);
+					}
+					else
+						submitForm(0);
 				}
 				else
 					submitForm(1);
@@ -322,19 +331,23 @@ function detect_if_wan_plug(flag){
 						document.getElementById("loadingIcon").style.display = "none";
 						changeiuiBackground(0);
 					}
-					setTimeout("update_wan_info(1);", 2000);
 				}
 				else if(autodet_state == "0" || autodet_state == "1" || autodet1_state == "0" || autodet1_state == "1"){
 					detect_if_wan_plug();
 					changeiuiBackground(1);
 				}
 				else if(autodet_state == "" || autodet1_state == ""){
-					if(flag == null)
-						update_wan_info();
-					else
-						update_wan_info(1);
+					if(autodet_retry_count > 0){
+						if(flag == null)
+							update_wan_info();
+						else
+							update_wan_info(1);
 
-					changeiuiBackground(1);
+						autodet_retry_count--;
+						changeiuiBackground(1);
+					}
+					else
+						submitForm(0);
 				}
 				else 
 					submitForm(1);
@@ -420,16 +433,23 @@ function startDetect(){
 		if(!parent.dual_ewan){
 			if(wanstate  == 2 && wansbstate == 0 && wanauxstate == 0)
 				submitForm(1);
-			else
+			else{
+				document.getElementById("loadingIcon").style.display = "";
+				changeiuiBackground(1);
 				detect_if_wan_plug();
+			}
 		}
 		else{
 			if((first_wanstate  == 2 && first_wansbstate == 0 && first_wanauxstate == 0) || 
 			   (second_wanstate == 2 && second_wansbstate == 0 && second_wanauxstate == 0))
 				submitForm(1);
-			else
+			else{
+				document.getElementById("loadingIcon").style.display = "";
+				changeiuiBackground(1);
 				detect_if_wan_plug();
+			}
 		}
+		document.getElementById("btn_next_step").disabled = true;
 	}
 }
 

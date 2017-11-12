@@ -53,5 +53,7 @@ int wpa_parse_kde_ies(const u8 *buf, size_t len,
 u8 * wpa_add_kde(u8 *pos, u32 kde, const u8 *data, size_t data_len,
 		 const u8 *data2, size_t data2_len);
 int wpa_auth_gen_wpa_ie(struct wpa_authenticator *wpa_auth);
-
+#ifdef CONFIG_WDS_WPA
+int wpa_modify_wpa_ie(struct wpa_state_machine *sm, u32 group_suite, u16 capab, int size);
+#endif
 #endif /* WPA_AUTH_IE_H */

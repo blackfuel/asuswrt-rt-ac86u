@@ -179,9 +179,6 @@ function QKinternettype_load_body(){
 		if(!parent.manualstb_support) 
 			document.applyForm.switch_wantag.remove(8);
 
-		if(odmpid == "RT-AC66U V2")
-			document.getElementById("image_field").className = "image_field_RT-AC66U_V2";
-
 		detect_if_wan_plug();
 	}
 
@@ -646,10 +643,7 @@ function switch_dialUp_type(obj){
 		document.getElementById("dhcp_scenario_2").style.display = "none";
 	}
 	else if(obj.id == "non_dialUp"){
-		if(odmpid == "RT-AC66U V2")
-			document.getElementById("image_field").className = "non_dialUp_RT-AC66U_V2";
-		else
-			document.getElementById("image_field").className = "non_dialUp";
+		document.getElementById("image_field").className = "non_dialUp";
 		document.getElementById("isp_card_desc").style.display = "none";
 		document.getElementById("dhcp_scenario_1").style.display = "";
 		document.getElementById("dhcp_scenario_2").style.display = "";
@@ -710,14 +704,14 @@ function next_step(flag){
 	if(flag == 0){
 		stage = 1;
 		if(document.applyForm.wan_type[0].checked){	// dial-up
-			if(parent.dual_ewan){
-				if(parent.cur_wan_unit == 0){
+			if(parent.dual_ewan || parent.dualwan_enabled){
+				if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0)){
 					parent.document.QKform.wan0_dhcpenable_x.value = 1;
 					parent.document.QKform.wan0_dnsenable_x.value = 1;
 					document.applyForm.wan0_proto.value = "pppoe";
 					parent.document.QKform.wan0_proto.value = document.applyForm.wan0_proto.value;
 				}
-				else{
+				else if((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1)){
 					parent.document.QKform.wan1_dhcpenable_x.value = 1;
 					parent.document.QKform.wan1_dnsenable_x.value = 1;
 					document.applyForm.wan1_proto.value = "pppoe";
@@ -836,20 +830,20 @@ function next_step(flag){
 		}
 
 		if(document.applyForm.dhcp_type[0].checked){	//DHCP
-			if(parent.dual_ewan){
-				if(parent.cur_wan_unit == 0){
+			if(parent.dual_ewan || parent.dualwan_enabled){
+				if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0)){
 					document.applyForm.wan0_proto.value = "dhcp";
 					parent.document.QKform.wan0_proto.value = document.applyForm.wan0_proto.value;
 					parent.document.QKform.wan0_dhcpenable_x.value = 1;
 					parent.document.QKform.wan0_dnsenable_x.value = 1;
 				}
-				else{
+				else if((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1)){
 					document.applyForm.wan1_proto.value = "dhcp";
 					parent.document.QKform.wan1_proto.value = document.applyForm.wan1_proto.value;
 					parent.document.QKform.wan1_dhcpenable_x.value = 1;
 					parent.document.QKform.wan1_dnsenable_x.value = 1;
 				}
-			}		
+			}
 			else{
 				document.applyForm.wan_proto.value = "dhcp";
 				parent.document.QKform.wan_proto.value = document.applyForm.wan_proto.value;
@@ -857,8 +851,6 @@ function next_step(flag){
 				parent.document.QKform.wan_dnsenable_x.value = 1;
 			}
 
-			//location.href = "QIS_verify_detect.htm";		// avoid redirect to internet_isp and internet_ip
-			//return true;
 			if(verify_vlan_settings()){
 				if(parent.dual_ewan){
 					if(parent.cur_wan_unit == 0)
@@ -876,17 +868,17 @@ function next_step(flag){
 				if(parent.flag_manual == 1)
 					document.applyForm.next_page.value = "QIS_wireless.htm";
 				else	
-					document.applyForm.next_page.value = "QIS_verify_detect.htm";
+					document.applyForm.next_page.value = "QIS_detect.htm";
 			}
 		}
 		else if(document.applyForm.dhcp_type[1].checked){	//static IP
-			if(parent.dual_ewan){
-				if(parent.cur_wan_unit == 0){
+			if(parent.dual_ewan || parent.dualwan_enabled){
+				if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0)){
 					document.applyForm.wan0_proto.value = "static";
 					parent.document.QKform.wan0_dhcpenable_x.value = 0;
 					parent.document.QKform.wan0_dnsenable_x.value = 0;
 				}
-				else{
+				else if((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1)){
 					document.applyForm.wan1_proto.value = "static";
 					parent.document.QKform.wan1_dhcpenable_x.value = 0;
 					parent.document.QKform.wan1_dnsenable_x.value = 0;
@@ -903,10 +895,10 @@ function next_step(flag){
 			document.getElementById("dhcp_scenario_2").style.display = "none";
 		}
 		
-		if(parent.dual_ewan){
-			if(parent.cur_wan_unit == 0)
+		if(parent.dual_ewan || parent.dualwan_enabled){
+			if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0))
 				parent.document.QKform.wan0_proto.value = document.applyForm.wan0_proto.value;
-			else
+			else if((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1))
 				parent.document.QKform.wan1_proto.value = document.applyForm.wan1_proto.value;
 		}
 		else
@@ -925,10 +917,7 @@ function switch_dhcp_type(obj){
 			document.getElementById("static_ip_desc").style.display = "";
 		}
 		else{
-			if(odmpid == "RT-AC66U V2")
-				document.getElementById("image_field").className = "non_dialUp_RT-AC66U_V2";
-			else	
-				document.getElementById("image_field").className = "non_dialUp";
+			document.getElementById("image_field").className = "non_dialUp";
 			document.getElementById("dhcp_scenario_1").style.display = "";
 			document.getElementById("dhcp_scenario_2").style.display = "";
 			document.getElementById("static_ip_desc").style.display = "none";
@@ -951,11 +940,7 @@ function previous_step(flag){
 		document.getElementById('previous_button').style.display = "none";
 		document.getElementById('title_desc').innerHTML = "<#QIS_SmartConn_title1#>";
 		if(document.getElementById("image_field").className == "static_image"){
-			
-			if(odmpid == "RT-AC66U V2")
-				document.getElementById("image_field").className = "non_dialUp_RT-AC66U_V2";
-			else
-				document.getElementById("image_field").className = "non_dialUp";
+			document.getElementById("image_field").className = "non_dialUp";
 			document.getElementById("dhcp_scenario_1").style.display = "";
 			document.getElementById("dhcp_scenario_2").style.display = "";
 			document.getElementById("static_ip_desc").style.display = "none";

@@ -593,6 +593,7 @@ static void report_notification_req(struct hostapd_data *hapd, const u8 *addr)
 						  info->op_class);
 		if (os_snprintf_error(end - pos, ret))
 			break;
+		pos += ret;
 		for (i = 0; i < info->num_channels; i++) {
 			ret = os_snprintf(pos, end - pos, "%u%s", info->channels[i],
 					i + 1 < info->num_channels ? "," : ":");
@@ -600,7 +601,7 @@ static void report_notification_req(struct hostapd_data *hapd, const u8 *addr)
 				break;
 			pos += ret;
 		}
-		ret = os_snprintf(pos, end - pos, "%u:%u",
+		ret = os_snprintf(pos, end - pos, "%u:%u ",
 						  info->pref, info->reason_code);
 		if (os_snprintf_error(end - pos, ret))
 			break;

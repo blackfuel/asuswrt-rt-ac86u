@@ -940,3 +940,27 @@ int wpa_auth_uses_mfp(struct wpa_state_machine *sm)
 {
 	return sm ? sm->mgmt_frame_prot : 0;
 }
+
+
+#ifdef CONFIG_WDS_WPA
+/**
+ * wpa_modify_wpa_ie - Modify RSN IE
+ * @sm: WPA state machine
+   @group_suite: Group Cipher suite
+ * @capab: Capabilities
+ * @size: Size modification of RSN IE
+ * Returns: 0 on success, <0 on failure
+ * Function modifies Group Cipher suite and RSN Capabilities of wpa_ie of WPA
+ * state machine passed in sm with values group_suite and capab passed as
+ * parameters. Modifies size of wpa_ie as well. size parameter is added to
+ * existing size.
+ */
+int wpa_modify_wpa_ie(struct wpa_state_machine *sm, u32 group_suite, u16 capab, int size)
+{
+  if (wpa_modify_wpa_ie_rsn(sm->wpa_ie, sm->wpa_ie_len, group_suite, capab))
+    return -1;
+  sm->wpa_ie[1] += size;
+  sm->wpa_ie_len += size;
+  return 0;
+}
+#endif

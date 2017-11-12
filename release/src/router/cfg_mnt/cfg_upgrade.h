@@ -1,7 +1,7 @@
 #ifndef __CFG_UPGRADE_H__
 #define __CFG_UPGRADE_H__
 
-#define TIMES_FW_CHECK	30
+#define TIMES_FW_CHECK	15
 
 enum firmwareStatus {
 	FW_NONE = 0,

@@ -2136,6 +2136,156 @@ void scan_est_throughput(struct wpa_supplicant *wpa_s,
 }
 
 
+static void scan_freqband(struct wpa_supplicant *wpa_s,
+		struct wpa_scan_res *res)
+{
+	int ret;
+	char *pos, *end;
+	enum wpa_radio_work_band band = wpas_freq_to_band(res->freq);
+
+	pos = res->freqband;
+	end = &res->freqband[FREQBAND_MAX_LEN];
+
+	if (BAND_2_4_GHZ == band) {
+		ret = os_snprintf(pos, end - pos, "2G");
+		if (os_snprintf_error(end - pos, ret))
+			goto failed;
+		pos += ret;
+	}
+	else if (BAND_5_GHZ == band) {
+		ret = os_snprintf(pos, end - pos, "5G");
+		if (os_snprintf_error(end - pos, ret))
+			goto failed;
+		pos += ret;
+	}
+	else if (BAND_60_GHZ == band) {
+		ret = os_snprintf(pos, end - pos, "60G");
+		if (os_snprintf_error(end - pos, ret))
+			goto failed;
+		pos += ret;
+	}
+	else {
+		goto failed;
+	}
+	return;
+	
+failed:
+	wpa_dbg(wpa_s, MSG_DEBUG, "Failed to calculate network mode");
+	pos = res->freqband;
+	end = &res->freqband[FREQBAND_MAX_LEN];
+	os_memset(res->freqband, 0, FREQBAND_MAX_LEN);
+	os_snprintf(pos, end - pos, "?");
+}
+
+
+static Boolean is_rate_exists_in_buff(const u8 *rates_buf, u8 rates_num, u8 rate_ref)
+{
+	u8 i;
+	for (i =0; i < rates_num; i++) {
+		/* Exclude flag Basic Rate and convert to Mbps */
+		if (rate_ref == ((rates_buf[i] & 0x7F) >> 1))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+
+static Boolean is_rate_exists(struct wpa_scan_res *res, u8 rate_ref)
+{
+	const u8 *ie;
+
+	/* Get IE Supported Rates */
+	ie = wpa_scan_get_ie(res, WLAN_EID_SUPP_RATES);
+	if (ie && is_rate_exists_in_buff(&ie[2], ie[1], rate_ref)) {
+		return TRUE;
+	}
+	else {
+		/* Get IE Extended Supported Rates */
+		ie = wpa_scan_get_ie(res, WLAN_EID_EXT_SUPP_RATES);
+		if (ie && is_rate_exists_in_buff(&ie[2], ie[1], rate_ref))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+
+static void scan_netmode(struct wpa_supplicant *wpa_s,
+		struct wpa_scan_res *res)
+{
+	const u8 *ie;
+	int ret;
+	char *pos, *end;
+	enum wpa_radio_work_band band = wpas_freq_to_band(res->freq);
+
+	pos = res->netmode;
+	end = &res->netmode[NETMODE_MAX_LEN];
+
+	/* Check frequency band */
+	if (BAND_2_4_GHZ == band) {
+		/* Check if network mode B (11Mbps) is supported */
+		if (is_rate_exists(res, 11)) {
+			ret = os_snprintf(pos, end - pos, "b");
+			if (os_snprintf_error(end - pos, ret))
+				goto failed;
+			pos += ret;
+		}
+		/* Check if network mode G (54Mbps) is supported */
+		if (is_rate_exists(res, 54)) {
+			ret = os_snprintf(pos, end - pos, "g");
+			if (os_snprintf_error(end - pos, ret))
+				goto failed;
+			pos += ret;
+		}
+		/* Get IE HT Capabilities */
+		ie = wpa_scan_get_ie(res, WLAN_EID_HT_CAP);
+		/* and if IE HT Capabilities is available then HT-mode is supported */
+		if (ie && ie[1]) {
+			ret = os_snprintf(pos, end - pos, "n");
+			if (os_snprintf_error(end - pos, ret))
+				goto failed;
+			pos += ret;
+		}
+	}
+	else if (BAND_5_GHZ == band) {
+		if (is_rate_exists(res, 54)) {
+			ret = os_snprintf(pos, end - pos, "a");
+			if (os_snprintf_error(end - pos, ret))
+				goto failed;
+			pos += ret;
+		}
+		/* Get IE HT Capabilities */
+		ie = wpa_scan_get_ie(res, WLAN_EID_HT_CAP);
+		/* and if IE HT Capabilities is available then HT-mode is supported */
+		if (ie && ie[1]) {
+			ret = os_snprintf(pos, end - pos, "n");
+			if (os_snprintf_error(end - pos, ret))
+				goto failed;
+			pos += ret;
+		}
+		/* Get IE VHT Capabilities */
+		ie = wpa_scan_get_ie(res, WLAN_EID_VHT_CAP);
+		/* and if IE HT Capabilities is available then VHT-mode is supported */
+		if (ie && ie[1]) {
+			ret = os_snprintf(pos, end - pos, "ac");
+			if (os_snprintf_error(end - pos, ret))
+				goto failed;
+			pos += ret;
+		}
+	}
+	else {
+		goto failed;
+	}
+	return;
+
+failed:
+	wpa_dbg(wpa_s, MSG_DEBUG, "Failed to calculate network mode");
+	pos = res->netmode;
+	end = &res->netmode[NETMODE_MAX_LEN];
+	os_memset(res->freqband, 0, NETMODE_MAX_LEN);
+	os_snprintf(pos, end - pos, "?");
+}
+
+
 /**
  * wpa_supplicant_get_scan_results - Get scan results
  * @wpa_s: Pointer to wpa_supplicant data
@@ -2174,6 +2324,8 @@ wpa_supplicant_get_scan_results(struct wpa_supplicant *wpa_s,
 
 		scan_snr(scan_res_item);
 		scan_est_throughput(wpa_s, scan_res_item);
+		scan_freqband(wpa_s, scan_res_item);
+		scan_netmode(wpa_s, scan_res_item);
 	}
 
 #ifdef CONFIG_WPS

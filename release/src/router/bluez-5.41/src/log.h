@@ -68,7 +68,6 @@ void __btd_enable_debug(struct btd_debug_desc *start,
 	__attribute__((used, section("__debug"), aligned(8))) = { \
 		.file = __FILE__, .flags = BTD_DEBUG_FLAG_DEFAULT, \
 	}; \
-	usleep(20*1000); \
 	if (__btd_debug_desc.flags & BTD_DEBUG_FLAG_PRINT) \
 		btd_debug(idx, "%s:%s() " fmt, __FILE__, __func__ , ## arg); \
 } while (0)

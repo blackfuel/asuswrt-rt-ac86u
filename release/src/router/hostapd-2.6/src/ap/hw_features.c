@@ -43,7 +43,7 @@ void hostapd_free_hw_features(struct hostapd_hw_modes *hw_features,
 
 
 #ifndef CONFIG_NO_STDOUT_DEBUG
-static char * dfs_info(struct hostapd_channel_data *chan)
+char * dfs_info(struct hostapd_channel_data *chan)
 {
 	static char info[256];
 	char *state;
@@ -1173,7 +1173,7 @@ hostapd_check_chans(struct hostapd_iface *iface)
 	 * which is used to trigger ACS.
 	 */
 
-	switch (acs_init(iface)) {
+	switch (acs_init(iface, ACS_INITIAL)) {
 	case HOSTAPD_CHAN_ACS:
 		return HOSTAPD_CHAN_ACS;
 	case HOSTAPD_CHAN_VALID:

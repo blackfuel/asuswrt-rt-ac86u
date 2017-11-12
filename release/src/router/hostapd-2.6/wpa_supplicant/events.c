@@ -1975,6 +1975,75 @@ static int wpas_fst_update_mbie(struct wpa_supplicant *wpa_s,
 }
 #endif /* CONFIG_FST */
 
+static ParseRes ieee802_11_parse_configurable_vendor(const u8 *start, size_t len,
+				struct ieee802_11_elems *elems,
+				u8 *vendor_events_filter, u8 vendor_events_filter_len)
+{
+	size_t left = len;
+	const u8 *pos = start;
+
+	os_memset(elems, 0, sizeof(*elems));
+
+	while (left >= 2) {
+		u8 id, elen;
+
+		id = *pos++;
+		elen = *pos++;
+		left -= 2;
+
+		if (elen > left)
+			return ParseFailed;
+
+		switch (id) {
+		case WLAN_EID_VENDOR_SPECIFIC:
+			if (elen >= 4 && vendor_events_filter && vendor_events_filter_len >= 3) {
+				int i = 0, found = 1;
+				for (i = 0; i < vendor_events_filter_len; i++) {
+					if (pos[i] != vendor_events_filter[i]) {
+						found = 0;
+						break;
+					}
+				}
+				if (found) {
+					elems->vendor_ie_to_notify = pos;
+					elems->vendor_ie_to_notify_len = elen;
+				}
+			}
+			break;
+		default:
+			break;
+		}
+
+		left -= elen;
+		pos += elen;
+	}
+
+	if (left)
+		return ParseFailed;
+
+	return ParseOK;
+}
+
+static void process_configurable_vendor_specific(struct wpa_supplicant *wpa_s,
+				   const u8 *ies, size_t ies_len,
+				   const u8 *addr, const char *event)
+{
+	struct ieee802_11_elems elems;
+
+	if (!ies)
+		return;
+
+	if (ieee802_11_parse_configurable_vendor(ies, ies_len, &elems,
+			wpa_s->vendor_events_filter, wpa_s->vendor_events_filter_len) == ParseFailed)
+		return;
+
+	if (elems.vendor_ie_to_notify) {
+		char str_vs_ie[128];
+		wpa_snprintf_hex(str_vs_ie, 128, elems.vendor_ie_to_notify, elems.vendor_ie_to_notify_len);
+		wpa_msg_ctrl(wpa_s, MSG_INFO, "%s" MACSTR " %s",
+				event, MAC2STR(addr), str_vs_ie);
+	}
+}
 
 static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
 					  union wpa_event_data *data)
@@ -1984,6 +2053,7 @@ static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
 #ifdef CONFIG_IEEE80211R
 	u8 bssid[ETH_ALEN];
 #endif /* CONFIG_IEEE80211R */
+	u8 addr[ETH_ALEN];
 
 	wpa_dbg(wpa_s, MSG_DEBUG, "Association info event");
 	if (data->assoc_info.req_ies)
@@ -2004,6 +2074,15 @@ static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
 		interworking_process_assoc_resp(wpa_s, data->assoc_info.resp_ies,
 						data->assoc_info.resp_ies_len);
 #endif /* CONFIG_INTERWORKING */
+
+		if (wpa_drv_get_bssid(wpa_s, addr) < 0)
+			wpa_dbg(wpa_s, MSG_ERROR, "Failed to get BSSID");
+		else if (data->assoc_info.reassoc)
+			process_configurable_vendor_specific(wpa_s, data->assoc_info.resp_ies,
+					data->assoc_info.resp_ies_len, addr, WPA_EVENT_REASSOC_RSP);
+		else
+			process_configurable_vendor_specific(wpa_s, data->assoc_info.resp_ies,
+					data->assoc_info.resp_ies_len, addr, WPA_EVENT_ASSOC_RSP);
 	}
 	if (data->assoc_info.beacon_ies)
 		wpa_hexdump(MSG_DEBUG, "beacon_ies",
@@ -3423,6 +3502,22 @@ static void wpa_supplicant_event_assoc_auth(struct wpa_supplicant *wpa_s,
 			       data->assoc_info.ptk_kek_len);
 }
 
+static void wpa_supplicant_event_ltq_unconnected_sta_rx(struct wpa_supplicant *wpa_s,
+  struct ltq_unconnected_sta *unc_sta)
+{
+  char buf[30];
+
+  os_snprintf(buf, sizeof(buf), MACSTR, MAC2STR(unc_sta->addr));
+  wpa_msg(wpa_s, MSG_INFO, UNCONNECTED_STA_RSSI "%s %s rx_bytes=%llu rx_packets=%u "
+    "rssi=%d %d %d %d SNR=%d %d %d %d rate=%d",
+    wpa_s->ifname, buf, unc_sta->rx_bytes, unc_sta->rx_packets,
+    unc_sta->rssi[0], unc_sta->rssi[1], unc_sta->rssi[2], unc_sta->rssi[3],
+    unc_sta->noise[0] ? unc_sta->rssi[0] - unc_sta->noise[0] : 0, /* RSSI and noise to SNR */
+    unc_sta->noise[1] ? unc_sta->rssi[1] - unc_sta->noise[1] : 0, /* RSSI and noise to SNR */
+    unc_sta->noise[2] ? unc_sta->rssi[2] - unc_sta->noise[2] : 0, /* RSSI and noise to SNR */
+    unc_sta->noise[3] ? unc_sta->rssi[3] - unc_sta->noise[3] : 0, /* RSSI and noise to SNR */
+    unc_sta->rate);
+}
 
 void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			  union wpa_event_data *data)
@@ -3468,6 +3563,8 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			wpa_printf(MSG_DEBUG,
 				   "FST: MB IEs updated from auth IE");
 #endif /* CONFIG_FST */
+		process_configurable_vendor_specific(wpa_s, data->auth.ies,
+				data->auth.ies_len, data->auth.peer, WPA_EVENT_AUTH_RSP);
 		sme_event_auth(wpa_s, data);
 		break;
 	case EVENT_ASSOC:
@@ -3844,6 +3941,24 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 				break;
 			}
 
+			if ((stype == WLAN_FC_STYPE_BEACON || stype == WLAN_FC_STYPE_PROBE_RESP ) &&
+					data->rx_mgmt.frame_len > IEEE80211_HDRLEN) {
+				const u8 *src = mgmt->sa;
+				const u8 *ie;
+				size_t ie_len;
+
+				ie = data->rx_mgmt.frame + IEEE80211_HDRLEN;
+				ie_len = data->rx_mgmt.frame_len - IEEE80211_HDRLEN;
+
+				if (stype == WLAN_FC_STYPE_BEACON)
+					process_configurable_vendor_specific(wpa_s, ie, ie_len, src,
+							WPA_EVENT_BEACON);
+				else
+					process_configurable_vendor_specific(wpa_s, ie, ie_len, src,
+							WPA_EVENT_PROBE_RSP);
+				break;
+			}
+
 			wpa_dbg(wpa_s, MSG_DEBUG, "AP: ignore received "
 				"management frame in non-AP mode");
 			break;
@@ -4144,6 +4259,10 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			data->p2p_lo_stop.reason_code);
 #endif /* CONFIG_P2P */
 		break;
+  case EVENT_LTQ_UNCONNECTED_STA_RX:
+    wpa_supplicant_event_ltq_unconnected_sta_rx(wpa_s,
+      &data->ltq_unconnected_sta);
+    break;
 	default:
 		wpa_msg(wpa_s, MSG_INFO, "Unknown event %d", event);
 		break;

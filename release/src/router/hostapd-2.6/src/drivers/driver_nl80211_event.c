@@ -207,7 +207,7 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
 {
 	const struct ieee80211_mgmt *mgmt;
 	union wpa_event_data event;
-	u16 status;
+	u16 status, fc, stype;
 
 	if (!(drv->capa.flags & WPA_DRIVER_FLAGS_SME) &&
 	    drv->force_connect_cmd) {
@@ -245,11 +245,28 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
 	}
 
 	drv->associated = 1;
+
+        if (drv->ignore_next_local_deauth == 1){
+            /*
+             * In case the flag to ignore deauth event triggered by
+             * local deauthentication was not reset (because kernel did not
+             * actually send the deauth event) reset ignore_next_local_deauth 
+             * flag 
+             */
+	    wpa_printf(MSG_DEBUG,
+                    "nl80211: Resetting flag that prevents raising deauth event"
+                    " triggered by local deauth");
+            drv->ignore_next_local_deauth = 0;
+        }
+
 	os_memcpy(drv->bssid, mgmt->sa, ETH_ALEN);
 	os_memcpy(drv->prev_bssid, mgmt->sa, ETH_ALEN);
 
 	os_memset(&event, 0, sizeof(event));
 	if (len > 24 + sizeof(mgmt->u.assoc_resp)) {
+		fc = le_to_host16(mgmt->frame_control);
+		stype = WLAN_FC_GET_STYPE(fc);
+		event.assoc_info.reassoc = stype == WLAN_FC_STYPE_REASSOC_RESP;
 		event.assoc_info.resp_ies = (u8 *) mgmt->u.assoc_resp.variable;
 		event.assoc_info.resp_ies_len =
 			len - 24 - sizeof(mgmt->u.assoc_resp);

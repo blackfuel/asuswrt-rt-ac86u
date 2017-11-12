@@ -467,6 +467,10 @@ struct hostapd_hw_modes {
  * @est_throughput: Estimated throughput in kbps (this is calculated during
  * scan result processing if left zero by the driver wrapper)
  * @snr: Signal-to-noise ratio in dB (calculated during scan result processing)
+ * @freqband: frequency band of BSS/IBSS (i.e. "2G", "5G", etc.,
+ * calculated during scan result processing)
+ * @netmode: network mode of BSS/IBSS (i.e., "bgn", "anac", etc.,
+ * calculated during scan result processing)
  * @ie_len: length of the following IE field in octets
  * @beacon_ie_len: length of the following Beacon IE field in octets
  *
@@ -497,6 +501,8 @@ struct wpa_scan_res {
 	unsigned int age;
 	unsigned int est_throughput;
 	int snr;
+	char freqband[FREQBAND_MAX_LEN];
+	char netmode[NETMODE_MAX_LEN];
 	size_t ie_len;
 	size_t beacon_ie_len;
 	/* Followed by ie_len + beacon_ie_len octets of IE data */
@@ -1536,6 +1542,12 @@ typedef struct mtlk_atf_quotas {
   uint16_t  data[0];    /* Actual layout: u16 vap_grant[nof_bss]; u16 sta_grant[nof_sta]; */
 } __attribute__ ((packed))  mtlk_atf_quotas_t;
 
+
+typedef struct mtlk_mac_addr_list_cfg {
+  u8 addr[ETH_ALEN];
+  u8 remove;
+} mtlk_mac_addr_list_cfg_t;
+
 /**
  * struct wpa_driver_capa - Driver capability information
  */
@@ -2542,12 +2554,14 @@ struct wpa_driver_ops {
 	 * e.g., wpa_supplicant_event()
 	 * @ifname: interface name, e.g., wlan0
 	 * @global_priv: private driver global data from global_init()
+	 * @param: driver specific configuration parameters
 	 * Returns: Pointer to private data, %NULL on failure
 	 *
 	 * This function can be used instead of init() if the driver wrapper
 	 * uses global data.
 	 */
-	void * (*init2)(void *ctx, const char *ifname, void *global_priv);
+	void * (*init2)(void *ctx, const char *ifname, void *global_priv,
+			const char *param);
 
 	/**
 	 * get_interfaces - Get information about available interfaces
@@ -4127,6 +4141,26 @@ struct wpa_driver_ops {
 	 */
 	int (*set_default_scan_ies)(void *priv, const u8 *ies, size_t ies_len);
 
+#ifdef CONFIG_WDS_WPA
+  /**
+   * set_deny_mac_addr - Add/remove MAC address to/from WDS WPA station list
+   * @priv: Private driver interface data
+   * @addr: MAC address to use
+   * @remove: 1 - remove address from list, 0 - add address to list
+   * Returns: 0 on success, -1 on failure
+   */
+  int (*set_wds_wpa_sta)(void *priv, const u8 *addr, const u8 remove);
+#endif
+
+  /**
+   * block_tx - Block TX after the next switch to DFS USABLE channel.
+   * @priv: Private driver interface data
+   * Returns: 0 on success, -1 on failure
+   *
+   * This function is used to request driver not to transmit after next switch
+   * to DFS USABLE channel.
+   */
+  int (*block_tx)(void *priv);
 };
 
 /**
@@ -5187,6 +5221,8 @@ union wpa_event_data {
 	  u32 rx_packets;
 	  s8 rssi[HOSTAPD_CHAN_RX_ANTENNAS];
 	  u8 addr[ETH_ALEN];
+	  s8 noise[HOSTAPD_CHAN_RX_ANTENNAS];
+	  u16 rate;
 	} ltq_unconnected_sta;
 
 	/**

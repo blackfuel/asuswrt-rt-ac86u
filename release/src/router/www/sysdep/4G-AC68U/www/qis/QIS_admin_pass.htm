@@ -67,12 +67,6 @@ for(var i=0; i<accounts.length; i++){
 var wans_mode = '<% nvram_get("wans_mode"); %>';
 
 function QKinternettype_load_body(){
-	if(parent.based_modelid == "RT-N11P" || parent.based_modelid == "RT-N300" || parent.based_modelid == "PL-N12" || parent.based_modelid == "PL-AC56" || parent.based_modelid == "BRT-AC828"){
-			document.getElementById("point4").style.display = "none";
-	}
-	else{
-			document.getElementById("general_desc4").style.display = "";
-	}		
 	
 	if(parent.ISMOBILE){
 		parent.document.title = "<#Web_Title2#>";
@@ -157,7 +151,6 @@ function getDualWANState(){
 
 }
 
-var retry_times = 3;
 function check_autodet_state(){
 	$.ajax({
 		url: '/appGet.cgi?hook=nvram_get(autodet_state)%3bnvram_get(autodet_auxstate)%3bnvram_get(autodet1_state)%3bnvram_get(autodet1_auxstate)%3bnvram_get(wan0_state_t)%3bnvram_get(wan0_sbstate_t)%3bnvram_get(wan0_auxstate_t)%3bnvram_get(wan1_state_t)%3bnvram_get(wan1_sbstate_t)%3bnvram_get(wan1_auxstate_t)%3bnvram_get(wan0_primary)%3bnvram_get(wan1_primary)',
@@ -233,13 +226,6 @@ function check_autodet_state(){
 
 function submitForm(){
 	changeiuiBackground(1);
-
-	check_autodet_state();
-	if( (autodet_state == "0"  || autodet_state == "1") && retry_times > 0 ){
-		setTimeout('submitForm();', 500);
-		retry_times--;
-		return false;
-	}
 
 	showtext(document.getElementById("alert_msg1"), "");
 	if(parent.ISMOBILE)
@@ -435,7 +421,14 @@ function submitForm(){
 				}
 				else{
 					parent.changeSubnet = false;
-					parent.document.QKform.wan_proto.value = "pppoe";
+					if(parent.gobi_support && parent.dualwan_enabled){
+						if(parent.ewan_index == 0)
+							parent.document.QKform.wan0_proto.value = "pppoe";
+						else
+							parent.document.QKform.wan1_proto.value = "pppoe";
+					}
+					else
+						parent.document.QKform.wan_proto.value = "pppoe";
 					document.form.action = "/qis/QIS_internet_account.htm";
 				}
 			}
@@ -656,7 +649,7 @@ function paste_password(){
 		<tr>
 			<th width="240"><a class="hintstyle" href="javascript:void(0);" onClick="openHint(11,4)"><#PASS_new#></a></th>
 			<td class="QISformtd">
-				<input type="password" autocomplete="off" value="" name="http_passwd" tabindex="2" style="height:25px;" class="input_18_table" maxlength="16" onkeyup="chkPass(this.value, 'http_passwd');" onpaste="setTimeout('paste_password();', 10)" onBlur="clean_scorebar(this);" autocorrect="off" autocapitalize="off">
+				<input type="password" autocomplete="off" value="" name="http_passwd" tabindex="2" style="height:25px;" class="input_18_table" maxlength="16" onkeyup="chkPass(this.value, 'http_passwd');" onpaste="setTimeout('paste_password();', 10)" onBlur="clean_scorebar(this);check_autodet_state();" autocorrect="off" autocapitalize="off">
 			&nbsp;&nbsp;
 				<div id="scorebarBorder" style="margin-left:180px; margin-top:-26px; display:none;" title="<#LANHostConfig_x_Password_itemSecur#>">
 				<div id="score" style="margin-top:3px;"></div>
@@ -694,7 +687,6 @@ function paste_password(){
 	<div id="adminPassDesc" class="QISTutorFont_admin_pass" style="height:200px;margin-left:-10px;">
 		<ul>
 			<li><#QIS_pass_desc3#>
-			<li id="point4"><div id="general_desc4" style="display:none;"><#QIS_pass_desc4#></div>
 			<li><#QIS_pass_desc5#>&nbsp;<% nvram_default_get("http_username"); %>&nbsp;/&nbsp;<% nvram_default_get("http_passwd"); %>
 		</ul>
 	</div>

@@ -36,6 +36,9 @@
 #include "ndisc_snoop.h"
 #include "sta_info.h"
 #include "vlan.h"
+#ifdef CONFIG_WDS_WPA
+#include "rsn_supp/wpa.h"
+#endif
 
 static void ap_sta_remove_in_other_bss(struct hostapd_data *hapd,
 				       struct sta_info *sta);
@@ -276,6 +279,9 @@ void ap_free_sta(struct hostapd_data *hapd, struct sta_info *sta)
 
 	ieee802_1x_free_station(hapd, sta);
 	wpa_auth_sta_deinit(sta->wpa_sm);
+#ifdef CONFIG_WDS_WPA
+	wpa_sm_deinit(sta->wpa);
+#endif
 	rsn_preauth_free_station(hapd, sta);
 #ifndef CONFIG_NO_RADIUS
 	if (hapd->radius)
@@ -1335,18 +1341,23 @@ void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 		pos += ret;
 
 		for (info = sta->non_pref_chan; info; info = info->next) {
-			ret = os_snprintf(pos, end - pos, " non_pref_chan=%u:%u:%u:",
-							  info->op_class, info->pref, info->reason_code);
+			ret = os_snprintf(pos, end - pos, " non_pref_chan=%u:",
+							  info->op_class);
 			if (os_snprintf_error(end - pos, ret))
 				break;
 			pos += ret;
 			for (i = 0; i < info->num_channels; i++) {
 				ret = os_snprintf(pos, end - pos, "%u%s", info->channels[i],
-						i + 1 < info->num_channels ? "," : " ");
+						i + 1 < info->num_channels ? "," : ":");
 				if (os_snprintf_error(end - pos, ret))
 					break;
 				pos += ret;
 			}
+		  ret = os_snprintf(pos, end - pos, "%u:%u ",
+						    info->pref, info->reason_code);
+		  if (os_snprintf_error(end - pos, ret))
+			  break;
+		  pos += ret;
 		}
 #endif
  		

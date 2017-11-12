@@ -63,35 +63,6 @@ u8 * hostapd_eid_ht_capabilities_assoc_resp(struct hostapd_data *hapd, u8 *eid,
 
   pos += sizeof(*cap);
 
-  if (hapd->iconf->obss_interval) {
-    struct ieee80211_obss_scan_parameters *scan_params;
-
-    *pos++ = WLAN_EID_OVERLAPPING_BSS_SCAN_PARAMS;
-    *pos++ = sizeof(*scan_params);
-
-    scan_params = (struct ieee80211_obss_scan_parameters *) pos;
-    os_memset(scan_params, 0, sizeof(*scan_params));
-    scan_params->width_trigger_scan_interval =
-      host_to_le16(hapd->iconf->obss_interval);
-
-    /* Fill in default values for remaining parameters
-    * (IEEE Std 802.11-2012, 8.4.2.61 and MIB defval) */
-    scan_params->scan_passive_dwell =
-      host_to_le16(hapd->iconf->scan_passive_dwell);
-    scan_params->scan_active_dwell =
-      host_to_le16(hapd->iconf->scan_active_dwell);
-    scan_params->scan_passive_total_per_channel =
-      host_to_le16(hapd->iconf->scan_passive_total_per_channel);
-    scan_params->scan_active_total_per_channel =
-      host_to_le16(hapd->iconf->scan_active_total_per_channel);
-    scan_params->channel_transition_delay_factor =
-      host_to_le16(hapd->iconf->channel_transition_delay_factor);
-    scan_params->scan_activity_threshold =
-      host_to_le16(hapd->iconf->scan_activity_threshold);
-
-    pos += sizeof(*scan_params);
-  }
-
   return pos;
 }
 
@@ -120,7 +91,19 @@ u8 * hostapd_eid_ht_capabilities(struct hostapd_data *hapd, u8 *eid)
 	/* TODO: ht_extended_capabilities (now fully disabled) */
 	/* TODO: asel_capabilities (now fully disabled) */
 
- 	pos += sizeof(*cap);
+	pos += sizeof(*cap);
+
+	return pos;
+}
+
+
+u8 * hostapd_eid_overlapping_bss_scan_params(struct hostapd_data *hapd, u8 *eid)
+{
+	u8 *pos = eid;
+
+	if (!hapd->iconf->ieee80211n || !hapd->iface->current_mode ||
+	    hapd->conf->disable_11n)
+		return eid;
 
 	if (hapd->iconf->obss_interval) {
 		struct ieee80211_obss_scan_parameters *scan_params;

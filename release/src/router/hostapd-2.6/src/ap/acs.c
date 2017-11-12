@@ -246,7 +246,7 @@
  */
 
 
-static int acs_request_scan(struct hostapd_iface *iface);
+static int acs_request_scan(struct hostapd_iface *iface, int acs_mode);
 static int acs_survey_is_sufficient(struct freq_survey *survey);
 static u32 acs_get_center_chan_index(struct hostapd_iface *iface);
 
@@ -1738,7 +1738,7 @@ static void acs_scan_complete(struct hostapd_iface *iface)
 	}
 
 	if (++iface->acs_num_completed_scans < iface->conf->acs_num_scans) {
-		err = acs_request_scan(iface);
+		err = acs_request_scan(iface, ACS_INIT_CTRL);
 		if (err) {
 			wpa_printf(MSG_ERROR, "ACS: Failed to request scan");
 			goto fail;
@@ -2035,6 +2035,10 @@ static void acs_init_candidate_table(struct hostapd_iface *iface)
   for (i = 0; i < mode->num_channels; i++) {
     struct hostapd_channel_data *chan = &mode->channels[i];
     if (chan->flag & HOSTAPD_CHAN_DISABLED) continue;
+
+    if (!is_in_chanlist(iface, chan))
+     continue;
+
     if (chan->flag & HOSTAPD_CHAN_RADAR) mode->candidates[mode->num_candidates].radar_affected = TRUE;
 
     mode->candidates[mode->num_candidates].freq = chan->freq;
@@ -2080,7 +2084,7 @@ static void acs_init_candidate_table(struct hostapd_iface *iface)
 }
 
 
-static int acs_request_scan(struct hostapd_iface *iface)
+static int acs_request_scan(struct hostapd_iface *iface, int acs_mode)
 {
 	struct wpa_driver_scan_params params;
 	struct hostapd_channel_data *chan;
@@ -2105,7 +2109,10 @@ static int acs_request_scan(struct hostapd_iface *iface)
 	}
 	*freq = 0;
 
-	iface->scan_cb = acs_scan_complete;
+	if (ACS_INITIAL == acs_mode)
+		iface->scan_cb = acs_scan_complete;
+	else
+		iface->scan_cb = acs_bg_scan_complete;
 
 	wpa_printf(MSG_DEBUG, "ACS: Scanning %d / %d",
 		   iface->acs_num_completed_scans + 1,
@@ -2124,7 +2131,7 @@ static int acs_request_scan(struct hostapd_iface *iface)
 }
 
 
-enum hostapd_chan_status acs_init(struct hostapd_iface *iface)
+enum hostapd_chan_status acs_init(struct hostapd_iface *iface, int acs_mode)
 {
 	int err;
 
@@ -2148,7 +2155,7 @@ enum hostapd_chan_status acs_init(struct hostapd_iface *iface)
     acs_init_candidate_table(iface);
 #endif
 
-	err = acs_request_scan(iface);
+	err = acs_request_scan(iface, acs_mode);
 	if (err < 0)
 		return HOSTAPD_CHAN_INVALID;
 
@@ -2232,9 +2239,6 @@ int acs_do_switch_channel(struct hostapd_iface *iface, int block_tx)
     return -1;
   }
 
-  /* Check if active CAC */
-  if (iface->cac_started) return 0;
-
   wpa_printf(MSG_DEBUG, "try switch to a new channel %d, params freq %d sec %d vht_chwidth %d seg0 %d seg1 %d block_tx %d", iface->conf->channel,
     acs_chan_to_freq(iface->conf->channel),
     iface->conf->secondary_channel,
@@ -2242,6 +2246,10 @@ int acs_do_switch_channel(struct hostapd_iface *iface, int block_tx)
     iface->conf->vht_oper_centr_freq_seg0_idx,
     iface->conf->vht_oper_centr_freq_seg1_idx,
     block_tx);
+
+  /* Check if active CAC */
+  if (iface->cac_started)
+    return hostapd_setup_interface_complete(iface, 0);
 
   /* check CAC required */
   for (i = 0; i < mode->num_channels; i++) {
@@ -3121,8 +3129,10 @@ void acs_radar_switch(struct hostapd_iface *iface)
   else
     ret = acs_recalc_ranks_and_set_chan(iface, SWR_RADAR);
 
-  if (ret)
+  if (ret) {
+    iface->chan_switch_reason = HAPD_CHAN_SWITCH_RADAR_DETECTED;
     acs_do_switch_channel(iface, 1);
+  }
   else
     wpa_printf(MSG_ERROR, "Must switch, radar !");
 }

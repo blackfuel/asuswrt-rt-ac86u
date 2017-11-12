@@ -99,6 +99,10 @@ struct wpa_bss {
 	unsigned int est_throughput;
 	/** Signal-to-noise ratio in dB */
 	int snr;
+	/** Frequency band of BSS/IBSS */
+	char freqband[FREQBAND_MAX_LEN];
+	/** Network mode of BSS/IBSS */
+	char netmode[NETMODE_MAX_LEN];
 	/** ANQP data */
 	struct wpa_bss_anqp *anqp;
 	/** Length of the following IE field in octets (from Probe Response) */

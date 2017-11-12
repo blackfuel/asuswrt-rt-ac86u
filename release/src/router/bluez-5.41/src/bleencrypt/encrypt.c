@@ -13,6 +13,8 @@
 #define AES_BLOCK_SIZE	16
 //---------------------------------------------------------------------------
 #ifndef __MBEDTLS__
+extern char *openssl_version_text(char version_text[32]);
+
 char *openssl_version_text(
 	char version_text[32])
 {

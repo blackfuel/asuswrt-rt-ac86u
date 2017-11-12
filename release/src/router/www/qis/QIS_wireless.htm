@@ -139,32 +139,9 @@ function QKWireless_load_body(){
 		}
 	
 		//while %w_Setting% == 1
-		if(parent.w_Setting_tmp == 1 && parent.document.QKform.sw_mode.value != "2" && !smart_connect_support){
-			
-			document.getElementById("Continued_PrevSetting").innerHTML = "<#QIS_Previous_WLKey#>";					
-			document.getElementById("Continued_PrevSetting").style.display = "";
-			document.getElementById("radio_Continued_PrevSetting").style.display = "";
+		if(parent.document.QKform.sw_mode.value != "2" && !smart_connect_support){
 			document.form.Cont_PrevSetting[0].checked = true;		
-			document.getElementById("btn_next_step").focus();
-
-			inputCtrl(document.form.wl0_ssid,0);
-			inputCtrl(document.form.wl0_wpa_psk,0);
-			if(band5g_support){
-					inputCtrl(document.form.sync_with_2ghz,0);
-					inputCtrl(document.form.wl1_ssid,0);
-					inputCtrl(document.form.wl1_wpa_psk,0);
-			}
-			if(wl_info.band5g_2_support){
-				inputCtrl(document.form.sync_with_5ghz,0);
-				inputCtrl(document.form.wl2_ssid,0);
-				inputCtrl(document.form.wl2_wpa_psk,0);						
-			}			
-		}
-		else{
-
-			document.getElementById("Continued_PrevSetting").style.display = "none";				
-			document.getElementById("radio_Continued_PrevSetting").style.display = "none";
-			setTimeout(function(){document.form.wl0_ssid.focus();}, 1);
+			change_smart_con(1);
 		}
 
 		if(smart_connect_support && (parent.document.QKform.sw_mode.value == 1 || parent.document.QKform.sw_mode.value == 3)){
@@ -771,14 +748,8 @@ function submitForm(){
 		document.form.http_passwd.disabled = false;
 	}
 
-	if(smart_connect_support && (document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3")){
-			if(document.form.smart_connect_t[0].checked == true){
-				document.form.smart_connect_x.value = 1;
-				document.form.wl1_wpa_psk.value = document.form.wl0_wpa_psk.value;
-				if(wl_info.band5g_2_support)
-					document.form.wl2_wpa_psk.value = document.form.wl0_wpa_psk.value; 		
-			}else if(document.form.smart_connect_t[1].checked == true)
-				document.form.smart_connect_x.value = 0;
+	if(smart_connect_support){
+		document.form.smart_connect_x.value = 0;
 	}
 
 	if(parent.based_modelid == "RT-AC87U")
@@ -1032,6 +1003,8 @@ function smartcon_desc_show(){
 
 function change_smart_con(v){
 	if(v == '1'){
+		document.form.smart_connect_t[0].checked = "checked"
+
 		document.getElementById("wl_unit_field_1").style.display = "none";
 		document.getElementById("wl_unit_field_2").style.display = "none";
 		document.getElementById("wl_unit_field_3").style.display = "none";
@@ -1040,10 +1013,12 @@ function change_smart_con(v){
 			document.getElementById("wl_unit_field_5").style.display = "none";
 			document.getElementById("wl_unit_field_6").style.display = "none";
 		}
-		document.getElementById("wl0_desc_name").innerHTML = "Tri-band Smart Connect Security";
+		document.getElementById("wl0_desc_name").innerHTML = "";
 		document.getElementById("wl0_desc_name").style = "padding-bottom:10px";
 		parent.document.getElementById("contentM").height = contentM_height_orig;
 	}else if (v == '0'){
+		document.form.smart_connect_t[1].checked = "checked"
+
 		document.getElementById("wl_unit_field_1").style.display = "";
 		document.getElementById("wl_unit_field_2").style.display = "";
 		document.getElementById("wl_unit_field_3").style.display = "";
@@ -1504,10 +1479,10 @@ function detect_LANStatus(_flag){
 </fieldset>
 <fieldset id="field_general" style="display:none;">
 	<legend id="Continued_legend">
-			<span id="Continued_PrevSetting"></span>
+			<span id="Continued_PrevSetting"><#smart_connect#></span>
 			<span id="radio_Continued_PrevSetting">
-					<input type="radio" id="Cont_PrevSetting0" name="Cont_PrevSetting" tabindex="1" class="input" value="0" onclick="PrevSetting(this.value);"><#checkbox_Yes#>
-					<input type="radio" id="Cont_PrevSetting1" name="Cont_PrevSetting" tabindex="2" class="input" value="1" onclick="PrevSetting(this.value);"><#checkbox_No#>
+					<input type="radio" id="Cont_PrevSetting0" name="Cont_PrevSetting" tabindex="1" class="input" value="0" onclick="change_smart_con(1);"><#checkbox_Yes#>
+					<input type="radio" id="Cont_PrevSetting1" name="Cont_PrevSetting" tabindex="2" class="input" value="1" onclick="change_smart_con(0);"><#checkbox_No#>
 			</span>	
 			<span id="RP_UseParentSetting" style="display:none;">
 				<input type="checkbox" id="RP_parentSetting" checked="" onclick="RP_useParentSetting()"><#QIS_apextended_usedefault#>

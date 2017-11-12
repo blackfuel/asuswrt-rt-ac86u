@@ -1071,6 +1071,9 @@ struct wpa_supplicant {
 	 */
 	struct wpabuf *lci;
 	struct os_reltime lci_time;
+
+	u8 vendor_events_filter[32];
+	u8 vendor_events_filter_len;
 };
 
 

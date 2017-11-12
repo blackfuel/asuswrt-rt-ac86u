@@ -198,8 +198,8 @@ function blocking_m(obj_id, show){
 
 function get_value_from_parent(){
 
-	if(parent.dual_ewan){
-		if(parent.cur_wan_unit == 0){
+	if(parent.dual_ewan || parent.dualwan_enabled){
+		if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0)){
 			document.form.wan_proto.value = parent.document.QKform.wan0_proto.value;
 			
 			document.form.wan_pppoe_username.value = parent.document.QKform.wan0_pppoe_username.value;
@@ -217,7 +217,7 @@ function get_value_from_parent(){
 			document.form.wan_dns2_x.value = parent.document.QKform.wan0_dns2_x.value;
 			document.form.wan_heartbeat_x.value = parent.document.QKform.wan0_heartbeat_x.value;
 		}
-		else{ //parent.cur_wan_unit == 1
+		else if((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1)){
 			document.form.wan_proto.value = parent.document.QKform.wan1_proto.value;
 			
 			document.form.wan_pppoe_username.value = parent.document.QKform.wan1_pppoe_username.value;
@@ -844,18 +844,8 @@ function submitForm(){
 			document.form.switch_wan2tagid.value = parent.document.QKform.switch_wan2tagid.value;
 			document.form.switch_wan2prio.value = parent.document.QKform.switch_wan2prio.value;
 			document.form.switch_stb_x.value = parent.document.QKform.switch_stb_x.value;
-			//document.form.flag.value = "verify_detect";
 			document.form.flag.value = "static";
   			if(original_switch_wantag != document.form.switch_wantag.value){
-				/*
-				document.form.action_script.value	= "reboot";
-				document.form.flag.value = "verify_detect_reboot";
-				document.form.action_wait.value	= "<% get_default_reboot_time(); %>";
-				document.getElementById("loadHint").style.display = "";
-				document.getElementById("nextButton").style.display = "none";
-				document.getElementById("prevButton").style.display = "none";
-				*/
-
 				var reboot_time = eval("<% get_default_reboot_time(); %> + 10");
 				document.form.action_script.value = "saveNvram";
 				document.form.action_wait.value = "0";

@@ -1872,7 +1872,6 @@ SM_STATE(WPA_PTK, AUTHENTICATION2)
 {
 	SM_ENTRY_MA(WPA_PTK, AUTHENTICATION2, wpa_ptk);
 
-	wpa_auth_set_eapol(sm->wpa_auth, sm->addr, WPA_EAPOL_portValid, 0);
 	wpa_group_ensure_init(sm->wpa_auth, sm->group);
 	sm->ReAuthenticationRequest = FALSE;
 

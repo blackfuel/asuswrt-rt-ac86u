@@ -28,6 +28,9 @@ struct hostapd_channel_data* hostapd_hw_get_channel_data(struct hostapd_iface *i
 struct hostapd_channel_data* hostapd_hw_get_channel_data_from_ch(struct hostapd_iface *iface, int chan);
 int hostapd_hw_get_antenna_mask(struct hostapd_data *hapd, int tx_ant,
   int rx_ant, u32 *tx_ant_mask, u32 *rx_ant_mask);
+#ifndef CONFIG_NO_STDOUT_DEBUG
+char * dfs_info(struct hostapd_channel_data *chan);
+#endif
 #else /* NEED_AP_MLME */
 static inline void
 hostapd_free_hw_features(struct hostapd_hw_modes *hw_features,
@@ -89,6 +92,12 @@ static inline int hostapd_hw_get_antenna_mask(struct hostapd_data *hapd, int tx_
 {
   return 0;
 }
+#ifndef CONFIG_NO_STDOUT_DEBUG
+static inline char * dfs_info(struct hostapd_channel_data *chan)
+{
+  return NULL;
+}
+#endif
 #endif /* NEED_AP_MLME */
 
 #endif /* HW_FEATURES_H */

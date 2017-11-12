@@ -82,7 +82,7 @@ static void wpa_priv_cmd_register(struct wpa_priv_interface *iface,
 			iface->drv_global_priv = NULL;
 		}
 		iface->drv_priv = iface->driver->init2(iface, iface->ifname,
-						       iface->drv_global_priv);
+						       iface->drv_global_priv, NULL);
 	} else if (iface->driver->init) {
 		iface->drv_priv = iface->driver->init(iface, iface->ifname);
 	} else {

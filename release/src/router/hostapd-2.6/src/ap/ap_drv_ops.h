@@ -466,4 +466,14 @@ static inline int hostapd_drv_get_capa(struct hostapd_data *hapd,
   return hapd->driver->get_capa(hapd->drv_priv, capa);
 }
 
+#ifdef CONFIG_WDS_WPA
+static inline int hostapd_drv_set_wds_wpa_sta(struct hostapd_data *hapd,
+  const u8 *addr, const u8 remove)
+{
+  if (hapd->driver == NULL || hapd->driver->set_wds_wpa_sta == NULL)
+    return -ENOTSUP;
+
+  return hapd->driver->set_wds_wpa_sta(hapd->drv_priv, addr, remove);
+}
+#endif
 #endif /* AP_DRV_OPS */

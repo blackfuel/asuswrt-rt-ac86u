@@ -688,8 +688,6 @@ int main(int argc, char *argv[])
 						memset(char_user, 0, sizeof(char_user));
 						ascii_to_char_safe(char_user, follow_account->name, sizeof(char_user));
 
-						samba_right = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 0);
-
 						if(first == 1)
 							first = 0;
 						else
@@ -699,8 +697,6 @@ int main(int argc, char *argv[])
 					}
 #else
 					for(i = 0; i < acc_num; ++i){
-						samba_right = get_permission(account_list[i], follow_partition->mount_point, folder_list[n], "cifs", 0);
-
 						if(first == 1)
 							first = 0;
 						else
@@ -724,7 +720,11 @@ int main(int argc, char *argv[])
 
 							samba_right_group = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 1);
 
+#ifdef UNION_PERMISSION
+							if(samba_right_group >= 1)
+#else
 							if(samba_right_group < 1)
+#endif
 								break;
 
 							owned_group = owned_group->next;
@@ -735,7 +735,11 @@ int main(int argc, char *argv[])
 
 						samba_right = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 0);
 
+#ifdef UNION_PERMISSION
+						if(samba_right >= 1 || samba_right_group >= 1)
+#else
 						if(samba_right >= 1 && samba_right_group >= 1)
+#endif
 							continue;
 
 						if(first == 1)
@@ -774,20 +778,30 @@ int main(int argc, char *argv[])
 
 							samba_right_group = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 1);
 
+#ifdef UNION_PERMISSION
+							if(samba_right_group >= 1)
+#else
 							if(samba_right_group < 1)
+#endif
 								break;
 
 							owned_group = owned_group->next;
 						}
+#ifndef UNION_PERMISSION
 						if(samba_right_group < 1)
 								continue;
+#endif
 
 						memset(char_user, 0, sizeof(char_user));
 						ascii_to_char_safe(char_user, follow_account->name, sizeof(char_user));
 
 						samba_right = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 0);
 
+#ifdef UNION_PERMISSION
+						if(samba_right < 1 && samba_right_group < 1)
+#else
 						if(samba_right < 1)
+#endif
 							continue;
 
 						if(first == 1)
@@ -826,20 +840,30 @@ int main(int argc, char *argv[])
 
 							samba_right_group = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 1);
 
+#ifdef UNION_PERMISSION
+							if(samba_right_group >= 2)
+#else
 							if(samba_right_group < 2)
+#endif
 								break;
 
 							owned_group = owned_group->next;
 						}
+#ifndef UNION_PERMISSION
 						if(samba_right_group < 2)
 								continue;
+#endif
 
 						memset(char_user, 0, sizeof(char_user));
 						ascii_to_char_safe(char_user, follow_account->name, sizeof(char_user));
 
 						samba_right = get_permission(char_user, follow_partition->mount_point, folder_list[n], "cifs", 0);
 
+#ifdef UNION_PERMISSION
+						if(samba_right < 2 && samba_right_group < 2)
+#else
 						if(samba_right < 2)
+#endif
 							continue;
 
 						if(first == 1)

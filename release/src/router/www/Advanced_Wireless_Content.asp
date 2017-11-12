@@ -23,6 +23,15 @@
 <script type="text/javascript" src="/js/jquery.js"></script>
 <script><% wl_get_parameter(); %>
 
+$(function () {
+	if(amesh_support) {
+		$('<script>')
+			.attr('type', 'text/javascript')
+			.attr('src','/require/modules/amesh.js')
+			.appendTo('head');
+	}
+});
+
 wl_channel_list_2g = '<% channel_list_2g(); %>';
 wl_channel_list_5g = '<% channel_list_5g(); %>';
 var wl_unit_value = '<% nvram_get("wl_unit"); %>';
@@ -269,51 +278,57 @@ function check_channel_2g(){
 
 	add_options_x2(document.form.wl_channel, wl_channel_list_2g, ch_v2, CurrentCh);
 	var option_length = document.form.wl_channel.options.length;	
-	if ((wmode == "0"||wmode == "1") && document.form.wl_bw.value != "0"){
-		inputCtrl(document.form.wl_nctrlsb, 1);
-		var x = document.form.wl_nctrlsb;
-		var length = document.form.wl_nctrlsb.options.length;
-		if (length > 1){
-			x.selectedIndex = 1;
-			x.remove(x.selectedIndex);
-		}
-		
-		if ((CurrentCh >=1) && (CurrentCh <= 4)){
-			x.options[0].text = "<#WLANConfig11b_EChannelAbove#>";
-			x.options[0].value = "lower";
-		}
-		else if ((CurrentCh >= 5) && (CurrentCh <= 7)){
-			x.options[0].text = "<#WLANConfig11b_EChannelAbove#>";
-			x.options[0].value = "lower";
-			add_option(document.form.wl_nctrlsb, "<#WLANConfig11b_EChannelBelow#>", "upper");
-			if (document.form.wl_nctrlsb_old.value == "upper")
-				document.form.wl_nctrlsb.options.selectedIndex=1;
-				
-			if(is_high_power && CurrentCh == 5) // for high power model, Jieming added at 2013/08/19
-				document.form.wl_nctrlsb.remove(1);
-			else if(is_high_power && CurrentCh == 7)
-				document.form.wl_nctrlsb.remove(0);	
-		}
-		else if ((CurrentCh >= 8) && (CurrentCh <= 10)){
-			x.options[0].text = "<#WLANConfig11b_EChannelBelow#>";
-			x.options[0].value = "upper";
-			if (option_length >=14){
-				add_option(document.form.wl_nctrlsb, "<#WLANConfig11b_EChannelAbove#>", "lower");
-				if (document.form.wl_nctrlsb_old.value == "lower")
+	if(wmode == "0"||wmode == "1"){
+		if((lantiq_support && document.form.wl_bw.value != "1") || (!lantiq_support && document.form.wl_bw.value != "0")){
+			inputCtrl(document.form.wl_nctrlsb, 1);
+			var x = document.form.wl_nctrlsb;
+			var length = document.form.wl_nctrlsb.options.length;
+			if (length > 1){
+				x.selectedIndex = 1;
+				x.remove(x.selectedIndex);
+			}
+			
+			if ((CurrentCh >=1) && (CurrentCh <= 4)){
+				x.options[0].text = "<#WLANConfig11b_EChannelAbove#>";
+				x.options[0].value = "lower";
+			}
+			else if ((CurrentCh >= 5) && (CurrentCh <= 7)){
+				x.options[0].text = "<#WLANConfig11b_EChannelAbove#>";
+				x.options[0].value = "lower";
+				add_option(document.form.wl_nctrlsb, "<#WLANConfig11b_EChannelBelow#>", "upper");
+				if (document.form.wl_nctrlsb_old.value == "upper")
 					document.form.wl_nctrlsb.options.selectedIndex=1;
+					
+				if(is_high_power && CurrentCh == 5) // for high power model, Jieming added at 2013/08/19
+					document.form.wl_nctrlsb.remove(1);
+				else if(is_high_power && CurrentCh == 7)
+					document.form.wl_nctrlsb.remove(0);	
+			}
+			else if ((CurrentCh >= 8) && (CurrentCh <= 10)){
+				x.options[0].text = "<#WLANConfig11b_EChannelBelow#>";
+				x.options[0].value = "upper";
+				if (option_length >=14){
+					add_option(document.form.wl_nctrlsb, "<#WLANConfig11b_EChannelAbove#>", "lower");
+					if (document.form.wl_nctrlsb_old.value == "lower")
+						document.form.wl_nctrlsb.options.selectedIndex=1;
+				}
+			}
+			else if (CurrentCh >= 11){
+				x.options[0].text = "<#WLANConfig11b_EChannelBelow#>";
+				x.options[0].value = "upper";
+			}
+			else{
+				x.options[0].text = "<#Auto#>";
+				x.options[0].value = "1";
 			}
 		}
-		else if (CurrentCh >= 11){
-			x.options[0].text = "<#WLANConfig11b_EChannelBelow#>";
-			x.options[0].value = "upper";
-		}
 		else{
-			x.options[0].text = "<#Auto#>";
-			x.options[0].value = "1";
+			inputCtrl(document.form.wl_nctrlsb, 0);
 		}
 	}
-	else
+	else{
 		inputCtrl(document.form.wl_nctrlsb, 0);
+	}
 }
 
 function insertChannelOption_60g(){
@@ -369,6 +384,10 @@ function applyRule(){
 		document.form.wl_wpa_psk.value = "";
 		
 	if(validForm()){
+		if(amesh_support) {
+			if(!check_wl_auth_support(auth_mode, $("select[name=wl_auth_mode_x] option:selected")))
+				return false;
+		}
 		if(document.form.wl_closed[0].checked && document.form.wps_enable.value == 1 && (isSwMode("rt") || isSwMode("ap"))){
 			if(confirm("<#wireless_JS_Hide_SSID#>")){
 				document.form.wps_enable.value = "0";	
@@ -427,10 +446,16 @@ function applyRule(){
 				document.form.next_page.value = "/Advanced_WSecurity_Content.asp";
 			}
 		}
-			
-		if(document.form.wl_nmode_x.value == "1" && wl_unit_value == "0")
-			document.form.wl_gmode_protection.value = "off";
-		
+
+		if(Bcmwifi_support) {
+			if(document.form.wl_nmode_x.value != "2" && wl_unit_value == "0")
+				document.form.wl_gmode_protection.value = "auto";
+		}
+		else {
+			if(document.form.wl_nmode_x.value == "1" && wl_unit_value == "0")
+				document.form.wl_gmode_protection.value = "off";
+		}
+
 		/*  Viz 2012.08.15 seems ineeded
 		inputCtrl(document.form.wl_crypto, 1);
 		inputCtrl(document.form.wl_wpa_psk, 1);

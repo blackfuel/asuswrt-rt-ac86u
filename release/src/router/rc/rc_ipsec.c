@@ -480,7 +480,8 @@ void rc_strongswan_conf_set()
     fprintf(fp, "# strongswan.conf - strongSwan configuration file\n#\n"
                 "# Refer to the strongswan.conf(5) manpage for details\n#\n"
                 "# Configuration changes should be made in the included files"
-                "\ncharon {\n\n\n"
+                "\ncharon {\n\n"
+                "  threads = %d\n"
                 "  send_vendor_id = yes\n"
                 "  duplicheck.enable = no\n"
                 "  starter { load_warning = no }\n\n"
@@ -490,7 +491,7 @@ void rc_strongswan_conf_set()
                 "  filelog {\n      /var/log/strongswan.charon.log {\n"
                 "        time_format = %%b %%e %%T\n        default = 1\n"
                 "        append = no\n        flush_line = yes\n"
-                "     }\n  }\n");
+                "     }\n  }\n", nvram_get_int("ipsec_threads_num"));
     if(0 != rc){
         if(('n' != samba_prof.dns1[0]) && ('\0' != samba_prof.dns1[0])){
             fprintf(fp,"\n  dns1=%s\n", samba_prof.dns1);
@@ -1183,16 +1184,20 @@ void ipsec_conf_phase1_set(FILE *fp, int prof_idx, ipsec_prof_type_t prof_type)
     fprintf(fp, "  ikelifetime=%d\n", prof[prof_type][prof_idx].keylife_p1);
     if((ENCRYPTION_TYPE_MAX_NUM != prof[prof_type][prof_idx].encryption_p1) &&
        (HASH_TYPE_MAX_NUM != prof[prof_type][prof_idx].hash_p1)){
-        fprintf(fp,"  ike=%s-%s-%s!\n", encryp[prof[prof_type][prof_idx].encryption_p1]
+        fprintf(fp,"  ike=%s-%s-%s\n", encryp[prof[prof_type][prof_idx].encryption_p1]
                   , hash[prof[prof_type][prof_idx].hash_p1], dh_group[DH_GROUP_14]);
     } else if((ENCRYPTION_TYPE_MAX_NUM == prof[prof_type][prof_idx].encryption_p1) && 
               (HASH_TYPE_MAX_NUM != prof[prof_type][prof_idx].hash_p1)){
-        fprintf(fp,"  ike=%s-%s-%s!\n", encryp[ENCRYPTION_TYPE_AES128]
+        fprintf(fp,"  ike=%s-%s-%s,%s-%s-%s!\n", encryp[ENCRYPTION_TYPE_AES128]
+                  , hash[prof[prof_type][prof_idx].hash_p1], dh_group[DH_GROUP_14]
+                  , encryp[ENCRYPTION_TYPE_3DES]
                   , hash[prof[prof_type][prof_idx].hash_p1], dh_group[DH_GROUP_14]);
     } else if((ENCRYPTION_TYPE_MAX_NUM != prof[prof_type][prof_idx].encryption_p1) && 
               (HASH_TYPE_MAX_NUM == prof[prof_type][prof_idx].hash_p1)){
-        fprintf(fp,"  ike=%s-%s-%s!\n", encryp[prof[prof_type][prof_idx].encryption_p1]
-                  , hash[HASH_TYPE_SHA1], dh_group[DH_GROUP_14]);
+        fprintf(fp,"  ike=%s-%s-%s,%s-%s-%s!\n", encryp[prof[prof_type][prof_idx].encryption_p1]
+                  , hash[HASH_TYPE_SHA1], dh_group[DH_GROUP_14]
+                  , encryp[prof[prof_type][prof_idx].encryption_p1]
+                  , hash[HASH_TYPE_SHA256], dh_group[DH_GROUP_14]);
     }
     return;
 }
@@ -1202,16 +1207,20 @@ void ipsec_conf_phase2_set(FILE *fp, int prof_idx, ipsec_prof_type_t prof_type)
     fprintf(fp, "  keylife=%d\n", prof[prof_type][prof_idx].keylife_p2);
     if((ENCRYPTION_TYPE_MAX_NUM != prof[prof_type][prof_idx].encryption_p2) && 
        (HASH_TYPE_MAX_NUM != prof[prof_type][prof_idx].hash_p2)){
-        fprintf(fp,"  esp=%s-%s!\n", encryp[prof[prof_type][prof_idx].encryption_p2]
+        fprintf(fp,"  esp=%s-%s\n", encryp[prof[prof_type][prof_idx].encryption_p2]
                   , hash[prof[prof_type][prof_idx].hash_p2]);
     } else if((ENCRYPTION_TYPE_MAX_NUM == prof[prof_type][prof_idx].encryption_p2) &&
               (HASH_TYPE_MAX_NUM != prof[prof_type][prof_idx].hash_p2)){
-        fprintf(fp,"  esp=%s-%s!\n", encryp[ENCRYPTION_TYPE_AES128]
+        fprintf(fp,"  esp=%s-%s,%s-%s!\n", encryp[ENCRYPTION_TYPE_AES128]
+                  , hash[prof[prof_type][prof_idx].hash_p2]
+                  , encryp[ENCRYPTION_TYPE_3DES]
                   , hash[prof[prof_type][prof_idx].hash_p2]);
     } else if((ENCRYPTION_TYPE_MAX_NUM != prof[prof_type][prof_idx].encryption_p2) &&
               (HASH_TYPE_MAX_NUM == prof[prof_type][prof_idx].hash_p2)){
-        fprintf(fp,"  esp=%s-%s!\n", encryp[prof[prof_type][prof_idx].encryption_p2]
-                  , hash[HASH_TYPE_SHA1]);
+        fprintf(fp,"  esp=%s-%s,%s-%s!\n", encryp[prof[prof_type][prof_idx].encryption_p2]
+                  , hash[HASH_TYPE_SHA1]
+                  , encryp[prof[prof_type][prof_idx].encryption_p2]
+                  , hash[HASH_TYPE_SHA256]);
     }
     return;
 }
@@ -1328,7 +1337,14 @@ void rc_ipsec_config_init()
     //rc_ipsec_ca_import();
     return;
 }
-
+void rc_set_ipsec_stack_block_size()
+{
+	char command[64];
+	if(NULL != nvram_safe_get("ipsec_stack_block_size")){
+		snprintf(command, sizeof(command), "echo \"%s\" > /tmp/ipsec_stack_block_size", nvram_safe_get("ipsec_stack_block_size"));
+		system(command);
+	}
+}
 #if 0
 static int cur_bitmap_en_scan()
 {
@@ -1798,7 +1814,7 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
     }
 //#endif
     //cur_bitmap_en = cur_bitmap_en_scan();
-	get_bitmap_scan(cur_bitmap_en_p);
+	get_bitmap_scan((int *) cur_bitmap_en_p);
 	//DBG(("rc_ipsec_down_stat>>>> 0x%x, 0x%x\n", cur_bitmap_en_p[0], cur_bitmap_en_p[1]));
 
 	if(cur_bitmap_en_p[0] != 0)
@@ -1941,7 +1957,7 @@ void rc_ipsec_set(ipsec_conn_status_t conn_status, ipsec_prof_type_t prof_type)
 
 	            if(((uint32_t)(1 << i)) != (pre_bitmap_en[prof_count] & ((uint32_t)(1 << i)))){
 						//cur_bitmap_en = cur_bitmap_en_scan();
-						get_bitmap_scan(cur_bitmap_en_p);
+						get_bitmap_scan((int *) cur_bitmap_en_p);
 						if(0 != strcmp(interface,"")){
 							/*fprintf(fp, "iptables -D INPUT -i %s --protocol esp -j ACCEPT\n", interface);
 							fprintf(fp, "iptables -D INPUT -i %s --protocol ah -j ACCEPT\n", interface);

@@ -216,7 +216,7 @@ function applyRule(){
 		}	
 	}
 
-	if(reset_wan_and_nat(document.form, document.form.wrs_protect_enable.value)) {
+	if(reset_wan_to_fo(document.form, document.form.wrs_protect_enable.value)) {
 		showLoading();
 		document.form.submit();
 	}

@@ -729,7 +729,7 @@ void start_usb(int orig)
 #if defined(RTCONFIG_BT_CONN)
 		modprobe("btusb");
 		modprobe("ath3k");
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
 		if (nvram_match("x_Setting", "0"))
 			system("/usr/bin/btchk.sh &"); /* workaround script */
 #endif
@@ -740,7 +740,7 @@ void start_usb(int orig)
 	}
 }
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
 void remove_dakota_usb_modules(void)
 {
 	modprobe_r(USB_DWC3);
@@ -898,7 +898,7 @@ void remove_usb_module(void)
 	remove_usb_led_module();
 	remove_usb_host_module();
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
 	remove_dakota_usb_modules();
 #endif
 }
@@ -1054,7 +1054,7 @@ void stop_usb(int f_force)
 		}
 	}
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300)
+#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
 	if(disabled)remove_dakota_usb_modules();
 #endif
 #endif // HND_ROUTER
@@ -1590,6 +1590,15 @@ _dprintf("%s: stop_cloudsync.\n", __func__);
 	nvram_set("dsltmp_diag_log_path", "");
 #endif
 
+#ifdef RTCONFIG_PUSH_EMAIL
+#ifdef RTCONFIG_DBLOG
+	if(nvram_match("dblog_enable", "1")) {
+		eval("dblogcmd", "exit"); // to stop dblog daemon
+	}
+	nvram_set("dblog_usb_path", "");
+	#endif /* RTCONFIG_DBLOG */
+#endif /* RTCONFIG_PUSH_EMAIL */
+
 	if(!g_reboot && nvram_match("apps_mounted_path", mnt->mnt_dir))
 		stop_app();
 #endif
@@ -1939,6 +1948,20 @@ _dprintf("usb_path: 4. don't set %s.\n", tmp);
 			}
 		}
 #endif
+
+#ifdef RTCONFIG_PUSH_EMAIL
+#ifdef RTCONFIG_DBLOG
+		if(ret == MOUNT_VAL_RW) {
+			if(nvram_match("dblog_usb_path", "")) {
+				nvram_set("dblog_usb_path", mountpoint);
+				//(enable=1) && (state=run || state=reboot)
+				if(nvram_match("dblog_enable", "1") && (nvram_match("dblog_state", "1")||nvram_match("dblog_state", "2"))) {
+					start_dblog(0);
+				}
+			}
+		}
+#endif /* RTCONFIG_DBLOG */
+#endif /* RTCONFIG_PUSH_EMAIL */
 
 		// check the permission files.
 		if(ret == MOUNT_VAL_RW)
@@ -2519,12 +2542,18 @@ start_ftpd(void)
 
 	killall("vsftpd", SIGHUP);
 
-#ifdef RTCONFIG_LANTIQ
+//#ifdef RTCONFIG_LANTIQ
+#if 0
 	if (!pids("vsftpd"))
 		cpu_eval(NULL, "2", "vsftpd", "/etc/vsftpd.conf");
 #else
-	if (!pids("vsftpd"))
+	if (!pids("vsftpd")) {
+#ifdef RTCONFIG_LANTIQ
+		_eval_retry(vsftpd_argv, NULL, 0, &pid, "vsftpd");
+#else
 		_eval(vsftpd_argv, NULL, 0, &pid);
+#endif
+	}
 #endif
 
 	if (pids("vsftpd"))
@@ -3223,10 +3252,16 @@ void start_dms(void)
 		once = 0;
 
 	if (nvram_get_int("dms_enable") != 0) {
-
-		if (/*(!once) &&*/ (nvram_get_int("dms_rebuild") == 0)) {
+#if 1
+		if ((nvram_get_int("dms_rebuild") == 0)) {
 			argv[index - 1] = "-r";
 		}
+#else
+		if ((!once) && (nvram_get_int("dms_rescan") == 0)) {
+			// no forced rescan
+			argv[--index] = NULL;
+		}
+#endif
 
 		if ((f = fopen(argv[2], "w")) != NULL) {
 			port = nvram_get_int("dms_port");
@@ -3348,8 +3383,10 @@ void start_dms(void)
 		if (nvram_get_int("dms_dbg"))
 			argv[index++] = "-v";
 
+#if 0
 		if (nvram_get_int("dms_web"))
 			argv[index++] = "-W";
+#endif
 
 		/* start media server if it's not already running */
 		if (pidof(MEDIA_SERVER_APP) <= 0) {
@@ -3383,6 +3420,9 @@ void stop_dms(void)
 void force_stop_dms(void)
 {
 	killall_tk(MEDIA_SERVER_APP);
+#if 0
+	eval("rm", "-rf", nvram_safe_get("dms_dbcwd"));
+#endif
 }
 
 void

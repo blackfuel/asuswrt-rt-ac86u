@@ -47,6 +47,9 @@
 #include "ndisc_snoop.h"
 #include "neighbor_db.h"
 #include "rrm.h"
+#ifdef CONFIG_WDS_WPA
+#include "wds_wpa.h"
+#endif
 
 
 static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason);
@@ -331,6 +334,9 @@ static void hostapd_free_hapd_data(struct hostapd_data *hapd)
 	hapd->started = 0;
 
 	wpa_printf(MSG_DEBUG, "%s(%s)", __func__, hapd->conf->iface);
+#ifdef CONFIG_WDS_WPA
+	ltq_wds_wpa_deinit(hapd);
+#endif
 	iapp_deinit(hapd->iapp);
 	hapd->iapp = NULL;
 	accounting_deinit(hapd);
@@ -522,6 +528,7 @@ static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason)
 	if (hostapd_drv_none(hapd) || hapd->drv_priv == NULL)
 		return 0;
 
+#if 0 /* Will be removed in hostapd_free_stas() */
 	if (!hapd->iface->driver_ap_teardown) {
 		wpa_dbg(hapd->msg_ctx, MSG_DEBUG,
 			"Flushing old station entries");
@@ -532,6 +539,8 @@ static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason)
 			ret = -1;
 		}
 	}
+#endif
+
 	wpa_dbg(hapd->msg_ctx, MSG_DEBUG, "Deauthenticate all stations");
 	os_memset(addr, 0xff, ETH_ALEN);
 	hostapd_drv_sta_deauth(hapd, addr, reason);
@@ -1184,6 +1193,13 @@ static int hostapd_setup_bss(struct hostapd_data *hapd, int first)
 	if (hapd->wpa_auth && wpa_init_keys(hapd->wpa_auth) < 0)
 		return -1;
 
+#ifdef CONFIG_WDS_WPA
+  if (ltq_wds_wpa_init(hapd)) {
+    wpa_printf(MSG_ERROR, "WDS WPA initialization failed");
+    return -1;
+  }
+#endif
+
 	if (hapd->driver && hapd->driver->set_operstate)
 		hapd->driver->set_operstate(hapd->drv_priv, 1);
 
@@ -1340,19 +1356,36 @@ void hostapd_channel_list_updated(struct hostapd_iface *iface, int initiator)
 }
 
 
-/* Must be aligned with drivers struct for vendor country command */
+/* Must be aligned with drivers struct */
 #define COUNTRY_CODE_MAX_LEN 3
-typedef struct mtlk_country_code_data
+typedef struct mtlk_hostapd_initial_data
 {
 	char	alpha2[COUNTRY_CODE_MAX_LEN];
 	u8	is_11b;
-} mtlk_country_code_data_t;
+	u8	radar_detection;
+} mtlk_hostapd_initial_data_t;
 
+static int send_initial_params_to_driver (struct hostapd_data *hapd, const char *country)
+{
+	mtlk_hostapd_initial_data_t data;
+
+	os_memset(&data, 0, sizeof(data));
+	os_memcpy(data.alpha2, country, 2); /* third char will not be sent */
+	data.is_11b = (HOSTAPD_MODE_IEEE80211B == hapd->iconf->hw_mode);
+	data.radar_detection = hapd->iconf->ieee80211h;
+
+	if (hostapd_drv_vendor_cmd(hapd, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_INITIAL_DATA,
+						(const u8*)&data, sizeof(data), NULL)) {
+		wpa_printf(MSG_ERROR, "Failed to send driver vendor command LTQ_NL80211_VENDOR_SUBCMD_INITIAL_DATA");
+		return -1;
+	}
+
+	return 0;
+}
 
 static int setup_interface(struct hostapd_iface *iface)
 {
 	struct hostapd_data *hapd = iface->bss[0];
-	mtlk_country_code_data_t cc_data;
 	size_t i;
 
 	/*
@@ -1406,12 +1439,8 @@ static int setup_interface(struct hostapd_iface *iface)
 			return -1;
 		}
 
-		os_memset(&cc_data, 0, sizeof(cc_data));
-		os_memcpy(cc_data.alpha2, country, 2); /* third char will not be sent */
-		cc_data.is_11b = (HOSTAPD_MODE_IEEE80211B == hapd->iconf->hw_mode);
-		if (hostapd_drv_vendor_cmd(hapd, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_COUNTRY_CODE,
-							(const u8*)&cc_data, sizeof(cc_data), NULL))
-			wpa_printf(MSG_INFO, "Failed to send driver vendor command LTQ_NL80211_VENDOR_SUBCMD_COUNTRY_CODE");
+		if (send_initial_params_to_driver(hapd, country))
+			return -1;
 
 		wpa_printf(MSG_DEBUG, "Previous country code %s, new country code %s",
 			   previous_country, country);

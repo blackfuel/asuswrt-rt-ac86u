@@ -964,7 +964,9 @@ static int hostapd_mgmt_rx(struct hostapd_data *hapd, struct rx_mgmt *rx_mgmt)
 	hapd = get_hapd_bssid(iface, bssid);
 	if (hapd == NULL) {
 		u16 fc = le_to_host16(hdr->frame_control);
-
+#ifdef CONFIG_WDS_WPA
+		struct ieee80211_mgmt *mgmt;
+#endif
 		/*
 		 * Drop frames to unknown BSSIDs except for Beacon frames which
 		 * could be used to update neighbor information.
@@ -973,7 +975,28 @@ static int hostapd_mgmt_rx(struct hostapd_data *hapd, struct rx_mgmt *rx_mgmt)
 		    WLAN_FC_GET_STYPE(fc) == WLAN_FC_STYPE_BEACON)
 			hapd = iface->bss[0];
 		else
-			return 0;
+#ifdef CONFIG_WDS_WPA
+		{
+		  /* set BSSID from destination address */
+      mgmt = (struct ieee80211_mgmt *) rx_mgmt->frame;
+
+      bssid = mgmt->da;
+      hapd = get_hapd_bssid(iface, bssid);
+
+      if ((hapd == NULL) || (hapd == HAPD_BROADCAST)) {
+        return 0;
+      }
+
+      if (!hostapd_maclist_found(hapd->conf->wds_wpa_sta,
+        hapd->conf->num_wds_wpa_sta, mgmt->sa, NULL))
+        return 0;
+
+      /* Replace BSSID for WDS mode */
+      os_memcpy(mgmt->bssid, mgmt->da, ETH_ALEN);
+		}
+#else
+		return 0;
+#endif
 	}
 
 	os_memset(&fi, 0, sizeof(fi));
@@ -1105,9 +1128,14 @@ static void hostapd_event_ltq_unconnected_sta_rx(struct hostapd_data *hapd,
   os_snprintf(buf, sizeof(buf), MACSTR, MAC2STR(unc_sta->addr));
   wpa_msg(hapd->msg_ctx, MSG_INFO,
     UNCONNECTED_STA_RSSI "%s rx_bytes=%llu rx_packets=%u "
-    "rssi=%d %d %d %d",
+    "rssi=%d %d %d %d SNR=%d %d %d %d rate=%d",
     buf, unc_sta->rx_bytes, unc_sta->rx_packets,
-    unc_sta->rssi[0], unc_sta->rssi[1], unc_sta->rssi[2], unc_sta->rssi[3]);
+    unc_sta->rssi[0], unc_sta->rssi[1], unc_sta->rssi[2], unc_sta->rssi[3],
+    unc_sta->noise[0] ? unc_sta->rssi[0] - unc_sta->noise[0] : 0, /* RSSI and noise to SNR */
+    unc_sta->noise[1] ? unc_sta->rssi[1] - unc_sta->noise[1] : 0, /* RSSI and noise to SNR */
+    unc_sta->noise[2] ? unc_sta->rssi[2] - unc_sta->noise[2] : 0, /* RSSI and noise to SNR */
+    unc_sta->noise[3] ? unc_sta->rssi[3] - unc_sta->noise[3] : 0, /* RSSI and noise to SNR */
+    unc_sta->rate);
 }
 
 static u16 check_wmm_wds(struct hostapd_data *hapd, struct sta_info *sta,

@@ -1193,7 +1193,11 @@ void redirect_nat_setting(void)
 		":PREROUTING ACCEPT [0:0]\n"
 		":POSTROUTING ACCEPT [0:0]\n"
 		":OUTPUT ACCEPT [0:0]\n");
+#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VZWAC1300) || defined(MAPAC1750)
+	if(sw_mode() == SW_MODE_AP && nvram_get("cfg_master") != NULL)
+#endif
 	fprintf(fp, "-A PREROUTING -p udp --dport 53 -j DNAT --to-destination %s:53\n", lan_ip);
+
 	fprintf(fp, "COMMIT\n");
 
 	fclose(fp);
@@ -1279,7 +1283,7 @@ void repeater_filter_setting(int mode){
 #endif
 #endif
 
-void write_port_forwarding(FILE *fp, char *config, char *lan_ip)
+void write_port_forwarding(FILE *fp, char *config, char *lan_ip, char *lan_if)
 {
 	char *proto, *protono, *port, *lport, *srcip, *dstip, *desc;
 	char *nv, *nvp, *b;
@@ -1380,19 +1384,22 @@ void write_port_forwarding(FILE *fp, char *config, char *lan_ip)
 			/* dualwan + load-balance */
 			for (unit = WAN_UNIT_FIRST; unit < wan_max_unit; ++unit) {
 				char vts_nv[sizeof("vts_rulelistXXXXXX")];
-				char *wan_iface[2];	/* 0: wan_if; 1: wanx_if */
+				char dst_ip[sizeof("-d 111.222.333.444XXXXXX")];
+				char *wan_iface[3];	/* 0: br0; 1: wan_if; 2: wanx_if; */
 
 				snprintf(prefix, sizeof(prefix), "wan%d_", unit);
 				if(nvram_get_int(strcat_r(prefix, "state_t", tmp)) != WAN_STATE_CONNECTED)
 					continue;
 
-				wanx_rules = 0;
-				wan_iface[0] = get_wan_ifname(unit);
-				wan_iface[1] = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+				snprintf(dst_ip, sizeof(dst_ip), "-d %s", nvram_pf_safe_get(prefix, "ipaddr"));
+				wanx_rules = 1;
+				wan_iface[0] = lan_if;
+				wan_iface[1] = get_wan_ifname(unit);
+				wan_iface[2] = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
 				wanx_ip = nvram_safe_get(strcat_r(prefix, "xipaddr", tmp));
 
 				if (strcmp(wan_iface[0], wan_iface[1]) && inet_addr_(wanx_ip))
-					wanx_rules = 1;
+					wanx_rules = 2;
 
 				/* FIXME: Below statments ignore @config. */
 				if (unit)
@@ -1431,29 +1438,29 @@ void write_port_forwarding(FILE *fp, char *config, char *lan_ip)
 
 						if (!strcmp(proto, "TCP") || !strcmp(proto, "BOTH")){
 							for (i = 0; i <= wanx_rules; ++i) {
-								fprintf(fp, "-A %s %s -i %s -p tcp -m tcp --dport %s -j DNAT %s\n",
-									chain, srcips, wan_iface[i], c, dstips);
+								fprintf(fp, "-A %s %s -i %s %s -p tcp -m tcp --dport %s -j DNAT %s\n",
+									chain, srcips, wan_iface[i], i? "" : dst_ip, c, dstips);
 							}
 
 							if (local_ftpport != 0 && local_ftpport != 21 && atoi(c) == 21) {
 								for (i = 0; i <= wanx_rules; ++i) {
-									fprintf(fp, "-A %s %s -i %s -p tcp -m tcp --dport %d -j DNAT --to-destination %s:21\n",
-										chain, srcips, wan_iface[i], local_ftpport, lan_ip);
+									fprintf(fp, "-A %s %s -i %s %s -p tcp -m tcp --dport %d -j DNAT --to-destination %s:21\n",
+										chain, srcips, wan_iface[i], i? "" : dst_ip, local_ftpport, lan_ip);
 								}
 							}
 						}
 						if (!strcmp(proto, "UDP") || !strcmp(proto, "BOTH")) {
 							for (i = 0; i <= wanx_rules; ++i) {
-								fprintf(fp, "-A %s %s -i %s -p udp -m udp --dport %s -j DNAT %s\n",
-									chain, srcips, wan_iface[i], c, dstips);
+								fprintf(fp, "-A %s %s -i %s %s -p udp -m udp --dport %s -j DNAT %s\n",
+									chain, srcips, wan_iface[i], i? "" : dst_ip, c, dstips);
 							}
 						}
 						// Handle raw protocol in port field, no val1:val2 allowed
 						if (strcmp(proto, "OTHER") == 0) {
 							protono = strsep(&c, ":");
 							for (i = 0; i <= wanx_rules; ++i) {
-								fprintf(fp, "-A %s %s -i %s -p %s -j DNAT --to %s\n",
-									chain, srcips, wan_iface[i], protono, dstip);
+								fprintf(fp, "-A %s %s -i %s %s -p %s -j DNAT --to %s\n",
+									chain, srcips, wan_iface[i], i? "" : dst_ip, protono, dstip);
 							}
 						}
 					}
@@ -1670,9 +1677,9 @@ void nat_setting(char *wan_if, char *wan_ip, char *wanx_if, char *wanx_ip, char 
 	}
 #endif
 	// Port forwarding or Virtual Server
-	write_port_forwarding(fp, "vts_rulelist", lan_ip);
+	write_port_forwarding(fp, "vts_rulelist", lan_ip, lan_if);
 #ifdef SUPPORT_GAME_PROFILE
-	write_port_forwarding(fp, "game_vts_rulelist", lan_ip);
+	write_port_forwarding(fp, "game_vts_rulelist", lan_ip, lan_if);
 #endif
 
 	if (is_nat_enabled() && nvram_get_int("upnp_enable"))
@@ -1818,6 +1825,18 @@ void nat_setting2(char *lan_if, char *lan_ip, char *logaccept, char *logdrop)	//
 	int wan_max_unit = WAN_UNIT_MAX;
 #ifdef RTCONFIG_MULTIWAN_CFG
 	int wanx_rules = 0;
+#endif
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+	char g_lan_class[32];
+	char g_lan_ip[20];
+	unsigned int dip;
+	struct in_addr  gst;
+	//if(nvram_get_int("wl0.1_bss_enabled"))
+	{
+		dip= ntohl(inet_addr(lan_ip))+0x100;                                
+		gst.s_addr = htonl(dip);
+                strcpy(g_lan_ip, inet_ntoa(gst));    
+	}
 #endif
 
 	ip2class(lan_ip, nvram_safe_get("lan_netmask"), lan_class);
@@ -1991,9 +2010,9 @@ void nat_setting2(char *lan_if, char *lan_ip, char *logaccept, char *logdrop)	//
 	}
 #endif
 	// Port forwarding or Virtual Server
-	write_port_forwarding(fp, "vts_rulelist", lan_ip);
+	write_port_forwarding(fp, "vts_rulelist", lan_ip, lan_if);
 #ifdef SUPPORT_GAME_PROFILE
-	write_port_forwarding(fp, "game_vts_rulelist", lan_ip);
+	write_port_forwarding(fp, "game_vts_rulelist", lan_ip, lan_if);
 #endif
 
 	if (is_nat_enabled() && nvram_get_int("upnp_enable"))
@@ -2066,35 +2085,34 @@ void nat_setting2(char *lan_if, char *lan_ip, char *logaccept, char *logdrop)	//
 		}
 
 		for(unit = WAN_UNIT_FIRST; unit < wan_max_unit; ++unit){
+			int i;
+			char dst_ip[sizeof("-d 111.222.333.444XXXXXX")];
+			char dmz_nv[sizeof("dmzXXX_ip")], *wan_iface[3];	/* 0: br0; 1: wan_if; 2: wanx_if; */
+
 			snprintf(prefix, sizeof(prefix), "wan%d_", unit);
 			if(nvram_get_int(strcat_r(prefix, "state_t", tmp)) != WAN_STATE_CONNECTED)
 				continue;
 
-			wanx_rules = 0;
-			wan_if = get_wan_ifname(unit);
-			wanx_if = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+			snprintf(dst_ip, sizeof(dst_ip), "-d %s", nvram_pf_safe_get(prefix, "ipaddr"));
+			wanx_rules = 1;
+			wan_iface[0] = lan_if;
+			wan_iface[1] = get_wan_ifname(unit);
+			wan_iface[2] = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
 			wanx_ip = nvram_safe_get(strcat_r(prefix, "xipaddr", tmp));
 
-			if (strcmp(wan_if, wanx_if) && inet_addr_(wanx_ip))
-				wanx_rules = 1;
+			if (strcmp(wan_iface[1], wan_iface[2]) && inet_addr_(wanx_ip))
+				wanx_rules = 2;
 
 			if (get_nr_wan_unit() == 2 && nvram_match("wans_mode", "lb")) {
 				/* dualwan + load-balance */
-				if (!unit && !nvram_match("dmz_ip", "")) {
-					fprintf(fp, "-A VSERVER -i %s -j DNAT --to %s\n",
-						wan_if, nvram_safe_get("dmz_ip"));
-					if (wanx_rules) {
-						fprintf(fp, "-A VSERVER -i %s -j DNAT --to %s\n",
-							wanx_if, nvram_safe_get("dmz_ip"));
-					}
-				}
-				if (unit == 1 && !nvram_match("dmz1_ip", "")) {
-					fprintf(fp, "-A VSERVER -i %s -j DNAT --to %s\n",
-						wan_if, nvram_safe_get("dmz1_ip"));
-					if (wanx_rules) {
-						fprintf(fp, "-A VSERVER -i %s -j DNAT --to %s\n",
-							wanx_if, nvram_safe_get("dmz1_ip"));
-					}
+				if (!unit)
+					strlcpy(dmz_nv, "dmz_ip", sizeof(dmz_nv));
+				else
+					snprintf(dmz_nv, sizeof(dmz_nv), "dmz%d_ip", unit);
+
+				for (i = 0; i <= wanx_rules && !nvram_match(dmz_nv, ""); ++i) {
+					fprintf(fp, "-A VSERVER -i %s %s -j DNAT --to %s\n",
+						wan_iface[i], i? "" : dst_ip, nvram_safe_get(dmz_nv));
 				}
 			} else {
 				/* singlewan or dualwan + failover/fallback, only primary available. */
@@ -2260,7 +2278,8 @@ void redirect_setting(void)
 	fclose(redirect_fp);
 }
 #endif
-static void write_access_restriction(FILE *fp)
+
+void write_access_restriction(FILE *fp)
 {
 	char *nv, *nvp, *b;
 	char *enable, *srcip, *accessType;
@@ -2336,8 +2355,55 @@ static void write_access_restriction(FILE *fp)
 			fprintf(fp, "-A ACCESS_RESTRICTION -j DROP\n");
 		}
 	}
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+	//if(nvram_get_int("wl0.1_bss_enabled"))
+	fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", "br+");
+	//else
+	//fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", lan_if);
+#endif
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+        //if(nvram_get_int("wl0.1_bss_enabled"))
+        {
+                fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", lan_if, BR_GUEST);
+                fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", BR_GUEST,lan_if);
+        }
+#endif
 }
 
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+void set_cap_apmode_filter(void)
+{
+	const char *cap_rules = "/tmp/cap_apmode_filter.default";
+	FILE *fp;
+	struct in_addr guest,guest1;
+ 	char glan[24],glan1[24];
+	unsigned int dip;
+        dip= ntohl(inet_addr(nvram_safe_get("lan_ipaddr")));
+        guest.s_addr = htonl(dip)&0x0000FFFF;
+        guest1.s_addr = htonl(dip)&0x00FFFFFF;
+        strlcpy(glan, inet_ntoa(guest), sizeof(glan));
+        strlcpy(glan1, inet_ntoa(guest1), sizeof(glan1));
+
+	if((fp = fopen(cap_rules, "w")) == NULL)
+		return;
+
+	fprintf(fp, "*filter\n"
+		":INPUT ACCEPT [0:0]\n"
+		":FORWARD ACCEPT [0:0]\n"
+		":OUTPUT ACCEPT [0:0]\n"
+		);
+
+	fprintf(fp, "-A INPUT -d %s/24 -i %s -j DROP\n",glan1,BR_GUEST);
+	fprintf(fp, "-A FORWARD -d %s/32 -i %s -o %s -j ACCEPT\n",nvram_safe_get("lan_gateway"),BR_GUEST,nvram_safe_get("lan_ifname"));
+	fprintf(fp, "-A FORWARD -d %s/16 -i %s -o %s -j DROP\n",glan,BR_GUEST,nvram_safe_get("lan_ifname"));
+	fprintf(fp, "COMMIT\n\n");
+	fclose(fp);
+	eval("iptables-restore", cap_rules);
+#ifdef RTCONFIG_IPV6
+	eval("ip6tables-restore", cap_rules);
+#endif	/* RTCONFIG_IPV6 */
+}
+#endif
 /* Rules for LW Filter and MAC Filter
  * MAC ACCEPT
  *     ACCEPT -> MACS
@@ -2563,7 +2629,7 @@ start_default_filter(int lanunit)
 #endif
 }
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 void reset_filter(void)
 {
 	const char *filter_rules = "/tmp/hive_filter.default";
@@ -2650,9 +2716,9 @@ int ruleHasFTPport(void)
 }
 #ifdef WEBSTRFILTER
 #ifdef RTCONFIG_IPV6
-static void write_UrlFilter(char *chain, char *lan_if, char *lan_ip, char *logdrop, FILE *fp, FILE *fp_ipv6)
+void write_UrlFilter(char *chain, char *lan_if, char *lan_ip, char *logdrop, FILE *fp, FILE *fp_ipv6)
 #else
-static void write_UrlFilter(char *chain, char *lan_if, char *lan_ip, char *logdrop, FILE *fp)
+void write_UrlFilter(char *chain, char *lan_if, char *lan_ip, char *logdrop, FILE *fp)
 #endif
 {
 	char *nv, *nvp, *b;
@@ -2745,6 +2811,59 @@ static void write_UrlFilter(char *chain, char *lan_if, char *lan_ip, char *logdr
 	}
 }
 #endif
+
+/**
+ * If static route is defined (LAN -> Route), accept skbs that is coming from LAN/WAN/MAN, depends on route type,
+ * and destination is defined in static route, with INVALID state in FORWARD chain.
+ * @fp:
+ * @prefix:	e.g., "lan_", "wan0_", "wan1_", etc.
+ * @var:	e.g. "route", "mroute". Reference to caller of add_routes().
+ * @ifname:
+ * @addr:	IP address of @ifname
+ * @nmask:	netmask of @ifname
+ */
+void __allow_sroutes(FILE *fp, char *prefix, char *var, char *ifname, char *addr, char *nmask)
+{
+	char word[80], *next;
+	char *ipaddr, *netmask, *gateway, *metric;
+	char tmp[100];
+
+	if (!fp || !prefix || !var || !ifname || !addr || !nmask)
+		return;
+
+	if (illegal_ipv4_address(addr) || illegal_ipv4_netmask(nmask))
+		return;
+
+	foreach(word, nvram_safe_get(strcat_r(prefix, var, tmp)), next) {
+
+		netmask = word;
+		ipaddr = strsep(&netmask, ":");
+		if (!ipaddr || !netmask)
+			continue;
+		gateway = netmask;
+		netmask = strsep(&gateway, ":");
+		if (!netmask || !gateway)
+			continue;
+		metric = gateway;
+		gateway = strsep(&metric, ":");
+		if (!gateway || !metric)
+			continue;
+
+		fprintf(fp, "-A FORWARD -i %s -o %s -s %s/%s -d %s/%s -j ACCEPT\n",
+			ifname, ifname, addr, nmask, ipaddr, netmask);
+	}
+
+	return;
+}
+
+void allow_sroutes(FILE *fp)
+{
+	if (!fp || !nvram_match("sr_enable_x", "1"))
+		return;
+
+	/* LAN routes */
+	__allow_sroutes(fp, "lan_", "route", nvram_get("lan_ifname"), nvram_get("lan_ipaddr"), nvram_get("lan_netmask"));
+}
 
 void
 filter_setting(char *wan_if, char *wan_ip, char *lan_if, char *lan_ip, char *logaccept, char *logdrop)
@@ -3252,6 +3371,7 @@ TRACE_PT("writing Parental Control\n");
 
 // oleg patch ~
 	/* Drop the wrong state, INVALID, packets */
+	allow_sroutes(fp);
 	fprintf(fp, "-A FORWARD -m state --state INVALID -j %s\n", logdrop);
 //#if 0
 #ifdef RTCONFIG_IPV6
@@ -3929,6 +4049,13 @@ TRACE_PT("writing Parental Control\n");
 		}
 #endif
 
+#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VZWAC1300)
+	//CAP/RE's guest can not access CAP's UI/app.
+	char lan_class[32];
+	ip2class(nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), lan_class);
+	if((sw_mode() == SW_MODE_ROUTER || (sw_mode() == SW_MODE_AP && nvram_match("cfg_master", "1")))/* && nvram_get_int("wl0.1_bss_enabled")*/)
+		fprintf(fp, "-A INPUT -i %s -d %s -j DROP\n", BR_GUEST,lan_class);
+#endif
 	if (nvram_match("fw_enable_x", "1")) {
 		/* Drop ICMP before ESTABLISHED state */
 		if (nvram_get_int("misc_ping_x") == 0) {
@@ -4249,6 +4376,7 @@ TRACE_PT("writing Parental Control\n");
 
 // oleg patch ~
 	/* Drop the wrong state, INVALID, packets */
+	allow_sroutes(fp);
 	fprintf(fp, "-A FORWARD -m state --state INVALID -j %s\n", logdrop);
 #if 0
 #ifdef RTCONFIG_IPV6
@@ -5436,10 +5564,12 @@ int start_firewall(int wanunit, int lanunit)
 #endif
 		}
 		else if (nvram_match("switch_wantag", "movistar")) {
-#ifndef HND_ROUTER
-			mcast_ifname = "vlan2"; /* and here */
-#else
+#if defined(HND_ROUTER)
 			mcast_ifname = "eth0.v1";
+#elif defined(BLUECAVE)
+			mcast_ifname = "eth1.2";
+#else
+			mcast_ifname = "vlan2"; /* and here */
 #endif
 		}
 	}

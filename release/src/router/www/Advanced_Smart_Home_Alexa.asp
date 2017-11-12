@@ -14,6 +14,7 @@
 <script language="JavaScript" type="text/javascript" src="/state.js"></script>
 <script language="JavaScript" type="text/javascript" src="/form.js"></script>
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
+<script language="JavaScript" type="text/javascript" src="/popup.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
 <style>
 .div_table{
@@ -123,15 +124,67 @@ var remaining_time_sec;
 var remaining_time_show;
 var countdownid;
 
+var external_ip = -1;
+var MAX_RETRY_NUM = 5;
+var external_ip_retry_cnt = MAX_RETRY_NUM;
+
 function initial(){
 	show_menu();
 
 	if(!ifttt_support){
 		document.getElementById("divSwitchMenu").style.display = "none";
-		document.getElementById("formfonttitle").innerHTML = "Amazon Alexa"
+		document.getElementById("formfonttitle").innerHTML = "Amazon Alexa";
 	}
 	if('<% nvram_get("fw_lw_enable_x"); %>' == '1')
 		document.getElementById("network_services_Remind").style.display = "";
+
+	tag_control();
+	get_real_ip();
+}
+
+function tag_control(){
+	document.getElementById("remote_control_here").style="text-decoration: underline;cursor:pointer;";
+	document.getElementById("remote_control_here").onclick=function(){
+		enable_remote_control();
+	};
+}
+
+function show_remote_control(){
+	if(stopFlag != 1 && external_ip_retry_cnt > 0)
+		setTimeout("get_real_ip();", 3000);
+
+	if(external_ip == 1 && ('<% nvram_get("ddns_enable_x"); %>' == '0' || '<% nvram_get("ddns_hostname_x"); %>' == '' || '<% nvram_get("misc_http_x"); %>' == '0'))
+			document.getElementById("remote_control").style.display = "";
+	else
+			document.getElementById("remote_control").style.display = "none";
+}
+
+function get_real_ip(){
+	$.ajax({
+		url: 'get_real_ip.asp',
+		dataType: 'script',
+		error: function(xhr){
+			setTimeout("get_real_ip();", 3000);
+		},
+		success: function(response){
+			external_ip_retry_cnt--;
+			show_remote_control();
+		}
+	});
+}
+
+function enable_remote_control(){
+	if(confirm("<#Alexa_Register_confirm#>")){
+		require(['/require/modules/makeRequest.js'], function(makeRequest){
+			makeRequest.start('/enable_remote_control.cgi',hide_remote_control , function(){});
+		});
+	}
+}
+
+function hide_remote_control(){
+	stopFlag = 1;
+	showLoading(5);
+	setTimeout("location.href=document.form.current_page.value", 5000);
 }
 
 function gen_new_pincode(){
@@ -255,31 +308,25 @@ function clipboard(ID_value)
 							<tr>
 								<td bgcolor="#4D595D" valign="top">
 									<div>&nbsp;</div>
-									<div class="formfonttitle">Alexa & IFTTT - Amazon Alexa</div>
+									<div id="formfonttitle" class="formfonttitle">Alexa & IFTTT - Amazon Alexa</div>
 									<div id="divSwitchMenu" style="margin-top:-40px;float:right;"><div style="width:110px;height:30px;float:left;border-top-left-radius:8px;border-bottom-left-radius:8px;" class="block_filter_pressed"><div class="tab_font_color" style="text-align:center;padding-top:5px;font-size:14px">Amazon Alexa</div></div><div style="width:110px;height:30px;float:left;border-top-right-radius:8px;border-bottom-right-radius:8px;" class="block_filter"><a href="Advanced_Smart_Home_IFTTT.asp"><div class="block_filter_name">IFTTT</div></a></div></div>
 									<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
 
 									<div class="div_table">
 											<div class="div_tr">
 												<div class="div_td div_desc" style="width:55%">
-													<div style="font-weight:bolder;font-size:16px;padding:25px 40px">
-														Control ASUS Router via Amazon Alexa
-													</div>
+													<div style="font-weight:bolder;font-size:16px;padding:25px 40px"><#Alexa_Desc1#></div>
 													<div style="padding:0px 40px;font-family:Arial, Helvetica, sans-serif;font-size:13px;">
-														<span>Control your ASUS Router with simple voice commands using Amazon Alexa and ASUS Router skill. When paired with Amazon Alexa, you can ask ASUS Router to perform various tasks and no need to open browser login with administrator or ASUS Router app on your phone, for example:
-														</span>
-														<p style="font-size:13px;padding-top: 20px;font-style:italic;">Try Saying:</p>
-														<p style="font-size:13px;padding-left: 20px;font-style:italic;">“Alexa, ask ASUS ROUTER to turn on Guest Network for two hours”</p>
-														<p style="font-size:13px;padding-left: 20px;font-style:italic;">“Alexa, ask ASUS ROUTER to turn off Guest Network”</p>
+														<span><#Alexa_Desc2#></span>
+														<p style="font-size:13px;padding-top: 20px;font-style:italic;"><#Alexa_Example0#></p>
+														<p style="font-size:13px;padding-left: 20px;font-style:italic;">“Alexa, ask ASUS ROUTER to turn on the Guest Network”</p>
+														<p style="font-size:13px;padding-left: 20px;font-style:italic;">“Alexa, ask ASUS ROUTER upgrade to the latest firmware”</p>
 														<p style="font-size:13px;padding-left: 20px;font-style:italic;">“Alexa, ask ASUS ROUTER to pause the Internet”</p>
-														<a style="font-family:Arial, Helvetica, sans-serif;font-size:13px;padding-top: 2px;padding-left: 20px;font-style:italic;text-decoration: underline;cursor:pointer;" href="https://www.asus.com/us/support/FAQ/1033393" target="_blank">More Skills</a>
-														<p id="network_services_Remind" style="font-size:13px;padding-top: 10px;font-style:italic;color:#FFCC00;font-size:13px;display: none;">
-														Remind : The policy of network services filter you are using in firewall will be covered once you saying “Alexa, ask ASUS Router to block devices from internet access”
-														</p>
+														<a style="font-family:Arial, Helvetica, sans-serif;font-size:13px;padding-top: 2px;padding-left: 20px;font-style:italic;text-decoration: underline;cursor:pointer;" href="https://www.asus.com/us/support/FAQ/1033393" target="_blank"><#Alexa_More_Skill#></a>
+														<p id="network_services_Remind" style="font-size:13px;padding-top: 10px;font-style:italic;color:#FFCC00;font-size:13px;display: none;"><#Alexa_Example_warning#></p>
 													</div>
-													<div style="text-align:center;padding-top:60px;font-family:Arial, Helvetica, sans-serif;font-style:italic;font-weight:lighter;font-size:18px;">
-														Create a smarter home with ASUS Router and Alexa!
-													</div>
+													<div style="text-align:center;padding-top:60px;font-family:Arial, Helvetica, sans-serif;font-style:italic;font-weight:lighter;font-size:18px;"><#Alexa_Register0#></div>
+													<div id="remote_control" style="text-align:center;padding-top:10px;font-size:15px;color:#FFCC00;font-weight:bolder;display:none;"><#Alexa_Register1#></div> <!-- id="remote_control_here" -->
 													<div class="div_img">
 														<table style="width:99%">
 															<div class="div_td" style="vertical-align:middle;">
@@ -288,8 +335,15 @@ function clipboard(ID_value)
 																		<div class="step_1"></div>
 																	</div>
 																	<div class="div_td" style="vertical-align:middle;">
-																		<div style="text-align:left;margin-top:5px;padding-left:3px;">
-																					<iframe width="180" height="56" frameBorder="0" src="https://nwep.asus.com/loginWithAmazon.html" ></iframe>
+																		<div>
+																			<div class="div_td" style="vertical-align:middle;">
+																				<div class="step_2_text"></div>
+																			</div>
+																			<div class="div_td" style="vertical-align:middle;">
+																				<div style="text-align:right;">
+																			<input class="button_gen_short" type="button" onclick="window.open('https://www.amazon.com/ASUS-ROUTER/dp/B07285G1RK');" value="GO">
+																				</div>
+																			</div>
 																		</div>
 																	</div>
 																</div>
@@ -297,17 +351,8 @@ function clipboard(ID_value)
 																	<div class="div_td" style="vertical-align:middle;padding-top:30px;">
 																		<div class="step_2"></div>
 																	</div>
-																	<div class="div_td" style="vertical-align:middle;padding-top:30px;">
-																		<div>
-																			<div class="div_td" style="vertical-align:middle;">
-																				<div class="step_2_text"></div>
-																			</div>
-																			<div class="div_td" style="vertical-align:middle;">
-																				<div style="text-align:right;">
-																			<input class="button_gen_short" type="button" onclick="window.open('http://alexa.amazon.com/spa/index.html#skills/dp/B07285G1RK');" value="GO">
-																				</div>
-																			</div>
-																		</div>
+																	<div class="div_td" style="vertical-align:middle;padding-top:30px;font-size:16px;">
+																		<span style="color:#c0c0c0;padding-left:5px;"><#Alexa_Signin#></span>
 																	</div>
 																</div>
 																<div class="div_tr">
@@ -329,7 +374,7 @@ function clipboard(ID_value)
 														<table style="width:99%">
 															<tr>
 																<th colspan="2">
-																	<div style="font-size:14px;padding-bottom:8px;">Manually paired ASUS router and your Amazon Alexa, please copy&paste below activate PIN to Link ASUS router and Alexa webpage.</div>		
+																	<div style="font-size:14px;padding-bottom:8px;"><#Alexa_pin_desc#></div>
 																</th>
 															</tr>
 															<tr>

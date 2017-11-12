@@ -2059,60 +2059,61 @@ static int hostapd_ctrl_iface_chan_switch(struct hostapd_iface *iface,
 	int ret;
 	unsigned int i;
 	struct hostapd_channel_data *channel;
-	int tx_ant = 0, rx_ant = 0;
-	u32 tx_ant_mask, rx_ant_mask;
-	char *str;
+	int tx_ant_mask = -1, rx_ant_mask = -1;
+	char *str, *pos2;
+	Boolean switch_type_scan = FALSE;
 
 	ret = hostapd_parse_csa_settings(pos, &settings);
 	if (ret)
 		return ret;
 
-	str = os_strstr(pos, "tx_ant=");
+	str = os_strstr(pos, "tx_ant_mask=");
   if (str) {
-    str += strlen("tx_ant=");
-    tx_ant = atoi(str);
-    if (tx_ant <= 0){
-      wpa_printf(MSG_ERROR, "chan_switch: invalid tx_ant provided");
+    str += strlen("tx_ant_mask=");
+
+    tx_ant_mask = strtol(str, &pos2, 10);
+    if (str == pos2 || tx_ant_mask < 0) {
+      wpa_printf(MSG_ERROR, "chan_switch: invalid tx_ant_mask provided");
       return -1;
     }
   }
-  str = os_strstr(pos, "rx_ant=");
+  str = os_strstr(pos, "rx_ant_mask=");
   if (str) {
-    str += strlen("rx_ant=");
-    rx_ant = atoi(str);
-    if (rx_ant <= 0){
-      wpa_printf(MSG_ERROR, "chan_switch: invalid rx_ant provided");
+    str += strlen("rx_ant_mask=");
+
+    rx_ant_mask = strtol(str, &pos2, 10);
+    if (str == pos2 || rx_ant_mask < 0) {
+      wpa_printf(MSG_ERROR, "chan_switch: invalid rx_ant_mask provided");
       return -1;
     }
   }
-  if ((tx_ant > 0 && rx_ant == 0) || (rx_ant > 0 && tx_ant == 0)) {
-    wpa_printf(MSG_ERROR, "chan_switch: changing only number of TX or RX "
-      "antennas is not possible");
+  if ((tx_ant_mask >= 0 && rx_ant_mask < 0) || (rx_ant_mask >= 0 && tx_ant_mask < 0)) {
+    wpa_printf(MSG_ERROR, "chan_switch: changing only TX or RX "
+      "antenna mask is not possible");
     return -1;
+  }
+  str = os_strstr(pos, "switch_type=");
+  if (str) {
+    str += strlen("switch_type=");
+    if (!strncmp(str, "scan", strlen("scan")))
+      switch_type_scan = TRUE;
   }
 
   /* Check if active CAC */
   if (iface->cac_started)
     return -1;
 
-  if (tx_ant > 0) {
-    ret = hostapd_hw_get_antenna_mask(iface->bss[0], tx_ant, rx_ant,
-      &tx_ant_mask, &rx_ant_mask);
-    if (ret < 0) {
-      wpa_printf(MSG_ERROR, "chan_switch: getting antenna mask from antenna "
-        "number failed: %s", strerror(errno));
-    } else {
+  if (tx_ant_mask >= 0) {
       ret = hostapd_drv_set_antenna(iface->bss[0], tx_ant_mask, rx_ant_mask);
       if (ret < 0) {
-        wpa_printf(MSG_ERROR, "chan_switch: setting antenna failed: %s",
+        wpa_printf(MSG_ERROR, "chan_switch: setting antenna mask failed: %s",
           strerror(errno));
       }
-    }
   }
 
 	/* ACS */
 	if (settings.freq_params.freq == 0) {
-	  if (acs_init(iface) == HOSTAPD_CHAN_ACS)
+	  if (acs_init(iface, ACS_INIT_CTRL) == HOSTAPD_CHAN_ACS)
 	    return 0;
 	  else
 	    return -1;
@@ -2129,6 +2130,9 @@ static int hostapd_ctrl_iface_chan_switch(struct hostapd_iface *iface,
   if ((channel->flag & HOSTAPD_CHAN_RADAR) &&
       ((channel->flag & HOSTAPD_CHAN_DFS_MASK) != HOSTAPD_CHAN_DFS_AVAILABLE))
   {
+    if (switch_type_scan && iface->bss[0]->driver && iface->bss[0]->driver->block_tx) {
+      iface->bss[0]->driver->block_tx(iface->bss[0]->drv_priv);
+    }
     settings.freq_params.channel = channel->chan;
     set_iface_conf(iface, &settings.freq_params);
     hostapd_setup_interface_complete(iface, 0);
@@ -4818,6 +4822,8 @@ int hostapd_ctrl_iface_sta_steer(struct hostapd_data *hapd, const char *cmd)
 
     ret = hostapd_ctrl_iface_bss_tm_req(hapd, buf, ret_buf, 32);
 
+    if (ret > 0)
+      ret = 0;
   }
 
   return ret;
@@ -5051,7 +5057,14 @@ int hostapd_ctrl_iface_get_sta_measurements(struct hostapd_data *hapd,
       return 0;
     return ret;
   }
+
   sta = ap_get_sta(hapd, sta_addr);
+  if (sta == NULL) {
+    ret = os_snprintf(buf, buflen, "FAIL\n");
+    if (ret < 0 || (size_t) ret >= buflen)
+      return 0;
+    return ret;
+  }
 
   ret = hostapd_drv_get_sta_measurements(hapd, sta_addr, &sta_info);
   if (ret) {
@@ -5820,11 +5833,10 @@ int hostapd_ctrl_iface_unconnected_sta(struct hostapd_data *hapd, const char *cm
 
 int hostapd_ctrl_iface_set_failsafe_chan(struct hostapd_iface *iface, const char *cmd)
 {
-  char *pos;
+  char *pos, *pos2;
   struct hostapd_channel_data *channel;
   struct hostapd_failsafe_freq_params old_freq_params;
-  int tx_ant = 0, rx_ant = 0;
-  int ret;
+  int tx_ant_mask = -1, rx_ant_mask = -1;
 
   memcpy(&old_freq_params, &iface->failsafe, sizeof(iface->failsafe));
   iface->failsafe.freq = atoi(cmd);
@@ -5889,36 +5901,31 @@ int hostapd_ctrl_iface_set_failsafe_chan(struct hostapd_iface *iface, const char
     goto err;
   }
 
-  pos = os_strstr(cmd, "tx_ant=");
+  pos = os_strstr(cmd, "tx_ant_mask=");
   if (pos) {
-    pos += strlen("tx_ant=");
-    tx_ant = atoi(pos);
-    if (tx_ant <= 0){
-      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid tx_ant provided");
-      goto err;
+    pos += strlen("tx_ant_mask=");
+    tx_ant_mask = strtol(pos, &pos2, 10);
+    if (pos == pos2 || tx_ant_mask < 0) {
+      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid tx_ant_mask provided");
+      return -1;
     }
   }
-  pos = os_strstr(cmd, "rx_ant=");
+  pos = os_strstr(cmd, "rx_ant_mask=");
   if (pos) {
-    pos += strlen("rx_ant=");
-    rx_ant = atoi(pos);
-    if (rx_ant <= 0){
-      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid rx_ant provided");
-      goto err;
+    pos += strlen("rx_ant_mask=");
+    rx_ant_mask = strtol(pos, &pos2, 10);
+    if (pos == pos2 || rx_ant_mask < 0) {
+      wpa_printf(MSG_ERROR, "set_failsafe_chan: invalid rx_ant_mask provided");
+      return -1;
     }
   }
-  if ((tx_ant > 0 && rx_ant == 0) || (rx_ant > 0 && tx_ant == 0)) {
-    wpa_printf(MSG_ERROR, "set_failsafe_chan: changing only number of TX or RX "
-      "antennas is not possible");
+  if ((tx_ant_mask >= 0 && rx_ant_mask < 0) || (rx_ant_mask >= 0 && tx_ant_mask < 0)) {
+    wpa_printf(MSG_ERROR, "set_failsafe_chan: changing only TX or RX "
+      "antenna mask is not possible");
     goto err;
   }
-  ret = hostapd_hw_get_antenna_mask(iface->bss[0], tx_ant, rx_ant,
-    &iface->failsafe.tx_ant, &iface->failsafe.rx_ant);
-  if (ret != 0) {
-      wpa_printf(MSG_ERROR, "chan_switch: getting antenna mask from antenna number failed: %s",
-        strerror(errno));
-      return ret;
-  }
+  iface->failsafe.tx_ant = tx_ant_mask;
+  iface->failsafe.rx_ant = rx_ant_mask;
 
   return 0;
 
@@ -6163,6 +6170,47 @@ int hostapd_ctrl_iface_get_restricted_chan(struct hostapd_iface *iface,
 
   return len;
 }
+
+
+int hostapd_ctrl_iface_get_hw_features(struct hostapd_iface *iface,
+  const char *cmd, char *buf, size_t buflen)
+{
+  int ret = 0, len = 0;
+  struct hostapd_data *hapd = iface->bss[0];
+  int i, j;
+
+  for (i = 0; i < iface->num_hw_features; i++) {
+    struct hostapd_hw_modes *feature = &iface->hw_features[i];
+    int dfs_enabled = hapd->iconf->ieee80211h &&
+      (iface->drv_flags & WPA_DRIVER_FLAGS_RADAR);
+
+    for (j = 0; j < feature->num_channels; j++) {
+      int dfs = 0;
+
+      if ((feature->channels[j].flag &
+           HOSTAPD_CHAN_RADAR) && dfs_enabled) {
+        dfs = 1;
+      }
+
+      if (feature->channels[j].flag & HOSTAPD_CHAN_DISABLED)
+        continue;
+
+      ret = os_snprintf(buf + len, buflen - len, "Allowed channel: mode=%d "
+           "chan=%d freq=%d MHz max_tx_power=%d dBm%s\n",
+           feature->mode,
+           feature->channels[j].chan,
+           feature->channels[j].freq,
+           feature->channels[j].max_tx_power,
+           dfs ? dfs_info(&feature->channels[j]) : "");
+      if (ret >= buflen - len || ret < 0)
+        return len;
+      len += ret;
+    }
+  }
+
+  return len;
+}
+
 
 static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
 					      char *buf, char *reply,
@@ -6531,7 +6579,10 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
   } else if (os_strncmp(buf, "DEL_VSIE ", 9) == 0) {
     if (hostapd_ctrl_iface_del_vsie(hapd, buf + 9))
       reply_len = -1;
-  } else {
+  } else if (os_strncmp(buf, "GET_HW_FEATURES", 15) == 0) {
+    reply_len = hostapd_ctrl_iface_get_hw_features(hapd->iface, NULL, reply,
+      reply_size);
+	} else {
 		os_memcpy(reply, "UNKNOWN COMMAND\n", 16);
 		reply_len = 16;
 	}

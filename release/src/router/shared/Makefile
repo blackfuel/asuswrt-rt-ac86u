@@ -100,6 +100,11 @@ ifeq ($(BUILD_NAME), RT-N10P_V3)
 CFLAGS += -DRTN10P_V3
 endif
 
+ifeq ($(RTCONFIG_AMAS),y)
+CFLAGS += -fPIC -I$(TOP)/json-c 
+LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
+endif
+
 OBJS = shutils.o linux_timer.o defaults.o model.o rtstate.o boardapi.o
 OBJS += network_utility.o
 OBJS += misc.o version.o files.o strings.o process.o 
@@ -177,7 +182,7 @@ CFLAGS += -I$(LINUXDIR)/drivers/char/rtl8370mb
 OBJS += rtl8370mb.o mdio.o
 endif
 else ifeq ($(RTCONFIG_LANTIQ),y)
-OBJS += flash_mtd.o api-lantiq.o
+OBJS += flash_mtd.o api-lantiq.o lantiq.o
 else
 # Broadcom
 OBJS += wl.o wl_linux.o
@@ -276,6 +281,11 @@ endif
 
 ifeq ($(RTCONFIG_LP5523),y)
 OBJS += lp5523led.o
+endif
+
+ifeq ($(RTCONFIG_AMAS),y)
+CFLAGS += -I$(TOP)/shared/sysdeps/amas
+OBJS += amas_utils.o
 endif
 
 vpath %.c sysdeps $(SRCBASE)/shared/ $(WLAN_ComponentSrcDirs)
@@ -382,7 +392,7 @@ prebuild/%.o:
 .%.depend: %.c
 	@$(CC) $(CFLAGS) -M $< > $@
 
-.defaults.depend .tcode.depend: .%.depend: %.c %.prep
+.defaults.depend .tcode.depend .hw_auth.depend: .%.depend: %.c %.prep
 	@$(CC) $(CFLAGS) -M $< > $@
 
 %.prep: %.c

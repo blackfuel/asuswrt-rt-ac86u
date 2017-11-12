@@ -434,6 +434,20 @@ function initial(){
 	}
 
 	orig_NM_container_height = parseInt($(".NM_radius_bottom_container").css("height"));
+
+	if(amesh_support) {
+		var html = '<a id="clientStatusLink" href="device-map/amesh.asp" target="statusframe">';
+		html += '<div id="iconAMesh" class="iconAMesh_dis" style="margin-top:20px;" onclick="clickEvent(this);"></div>';
+		html += '</a>';
+		html += '<div class="clients" id="ameshNumber" style="cursor:pointer;">AiMesh Node: <span>0</span></div>';/* untranslated */
+		$("#ameshContainer").html(html);
+		require(['/require/modules/amesh.js'], function(){
+			updateAMeshCount();
+			setInterval(updateAMeshCount, 5000);
+		});
+	}
+	else
+		$("#ameshContainer").remove();
 }
 
 /*
@@ -460,9 +474,9 @@ function show_ddns_status(){
 	if( ddns_enable == '0')
         document.getElementById("ddnsHostName").innerHTML = '<a style="color:#FFF;text-decoration:underline;" href="/Advanced_ASUSDDNS_Content.asp?af=ddns_enable_x"><#btn_go#></a>';
     else if(ddnsName == '')
-        document.getElementById("ddnsHostName").innerHTML = '<a style="color:#FFF;text-decoration:underline;" href="/Advanced_ASUSDDNS_Content.asp?af=DDNSName">Sign up</a>';
+        document.getElementById("ddnsHostName").innerHTML = '<a style="color:#FFF;text-decoration:underline;" href="/Advanced_ASUSDDNS_Content.asp?af=DDNSName"><#sign_up#></a>';
     else if(ddnsName == isMD5DDNSName())
-        document.getElementById("ddnsHostName").innerHTML = '<a style="color:#FFF;text-decoration:underline;" href="/Advanced_ASUSDDNS_Content.asp?af=DDNSName">Sign up</a>';
+        document.getElementById("ddnsHostName").innerHTML = '<a style="color:#FFF;text-decoration:underline;" href="/Advanced_ASUSDDNS_Content.asp?af=DDNSName"><#sign_up#></a>';
     else{
         document.getElementById("ddnsHostName").innerHTML = '<span>'+ ddnsName +'</span>';
         if(ddns_enable == '1'){
@@ -524,6 +538,10 @@ function set_default_choice(){
 		else if(flag == "USBdisk"){
 			document.getElementById("iconRouter").style.backgroundPosition = '0% 0%';
 			clickEvent(document.getElementById("iconUSBdisk"));
+		}
+		else if(flag == "AMesh"){
+			document.getElementById("iconRouter").style.backgroundPosition = '0% 0%';
+			clickEvent(document.getElementById("iconAMesh"));
 		}
 		else{
 			clickEvent(document.getElementById("iconRouter"));
@@ -736,6 +754,11 @@ function get_clicked_device_order(){
 
 function clickEvent(obj){
 	cookie.unset("wireless_subunit");
+	if(amesh_support) {
+		require(['/require/modules/amesh.js'], function(){
+			initial_amesh_obj();
+		});	
+	}
 	var icon;
 	var stitle;
 	var seat;
@@ -849,6 +872,18 @@ function clickEvent(obj){
 	else if(obj.id.indexOf("No") > 0){
 		icon = "iconNo";
 	}
+	else if(obj.id.indexOf("AMesh") > 0){
+		icon = "iconAMesh";
+		stitle = "AiMesh";
+		setTimeout(function(){
+			var flag = '<% get_parameter("flag"); %>';
+			var id = '<% get_parameter("id"); %>';
+			if(flag != "" && id != "")
+				document.getElementById("statusframe").src = "/device-map/amesh.asp?id=" + id + "";
+			else
+				document.getElementById("statusframe").src = "/device-map/amesh.asp";
+		}, 1);
+	}
 	else
 		alert("mouse over on wrong place!");
 
@@ -857,6 +892,10 @@ function clickEvent(obj){
 			lastClicked.style.backgroundPosition = '1px -4px';
 		else if(lastClicked.id.indexOf("Guestnetwork") > 0)
 			lastClicked.style.backgroundPosition = '13px 10px, 0px 0px';
+		else if(lastClicked.id.indexOf("AMesh") > 0) {
+			lastClicked.classList.remove('iconAMesh');
+			lastClicked.classList.add('iconAMesh_dis');
+		}
 		else
 			lastClicked.style.backgroundPosition = '0% 0%';
 	}
@@ -882,6 +921,10 @@ function clickEvent(obj){
 	}
 	else if(obj.id.indexOf("Guestnetwork") > 0) {
 		obj.style.backgroundPosition = '13px 10px, -67px 0%';
+	}
+	else if(obj.id.indexOf("AMesh") > 0) {
+		obj.classList.add('iconAMesh');
+		obj.classList.remove('iconAMesh_dis');
 	}
 	else{
 		obj.style.backgroundPosition = '0% 101%';
@@ -1387,7 +1430,7 @@ function show_custom_image() {
 	}
 	else {
 		$("#custom_image").slideUp("slow");
-		document.getElementById("changeIconTitle").innerHTML = "Change";/*untranslated*/
+		document.getElementById("changeIconTitle").innerHTML = "<#CTL_Change#>";
 	}
 }
 
@@ -1491,7 +1534,7 @@ function popupEditBlock(clientObj){
 		document.list_form.MULTIFILTER_MACFILTER_DAYTIME.value = MULTIFILTER_MACFILTER_DAYTIME_orig;
 		document.getElementById("divDropClientImage").ondrop = null;
 		document.getElementById("internetTimeScheduling").style.display = "none";
-		if(sw_mode == "1" && !clientObj.amas_isRe) {
+		if(sw_mode == "1" && !clientObj.amesh_isRe) {
 			document.getElementById('tr_adv_setting').style.display = "";
 			if(pm_support) {
 				document.getElementById('adv_block_internet').style.display = "none";
@@ -1502,11 +1545,9 @@ function popupEditBlock(clientObj){
 			document.getElementById('tr_adv_setting').style.display = "none";
 		}
 		document.getElementById("custom_image").style.display = "none";
-		document.getElementById("changeIconTitle").innerHTML = "Change";/*untranslated*/
+		document.getElementById("changeIconTitle").innerHTML = "<#CTL_Change#>";
 		
 		var convRSSI = function(val) {
-			if(val == "") return "wired";
-
 			val = parseInt(val);
 			if(val >= -50) return 4;
 			else if(val >= -80)	return Math.ceil((24 + ((val + 80) * 26)/10)/25);
@@ -1517,11 +1558,12 @@ function popupEditBlock(clientObj){
 		var rssi_t = 0;
 		var connectModeTip = "";
 		var clientIconHtml = "";
-		rssi_t = convRSSI(clientObj.rssi);
-		if(isNaN(rssi_t)) {
+		if(clientObj.isWL == "0") {
+			rssi_t = "wired";
 			connectModeTip = "<#tm_wired#>";
 		}
 		else {
+			rssi_t = convRSSI(clientObj.rssi);
 			switch (rssi_t) {
 				case 1:
 					connectModeTip = "<#Radio#>: <#PASS_score1#>\n";
@@ -1594,7 +1636,7 @@ function popupEditBlock(clientObj){
 
 		document.getElementById('ipaddr_field').disabled = true;
 		$("#ipaddr_field").addClass("client_input_text_disabled");
-		if(sw_mode == "1" && !clientObj.amas_isRe) {
+		if(sw_mode == "1" && !clientObj.amesh_isRe) {
 			$("#ipaddr_field").removeClass("client_input_text_disabled");
 			document.getElementById('ipaddr_field').disabled = false;
 			document.getElementById("ipaddr_field").onkeypress = function() {
@@ -2050,15 +2092,38 @@ function updateClientsCount() {
 			setTimeout("updateClientsCount();", 1000);
 		},
 		success: function(response){
+			var re_tune_client_count = function() {
+				var count = 0;
+				var fromNetworkmapd_array = [];
+				for(var i in fromNetworkmapd.maclist){
+					if (fromNetworkmapd.maclist.hasOwnProperty(i)) {
+						fromNetworkmapd_array[fromNetworkmapd.maclist[i]] = 1;
+					}
+				}
+				count = fromNetworkmapd.maclist.length;
+				for(var i in get_cfg_clientlist[0]){
+					if (get_cfg_clientlist[0].hasOwnProperty(i)) {
+						if(fromNetworkmapd_array[get_cfg_clientlist[0][i].mac] != undefined)
+							count--;
+					}
+				}
+				return count;
+			};
 			//When not click iconClient and not click View Client List need update client count.
 			if(lastName != "iconClient") {
 				if(document.getElementById("clientlist_viewlist_content")) {
 					if(document.getElementById("clientlist_viewlist_content").style.display == "none") {
-						show_client_status(fromNetworkmapd.maclist.length);
+						if(amesh_support)
+							show_client_status(re_tune_client_count());
+						else
+							show_client_status(fromNetworkmapd.maclist.length);
 					}
 				}
 				else {
-					show_client_status(fromNetworkmapd.maclist.length);
+					if(amesh_support)
+						show_client_status(re_tune_client_count());
+					else
+						show_client_status(fromNetworkmapd.maclist.length);
 				}
 			}
 			setTimeout("updateClientsCount();", 3000);
@@ -2186,8 +2251,8 @@ function closeClientDetailView() {
 		</thead>
 		<tr>
 			<th width="45%"><#Client_Name#></th>
-			<th width="30%">MAC</th>
-			<th width="15%">Upload icon</th>
+			<th width="30%"><#MAC_Address#></th>
+			<th width="15%"><#Client_Icon#></th>
 			<th width="10%"><#CTL_del#></th>
 		</tr>
 	</table>
@@ -2224,13 +2289,13 @@ function closeClientDetailView() {
 					<canvas id="canvasUserIcon" class="client_canvasUserIcon" width="85px" height="85px"></canvas>
 				</div>
 				<div id="changeClientIconControl" class="changeClientIcon">
-					<span title="Change to default client icon" class="IE8HACK" onclick="setDefaultIcon();">Default</span><!--untranslated-->
-					<span id="changeIconTitle" class="IE8HACK" title="Change client icon" style="margin-left:10px;" onclick="show_custom_image();">Change</span><!--untranslated-->
+					<span title="Change to default client icon" class="IE8HACK" onclick="setDefaultIcon();"><#CTL_Default#></span>
+					<span id="changeIconTitle" class="IE8HACK" title="Change client icon" style="margin-left:10px;" onclick="show_custom_image();"><#CTL_Change#></span>
 				</div>
 			</td>
 			<td style="vertical-align:top;text-align:center;">
 				<div class="clientTitle">
-					Name
+					<#Clientlist_name#>
 				</div>
 				<div  class="clientTitle" style="margin-top:10px;">
 					IP
@@ -2239,7 +2304,7 @@ function closeClientDetailView() {
 					MAC
 				</div>
 				<div  class="clientTitle" style="margin-top:10px;">
-					Device
+					<#Clientlist_device#>
 				</div>
 			</td>
 			<td style="vertical-align:top;width:280px;">
@@ -2368,7 +2433,7 @@ function closeClientDetailView() {
 					<div class="clientList_line"></div>
 					<div style="width:100%;margin:5px 0;">
 						<div style="width:65%;float:left;line-height:32px;">
-							<span onmouseover="return overlib('Enable this button to block this device to access internet.');" onmouseout="return nd();">Block Internet Access<!--untranslated--></span>
+							<span onmouseover="return overlib('Enable this button to block this device to access internet.');" onmouseout="return nd();"><#Clientlist_block_internet#></span>
 						</div>
 						<div class="left" style="cursor:pointer;float:right;" id="radio_BlockInternet_enable"></div>
 						<div style="clear:both;"></div>
@@ -2378,7 +2443,7 @@ function closeClientDetailView() {
 					<div class="clientList_line"></div>
 					<div style="width:100%;margin:5px 0;">
 						<div style="width:65%;float:left;line-height:32px;">
-							<span id="time_scheduling_title" onmouseover="return overlib('Time Scheduling allows you to set the time limit for a client\'s network usage.');" onmouseout="return nd();"><#Parental_Control#></span><!--untranslated-->
+							<span id="time_scheduling_title" onmouseover="return overlib('Time Scheduling allows you to set the time limit for a client\'s network usage.');" onmouseout="return nd();"><#Parental_Control#></span>
 						</div>
 						<div align="center" class="left" style="cursor:pointer;float:right;" id="radio_TimeScheduling_enable"></div>
 						<div id="internetTimeScheduling" class="internetTimeEdit" style="float:right;margin-right:10px;" title="<#Time_Scheduling#>" onclick="redirectTimeScheduling();" ></div>
@@ -2389,7 +2454,7 @@ function closeClientDetailView() {
 					<div class="clientList_line"></div>
 					<div style="width:100%;margin:5px 0;">
 						<div style="width:65%;float:left;line-height:32px;">
-							<span onmouseover="return overlib('Enable this button to bind specific IP with MAC Address of this device.');" onmouseout="return nd();">MAC and IP address Binding<!--untranslated--></span>
+							<span onmouseover="return overlib('Enable this button to bind specific IP with MAC Address of this device.');" onmouseout="return nd();"><#Clientlist_IPMAC_Binding#></span>
 						</div>
 						<div align="center" class="left" style="cursor:pointer;float:right;" id="radio_IPBinding_enable" ></div>
 						<div style="clear:both;"></div>
@@ -2593,6 +2658,8 @@ function closeClientDetailView() {
 								</script>			
 							</div>
 						</div>
+
+						<div id="ameshContainer" onclick="showstausframe('AMesh');"></div>
 
 						<!--div id="" onclick="">
 							<img style="margin-top:15px;width:150px;height:2px" src="/images/New_ui/networkmap/linetwo2.png">

@@ -54,7 +54,9 @@ static int vpnc_get_dev_policy_list(VPNC_DEV_POLICY *list, const int list_size, 
 int vpnc_set_policy_by_ifname(const char *vpnc_ifname, const int action);
 int stop_vpnc_by_unit(const int unit);
 int set_routing_table(const int cmd, const int vpnc_id);
+#if 0
 static void vpnc_dump_vpnc_profile(const VPNC_PROFILE *profile);
+#endif
 static VPNC_PROFILE* vpnc_get_profile_by_vpnc_id(VPNC_PROFILE *list, const int list_size, const int vpnc_id);
 int set_default_routing_table(const VPNC_ROUTE_CMD cmd, const int table_id);
 int set_routing_rule(const VPNC_ROUTE_CMD cmd, const char *source_ip, const int vpnc_id);
@@ -908,6 +910,7 @@ vpnc_ovpn_sync_account(const VPNC_PROFILE *prof)
 * RETURN:  
 * NOTE:
 *******************************************************************/
+#if 0
 static void
 vpnc_dump_dev_policy_list(const VPNC_DEV_POLICY *list, const int list_size)
 {
@@ -931,7 +934,9 @@ vpnc_dump_dev_policy_list(const VPNC_DEV_POLICY *list, const int list_size)
 	}
 	_dprintf("[%s, %d]End of dump!\n", __FUNCTION__, __LINE__);
 }
+#endif
 
+#if 0
 static void
 vpnc_dump_vpnc_profile(const VPNC_PROFILE *profile)
 {
@@ -953,6 +958,7 @@ vpnc_dump_vpnc_profile(const VPNC_PROFILE *profile)
 			break;
 	}
 }
+#endif
 
 /*******************************************************************
 * NAME: vpnc_dump_vpnc_profile_list
@@ -964,6 +970,7 @@ vpnc_dump_vpnc_profile(const VPNC_PROFILE *profile)
 * RETURN:  
 * NOTE:
 *******************************************************************/
+#if 0
 static void
 vpnc_dump_vpnc_profile_list(const VPNC_PROFILE *list, const int list_size)
 {
@@ -980,6 +987,7 @@ vpnc_dump_vpnc_profile_list(const VPNC_PROFILE *list, const int list_size)
 
 	_dprintf("[%s, %d]End of dump!\n", __FUNCTION__, __LINE__);
 }
+#endif
 
 /*******************************************************************
 * NAME: vpnc_set_basic_conf
@@ -2087,7 +2095,7 @@ int set_routing_rule(const VPNC_ROUTE_CMD cmd, const char *source_ip, const int 
 	else
 		snprintf(id_str, sizeof(id_str), "main");
 
-	eval("ip", "rule", cmd_str, "from", source_ip, "table", id_str, "priority", VPNC_RULE_PRIORITY);
+	eval("ip", "rule", cmd_str, "from", (char *) source_ip, "table", id_str, "priority", VPNC_RULE_PRIORITY);
 	return 0;
 }
 

@@ -12,7 +12,7 @@
 
 #ifdef CONFIG_ACS
 
-enum hostapd_chan_status acs_init(struct hostapd_iface *iface);
+enum hostapd_chan_status acs_init(struct hostapd_iface *iface, int acs_mode);
 int acs_recalc_ranks_and_set_chan(struct hostapd_iface *iface, int switch_reason);
 void acs_update_intolerant_channels(struct hostapd_iface *iface, u8 chan);
 void acs_switch_intolerant(struct hostapd_iface *iface);
@@ -36,7 +36,7 @@ typedef struct {
 
 #else /* CONFIG_ACS */
 
-static inline enum hostapd_chan_status acs_init(struct hostapd_iface *iface)
+static inline enum hostapd_chan_status acs_init(struct hostapd_iface *iface, int acs_mode)
 {
 	wpa_printf(MSG_ERROR, "ACS was disabled on your build, rebuild hostapd with CONFIG_ACS=y or set channel");
 	return HOSTAPD_CHAN_INVALID;

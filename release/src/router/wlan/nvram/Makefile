@@ -11,6 +11,8 @@ KERNEL_NVRAM_FILE_NAME := kernel_nvram.setting
 
 include $(BUILD_DIR)/make.common
 
+include $(TOP)/.config
+
 ifneq ("$(wildcard $(KERNEL_DIR)/.config)","")
 include $(KERNEL_DIR)/.config
 endif
@@ -20,6 +22,10 @@ else
 LIBS = -ldl -lnvram
 endif
 LIBS += -L$(TOP)/shared -lshared
+
+ifeq ($(RTCONFIG_AMAS),y)
+LIBS += -L$(TOP)/json-c/.libs -ljson-c
+endif
 
 ifneq ($(strip $(BUILD_BRCM_HNDROUTER)),)
 CFLAGS += -DBCA_HNDROUTER

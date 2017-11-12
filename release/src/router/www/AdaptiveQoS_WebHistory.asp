@@ -194,7 +194,7 @@ function change_page(flag){
 function eula_confirm(){
 	document.form.TM_EULA.value = 1;
 	document.form.bwdpi_wh_enable.value = 1;
-	if(reset_wan_and_nat(document.form, document.form.bwdpi_wh_enable.value)) {
+	if(reset_wan_to_fo(document.form, document.form.bwdpi_wh_enable.value)) {
 		document.form.action_wait.value = "15";
 		document.form.submit();
 	}
@@ -292,7 +292,7 @@ function cal_panel_block(obj){
 																	function(){
 																		if(document.form.TM_EULA.value == 0){
 																			var adjust_TM_eula_height = function(_objID) {
-																				var scrollTop = document.body.scrollTop;
+																				var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
 																				document.getElementById(_objID).style.top = (scrollTop + 10) + "px";
 																				var visiable_height = document.documentElement.clientHeight;
 																				var tm_eula_container_height = parseInt(document.getElementById(_objID).offsetHeight);
@@ -348,7 +348,7 @@ function cal_panel_block(obj){
 
 																			document.form.bwdpi_wh_stamp.value = timestamp;
 																			document.form.bwdpi_wh_enable.value = 1;
-																			if(reset_wan_and_nat(document.form, document.form.bwdpi_wh_enable.value)) {
+																			if(reset_wan_to_fo(document.form, document.form.bwdpi_wh_enable.value)) {
 																				document.form.submit();
 																			}
 																			else {

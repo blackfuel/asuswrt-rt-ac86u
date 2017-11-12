@@ -4642,7 +4642,7 @@ next_driver:
 	if (wpa_supplicant_set_driver(wpa_s, driver) < 0)
 		return -1;
 
-	wpa_s->drv_priv = wpa_drv_init(wpa_s, wpa_s->ifname);
+	wpa_s->drv_priv = wpa_drv_init(wpa_s, wpa_s->ifname, wpa_s->conf->driver_param);
 	if (wpa_s->drv_priv == NULL) {
 		const char *pos;
 		pos = driver ? os_strchr(driver, ',') : NULL;
@@ -4680,6 +4680,18 @@ next_driver:
 	return 0;
 }
 
+void wpas_set_vendor_events_filter(struct wpa_supplicant *wpa_s)
+{
+	if (wpa_s->conf->driver_param) {
+		u8 *pos = os_strstr(wpa_s->conf->driver_param, "vendor_events_filter=");
+		if (pos) {
+			pos += 21;
+			wpa_s->vendor_events_filter_len = (os_strlen(pos) - 1) / 2;
+			if (wpa_s->vendor_events_filter_len)
+				hexstr2bin(pos, wpa_s->vendor_events_filter, wpa_s->vendor_events_filter_len);
+		}
+	}
+}
 
 static int wpa_supplicant_init_iface(struct wpa_supplicant *wpa_s,
 				     struct wpa_interface *iface)
@@ -4996,6 +5008,8 @@ static int wpa_supplicant_init_iface(struct wpa_supplicant *wpa_s,
 #endif /* CONFIG_MBO */
 
 	wpa_supplicant_set_default_scan_ies(wpa_s);
+
+	wpas_set_vendor_events_filter(wpa_s);
 
 	return 0;
 }

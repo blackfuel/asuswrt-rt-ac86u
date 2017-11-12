@@ -52,6 +52,7 @@
 #include "offchannel.h"
 #include "drivers/driver.h"
 #include "mesh.h"
+#include "drivers/nl80211_copy.h"
 
 static int wpa_supplicant_global_iface_list(struct wpa_global *global,
 					    char *buf, int len);
@@ -2507,12 +2508,12 @@ static char * wpa_supplicant_wps_ie_txt(struct wpa_supplicant *wpa_s,
 
 /* Format one result on one text line into a buffer. */
 static int wpa_supplicant_ctrl_iface_scan_result(
-	struct wpa_supplicant *wpa_s,
+	struct wpa_supplicant *wpa_s, char *cmd,
 	const struct wpa_bss *bss, char *buf, size_t buflen)
 {
-	char *pos, *end;
+	char *pos, *end, *option;
 	int ret;
-	const u8 *ie, *ie2, *osen_ie, *p2p, *mesh;
+	const u8 *ie, *ie2, *osen_ie, *p2p, *mesh, *asus_ie;
 
 	mesh = wpa_bss_get_ie(bss, WLAN_EID_MESH_ID);
 	p2p = wpa_bss_get_vendor_ie(bss, P2P_IE_VENDOR_TYPE);
@@ -2526,104 +2527,129 @@ static int wpa_supplicant_ctrl_iface_scan_result(
 	pos = buf;
 	end = buf + buflen;
 
-	ret = os_snprintf(pos, end - pos, "bssid=" MACSTR " frequency=%d"
-	  " signal_level=%d flags=",
-			  MAC2STR(bss->bssid), bss->freq, bss->level);
-	if (os_snprintf_error(end - pos, ret))
-		return -1;
-	pos += ret;
-	ie = wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE);
-	if (ie)
-		pos = wpa_supplicant_ie_txt(pos, end, "WPA", ie, 2 + ie[1]);
-	ie2 = wpa_bss_get_ie(bss, WLAN_EID_RSN);
-	if (ie2) {
-		pos = wpa_supplicant_ie_txt(pos, end, mesh ? "RSN" : "WPA2",
-					    ie2, 2 + ie2[1]);
-	}
-	osen_ie = wpa_bss_get_vendor_ie(bss, OSEN_IE_VENDOR_TYPE);
-	if (osen_ie)
-		pos = wpa_supplicant_ie_txt(pos, end, "OSEN",
-					    osen_ie, 2 + osen_ie[1]);
-	pos = wpa_supplicant_wps_ie_txt(wpa_s, pos, end, bss);
-	if (!ie && !ie2 && !osen_ie && (bss->caps & IEEE80211_CAP_PRIVACY)) {
-		ret = os_snprintf(pos, end - pos, "[WEP]");
+	if (cmd && os_strlen(cmd) && os_strcasecmp(cmd, " simple") == 0) {
+		ret = os_snprintf(pos, end - pos, "bssid=" MACSTR " signal_level=%d",
+				  MAC2STR(bss->bssid), bss->level);
 		if (os_snprintf_error(end - pos, ret))
 			return -1;
 		pos += ret;
-	}
-	if (mesh) {
-		ret = os_snprintf(pos, end - pos, "[MESH]");
-		if (os_snprintf_error(end - pos, ret))
-			return -1;
-		pos += ret;
-	}
-	if (bss_is_dmg(bss)) {
-		const char *s;
-		ret = os_snprintf(pos, end - pos, "[DMG]");
-		if (os_snprintf_error(end - pos, ret))
-			return -1;
-		pos += ret;
-		switch (bss->caps & IEEE80211_CAP_DMG_MASK) {
-		case IEEE80211_CAP_DMG_IBSS:
-			s = "[IBSS]";
-			break;
-		case IEEE80211_CAP_DMG_AP:
-			s = "[ESS]";
-			break;
-		case IEEE80211_CAP_DMG_PBSS:
-			s = "[PBSS]";
-			break;
-		default:
-			s = "";
-			break;
+
+		/* ASUS vsie */
+		asus_ie = wpa_bss_get_vendor_ie(bss, ASUS_IE_VENDOR_TYPE);
+		if (asus_ie) {
+			char ie_buf[1024];
+			memset(ie_buf, 0, sizeof(ie_buf));
+			wpa_snprintf_hex(ie_buf, sizeof(ie_buf), &asus_ie[2], asus_ie[1]);
+			ret = os_snprintf(pos, end - pos, " vsie=%s", ie_buf);
+			if (os_snprintf_error(end - pos, ret))
+				return -1;
+			pos += ret;
 		}
-		ret = os_snprintf(pos, end - pos, "%s", s);
-		if (os_snprintf_error(end - pos, ret))
-			return -1;
-		pos += ret;
 	} else {
-		if (bss->caps & IEEE80211_CAP_IBSS) {
-			ret = os_snprintf(pos, end - pos, "[IBSS]");
+		ret = os_snprintf(pos, end - pos, "bssid=" MACSTR " frequency=%d"
+		  " signal_level=%d flags=",
+				  MAC2STR(bss->bssid), bss->freq, bss->level);
+		if (os_snprintf_error(end - pos, ret))
+			return -1;
+		pos += ret;
+		ie = wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE);
+		if (ie)
+			pos = wpa_supplicant_ie_txt(pos, end, "WPA", ie, 2 + ie[1]);
+		ie2 = wpa_bss_get_ie(bss, WLAN_EID_RSN);
+		if (ie2) {
+			pos = wpa_supplicant_ie_txt(pos, end, mesh ? "RSN" : "WPA2",
+						    ie2, 2 + ie2[1]);
+		}
+		osen_ie = wpa_bss_get_vendor_ie(bss, OSEN_IE_VENDOR_TYPE);
+		if (osen_ie)
+			pos = wpa_supplicant_ie_txt(pos, end, "OSEN",
+						    osen_ie, 2 + osen_ie[1]);
+		pos = wpa_supplicant_wps_ie_txt(wpa_s, pos, end, bss);
+		if (!ie && !ie2 && !osen_ie && (bss->caps & IEEE80211_CAP_PRIVACY)) {
+			ret = os_snprintf(pos, end - pos, "[WEP]");
 			if (os_snprintf_error(end - pos, ret))
 				return -1;
 			pos += ret;
 		}
-		if (bss->caps & IEEE80211_CAP_ESS) {
-			ret = os_snprintf(pos, end - pos, "[ESS]");
+		if (mesh) {
+			ret = os_snprintf(pos, end - pos, "[MESH]");
 			if (os_snprintf_error(end - pos, ret))
 				return -1;
 			pos += ret;
 		}
-	}
-	if (p2p) {
-		ret = os_snprintf(pos, end - pos, "[P2P]");
-		if (os_snprintf_error(end - pos, ret))
-			return -1;
-		pos += ret;
-	}
-#ifdef CONFIG_HS20
-	if (wpa_bss_get_vendor_ie(bss, HS20_IE_VENDOR_TYPE) && ie2) {
-		ret = os_snprintf(pos, end - pos, "[HS20]");
-		if (os_snprintf_error(end - pos, ret))
-			return -1;
-		pos += ret;
-	}
-#endif /* CONFIG_HS20 */
-#ifdef CONFIG_FST
-	if (wpa_bss_get_ie(bss, WLAN_EID_MULTI_BAND)) {
-		ret = os_snprintf(pos, end - pos, "[FST]");
-		if (os_snprintf_error(end - pos, ret))
-			return -1;
-		pos += ret;
-	}
-#endif /* CONFIG_FST */
+		if (bss_is_dmg(bss)) {
+			const char *s;
+			ret = os_snprintf(pos, end - pos, "[DMG]");
+			if (os_snprintf_error(end - pos, ret))
+				return -1;
+			pos += ret;
+			switch (bss->caps & IEEE80211_CAP_DMG_MASK) {
+			case IEEE80211_CAP_DMG_IBSS:
+				s = "[IBSS]";
+				break;
+			case IEEE80211_CAP_DMG_AP:
+				s = "[ESS]";
+				break;
+			case IEEE80211_CAP_DMG_PBSS:
+				s = "[PBSS]";
+				break;
+			default:
+				s = "";
+				break;
+			}
+			ret = os_snprintf(pos, end - pos, "%s", s);
+			if (os_snprintf_error(end - pos, ret))
+				return -1;
+			pos += ret;
+		} else {
+			if (bss->caps & IEEE80211_CAP_IBSS) {
+				ret = os_snprintf(pos, end - pos, "[IBSS]");
+				if (os_snprintf_error(end - pos, ret))
+					return -1;
+				pos += ret;
+			}
+			if (bss->caps & IEEE80211_CAP_ESS) {
+				ret = os_snprintf(pos, end - pos, "[ESS]");
+				if (os_snprintf_error(end - pos, ret))
+					return -1;
+				pos += ret;
+			}
+		}
+		if (p2p) {
+			ret = os_snprintf(pos, end - pos, "[P2P]");
+			if (os_snprintf_error(end - pos, ret))
+				return -1;
+			pos += ret;
+		}
+	#ifdef CONFIG_HS20
+		if (wpa_bss_get_vendor_ie(bss, HS20_IE_VENDOR_TYPE) && ie2) {
+			ret = os_snprintf(pos, end - pos, "[HS20]");
+			if (os_snprintf_error(end - pos, ret))
+				return -1;
+			pos += ret;
+		}
+	#endif /* CONFIG_HS20 */
+	#ifdef CONFIG_FST
+		if (wpa_bss_get_ie(bss, WLAN_EID_MULTI_BAND)) {
+			ret = os_snprintf(pos, end - pos, "[FST]");
+			if (os_snprintf_error(end - pos, ret))
+				return -1;
+			pos += ret;
+		}
+	#endif /* CONFIG_FST */
 
-	ret = os_snprintf(pos, end - pos, " ssid=%s",
-			  wpa_ssid_txt(bss->ssid, bss->ssid_len));
-	if (os_snprintf_error(end - pos, ret))
-		return -1;
-	pos += ret;
+		ret = os_snprintf(pos, end - pos, " ssid=%s",
+				  wpa_ssid_txt(bss->ssid, bss->ssid_len));
+		if (os_snprintf_error(end - pos, ret))
+			return -1;
+		pos += ret;
 
+		ret = os_snprintf(pos, end - pos, " freqband=%s", bss->freqband);
+		if (os_snprintf_error(end - pos, ret))
+			return -1;
+		pos += ret;
+	}
+	
 	ret = os_snprintf(pos, end - pos, "\n");
 	if (os_snprintf_error(end - pos, ret))
 		return -1;
@@ -2634,7 +2660,7 @@ static int wpa_supplicant_ctrl_iface_scan_result(
 
 
 static int wpa_supplicant_ctrl_iface_scan_results(
-	struct wpa_supplicant *wpa_s, char *buf, size_t buflen)
+	struct wpa_supplicant *wpa_s, char *cmd, char *buf, size_t buflen)
 {
 	char *pos, *end;
 	struct wpa_bss *bss;
@@ -2643,7 +2669,7 @@ static int wpa_supplicant_ctrl_iface_scan_results(
 	pos = buf;
 	end = buf + buflen;
 	dl_list_for_each(bss, &wpa_s->bss_id, struct wpa_bss, list_id) {
-		ret = wpa_supplicant_ctrl_iface_scan_result(wpa_s, bss, pos,
+		ret = wpa_supplicant_ctrl_iface_scan_result(wpa_s, cmd, bss, pos,
 							    end - pos);
 		if (ret < 0 || ret >= end - pos)
 			return pos - buf;
@@ -7335,6 +7361,97 @@ static int wpa_supplicant_ctrl_iface_get_data_routing_mode(
   return pos - buf;
 }
 
+static int wpa_supplicant_ctrl_iface_unconnected_sta(struct wpa_supplicant *wpa_s,
+  const char *cmd)
+{
+  struct hostapd_unconnected_sta_req_params req;
+  char *pos;
+
+  os_memset(&req, 0, sizeof(req));
+
+  if (hwaddr_aton(cmd, req.addr))
+    return -1;
+
+  pos = os_strstr(cmd, " ");
+  if (pos) {
+    pos++;
+    req.freq = atoi(pos);
+    if (req.freq == 0){
+      wpa_printf(MSG_ERROR, "unconnected_sta: invalid freq provided");
+      return -1;
+    }
+  } else {
+    wpa_printf(MSG_ERROR, "unconnected_sta: freq not specified");
+    return -1;
+  }
+
+  pos = os_strstr(cmd, "center_freq1=");
+  if (pos) {
+    pos += strlen("center_freq1=");
+    req.center_freq1 = atoi(pos);
+    if (req.center_freq1 == 0){
+      wpa_printf(MSG_ERROR, "unconnected_sta: invalid center_freq1 provided");
+      return -1;
+    }
+  } else {
+    wpa_printf(MSG_ERROR, "unconnected_sta: center_freq1 not specified");
+    return -1;
+  }
+
+  pos = os_strstr(cmd, "center_freq2=");
+  if (pos) {
+    pos += strlen("center_freq2=");
+    req.center_freq2 = atoi(pos);
+    if (req.center_freq2 == 0){
+      wpa_printf(MSG_ERROR, "unconnected_sta: invalid center_freq2 provided");
+      return -1;
+    }
+  }
+
+  pos = os_strstr(cmd, "bandwidth=");
+  if (pos) {
+    pos += strlen("bandwidth=");
+    req.bandwidth = atoi(pos);
+    if (req.bandwidth == 0){
+      wpa_printf(MSG_ERROR, "unconnected_sta: invalid bandwidth provided");
+      return -1;
+    }
+  } else {
+    wpa_printf(MSG_ERROR, "unconnected_sta: bandwidth not specified");
+    return -1;
+  }
+  switch (req.bandwidth) {
+  case 20:
+    req.bandwidth = NL80211_CHAN_WIDTH_20;
+    break;
+  case 40:
+    req.bandwidth = NL80211_CHAN_WIDTH_40;
+    break;
+  case 80:
+    if (req.center_freq2)
+      req.bandwidth = NL80211_CHAN_WIDTH_80P80;
+    else
+      req.bandwidth = NL80211_CHAN_WIDTH_80;
+    break;
+  case 160:
+    req.bandwidth = NL80211_CHAN_WIDTH_160;
+    break;
+  default:
+    wpa_printf(MSG_ERROR, "unconnected_sta: invalid bandwidth provided");
+    return -1;
+  }
+
+  if (wpa_s->wpa_state >= WPA_ASSOCIATED &&
+    os_memcmp(req.addr, wpa_s->bssid, sizeof(wpa_s->bssid)) == 0) {
+    wpa_printf(MSG_ERROR, "unconnected_sta: disconnect from AP "MACSTR" first",
+      MAC2STR(req.addr));
+    return -1;
+  }
+
+  return wpa_drv_unconnected_sta(wpa_s, &req);
+}
+
+
 static void wpa_supplicant_ctrl_iface_flush(struct wpa_supplicant *wpa_s)
 {
 #ifdef CONFIG_P2P
@@ -8888,7 +9005,7 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 					 char *buf, size_t *resp_len)
 {
 	char *reply;
-	const int reply_size = 4096;
+	const int reply_size = 16384;
 	int reply_len;
 
 	if (os_strncmp(buf, WPA_CTRL_RSP, os_strlen(WPA_CTRL_RSP)) == 0 ||
@@ -9337,9 +9454,10 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 		wpas_ctrl_scan(wpa_s, NULL, reply, reply_size, &reply_len);
 	} else if (os_strncmp(buf, "SCAN ", 5) == 0) {
 		wpas_ctrl_scan(wpa_s, buf + 5, reply, reply_size, &reply_len);
-	} else if (os_strcmp(buf, "SCAN_RESULTS") == 0) {
+	} else if (os_strncmp(buf, "SCAN_RESULTS", 12) == 0) {
+		printf("commandddddddddddddddddddd=%s\n", buf);
 		reply_len = wpa_supplicant_ctrl_iface_scan_results(
-			wpa_s, reply, reply_size);
+			wpa_s, buf + 12, reply, reply_size);
 	} else if (os_strcmp(buf, "ABORT_SCAN") == 0) {
 		if (wpas_abort_ongoing_scan(wpa_s) < 0)
 			reply_len = -1;
@@ -9593,6 +9711,9 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
   } else if (os_strncmp(buf, "DATA_ROUTING_MODE_GET", 21) == 0) {
     reply_len = wpa_supplicant_ctrl_iface_get_data_routing_mode(wpa_s, NULL, reply,
           reply_size);
+  } else if (os_strncmp(buf, "UNCONNECTED_STA_RSSI  ", 21) == 0) {
+    if (wpa_supplicant_ctrl_iface_unconnected_sta(wpa_s, buf + 21))
+      reply_len = -1;
 	} else {
 		os_memcpy(reply, "UNKNOWN COMMAND\n", 16);
 		reply_len = 16;

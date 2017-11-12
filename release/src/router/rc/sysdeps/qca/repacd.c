@@ -29,6 +29,8 @@
 #include <sys/signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/un.h>
 #include <dirent.h>
 #include <sys/mount.h>
 #include <net/if.h>
@@ -45,8 +47,13 @@
 //#define DETECT_5G 1
 //#define RADAR_FAILOVER
 
+#ifdef RTCONFIG_DETWAN
+#define WAN_NVRAM	"detwan_ifname"
+#else
+#define WAN_NVRAM	"wan0_ifname"
+#endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 //parameter control
 #define wifi_son_mode 1
 int hive_daisy_chain=1;  //if 0 , topology is star mode.
@@ -58,20 +65,22 @@ int disable_steering=0;
 int scaling_factor=70;
 int distance=0;
 #ifdef RTCONFIG_DUAL_BACKHAUL
-int disable_2g=0;
+int sp_from_2g=0;
 #endif
-int self_restart=60;
+int self_restart=40;
 int resolving=0;
+int retry_2g=0;
 #define  percent_rate_min 30
 #define  percent_rate_max 70
 
+#define RTCONFIG_ETHBH_MIXED_MODE
+#define	UDPBCAST_SOCKET_RCV
 #define	WSPLCD_CONF	"/tmp/wsplcd.conf"
 #define	CMP_CONF	"/tmp/wscmp"
 #define	CMP_CONF_NEW	"/tmp/wscmp_new"
 #define AP_SCAN_FILE	"/tmp/apscan_file.txt"
 #ifdef RTCONFIG_ETHBACKHAUL
-int check_eth_time=20;  //more than wlready=1 time after watchdog start-up
-int eth_down_time=25;
+int eth_down_time=30;
 #endif
 int dbg_m=0;
 
@@ -86,9 +95,18 @@ int check_period=30;
 
 int cfg_re_syncing=0;
 int cfg_changed=0;
+int re_scy_changed=0;
+char asuscmd[30]="";
 char QCA_DRV[] = "athr" ;
 
 void detect_5gband_bssid(void);
+int wifimon_check_hops(int band);
+int get_mac(char *ifname,char *mac);
+int detect_loop(void);
+void wpa_cli_set_bssid(int band,char *mac);
+extern char *get_qca_iwpriv(char *name, char *command);
+extern int getSiteSurvey(int band,char* ofile);
+extern int get_ap_mac(const char *ifname, struct iwreq *pwrq);
 
 struct {
     char *hwmode;
@@ -122,6 +140,8 @@ int get_role(void)
 		case 1:
 			return 0;
 		case 3:
+			if(nvram_match("cfg_master", "1"))
+				return 0;
 			return 1;
 		default:
 			return -1;
@@ -249,15 +269,15 @@ char *translate_hwmode(const char *iface)
                                 chomp(mode);
 			}
 		}
-	}
+	
 
-	_dprintf("=> %s's hwmode=%s\n",iface,mode);
-	for (i = 0; phy_to_std_map[i].hwmode; ++i) {
-        	if (!strcmp(phy_to_std_map[i].hwmode, mode)) {
-            		return phy_to_std_map[i].wsp_std;
+		_dprintf("=> %s's hwmode=%s\n",iface,mode);
+		for (i = 0; phy_to_std_map[i].hwmode; ++i) {
+       		 	if (!strcmp(phy_to_std_map[i].hwmode, mode)) {
+	       	     		return phy_to_std_map[i].wsp_std;
+			}
 		}
 	}
-
 	return "";
 }
 
@@ -275,7 +295,7 @@ char *translate_crypto(char* val)
 	else
 		return "";
 }
-
+/*
 char *translate_auth(char* val)
 {
 	char *nvram;
@@ -302,7 +322,173 @@ char *translate_auth(char* val)
 	else
 	return "";
 }
+*/
 
+int auth_support(int band)
+{
+       char *outpt=NULL;
+        int auth=0;
+        if ((outpt=get_qca_iwpriv(get_wififname(band), "get_authmode")))
+        {
+                auth= atoi(outpt);
+                free(outpt);
+        }
+       return auth;
+}
+
+int wpa_support(int band)
+{
+       char *outpt=NULL;
+        int wpa=0;
+        if ((outpt=get_qca_iwpriv(get_wififname(band), "get_wpa")))
+        {
+                wpa= atoi(outpt);
+                free(outpt);
+        }
+       return wpa;
+}
+
+int hostapd_exist(int band)
+{
+	int i;
+	FILE *fp;
+	char buf[1024],prefix[]="hostapd_athxxxxx.conf",*pt1;
+
+	for(i=0;i<2;i++)
+	{
+		unlink("/tmp/ps.txt");
+		doSystem("ps >> /tmp/ps.txt");
+		snprintf(prefix, sizeof(prefix), "hostapd_ath%d.conf", band);
+
+		if ((fp = fopen("tmp/ps.txt", "r")) < 0) 
+			return 0;
+
+ 	      	memset(buf, 0, sizeof(buf));
+		while(fgets(buf,1024,fp)!=NULL)
+		{
+			pt1=strstr(buf,prefix);
+			if(pt1) 
+			{
+        			fclose(fp);
+				return 1; //exist
+			}
+		}
+		
+        	fclose(fp);	
+		sleep(6);
+	}
+	return 0;
+}
+
+int get_wpa_encry(int band)
+{
+       char buf[1024];
+       FILE *fp;
+       int len;
+       char *pt1,*pt2 = NULL;
+
+       if(!hostapd_exist(band))
+		return 0;
+
+       sprintf(buf, "hostapd_cli -i%s get_config", get_wififname(band));
+       fp = popen(buf, "r");
+       if (fp) {
+               memset(buf, 0, sizeof(buf));
+               len = fread(buf, 1, sizeof(buf), fp);
+               pclose(fp);
+               if (len > 1) {
+                       buf[len-1] = '\0';
+                       pt1 = strstr(buf, "pairwise_cipher=");
+                       if (pt1) {
+                               pt2 = pt1 + strlen("pairwise_cipher=");
+                               chomp(pt2);
+                       }
+               }
+
+       	       if(!strcmp(pt2,"TKIP"))
+               		return 1;
+       	       else if(!strcmp(pt2,"CCMP"))
+               		return 2;
+       	       else
+               		return 3;
+       }
+       return 0;
+}
+
+
+
+
+char *get_auth_mode(int band)
+{
+       int auth=0;
+       auth=auth_support(band);
+       if(auth==0)
+               return "";
+       else if(auth==1)
+               return "None";
+       else if(auth==2)
+               return "SharedAuthentication";
+       else if(auth==3)
+               return "EAPAuthentication";
+       else
+               return "PSKAuthentication";
+}
+
+char *get_encry_mode(int band)
+{
+       int auth=0,wpa=0;
+       auth=auth_support(band);
+       if(auth==1 || auth==2)
+       {
+               if(nvram_get_int("wl0_wep_x")|| nvram_get_int("wl1_wep_x"))
+                       return "WEPEncryption";
+               else
+                       return "";
+       }
+       else
+       {
+               wpa=get_wpa_encry(band);
+               if(wpa==1)
+                       return "TKIPEncryption";
+               else if(wpa==2)
+                       return "AESEncryption";
+               else if(wpa==3)
+                       return "TKIPandAESEncryption";
+               else
+                       return "";
+       }
+
+}
+
+char *get_beacon_type(int band)
+{
+        int auth=0,wpa=0;
+       auth=auth_support(band);
+       wpa=wpa_support(band);
+       switch(auth)
+       {
+               case 0:
+               case 3:
+                       return "";
+               case 1: //open
+                       return "None";
+               case 2: //shared
+                       return "Basic";
+               default:
+                       if(wpa==1)
+                               return "WPA";
+                       else if(wpa==2)
+                               return "11i";
+                       else if(wpa==3)
+                               return "WPAand11i";
+                       else
+                               return "";
+       }
+
+}
+
+
+/*
 char *translate_bcn(char *val)
 {
 	char *nvram;
@@ -316,7 +502,7 @@ char *translate_bcn(char *val)
 	else
 		return "Basic";
 }
-
+*/
 
 //generate wsplcd.conf 
 static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
@@ -326,13 +512,21 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	char tmp1[200],tmp2[200];
 	FILE *fp;
 	char *gkey=NULL;
-
+        int wpa_2g,wpa_5g;
+#if defined(MAPAC2200)
+        int wpa_5g2;
+#endif
 	if (!(fp = fopen(filename, "w+")))
 	{
 		_dprintf("gen %s file fails!\n", filename);
 		return;
 	}
 
+        wpa_2g=wpa_support(0);
+        wpa_5g=wpa_support(1);
+#if defined(MAPAC2200)
+        wpa_5g2=wpa_support(2);
+#endif
 	gkey=nvram_get("cfg_group");
 	if (!cmp_only) {
 	fprintf(fp, "# Config file for wsplcd, automatically created by script\n");
@@ -354,7 +548,11 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 					sprintf(tmp1,"%s,",tmp1);
 				sprintf(tmp1, "%s%s:WLAN",tmp1,word);
 			}
+#if defined(RTCONFIG_QCA953X) || defined(RTCONFIG_QCA956X)
+			if(strstr(word, "vlan"))
+#else
 			if(strstr(word, "eth"))
+#endif
 			{
 				if(strlen(tmp2)!=t2)
 					sprintf(tmp2,"%s,",tmp2);
@@ -381,12 +579,12 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	fprintf(fp, "WPS_method=M2\n");
 	fprintf(fp, "WPS_tx_mode=encrypted\n");
 	fprintf(fp, "WPS_rx_mode=encrypted\n");
-	fprintf(fp, "config_station=yes\n");
+	fprintf(fp, "config_station=no\n");
 	fprintf(fp, "search_timeout=60\n");
 	fprintf(fp, "WPS_session_timeout=120\n");
-	fprintf(fp, "WPS_retransmission_timeout=5\n");
+	fprintf(fp, "WPS_retransmission_timeout=10\n");
 	fprintf(fp, "WPS_per_message_timeout=15\n");
-	fprintf(fp, "band_sel_enable=0\n");
+	fprintf(fp, "band_sel_enable=1\n");
 	fprintf(fp, "band_choice=5G\n");  //default: 5G
 	fprintf(fp, "rm_collect_timeout=10\n");
 	fprintf(fp, "deep_clone_enable=%d\n",deep_clone);
@@ -406,14 +604,14 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	fprintf(fp, "button_mode=2\n");
 	fprintf(fp, "clone_timeout=180\n"); //default:180 sec
 	fprintf(fp, "walk_timeout=120\n");
-	fprintf(fp, "repeat_timeout=2\n");
+	fprintf(fp, "repeat_timeout=3\n");
 	fprintf(fp, "internal_timeout=15\n");
 	fprintf(fp, "wait_wifi_config_secs_other=30\n");
 	fprintf(fp, "wait_wifi_config_secs_first=30\n");
 	fprintf(fp, "atf_config_en=0\n");
 	fprintf(fp, "cfg_changed=%d\n",cfg_changed);
 	fprintf(fp, "cfg_restart_long_timeout=%d\n",self_restart);
-	fprintf(fp, "cfg_restart_short_timeout=30\n");
+	fprintf(fp, "cfg_restart_short_timeout=20\n");
 	fprintf(fp, "cfg_apply_timeout=%d\n",nvram_get_int("hive_apply_time")?20:10);
 	} /* end of cmp_only */
 	//wifi0
@@ -429,14 +627,16 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	} /* end of cmp_only */
 	//fprintf(fp, "WLAN.1.Standard=ng20\n");
 	fprintf(fp, "WLAN.1.Channel=%d\n",nvram_get_int("wl0_channel"));
-	fprintf(fp, "WLAN.1.BeaconType=%s\n",translate_bcn("wl0_crypto"));
-	fprintf(fp, "WLAN.1.BasicEncryptionModes=\n");
-	fprintf(fp, "WLAN.1.BasicAuthenticationMode=\n");
-	fprintf(fp, "WLAN.1.WPAEncryptionModes=\n");
-	fprintf(fp, "WLAN.1.WPAAuthenticationMode=\n");
-	fprintf(fp, "WLAN.1.IEEE11iEncryptionModes=%s\n",translate_crypto("wl0_crypto"));
-	fprintf(fp, "WLAN.1.IEEE11iAuthenticationMode=%s\n",translate_auth("wl0_auth_mode_x")); 
-	fprintf(fp, "WLAN.1.KeyPassphrase=%s\n",nvram_get("wl0_wpa_psk")); 
+     	if (!cmp_only) {
+        	fprintf(fp, "WLAN.1.BeaconType=%s\n",get_beacon_type(0));
+		fprintf(fp, "WLAN.1.BasicEncryptionModes=%s\n",wpa_2g==0?get_encry_mode(0):"");
+		fprintf(fp, "WLAN.1.BasicAuthenticationMode=%s\n",wpa_2g==0?get_auth_mode(0):"");
+		fprintf(fp, "WLAN.1.WPAEncryptionModes=%s\n",wpa_2g==1?get_encry_mode(0):"");
+		fprintf(fp, "WLAN.1.WPAAuthenticationMode=%s\n",wpa_2g==1?get_auth_mode(0):"");
+		fprintf(fp, "WLAN.1.IEEE11iEncryptionModes=%s\n",wpa_2g>1?get_encry_mode(0):"");
+		fprintf(fp, "WLAN.1.IEEE11iAuthenticationMode=%s\n",wpa_2g>1?get_auth_mode(0):"");
+		fprintf(fp, "WLAN.1.KeyPassphrase=%s\n",wpa_2g>0?nvram_get("wl0_wpa_psk"):""); 
+	} /* end of cmp_only */
 	fprintf(fp, "WLAN.1.DeviceOperationMode=RootAP\n"); //ap
 	fprintf(fp, "WLAN.1.X_ATH-COM_APModuleEnable=1\n");
 	fprintf(fp, "WLAN.1.X_ATH-COM_WPSPin=12345670\n");
@@ -444,6 +644,9 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	fprintf(fp, "WLAN.1.X_ATH-COM_WPSConfigured=CONFIGURED\n");
 	fprintf(fp, "WLAN.1.X_ATH-COM_HT40Coexist=1\n");
 	fprintf(fp, "WLAN.1.WsplcdUnmanaged=0\n");
+	fprintf(fp, "WLAN.1.ASUSCMD=%s\n",asuscmd);  
+	fprintf(fp, "WLAN.1.SECURITY_TYPE=%d\n",security_type(0));  
+	fprintf(fp, "WLAN.1.SECURITY_EXT=%s\n",nvram_get("wl0_wpa_psk"));  
 	if (!cmp_only) {
 	fprintf(fp, "WLAN.1.INFORE=%d\n",cfg_re_syncing);
 	if (gkey && strlen(gkey))
@@ -471,14 +674,14 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 #endif
 		fprintf(fp, "WLAN.3.Standard=\n");
 	fprintf(fp, "WLAN.3.Channel=%d\n",nvram_get_int("wl0_channel"));
-	fprintf(fp, "WLAN.3.BeaconType=%s\n",translate_bcn("wl0_crypto"));
-	fprintf(fp, "WLAN.3.BasicEncryptionModes=\n");
-	fprintf(fp, "WLAN.3.BasicAuthenticationMode=\n");
-	fprintf(fp, "WLAN.3.WPAEncryptionModes=\n");
-	fprintf(fp, "WLAN.3.WPAAuthenticationMode=\n");
-	fprintf(fp, "WLAN.3.IEEE11iEncryptionModes=%s\n",translate_crypto("wl0_crypto")); 
-	fprintf(fp, "WLAN.3.IEEE11iAuthenticationMode=%s\n",nvram_get("wl0_auth_mode_x")); 
-	fprintf(fp, "WLAN.3.KeyPassphrase=%s\n",nvram_get("wl0_wpa_psk"));  //use ath's key
+        fprintf(fp, "WLAN.3.BeaconType=%s\n",get_beacon_type(0));
+        fprintf(fp, "WLAN.3.BasicEncryptionModes=%s\n",wpa_2g==0?get_encry_mode(0):"");
+        fprintf(fp, "WLAN.3.BasicAuthenticationMode=%s\n",wpa_2g==0?get_auth_mode(0):"");
+        fprintf(fp, "WLAN.3.WPAEncryptionModes=%s\n",wpa_2g==1?get_encry_mode(0):"");
+        fprintf(fp, "WLAN.3.WPAAuthenticationMode=%s\n",wpa_2g==1?get_auth_mode(0):"");
+        fprintf(fp, "WLAN.3.IEEE11iEncryptionModes=%s\n",wpa_2g>1?get_encry_mode(0):"");
+        fprintf(fp, "WLAN.3.IEEE11iAuthenticationMode=%s\n",wpa_2g>1?get_auth_mode(0):"");
+	fprintf(fp, "WLAN.3.KeyPassphrase=%s\n",wpa_2g>0?nvram_get("wl0_wpa_psk"):""); 
 	fprintf(fp, "WLAN.3.DeviceOperationMode=WDSStation\n"); //wds station
 	fprintf(fp, "WLAN.3.X_ATH-COM_APModuleEnable=%d\n",role?1:0);
 	fprintf(fp, "WLAN.3.X_ATH-COM_WPSPin=12345670\n");
@@ -491,6 +694,9 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	fprintf(fp, "WLAN.3.X_ATH-COM_WPSConfigured=CONFIGURED\n");
 	fprintf(fp, "WLAN.3.X_ATH-COM_HT40Coexist=1\n");
 	fprintf(fp, "WLAN.3.WsplcdUnmanaged=0\n");
+	fprintf(fp, "WLAN.3.ASUSCMD=%s\n",asuscmd); 
+	fprintf(fp, "WLAN.3.SECURITY_TYPE=%d\n",security_type(0));  
+	fprintf(fp, "WLAN.3.SECURITY_EXT=%s\n",nvram_get("wl0_wpa_psk"));  
 	fprintf(fp, "WLAN.3.INFORE=%d\n",cfg_re_syncing);
 	if (gkey && strlen(gkey))
 		fprintf(fp, "WLAN.3.GROUPKEY=%s\n",gkey);
@@ -515,14 +721,16 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	//fprintf(fp, "WLAN.2.Standard=acvht80\n");
 	} /* end of cmp_only */
 	fprintf(fp, "WLAN.2.Channel=%d\n",nvram_get_int("wl1_channel"));
-	fprintf(fp, "WLAN.2.BeaconType=%s\n",translate_bcn("wl1_crypto"));
-	fprintf(fp, "WLAN.2.BasicEncryptionModes=\n");
-	fprintf(fp, "WLAN.2.BasicAuthenticationMode=\n");
-	fprintf(fp, "WLAN.2.WPAEncryptionModes=\n");
-	fprintf(fp, "WLAN.2.WPAAuthenticationMode=\n");
-	fprintf(fp, "WLAN.2.IEEE11iEncryptionModes=%s\n",translate_crypto("wl1_crypto")); 
-	fprintf(fp, "WLAN.2.IEEE11iAuthenticationMode=%s\n",translate_auth("wl1_auth_mode_x")); 
-	fprintf(fp, "WLAN.2.KeyPassphrase=%s\n",nvram_get("wl1_wpa_psk")); 
+        if (!cmp_only) {
+	        fprintf(fp, "WLAN.2.BeaconType=%s\n",get_beacon_type(1));
+       		fprintf(fp, "WLAN.2.BasicEncryptionModes=%s\n",wpa_5g==0?get_encry_mode(1):"");
+        	fprintf(fp, "WLAN.2.BasicAuthenticationMode=%s\n",wpa_5g==0?get_auth_mode(1):"");
+        	fprintf(fp, "WLAN.2.WPAEncryptionModes=%s\n",wpa_5g==1?get_encry_mode(1):"");
+        	fprintf(fp, "WLAN.2.WPAAuthenticationMode=%s\n",wpa_5g==1?get_auth_mode(1):"");
+        	fprintf(fp, "WLAN.2.IEEE11iEncryptionModes=%s\n",wpa_5g>1?get_encry_mode(1):"");
+        	fprintf(fp, "WLAN.2.IEEE11iAuthenticationMode=%s\n",wpa_5g>1?get_auth_mode(1):"");
+		fprintf(fp, "WLAN.2.KeyPassphrase=%s\n",wpa_5g>0?nvram_get("wl1_wpa_psk"):""); 
+        } /* end of cmp_only */
 	fprintf(fp, "WLAN.2.DeviceOperationMode=RootAP\n"); //ap
 	fprintf(fp, "WLAN.2.X_ATH-COM_APModuleEnable=1\n");
 	fprintf(fp, "WLAN.2.X_ATH-COM_WPSPin=12345670\n");
@@ -530,6 +738,9 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	fprintf(fp, "WLAN.2.X_ATH-COM_WPSConfigured=CONFIGURED\n");
 	fprintf(fp, "WLAN.2.X_ATH-COM_HT40Coexist=1\n");
 	fprintf(fp, "WLAN.2.WsplcdUnmanaged=0\n");
+	fprintf(fp, "WLAN.2.ASUSCMD=%s\n",asuscmd);  
+	fprintf(fp, "WLAN.2.SECURITY_TYPE=%d\n",security_type(1));  
+	fprintf(fp, "WLAN.2.SECURITY_EXT=%s\n",nvram_get("wl1_wpa_psk"));  
 	if (!cmp_only) {
 	fprintf(fp, "WLAN.2.INFORE=%d\n",cfg_re_syncing);
 	if (gkey && strlen(gkey))
@@ -554,14 +765,14 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	else
 		fprintf(fp, "WLAN.4.Standard=\n");
 	fprintf(fp, "WLAN.4.Channel=%d\n",nvram_get_int("wl1_channel"));
-	fprintf(fp, "WLAN.4.BeaconType=%s\n",translate_bcn("wl1_crypto"));
-	fprintf(fp, "WLAN.4.BasicEncryptionModes=\n");
-	fprintf(fp, "WLAN.4.BasicAuthenticationMode=\n");
-	fprintf(fp, "WLAN.4.WPAEncryptionModes=\n");
-	fprintf(fp, "WLAN.4.WPAAuthenticationMode=\n");
-	fprintf(fp, "WLAN.4.IEEE11iEncryptionModes=%s\n",translate_crypto("wl1_crypto")); 
-	fprintf(fp, "WLAN.4.IEEE11iAuthenticationMode=%s\n",translate_auth("wl1_auth_mode_x")); 
-	fprintf(fp, "WLAN.4.KeyPassphrase=%s\n",nvram_get("wl1_wpa_psk"));  //use ath's key
+        fprintf(fp, "WLAN.4.BeaconType=%s\n",get_beacon_type(1));
+        fprintf(fp, "WLAN.4.BasicEncryptionModes=%s\n",wpa_5g==0?get_encry_mode(1):"");
+        fprintf(fp, "WLAN.4.BasicAuthenticationMode=%s\n",wpa_5g==0?get_auth_mode(1):"");
+        fprintf(fp, "WLAN.4.WPAEncryptionModes=%s\n",wpa_5g==1?get_encry_mode(1):"");
+        fprintf(fp, "WLAN.4.WPAAuthenticationMode=%s\n",wpa_5g==1?get_auth_mode(1):"");
+        fprintf(fp, "WLAN.4.IEEE11iEncryptionModes=%s\n",wpa_5g>1?get_encry_mode(1):"");
+        fprintf(fp, "WLAN.4.IEEE11iAuthenticationMode=%s\n",wpa_5g>1?get_auth_mode(1):"");
+	fprintf(fp, "WLAN.4.KeyPassphrase=%s\n",wpa_5g>0?nvram_get("wl1_wpa_psk"):""); 
 	fprintf(fp, "WLAN.4.DeviceOperationMode=WDSStation\n"); //wds station
 	fprintf(fp, "WLAN.4.X_ATH-COM_APModuleEnable=%d\n",role?1:0);
 	fprintf(fp, "WLAN.4.X_ATH-COM_WPSPin=12345670\n");
@@ -572,6 +783,9 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	fprintf(fp, "WLAN.4.X_ATH-COM_WPSConfigured=CONFIGURED\n");
 	fprintf(fp, "WLAN.4.X_ATH-COM_HT40Coexist=1\n");
 	fprintf(fp, "WLAN.4.WsplcdUnmanaged=0\n");
+	fprintf(fp, "WLAN.4.ASUSCMD=%s\n",asuscmd);  
+	fprintf(fp, "WLAN.4.SECURITY_TYPE=%d\n",security_type(1));  
+	fprintf(fp, "WLAN.4.SECURITY_EXT=%s\n",nvram_get("wl1_wpa_psk"));  
 	fprintf(fp, "WLAN.4.INFORE=%d\n",cfg_re_syncing);
 	if (gkey && strlen(gkey))
 		fprintf(fp, "WLAN.4.GROUPKEY=%s\n",gkey);
@@ -597,14 +811,16 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 	//fprintf(fp, "WLAN.5.Standard=acvht80\n");
 	} /* end of cmp_only */
 	fprintf(fp, "WLAN.5.Channel=%d\n",nvram_get_int("wl2_channel"));
-	fprintf(fp, "WLAN.5.BeaconType=%s\n",translate_bcn("wl2_crypto"));
-	fprintf(fp, "WLAN.5.BasicEncryptionModes=\n");
-	fprintf(fp, "WLAN.5.BasicAuthenticationMode=\n");
-	fprintf(fp, "WLAN.5.WPAEncryptionModes=\n");
-	fprintf(fp, "WLAN.5.WPAAuthenticationMode=\n");
-	fprintf(fp, "WLAN.5.IEEE11iEncryptionModes=%s\n",translate_crypto("wl2_crypto")); 
-	fprintf(fp, "WLAN.5.IEEE11iAuthenticationMode=%s\n",translate_auth("wl2_auth_mode_x")); 
-	fprintf(fp, "WLAN.5.KeyPassphrase=%s\n",nvram_get("wl2_wpa_psk")); 
+        if (!cmp_only) {
+        	fprintf(fp, "WLAN.5.BeaconType=%s\n",get_beacon_type(2));
+        	fprintf(fp, "WLAN.5.BasicEncryptionModes=%s\n",wpa_5g2==0?get_encry_mode(2):"");
+        	fprintf(fp, "WLAN.5.BasicAuthenticationMode=%s\n",wpa_5g2==0?get_auth_mode(2):"");
+        	fprintf(fp, "WLAN.5.WPAEncryptionModes=%s\n",wpa_5g2==1?get_encry_mode(2):"");
+        	fprintf(fp, "WLAN.5.WPAAuthenticationMode=%s\n",wpa_5g2==1?get_auth_mode(2):"");
+        	fprintf(fp, "WLAN.5.IEEE11iEncryptionModes=%s\n",wpa_5g2>1?get_encry_mode(2):"");
+        	fprintf(fp, "WLAN.5.IEEE11iAuthenticationMode=%s\n",wpa_5g2>1?get_auth_mode(2):"");
+		fprintf(fp, "WLAN.5.KeyPassphrase=%s\n",wpa_5g2>0?nvram_get("wl2_wpa_psk"):""); 
+	} /* end of cmp_only */
 	fprintf(fp, "WLAN.5.DeviceOperationMode=RootAP\n"); //ap
 	fprintf(fp, "WLAN.5.X_ATH-COM_APModuleEnable=1\n");
 	fprintf(fp, "WLAN.5.X_ATH-COM_WPSPin=12345670\n");
@@ -615,14 +831,21 @@ static void gen_wsplcd_conf(int role, char *filename, int cmp_only)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 	fprintf(fp, "WLAN.5.CH2G=%d\n",get_ch(get_freq(0)));  //valid for CAP 2G
 #endif
+	fprintf(fp, "WLAN.5.ASUSCMD=%s\n",asuscmd);  
+	fprintf(fp, "WLAN.5.SECURITY_TYPE=%d\n",security_type(2));  
+	fprintf(fp, "WLAN.5.SECURITY_EXT=%s\n",nvram_get("wl2_wpa_psk"));  
 	//WLAN.2 (ap,5G-1), WLAN.5(ap,5G-2): One of them can do sync. Disable 5G-2 sync by wsplcdunmanaged=1!!
 	if (!cmp_only) {
 	fprintf(fp, "WLAN.5.WsplcdUnmanaged=1\n");
 	if (gkey && strlen(gkey))
 		fprintf(fp, "WLAN.5.GROUPKEY=%s\n",gkey);
+
+
 	} /* end of cmp_only */
 
 #endif
+	sprintf(tmp2, "%d", security_type(0));
+	nvram_set("now_security",tmp2);
 	fclose(fp);
 }
 
@@ -667,7 +890,9 @@ void gen_hyd_conf(int role)
         t1=strlen(tmp1);
         t2=strlen(tmp2);
         foreach(word, nvram_safe_get("lan_ifnames"), next_word){
-		//if(strlen(word)<5) //ignore guest network 	
+		if(strlen(word)>5 && nvram_get_int("wl0.1_bss_enabled")) //ignore guest network 	
+			_dprintf("hyd => ignore %\n",word);
+		else
 		{
 
            	    	if(strlen(tmp1)!=t1)
@@ -688,6 +913,11 @@ void gen_hyd_conf(int role)
 				if(role)//re
 				{
                         		sprintf(tmp1, "%s%s:WLAN",tmp1,word);
+#ifdef RTCONFIG_ETHBACKHAUL
+					if (nvram_get_int("eth_backl"))
+						;//sprintf(tmp2,"%seth1",tmp2);
+					else
+#endif
 					sprintf(tmp2,"%s%s",tmp2,word);
 				}
 			}
@@ -700,12 +930,16 @@ void gen_hyd_conf(int role)
 	fprintf(fp,"%s\n",tmp1);
 	if(role)
 	{
+#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+		fprintf(fp, "NoRelayGroupList=%s%s\n",tmp2, (nvram_get_int("eth_backl")?"eth0":"")); //lan group
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
 		fprintf(fp, "NoRelayGroupList=%s\n",tmp2); //lan group
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
 		fprintf(fp, "ForceGroupRelaying=1\n");
 	}
 	fprintf(fp, "SwitchLanVid=1\n"); //default 1
 	fprintf(fp, "SwitchCpuPort=0\n"); //default 0
-	fprintf(fp, "VlanIds=\n"); 
+	fprintf(fp, "VlanIds=eth1.1,eth0.2\n"); 
 
 	fprintf(fp, "[HY]\n");
 	fprintf(fp, "LoadBalancingSeamless=1\n");
@@ -779,9 +1013,16 @@ void gen_hyd_conf(int role)
 	fprintf(fp, "ENABLE_TD3=1\n");
 	fprintf(fp, "ENABLE_BD_SPOOFING=1\n");
 	fprintf(fp, "NOTIFICATION_THROTTLING_WINDOW=1\n");
-	fprintf(fp, "PERIODIC_QUERY_INTERVAL=60\n");
-	fprintf(fp, "ENABLE_NOTIFICATION_UNICAST=0\n");
-
+	if(nvram_get_int("wl0.1_bss_enabled"))
+	{
+		fprintf(fp, "PERIODIC_QUERY_INTERVAL=15\n");
+		fprintf(fp, "ENABLE_NOTIFICATION_UNICAST=1\n");
+	}
+	else
+	{
+		fprintf(fp, "PERIODIC_QUERY_INTERVAL=60\n");
+		fprintf(fp, "ENABLE_NOTIFICATION_UNICAST=0\n");
+	}
 
 	fprintf(fp, "[PATHSELECT]\n");
 	fprintf(fp, "UpdateHDInterval=10\n");
@@ -889,7 +1130,7 @@ void gen_hyd_conf(int role)
 	fprintf(fp, "BcnrptPassiveDuration=200\n");
 	fprintf(fp, "HighTxRateXingThreshold=50000\n");
 	fprintf(fp, "HighRateRSSIXingThreshold=30\n");
-	fprintf(fp, "LowRSSIAPSteeringThreshold=20\n");
+	fprintf(fp, "LowRSSIAPSteeringThreshold=%d\n",nvram_get_int("lyra_ap_steering"));
 	fprintf(fp, "Delay24GProbeRSSIThreshold=35\n");
 	fprintf(fp, "Delay24GProbeTimeWindow=0\n");
 	fprintf(fp, "Delay24GProbeMinReqCount=0\n");
@@ -907,7 +1148,7 @@ void gen_hyd_conf(int role)
 	fprintf(fp, "BcnrptPassiveDuration=200\n");
 	fprintf(fp, "LowTxRateXingThreshold=6000\n");
 	fprintf(fp, "LowRateRSSIXingThreshold=0\n");
-	fprintf(fp, "LowRSSIAPSteeringThreshold=20\n");
+	fprintf(fp, "LowRSSIAPSteeringThreshold=%d\n",nvram_get_int("lyra_ap_steering"));
 	
 	fprintf(fp, "[STADB]\n");
 	fprintf(fp, "IncludeOutOfNetwork=1\n");
@@ -929,8 +1170,8 @@ void gen_hyd_conf(int role)
 	fprintf(fp, "LowTxRateXingThreshold=6000\n");
 	fprintf(fp, "LowRateRSSIXingThreshold=0\n");
 	fprintf(fp, "RSSISteeringPoint_DG=5\n");
-	fprintf(fp, "LowRSSIAPSteeringThreshold_W2=20\n");
-	fprintf(fp, "LowRSSIAPSteeringThreshold_W5=20\n");
+	fprintf(fp, "LowRSSIAPSteeringThreshold_W2=%d\n",nvram_get_int("lyra_ap_steering"));
+	fprintf(fp, "LowRSSIAPSteeringThreshold_W5=%d\n",nvram_get_int("lyra_ap_steering"));
 
 	fprintf(fp, "[BANDMON]\n");
 	fprintf(fp, "MUOverloadThreshold_W2=70\n");
@@ -1083,9 +1324,11 @@ void hyd_start(int role)
 	doSystem("hyctl attach %s",nvram_get("lan_ifname")); //after br0 is up
         sleep(2);
 	//run daemon
+#if 0
 	if(nvram_get_int("hive_dbg"))
                 doSystem("nohup hyd -C /tmp/hyd.conf -d 2>&1 | logger -s &");
 	else
+#endif
  		doSystem("hyd -C /tmp/hyd.conf");
 }
 
@@ -1238,7 +1481,7 @@ void wps_enable(int role)
 //only for backhaul 2G/5G
 void set_wifi_otherband_bssid(int band)
 {
-	char *temp=NULL,tmp[50],prefix_wl[]="wlxxxx_",cmd[128];
+	char *temp=NULL,tmp[50],prefix_wl[]="wlxxxx_";
 #if defined(MAPAC2200)
 		if(band==2)
 			return ;
@@ -1272,6 +1515,14 @@ void set_hops_count(void)
 #else
 	distance=wifimon_check_hops(1);	
 #endif
+#ifdef RTCONFIG_ETHBACKHAUL
+	if (nvram_get_int("eth_backl"))
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+		distance=nvram_get_int("eth_bh_up_cost"); /* overwrite RE distance */
+#else
+		distance=255; /* overwrite RE distance  */
+#endif
+#endif
 	if(distance<256) //0~255
 	{
 		doSystem("iwpriv %s set_whc_dist %d", get_wififname(0),distance);
@@ -1287,7 +1538,10 @@ void set_hops_count(void)
 		doSystem("iwpriv %s set_whc_ul_rate 0", get_staifname(1));
 	}
 
-	_dprintf("Distance form sta1 is %d, apply to athx !!\n",distance);
+	_dprintf("Distance form stax is %d, apply to athx !!\n",distance);
+#ifdef RTCONFIG_ETHBACKHAUL
+	nvram_set_int("mesh_dist", distance);
+#endif
 }
 
 //4 vaps: ath0(pre-created) ath1(pre-crated) 
@@ -1302,7 +1556,7 @@ void set_vap(int role, int band)
 	doSystem("iwpriv %s extap 0", get_wififname(band));
 	doSystem("iwpriv %s blockdfschan %d", get_wififname(band), block_dfs_enable);
 	doSystem("iwpriv %s son 1", get_wififname(band));
-	 if(!nvram_get_int("dfs_check_period"))   
+	if(!band)   //in dual-backhaul, we will concern and discuss 2G's athnewind
 		doSystem("iwpriv %s athnewind 1", get_wififname(band));
 	if(role) //range extender
 		doSystem("iwpriv %s set_whc_dist 255", get_wififname(band));
@@ -1322,14 +1576,28 @@ void set_vap(int role, int band)
 #endif
 		doSystem("iwpriv %s wds 1",get_staifname(band));
 		doSystem("iwpriv %s set_whc_sfactor %d",get_staifname(band),scaling_factor);
-	 	if(!nvram_get_int("dfs_check_period"))   
+		if(!band)   //in dual-backhaul, we will concern and discuss 2G's athnewind
 			doSystem("iwpriv %s athnewind 1",get_staifname(band));
 		doSystem("iwpriv %s shortgi 1",get_staifname(band));
 		doSystem("iwpriv %s set_whc_dist 255", get_staifname(band));
 		//doSystem("iwpriv %s mode auto",get_staifname(band));
 	//	if(nvram_get_int("dfs_check_period") && band)
 	//		doSystem("iwpriv wifi%d staDFSEn 1",band);
+		if(nvram_get_int("wl0.1_bss_enabled"))
+		{
+			doSystem("vconfig add %s 1",get_staifname(band));
+			doSystem("ifconfig %s.1 up",get_staifname(band));
+			doSystem("brctl addif %s %s.1",BR_GUEST,get_staifname(band));
+			sleep(2);
+			doSystem("ifconfig %s up",BR_GUEST);
+		}
 	}
+#ifdef RTCONFIG_ETHBACKHAUL
+	if(role) //range extender
+		nvram_set_int("mesh_dist", 255);
+	else
+		nvram_set_int("mesh_dist", 0);
+#endif
 }
 
 //search keyword from wpa_supplicant-sta0.conf/wpa_supplicant-sta1.conf
@@ -1489,7 +1757,7 @@ void setWscInfo_enrollee(int band)
 
 	}
   	nvram_commit();     
-	gen_qca_wifi_cfgs();
+	restart_wifi(0);
 
 	_dprintf("upgrade wsc information\n");
 	
@@ -1663,13 +1931,24 @@ int check_wsc_enrollee_status(int max_sec)
 }
 
 
-void wifimon_up(void)
+void wifimon_up(char *sec)
 {
 	pid_t pid;
 	char *wifimon[]={"wifimon_check","20",NULL};
+	wifimon[1]=sec;
 	doSystem("killall -9 wifimon_check");
 	_eval(wifimon, ">>/dev/null", 0, &pid);
 }
+
+#ifdef RTCONFIG_ETHBACKHAUL
+static void eth_bh_mon_up(void)
+{
+	pid_t pid;
+	char *ethmon[]={"eth_bh_mon",NULL};
+	if (!pids(ethmon[0]))
+		_eval(ethmon, NULL, 0, &pid);
+}
+#endif
 
 void wsplcd_stop(void)
 {
@@ -1775,13 +2054,40 @@ static int cmp_file(char *fname1, char *fname2)
 	return ret;
 }
 
+int start_wsplcd(void) //violence disable/enable
+{
+	doSystem("killall wsplcd");
+	doSystem("rm -rf "WSPLCD_CONF);
+	doSystem("rm -rf /tmp/wsplcd.apply");
+        gen_wsplcd_conf(get_role(), WSPLCD_CONF, 0);
+	wsplcd_exec=1;
+        wsplcd_enable();
+        return 0;
+}
+
+int start_hyd(void) //violaence disable/enable
+{
+ 	doSystem("killall -9 hyd");
+	doSystem("rm -rf /tmp/hyd.conf");
+	hyd_exec=1;
+	hyd_start(get_role());
+	return 0;
+}
+
+
+#ifdef RTCONFIG_ETHBACKHAUL
+void eth_mon_pre_action(int do_poweroff);
+#endif
 // return 0: normal case
 // return 1: nothing changed
 int start_cap(int c)
 {
-
+	char tmp[20];
 	if(c==0) //first start, for user
 	{
+#ifdef RTCONFIG_ETHBACKHAUL
+		eth_mon_pre_action(1);
+#endif
 		_dprintf("starting WHC auto-configuration for CAP\n");
 		wsplcd_stop();
 		//wpa_supplicant_stop(0);
@@ -1805,10 +2111,21 @@ int start_cap(int c)
 		wsplcd_enable();
 		hyd_start(0);
 		//wps_enable(0);
+#ifdef RTCONFIG_ETHBACKHAUL
+		eth_bh_mon_up();
+#endif
 	}
 	else if(c==1) //config change , for user
 	{
 		_dprintf("CAP: restart after config change\n");
+		_dprintf("scy-now=%d,scy-next=%d\n",nvram_get_int("now_security"),security_type(0));
+		if(nvram_get_int("now_security")!=security_type(0) && nvram_get_int("now_security")!=0)
+		{
+			nvram_set("cap_security_old",nvram_get("now_security"));
+			sprintf(tmp, "%d", security_type(0));
+			nvram_set("now_security",tmp);
+		}	
+			
 		gen_wsplcd_conf(0, CMP_CONF_NEW, 1);
 		if (cmp_file(CMP_CONF, CMP_CONF_NEW)) {
 			unlink(CMP_CONF);
@@ -1820,36 +2137,63 @@ int start_cap(int c)
 			wsplcd_enable();
 			sleep(6);
 			nvram_set("cap_syncing","1");
-#if !defined(MAPAC1800)
+#if defined(RTCONFIG_LP5523)
 			lp55xx_leds_proc(LP55XX_GREENERY_LEDS, LP55XX_WIFI_PARAM_SYNC);
+#elif defined(MAPAC1750)
+			set_rgbled(RGBLED_GREEN_3ON1OFF);
 #endif
 		} else
+		{
+			_dprintf("CAP: ignore to change config\n");
 			return 1;
+		}
 	}
 	else if(c==2) //restart, for wsplcd daemon
 	{
 		_dprintf("CAP: restart wireless\n");
+		if(nvram_get_int("now_security")!=nvram_get_int("cap_security_old"))
+		{
+			_dprintf("CAP: change security mode\n");
+			restart_wifi(1);
+			sleep(10); //wait the time of postwifi.sh
+		}
 		set_vap(0,0); //config for 2G CAP
        	 	set_vap(0,1); //config for 5G CAP
 #if defined(MAPAC2200)
        	 	set_vap(0,2); //config for 5G-2 CAP
 		duplicate_5g2();
 #endif
+
 		wsplcd_stop();
 		gen_wsplcd_conf(0, CMP_CONF, 1);
 		cfg_re_syncing=0;
 		cfg_changed=0;
+		strcpy(asuscmd,"");
 		gen_wsplcd_conf(0, WSPLCD_CONF, 0);
 		wsplcd_enable();
 		nvram_commit();
-		gen_qca_wifi_cfgs();
+		if(nvram_get_int("now_security")==nvram_get_int("cap_security_old"))
+		{
+			_dprintf("CAP: simply restart wireless\n");
+			restart_wifi(0);
+		}
 		nvram_set("cap_syncing","0");
-		sleep(30); //estimate wifi-restart time
+		//sleep(30); //estimate wifi-restart time
 		//_dprintf("=>CAP: config change stop\n");
-#if !defined(MAPAC1800)
+#if defined(RTCONFIG_LP5523)
 		lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#elif defined(MAPAC1750)
+		nvram_set("prelink_pap_status", "0");
 #endif
 	}
+
+//send RCSA to uplink/CAP/PAP when detect radar
+	if(nvram_get_int("dfs_check_period"))
+		doSystem("iwpriv wifi1 CSwOpts 0x30");
+#if defined(MAPAC2200)
+	if (nvram_get_int("ncb_enable"))
+		doSystem("iwpriv wifi1 ncb_enable 1");
+#endif
 	return 0;
 }
 
@@ -1857,19 +2201,45 @@ void start_re(int c)
 {
 	int i;
 	wsplcd_stop();
+	
+#ifdef RTCONFIG_ETHBACKHAUL
+	if(c==0)
+		eth_mon_pre_action(1);
+#endif
 	if(c==3)
 	{
-		_dprintf("=>RE : ######wait timeout#####\n");
+		_dprintf("=>RE : ######wait and send msg to next RE#####\n");
+		ind_ath();//keep ath1 alive	
+		doSystem("ifconfig %s down",get_staifname(1));
+#ifdef RTCONFIG_DUAL_BACKHAUL
+		doSystem("iwpriv %s athnewind 1", get_wififname(0)); 
+		doSystem("ifconfig %s down",get_staifname(0));
+#endif
+		if(nvram_get_int("re_security_new")!=0 && 
+			(nvram_get_int("re_security_new")!=nvram_get_int("now_security")))
+		{
+			_dprintf("RE: change security mode\n");
+			resolve_security(nvram_get_int("re_security_new"));
+			re_scy_changed=1;
+		}
 		cfg_re_syncing=1;
+		cfg_changed=1;
 		gen_wsplcd_conf(0, WSPLCD_CONF, 0);
 		wsplcd_exec=1;
 		wsplcd_enable();
 		doSystem("killall -9 wifimon_check");
-		check_wsc_enrollee_status(10); //update current pap's bssid
+		//check_wsc_enrollee_status(10); //update current pap's bssid
 		sleep(self_restart); //estimate waiting time
+		_dprintf("=>RE : ###### stop to send msg #####\n");
 		doSystem("killall -9 wsplcd");
 		doSystem("rm -rf "WSPLCD_CONF);
 		doSystem("rm -rf /tmp/wsplcd.apply");
+		doSystem("ifconfig %s up",get_staifname(1));
+		doSystem("iwpriv %s athnewind 0", get_wififname(1)); //bind ath1 with sta1
+#ifdef RTCONFIG_DUAL_BACKHAUL
+		doSystem("ifconfig %s up",get_staifname(0));
+		doSystem("iwpriv %s athnewind 0", get_wififname(0)); 
+#endif
 		cfg_re_syncing=0;
 	}	
 	else
@@ -1893,6 +2263,8 @@ void start_re(int c)
 		duplicate_5g2();
   		nvram_commit();     
 	}
+	if (nvram_get_int("ncb_enable"))
+		doSystem("iwpriv wifi1 ncb_enable 1");
 #endif
 
 
@@ -1906,8 +2278,19 @@ void start_re(int c)
 #else
 	{
 
-		
-		gen_qca_wifi_cfgs();
+
+		if(c==2 || c==3)//only for wsplcd restart
+		{
+  			nvram_commit();     
+			_dprintf("run asus command=%s\n",nvram_get("re_asuscmd"));	
+			if(!strcmp(nvram_get("re_asuscmd"),"reboot"))
+				notify_rc("reboot");
+			//else
+			
+			restart_wifi(re_scy_changed);
+		}
+		else
+			restart_wifi(0);
 
 		if(nvram_get_int("dfs_check_period"))
 		{
@@ -1934,7 +2317,10 @@ void start_re(int c)
 			wpa_supplicant_start(i);
 			sleep(1);
 		}
-
+//avoid incorrect blue-led casued by 2G connection
+#ifdef RTCONFIG_DUAL_BACKHAUL
+		doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 disable_network 0");
+#endif
 	}
 #endif
 	for(i=0;i<2;i++)  
@@ -1948,28 +2334,152 @@ void start_re(int c)
 	{
 		nvram_set("re_syncing","0");
 		wpa_cli_set_bssid(1,nvram_get("wl1_sta_bssid"));
-		sleep(10); //estimate
+		//sleep(10); //estimate
 #ifdef RTCONFIG_DUAL_BACKHAUL
 		wpa_cli_set_bssid(0,nvram_get("wl0_sta_bssid"));
 #endif
 		//_dprintf("RE: config change stop\n");
-#if !defined(MAPAC1800)
+#if defined(RTCONFIG_LP5523)
 		lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#elif defined(MAPAC1750)
+		nvram_set("prelink_pap_status", "0");
 #endif
-		check_wsc_enrollee_status(20);
+		check_wsc_enrollee_status(10);
+		cfg_changed=0;
+		re_scy_changed=0;
 	}
 	//gen config and run daemon
 	gen_wsplcd_conf(1, WSPLCD_CONF, 0);
 	wsplcd_enable();
 	hyd_start(1);
-	wifimon_up();
 
+//avoid incorrect blue-led casued by 2G connection
+#ifdef RTCONFIG_DUAL_BACKHAUL
+	doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 enable_network 0");
+#endif
+	//send RCSA to uplink/CAP/PAP when detect radar
+	if(nvram_get_int("dfs_check_period"))
+		doSystem("iwpriv wifi1 CSwOpts 0x30");
+
+
+	if(c==2 || c==3) //only for wsplcd restart
+		wifimon_up("0");
+	else
+		wifimon_up("20");
+#ifdef RTCONFIG_ETHBACKHAUL
+	if(c==0)
+		eth_bh_mon_up();
+#endif
 }
 
+int resolve_security(int val)
+{
+ 	int auth,enc,i;
+	char tmp[15],tmp2[15],tmp3[15],str[10],str2[10],str3[100];
+	auth=(val>>4)&0xf;
+	enc=val&0xf;
+	if(auth==1)
+		strcpy(str,"open");
+	else if(auth==2)
+		strcpy(str,"shared");
+	else if(auth==3)
+		strcpy(str,"psk");
+	else if(auth==4)
+		strcpy(str,"psk2");
+	else if(auth==5)
+		strcpy(str,"pskpsk2");
+	else 
+		strcpy(str,"");
+
+	if(enc==1)
+		strcpy(str2,"tkip");
+	else if(enc==2)
+		strcpy(str2,"aes");
+	else if(enc==3)
+		strcpy(str2,"tkip+aes");
+	else
+		strcpy(str2,"");
+
+	for(i=0;i<2;i++)
+	{
+		sprintf(tmp, "wl%d_auth_mode_x",i);
+		sprintf(tmp2, "wl%d_crypto",i);
+		sprintf(tmp3, "wl%d_wpa_psk",i);
+		nvram_set(tmp,str);
+		nvram_set(tmp2,str2);
+		nvram_set(tmp3,nvram_safe_get("re_security_ext"));
+	}
+	
+#if defined(MAPAC2200)
+	nvram_set("wl2_auth_mode_x",str);
+	nvram_set("wl2_crypto",str2);
+	nvram_set("wl2_wpa_psk",nvram_safe_get("re_security_ext"));
+#endif
+	_dprintf("==> wl0 auth=%s, wl1 auth=%s\n",nvram_safe_get("wl0_auth_mode_x"),nvram_safe_get("wl1_auth_mode_x"));
+}
+	
+
+void restart_wifi(int option)
+{
+	if(option)
+		restart_wireless();
+	else
+		gen_qca_wifi_cfgs();
+}
+
+int security_type(int band)
+{
+	int auth,enc;
+        char prefix[] = "wlXXXXXX",tmp[128];
+	char *str=NULL;
+	snprintf(prefix, sizeof(prefix), "wl%d_", band);
+	str = nvram_safe_get(strcat_r(prefix, "auth_mode_x", tmp));
+
+	if (str && strlen(str))
+	{
+		if(!strcmp(str,"open"))
+			auth=1;
+		else if(!strcmp(str,"shared"))
+			auth=2;
+		else if(!strcmp(str,"psk"))
+			auth=3;
+		else if(!strcmp(str,"psk2"))
+			auth=4;
+		else if(!strcmp(str,"pskpsk2"))
+			auth=5;
+		else
+			auth=6;
+	}
+	else 
+		auth=0;
+	
+	str = nvram_safe_get(strcat_r(prefix, "crypto", tmp));
+	if (str && strlen(str))
+	{
+		if(!strcmp(str,"tkip"))
+			enc=1;
+		else if(!strcmp(str,"aes"))
+			enc=2;
+		else if(!strcmp(str,"tkip+aes")||!strcmp(str,"aes+tkip"))
+			enc=3;
+		else
+			enc=4;
+	}
+	else
+		enc=0;
+	return (auth<<4|enc);
+}
+
+int start_cmd(char *cmd)
+{
+	strncpy(asuscmd,cmd,strlen(cmd));
+	start_cap(1);		
+	return 0;
+}
 
 void start_hyfi(void)
 {
-	int i,role;
+	int role;
 	role=get_role();
 	if(role==0)
 	{
@@ -1984,20 +2494,32 @@ void start_hyfi(void)
 	}
 	else if(role==1)
 	{
-#ifdef RTCONFIG_DUAL_BACKHAUL
-		for(i=0;i<2;i++)
-			wpa_supplicant_start(i);
-#else
-		wpa_supplicant_start(1);
-#endif
-		set_vap(1,0); //config for 2G range extender
-        	set_vap(1,1); //config for 5G range extender
+		if(re_scy_changed)
+		{
+			set_vap(1,0); //config for 2G range extender
+       		 	set_vap(1,1); //config for 5G range extender
 #if defined(MAPAC2200)
-      		set_vap(1,2); //config for 5G-2 range extender
+     	 		set_vap(1,2); //config for 5G-2 range extender
 #endif
-		hyd_start(1);
-		gen_wsplcd_conf(1, WSPLCD_CONF, 0);
-		//wifimon_up();
+			return;
+		}
+		else
+		{
+#ifdef RTCONFIG_DUAL_BACKHAUL
+			for(i=0;i<2;i++)
+				wpa_supplicant_start(i);
+#else
+			wpa_supplicant_start(1);
+#endif
+			set_vap(1,0); //config for 2G range extender
+       		 	set_vap(1,1); //config for 5G range extender
+#if defined(MAPAC2200)
+     	 		set_vap(1,2); //config for 5G-2 range extender
+#endif
+			hyd_start(1);
+			gen_wsplcd_conf(1, WSPLCD_CONF, 0);
+			//wifimon_up();
+		}
 	}
 	else
 		_dprintf("error mode!!\n");
@@ -2019,7 +2541,157 @@ void stop_hyfi(void)
 
 
 #ifdef RTCONFIG_ETHBACKHAUL
-int eth_backl=0;
+static inline int get_my_dist(void) {
+	return nvram_get_int("mesh_dist");
+}
+#define VV_DEBUG 1
+/* following definition is according to platform & product */
+#define	MAX_WANLAN_PORT		5
+#define	ETH0_DEFAULT_PORT_SHIFT	5
+#define	ETH1_DEFAULT_PORT_SHIFT	4
+
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+#define UPSTREAM_DETECTING_DEFAULT_TIMEOUT	4
+#define LLDP_UPSTREAM_DETECT_TIMEOUT		10
+#define LLDP_DOWNSTREAM_DETECT_TIMEOUT		(UPSTREAM_DETECTING_DEFAULT_TIMEOUT + LLDP_UPSTREAM_DETECT_TIMEOUT)
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+#define	PEER_NODE_DETECT_TIMEOUT		3
+#define	EXCHANGE_PORT				9413
+#define EXCHANGE_BUF_LEN			64
+#define	EXCHANGE_GROUP_LEN			8
+#define	EXCHANGE_MAC_LEN			12
+#define	MAX_RECORD_ETH_CLIENT			10
+#define EXCHANGE_DAEMON_PERIOD		3	/* send beacon every X seconds */
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+#define	EXCHANGE_PEER_DIE_TIMEOUT	15	/* remove eth backhaul peer if receive no beacon over X seconds */
+#else
+#define	EXCHANGE_PEER_DIE_TIMEOUT	30	/* remove eth backhaul peer if receive no beacon over X seconds */
+#endif
+#define	EXCHANGE_DAEMON_ACT_SENDOUT	1
+#define	EXCHANGE_DAEMON_ACT_UPDATE	2
+#define	EXCHANGE_DAEMON_ACT_ENTETH_L	4
+#define	EXCHANGE_DAEMON_ACT_ENTETH_D	8
+#define	EXCHANGE_DAEMON_ACT_EXIT_ETH	16
+#define	EXCHANGE_DAEMON_ACT_RESET_ALL	32	/* reset all LAN ports after 3 seconds */
+#define	EXCHANGE_DAEMON_ACT_DIS_PORT	64	/* disable specific port */
+#define	EXCHANGE_DAEMON_ACT_BANG_PEER	128	/* response to NON ETH RE peer */
+
+#define	HIVE_ETH_SCRIPT_TIMEOUT		12
+#define	UN_PATH_PORT_TO_DAEMON	"/tmp/eth_p2d.sock"
+
+typedef struct {
+	char role; // C, R
+	char mode; // E, N, (W)
+	char msg_type; // L, D
+	char dist_str[3+1]; // 000, 001, 255
+	unsigned char group_key[EXCHANGE_GROUP_LEN]; // pre 8 hex-digit of group key
+	unsigned char WIFI1_MAC[EXCHANGE_MAC_LEN]; // MAC address of 5G-1 interface
+	unsigned char CAP_MAC[EXCHANGE_MAC_LEN]; // MAC address of CAP's 5G-1, or stands for upper NODE's MAC in mixed mode
+	unsigned char SRC_MAC[EXCHANGE_MAC_LEN]; // MAC address of src MAC
+} __attribute__((packed)) exchange_message_t, *exchange_message_pt;
+
+typedef struct {
+	unsigned char is_used;
+	unsigned char from_port; // 255: by daemon
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+	unsigned char distance;
+#endif
+	time_t update_time;
+	unsigned char WIFI1_MAC[EXCHANGE_MAC_LEN+1]; // MAC address of 5G-1 interface
+} __attribute__((packed)) daemon_record_t, *daemon_record_pt;
+
+typedef struct {
+	unsigned char action; // A(add), D(delete), E(add & enter ethbackl)
+	unsigned char port_no; // happened on which port
+	unsigned char WIFI1_MAC[EXCHANGE_MAC_LEN+1]; // MAC address of 5G-1 interface
+} __attribute__((packed)) p2d_message_t, *p2d_message_pt;
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+
+#if 0 // #ifdef KEEP_ALIVE_CHECK
+/* clone Eason's original logic: check alive every 20 seconds, sample result in 10 seconds */
+#define STREAM_CHECK_ALIVE_TIME		20
+#define STREAM_CHECK_ALIVE_AVG_CNT		10
+#endif
+
+enum {
+	NOLINK_STATE = 0,
+	LINKUP_STABLE,
+	HIVE_ETH_WAIT,
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+	RE_DIRECTION_DETECTING,
+	LLDP_UPSTREAM_DETECT,
+	LLDP_DOWNSTREAM_DETECT,
+	RE_DOWNSTREAM_ETHBACKHAUL_SETUPWAIT,
+	RE_ETHBACKHAUL_TEARDOWNWAIT,
+#if 0 //#ifdef KEEP_ALIVE_CHECK
+	RE_ETHBACKHAUL_TEARDOWNWAIT2,
+#endif
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+	PEER_NODE_DETECTING,
+	PEER_PORT_DISABLE,
+	RE_PEER_RELINK,
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+};
+
+#ifdef VV_DEBUG
+static char *state2str(int state)
+{
+	char *str;	
+	switch (state) {
+		case NOLINK_STATE:
+					str = "<no link>";
+					break;
+		case LINKUP_STABLE:
+					str = "<changed to linkup>";
+					break;
+		case HIVE_ETH_WAIT:
+					str = "<waiting eth script>";
+					break;
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+		case RE_DIRECTION_DETECTING:
+					str = "<RE up/down detecting>";
+					break;
+		case LLDP_UPSTREAM_DETECT:
+					str = "<LLDP upstream detect wait>";
+					break;
+		case LLDP_DOWNSTREAM_DETECT:
+					str = "<LLDP downstream detect wait>";
+					break;
+		case RE_DOWNSTREAM_ETHBACKHAUL_SETUPWAIT:
+					str = "<RE downstream eth setup wait>";
+					break;
+		case RE_ETHBACKHAUL_TEARDOWNWAIT:
+					str = "<RE ETH_BACKL tear down wait>";
+					break;
+#if 0 //#ifdef KEEP_ALIVE_CHECK
+		case RE_ETHBACKHAUL_TEARDOWNWAIT2:
+					str = "<RE ETH_BACKL tear down wait2>";
+					break;
+#endif
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+		case PEER_NODE_DETECTING:
+					str = "<peer node detection>";
+					break;
+		case PEER_PORT_DISABLE:
+					str = "<port disable>";
+					break;
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+		default:
+					str = "<INVALID!!!>";
+					break;
+	}
+	return str;
+}
+#endif
+
+/* sync this value from ipq40xx.c */
+#define ISOLATED_VLAN_OFFSET    10
+
+#define DETECT_SCRIPT_NAME	"eth_det_%d.sh"
+#define DETECT_RESULT_NAME	"eth_det_%d_output"
+
+#define DETECT_PEER_RESULT_NAME	"det_peer.%s"
+
 int lldpcli_det(void)
 {
 	char buf[2048];
@@ -2027,7 +2699,17 @@ int lldpcli_det(void)
         int len;
         char *pt1,*pt2;
 	char bssid[18];
-        sprintf(buf, "lldpcli show neighbors");
+	//we listen eth0(upstream) for RE, eth1(downstream) for CAP
+
+	if (get_role()) // RE
+		pt1 = "eth0";
+	else { /* CAP */
+		if (strcmp(nvram_safe_get(WAN_NVRAM), "eth0")==0)
+			pt1 = "eth1";
+		else
+			pt1 = "eth0";
+	}
+	sprintf(buf, "lldpcli show neighbors ports %s", pt1);
 	
         fp = popen(buf, "r");
         if (fp) {
@@ -2037,9 +2719,39 @@ int lldpcli_det(void)
                 if (len > 1) {
                         buf[len-1] = '\0';
 			if(get_role()) //RE
-                        	pt1 = strstr(buf, "MAP-CAP"); //get 
+			{
+                        	pt1 = strstr(buf, "MAP-CAP"); //get
+				if(!pt1)	
+                        		pt1 = strstr(buf, "MAP-RE"); //get 
+
+			}
 			else
                         	pt1 = strstr(buf, "MAP-RE"); //get 
+                        if (pt1)
+                               return 1;
+		}
+	}
+	return 0;
+}
+
+int lldpcli_det2(void)
+{
+	char buf[2048];
+        FILE *fp;
+        int len;
+        char *pt1,*pt2;
+	char bssid[18];
+	//we listen eth1(downstream) for RE
+        sprintf(buf, "lldpcli show neighbors ports eth1");
+	
+        fp = popen(buf, "r");
+        if (fp) {
+                memset(buf, 0, sizeof(buf));
+                len = fread(buf, 1, sizeof(buf), fp);
+                pclose(fp);
+                if (len > 1) {
+                        buf[len-1] = '\0';
+                        pt1 = strstr(buf, "MAP-RE"); //get 
                         if (pt1)
                                return 1;
 		}
@@ -2059,24 +2771,55 @@ void wpacli_reset()
 	doSystem("wpa_cli -p /var/run/wpa_supplicant-sta1 enable_network 0");
 }
 
-void start_eth(int c)
+static void org_start_eth(int c)
 {
         char ifname[32];
         char *next;
 	int i=0;
-	if(c) //eth up
+	if(c==3) //RE eth1 up
 	{
-		_dprintf("=> RE: eth backhaul up\n");
-		wpacli_reset();
-		sleep(eth_down_time); //for green led
+		_dprintf("=> RE: eth downstream backhaul up\n");
+                foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+                	ifconfig(ifname, 0, NULL, NULL);
+                sleep(15);
+                foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+                       	ifconfig(ifname, IFUP, NULL, NULL);
 	}
-	else
+	else if(c==2) //RE eth1 down
 	{
-		_dprintf("=> RE: eth backhaul down\n");
-		ifconfig("eth1", 0, NULL, NULL);
+		_dprintf("=> RE: eth downstream backhaul down\n");
+                ifconfig("eth1", 0, NULL, NULL);
+		sleep(15);
 		doSystem("killall -9 hyd");
 		doSystem("hyd -C /tmp/hyd.conf");
-		wpacli_reset();
+                ifconfig("eth1", IFUP, NULL, NULL);
+	}
+	else if(c==1) //RE eth0 up
+	{
+		_dprintf("=> RE: eth backhaul up\n");
+                ifconfig("eth1", 0, NULL, NULL);
+		wpa_supplicant_stop(1);
+		gen_hyd_conf(1);
+		doSystem("killall -9 hyd");
+		doSystem("hyd -C /tmp/hyd.conf");
+		sleep(2);
+                ifconfig("eth1", IFUP, NULL, NULL);
+		// add if up for athnewind config changed
+		ifconfig(get_wififname(1), IFUP, NULL, NULL);
+	}
+	else if(c==0) //RE eth0 down
+	{
+		_dprintf("=> RE: eth backhaul down\n");
+                ifconfig("eth1", 0, NULL, NULL);
+                ifconfig("br0",  0, NULL, NULL);
+		sleep(2);
+		gen_hyd_conf(1);
+		doSystem("killall -9 hyd");
+                ifconfig("br0",  IFUP, NULL, NULL);
+        	doSystem("echo 1 >> /proc/sys/net/bridge/bridge-nf-call-custom");
+		doSystem("hyctl attach %s",nvram_get("lan_ifname")); //after br0 is up
+
+		wpa_supplicant_start(1);
 
 		if (pids("udhcpc"))
                 {
@@ -2105,6 +2848,1826 @@ void start_eth(int c)
 		}
 	}
 }
+
+static void cap_start_eth(int c)
+{
+	if (c==1) {
+		char ifname[32];
+		char *next;
+		foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+			ifconfig(ifname, 0, NULL, NULL);
+		sleep(15);
+		foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+			ifconfig(ifname, IFUP, NULL, NULL);
+	} else if (c==0) {
+		ifconfig("eth1", 0, NULL, NULL);
+		sleep(eth_down_time);
+		ifconfig("eth1", IFUP, NULL, NULL);
+		doSystem("killall -9 hyd");
+		notify_rc("start_dnsmasq");
+	}
+}
+
+/*
+eth_queue_cmd
+0: initial
+1: act for daemon hive_eth 0
+2: act for daemon hive_eth 1
+3: wait to do daemon hive_eth 0
+4: wait to do daemon hive_eth 1
+9: busy
+*/
+void start_eth(int c)
+{
+	if((c==0) || (c==1)) { // duplicated check
+		int queue_cmd;
+		queue_cmd = nvram_get_int("eth_queue_cmd");
+do_again:
+		/* queue_cmd should be 1 or 2 here */
+		nvram_set("eth_queue_cmd", "9");
+		if (get_role())
+			org_start_eth(c);
+		else
+			cap_start_eth(c);
+#ifndef RTCONFIG_ETHBH_MIXED_MODE
+		if ( queue_cmd == 1 )
+			nvram_set("eth_bh_resetLAN", "4");
+#endif
+		/* check queue again */
+		queue_cmd = nvram_get_int("eth_queue_cmd");
+		switch(queue_cmd)
+		{
+			case 3:
+				nvram_set("eth_backl","0");
+				queue_cmd = 1;
+				break;
+			case 4:
+				nvram_set("eth_backl","1");
+				set_hops_count();
+				queue_cmd = 2;
+				break;
+			case 1:
+			case 2:
+			case 9:
+			default:
+				nvram_unset("eth_queue_cmd"); /* set to 0 */
+				queue_cmd = 0;
+				break;
+		}
+		if ((queue_cmd) && (queue_cmd-1) != c) {
+			c = queue_cmd-1;
+			goto do_again;
+		}
+	} else
+		org_start_eth(c);
+}
+
+unsigned int isolated_vlan_create( unsigned int mask, char * nic);
+unsigned int get_all_portmask(void);
+unsigned int get_portlink_bymask(unsigned int portmask);
+void power_onoff_port(int portno, int state);
+void move_port_to(int portno, char *nic_device);
+void isolate_port(int portno);
+
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+static void re_detect_direction_on_port(int portno)
+{
+	FILE *fp;
+	char fname[50];
+	int vlanid = portno+ISOLATED_VLAN_OFFSET;
+	sprintf(fname, "/tmp/"DETECT_RESULT_NAME, portno);
+	unlink(fname);
+	sprintf(fname, "/tmp/"DETECT_SCRIPT_NAME, portno);
+	if (fp = fopen(fname, "w")) {
+		fprintf(fp, "#!/bin/sh\n"); 
+		fprintf(fp, "ifconfig vlan%d 0.0.0.0 up\n", vlanid); 
+                fprintf(fp, "if udhcpc -i vlan%d -t %d -T1 -n -q -R > /dev/null 2>&1; then\n", vlanid, UPSTREAM_DETECTING_DEFAULT_TIMEOUT);
+                fprintf(fp, "    echo -n 1 > /tmp/"DETECT_RESULT_NAME"\n", portno);
+                fprintf(fp, "else\n");
+                fprintf(fp, "    echo -n 0 > /tmp/"DETECT_RESULT_NAME"\n", portno);
+                fprintf(fp, "fi\n");
+		fprintf(fp, "ifconfig vlan%d down\n", vlanid); 
+		fclose(fp);
+		chmod(fname, 0755);
+		eval(fname);
+	}
+}
+
+static void re_abort_detect_dir_on_port(int portno)
+{
+	FILE *fp;
+	char fname[50];
+	int vlanid = portno+ISOLATED_VLAN_OFFSET;
+	sprintf(fname, "killall -9 "DETECT_SCRIPT_NAME, portno);
+	system(fname);
+	sprintf(fname, "/tmp/"DETECT_RESULT_NAME, portno);
+	unlink(fname);
+}
+
+/* return 1 for upstream, 0 for downstream */
+static int get_direction_detect_result(int portno)
+{
+	char fname[50];
+	char value[5];
+	int result;
+	sprintf(fname, "/tmp/"DETECT_RESULT_NAME, portno);
+	value[0]='\0';
+        f_read_string(fname, value, sizeof(value));
+	if (value[0]=='1')
+		return 1;
+	else if (value[0]=='0')
+		return 0;
+	else {
+		_dprintf("BBBBUG!!!!! [%s:%d]: read[%s],result[%s]", \
+		__func__, __LINE__, fname, value);
+	}
+}
+
+inline static void re_move_port_upstream(int portno)
+{
+	move_port_to(portno, "eth0"); /* group 1, eth0 */
+}
+
+inline static void re_move_port_downstream(int portno)
+{
+	move_port_to(portno, "eth1"); /* group 2, eth1 */
+}
+
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+
+static pid_t peer_detect_on_port(int portno, int timeout, unsigned char *gk_prefix)
+{
+	pid_t pid;
+	char vlanstr[10], time_str[10], tmpbuf[30];
+	unsigned char MAC[6];
+	char our_msg[EXCHANGE_BUF_LEN];
+	char *det_argv[] = { "ethbh_peer_detect", NULL, NULL, NULL, NULL };
+	exchange_message_pt mpt;
+	
+	sprintf(vlanstr, "vlan%d", portno+ISOLATED_VLAN_OFFSET);
+	sprintf(time_str, "%d", timeout);
+
+	memset(our_msg, 0x00, sizeof(our_msg));
+	mpt = (exchange_message_pt)&our_msg[0];
+	if (get_role()) //RE
+		mpt->role='R';
+	else
+		mpt->role='C';
+	if (nvram_get_int("eth_backl"))
+		mpt->mode='E';
+	else
+		mpt->mode='N';
+	mpt->msg_type = 'L';
+	if (get_role()) //RE
+		sprintf(mpt->dist_str, "%03d", get_my_dist());
+	else
+		sprintf(mpt->dist_str, "%03d", 0);
+	mpt->dist_str[sizeof(mpt->dist_str)-1]='S';
+
+	memcpy(mpt->group_key, gk_prefix, sizeof(mpt->group_key));
+	if (ether_atoe(nvram_safe_get("wl1macaddr"), MAC))
+		sprintf(tmpbuf, "%02X%02X%02X%02X%02X%02X", MAC[0], MAC[1], MAC[2], MAC[3], MAC[4], MAC[5]);
+	else
+		sprintf(tmpbuf, "000000000000");
+	memcpy(mpt->WIFI1_MAC, tmpbuf, sizeof(mpt->WIFI1_MAC));
+	if (get_role()) { // RE
+		if (nvram_get("eth_bh_CAPMAC"))
+			strcpy(tmpbuf, nvram_get("eth_bh_CAPMAC"));
+		else
+			sprintf(tmpbuf, "000000000000");
+	}
+	memcpy(mpt->CAP_MAC, tmpbuf, sizeof(mpt->CAP_MAC));
+	sprintf(tmpbuf, "000000000000");
+	memcpy(mpt->SRC_MAC, tmpbuf, sizeof(mpt->SRC_MAC));
+	det_argv[1]=vlanstr;
+	det_argv[2]=time_str;
+	det_argv[3]=our_msg;
+
+	_eval(det_argv, NULL, 0, &pid);
+	return pid;
+}
+
+static void detect_daemonon_run(char *lan, unsigned char *gk_prefix)
+{
+	pid_t pid;
+	char tmpbuf[30];
+	unsigned char MAC[6];
+	char our_msg[EXCHANGE_BUF_LEN];
+	char *det_argv[] = { "ethbh_peer_detect", NULL, NULL, NULL, NULL };
+	exchange_message_pt mpt;
+
+	memset(our_msg, 0x00, sizeof(our_msg));
+	mpt = (exchange_message_pt)&our_msg[0];
+	if (get_role()) //RE
+		mpt->role='R';
+	else
+		mpt->role='C';
+	mpt->mode='E';
+	mpt->msg_type = 'D';
+	/* updated this in while loop */
+	sprintf(mpt->dist_str, "%03dS", 0);
+	memcpy(mpt->group_key, gk_prefix, sizeof(mpt->group_key));
+	if (ether_atoe(nvram_safe_get("wl1macaddr"), MAC))
+		sprintf(tmpbuf, "%02X%02X%02X%02X%02X%02X", MAC[0], MAC[1], MAC[2], MAC[3], MAC[4], MAC[5]);
+	else
+		sprintf(tmpbuf, "000000000000");
+	memcpy(mpt->WIFI1_MAC, tmpbuf, sizeof(mpt->WIFI1_MAC));
+	if (get_role()) { // RE
+		sprintf(tmpbuf, "000000000000"); /* it will be updated in daemon */
+	}
+	memcpy(mpt->CAP_MAC, tmpbuf, sizeof(mpt->CAP_MAC));
+	sprintf(tmpbuf, "000000000000");
+	memcpy(mpt->SRC_MAC, tmpbuf, sizeof(mpt->SRC_MAC));
+	det_argv[1]=lan;
+	det_argv[2]="0"; // indicate to be daemon
+	det_argv[3]=our_msg;
+
+	_eval(det_argv, NULL, 0, &pid);
+	return;
+}
+
+/*
+  return -1: no detect result
+  return  0: got exact result
+  return  1: got chaos case, just disable this port
+*/
+static int get_peer_detect_result(int portno, unsigned char *key, char *outbuf, int outbuf_size)
+{
+	char fname[50];
+	char vlanstr[10];
+	char msgbuf[MAX_RECORD_ETH_CLIENT][sizeof(exchange_message_t)+1];
+	int client_count, len, i, cap_count, cap_index;
+	exchange_message_pt mpt;
+	FILE *fp;
+
+	if (outbuf_size < sizeof(exchange_message_t)) {
+		_dprintf("[%s] buffer too small[%d], need[%d]!!!\n", __func__, outbuf_size, sizeof(exchange_message_t));
+		return 1;
+	}
+
+	sprintf(vlanstr, "vlan%d", portno+ISOLATED_VLAN_OFFSET);
+	sprintf(fname, "/tmp/"DETECT_PEER_RESULT_NAME, vlanstr);
+	if (!f_exists(fname)) return -1;
+
+	fp = fopen(fname, "rb");
+	if (!fp) return -1;
+
+	client_count=0;
+	while (client_count < MAX_RECORD_ETH_CLIENT) {
+		len = fread(msgbuf[client_count], 1, sizeof(exchange_message_t)+1, fp);
+		msgbuf[client_count][sizeof(exchange_message_t)]='\0';
+		if (len >= sizeof(exchange_message_t))
+			client_count++;
+		else
+			break;
+	}
+	fclose(fp);
+	if (client_count==0)
+		return -1;
+	cap_index=0;
+	cap_count=0;
+	for ( i=0; i<client_count; i++) {
+		mpt = (exchange_message_pt)&msgbuf[i][0];
+		if (memcmp(mpt->group_key, key, sizeof(mpt->group_key))!=0) {
+			return 1;
+		}
+		if (mpt->role=='C') {
+			cap_count++;
+			cap_index=i;
+		}
+		if ((mpt->msg_type=='L') && (client_count>1)) {
+			return 1;
+		}
+	}
+	if (cap_count > 1) {
+		return 1;
+	} else if (cap_count==1) {
+		memcpy(outbuf, msgbuf[cap_index], sizeof(exchange_message_t));
+	} else { /* cap_count==0 */
+		if (client_count!=1) {
+			return 1;
+		}
+		memcpy(outbuf, msgbuf[0], sizeof(exchange_message_t));
+	}
+	return 0;
+}
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+
+static void h_chld(int signo)
+{
+	while(waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+
+void eth_mon_pre_action(int do_poweroff)
+{
+	unsigned int all_portmask;
+	unsigned char all_portbuf[20];
+	char *lan_device="eth1";
+
+	if (get_role()) // RE
+		all_portmask = isolated_vlan_create(0, lan_device);
+	else {
+		all_portmask = get_all_portmask();
+		/* we don't handle CAP's WAN port */
+		if (strcmp(nvram_safe_get(WAN_NVRAM), "eth0")==0)
+			all_portmask &= ~(1 << ETH0_DEFAULT_PORT_SHIFT);
+		else if (strcmp(nvram_safe_get(WAN_NVRAM), "eth1")==0) {
+			all_portmask &= ~(1 << ETH1_DEFAULT_PORT_SHIFT);
+			lan_device = "eth0";
+		}
+#ifndef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+		/* isloated the LAN port */
+		isolated_vlan_create(all_portmask, lan_device);
+#endif
+	}
+	snprintf(all_portbuf, sizeof(all_portbuf), "%X", all_portmask);
+
+	nvram_set("tmp_eb_allport", all_portbuf);
+	nvram_set("tmp_eb_lan", lan_device);
+
+	if (do_poweroff) {
+		unsigned int tmp_shift_mask;
+		int i;
+		for (i=0; i < MAX_WANLAN_PORT; i++) { /* handle power state */
+			tmp_shift_mask = 1 << (i+1);
+			if (!(tmp_shift_mask & all_portmask)) continue;
+			power_onoff_port(i+1, 0);
+		}
+	}
+
+	f_write_string("/proc/sys/net/bridge/lan_nic", lan_device, 0, 0);
+}
+
+#define	ETH_BH_MON_EXECNAME	"eth_bh_mon"
+extern pid_t* find_pid_by_name( char* pidName); 
+void start_eth_bh_mon(void)
+{
+	int i, reset_port;
+	unsigned int all_portmask, change2_linkdown_mask, change2_linkup_mask;
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+	unsigned int re_upstream_cap_downstream_port_mask, re_downstream_port_mask;
+#endif
+	unsigned int cur_linkstate, last_linkstate, tmp_state, tmp_shift_mask;
+#ifdef	UDPBCAST_SOCKET_RCV
+	unsigned int under_link_detect_mask = 0;
+#endif
+	unsigned int port_state_machine[MAX_WANLAN_PORT] = { NOLINK_STATE };
+	unsigned int port_state_machine_timeout[MAX_WANLAN_PORT] = { 0 };
+#ifndef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+	unsigned int port_detected_ethbackl[MAX_WANLAN_PORT] = { 0 }; /* 0: none, 1: normal eth, 2: re-peer, 3: re-peer-disabled */
+	unsigned int port_power_down_count[MAX_WANLAN_PORT] = { 0 };
+	unsigned char port_eth_bh_neighbor[MAX_WANLAN_PORT][EXCHANGE_MAC_LEN+1];
+#endif
+	char lan_device[20];
+	unsigned char our_group_key[EXCHANGE_GROUP_LEN+1];
+	int s_un;
+	p2d_message_t p2d_buf;
+#ifdef VV_DEBUG
+	unsigned int last_port_state_machine[MAX_WANLAN_PORT] = { NOLINK_STATE };
+#endif
+#if 0 //#ifdef KEEP_ALIVE_CHECK
+	int stream_avg=0, stream_avg_cnt=0, downstream_alive_check=0, upstream_alive_check=0;
+#endif
+#ifndef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+	pid_t peer_detect_pid[MAX_WANLAN_PORT] = { 0 };
+#endif
+
+#ifdef UDPBCAST_SOCKET_RCV
+	nvram_set_int("eth_under_detmask", under_link_detect_mask);
+#endif
+	cur_linkstate = last_linkstate = 0;
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+	if (get_role())
+		nvram_set_int("eth_bh_up_cost", 0);
+#endif
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+	re_upstream_cap_downstream_port_mask = re_downstream_port_mask = 0;
+#endif
+	if (1)
+	{
+		pid_t mypid, *pid_list;
+
+		mypid = getpid();
+		pid_list = find_pid_by_name(ETH_BH_MON_EXECNAME);
+		for (i=0; pid_list[i]!=0; i++) {
+			if (pid_list[i] != mypid) {
+				_dprintf("[%s] is already running, pid:%u\n", ETH_BH_MON_EXECNAME, pid_list[i]);
+				return;
+			}
+		}
+	}
+	strcpy(lan_device, nvram_safe_get("tmp_eb_lan"));
+	all_portmask = strtoul(nvram_safe_get("tmp_eb_allport"), NULL, 16);
+	nvram_unset("tmp_eb_lan");
+	nvram_unset("tmp_eb_allport");
+	for (i=0; i < MAX_WANLAN_PORT; i++) { /* handle power down count */
+		tmp_shift_mask = 1 << (i+1);
+		if (!(tmp_shift_mask & all_portmask)) continue;
+		port_power_down_count[i] = 2;
+	}
+
+	signal(SIGCHLD, h_chld);
+	our_group_key[EXCHANGE_GROUP_LEN]='\0';
+	memcpy(our_group_key, nvram_safe_get("cfg_group"), EXCHANGE_GROUP_LEN);
+
+	detect_daemonon_run(lan_device, our_group_key);
+	if (1)
+	{
+		struct sockaddr_un uaddr;
+		int try=0;
+
+		while (try++<3) {
+			if (f_exists(UN_PATH_PORT_TO_DAEMON)) break;
+			sleep(1);
+		}
+
+		if ((s_un=socket(AF_LOCAL,SOCK_DGRAM,0)) == -1) {
+			_dprintf("[%s]local socket open error!\n", __func__);
+			return;
+		}
+
+		memset ((char *)&uaddr,0,sizeof(uaddr));
+		uaddr.sun_family=AF_LOCAL;
+		strcpy(uaddr.sun_path, UN_PATH_PORT_TO_DAEMON);
+
+		if ( connect(s_un,(struct sockaddr*)(&uaddr),sizeof(uaddr)) == -1 ) {
+			close(s_un);
+			_dprintf("[%s]local socket connect error!\n", __func__);
+			return;
+		}
+	}
+
+	while (1) {
+		if (nvram_match("x_Setting", "1") && nvram_get_int("wlready")) {
+			change2_linkdown_mask = change2_linkup_mask = 0;
+			cur_linkstate = get_portlink_bymask(all_portmask);
+			if ( cur_linkstate != last_linkstate ) { /* something changed */
+				tmp_state = cur_linkstate ^ last_linkstate;
+				for (i=0; i < MAX_WANLAN_PORT; i++) { /* handle state machine */
+					tmp_shift_mask = 1 << (i+1);
+					if ( tmp_state & tmp_shift_mask ) { /* port link state changed */
+						if ( tmp_shift_mask & last_linkstate ) /* link down */
+							change2_linkdown_mask |= tmp_shift_mask;
+						else if ( tmp_shift_mask & cur_linkstate ) /* link up */
+							change2_linkup_mask |= tmp_shift_mask;
+						else /* BUG!! */
+							_dprintf("BBBBUG!!!!! [%s:%d]: last:0x%02x, cur:0x%02x, tmp_shift:0x%02x\n", \
+								__func__, __LINE__, last_linkstate, cur_linkstate, tmp_shift_mask);
+					}
+				}
+				last_linkstate = cur_linkstate;
+			}
+			for (i=0; i < MAX_WANLAN_PORT; i++) { /* handle state machine */
+				tmp_shift_mask = 1 << (i+1);
+#ifdef VV_DEBUG
+				if (last_port_state_machine[i]!=port_state_machine[i])
+					_dprintf("<<State Changed>>: port[%d]:%s, port_mask:0x%02x\n", i+1, state2str(port_state_machine[i]), tmp_shift_mask);
+				last_port_state_machine[i]=port_state_machine[i];
+#endif
+				switch (port_state_machine[i]) {
+					case	NOLINK_STATE:
+								if ( tmp_shift_mask & change2_linkup_mask ) { /* link up, go to upstream detecting */
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+									if (get_role()) {//RE
+										re_detect_direction_on_port(i+1);
+										port_state_machine[i]=RE_DIRECTION_DETECTING;
+										port_state_machine_timeout[i]=UPSTREAM_DETECTING_DEFAULT_TIMEOUT;
+									} else { // CAP
+										/* move_port_downstream(tmp_shift_mask); */ /* CAP don't need to move port */
+										if (nvram_get_int("eth_backl")==0) {
+											port_state_machine[i]=LLDP_DOWNSTREAM_DETECT;
+											port_state_machine_timeout[i]=LLDP_DOWNSTREAM_DETECT_TIMEOUT; /* wait for being stable */
+										}
+									}
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+									if(!get_role()) { //CAP
+										char vlan_name[10];
+										snprintf(vlan_name, sizeof(vlan_name), "vlan%d", i+1+ISOLATED_VLAN_OFFSET);
+										eval("iptables", "-I", "INPUT", "-i", vlan_name, "-j", "ACCEPT");
+									}
+#ifdef UDPBCAST_SOCKET_RCV
+									under_link_detect_mask |= (1<<i);
+									nvram_set_int("eth_under_detmask", under_link_detect_mask);
+#endif
+									peer_detect_pid[i]=peer_detect_on_port(i+1, PEER_NODE_DETECT_TIMEOUT, our_group_key);
+									port_state_machine[i]=PEER_NODE_DETECTING;
+									port_state_machine_timeout[i]=PEER_NODE_DETECT_TIMEOUT+1;
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+								} else if ( tmp_shift_mask & change2_linkdown_mask ) {
+									_dprintf("BBBBUG!!!!! [%s:%d]: port:%d, c2_linkup:0x%02x, c2_linkdown:0x%02x\n", \
+										__func__, __LINE__, i+1, change2_linkup_mask, change2_linkdown_mask);
+								}
+								break;
+					case	LINKUP_STABLE:
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									isolate_port(i+1);
+									port_state_machine[i]=NOLINK_STATE;
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+									if (re_upstream_cap_downstream_port_mask == tmp_shift_mask) {
+										re_upstream_cap_downstream_port_mask = 0;
+										if(nvram_get_int("eth_backl")) {
+											nvram_set("eth_backl","0");
+											eval("hive_eth","0");
+											nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+										}
+									} else if (re_downstream_port_mask == tmp_shift_mask) {
+										re_downstream_port_mask = 0;
+										if(nvram_get_int("re_eth_backl"))
+										{
+											ifconfig(lan_device, 0, NULL, NULL);
+											port_state_machine[i]=RE_ETHBACKHAUL_TEARDOWNWAIT; /* over write state */
+											port_state_machine[i]=eth_down_time;
+										}
+									}
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+									port_state_machine[i]=NOLINK_STATE;
+									if (port_detected_ethbackl[i]==1) {
+#if 0
+										int j, count;
+										port_detected_ethbackl[i]=0;
+
+										if(get_role()) { //RE
+											count=0;
+											nvram_unset("eth_bh_CAPMAC");
+											for (j=0;j<MAX_WANLAN_PORT;j++)
+												if ( port_detected_ethbackl[j]==2 ) {
+													port_power_down_count[j]=2;
+													power_onoff_port(j+1, 0);
+												}
+										} else { // CAP
+											for (j=0, count=0;j<MAX_WANLAN_PORT;j++)
+												if ( port_detected_ethbackl[j]==1 ) count++;
+										}
+
+										if (count==0) {
+											_dprintf("<<ETH BACKL>>: leave eth backhaul, port[%d]\n", i+1);
+											nvram_set("eth_backl","0");
+											eval("hive_eth","0");
+											nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+										}
+#else
+										port_detected_ethbackl[i]=0;
+										p2d_buf.action='D';
+										p2d_buf.port_no=(unsigned char)i;
+										if(get_role()) //RE
+											memcpy(p2d_buf.WIFI1_MAC, nvram_get("eth_bh_CAPMAC"), EXCHANGE_MAC_LEN+1);
+										else
+											memcpy(p2d_buf.WIFI1_MAC, port_eth_bh_neighbor[i], EXCHANGE_MAC_LEN+1);
+										send(s_un , &p2d_buf, sizeof(p2d_buf), 0); /* notify daemon to handle eth_backl */
+#endif
+									} else
+										port_detected_ethbackl[i]=0;
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+								} else if ( tmp_shift_mask & change2_linkup_mask ) {
+									_dprintf("BBBBUG!!!!! [%s:%d]: port:%d, c2_linkup:0x%02x, c2_linkdown:0x%02x\n", \
+										__func__, __LINE__, i+1, change2_linkup_mask, change2_linkdown_mask);
+								} else {
+#if 0 // #ifdef KEEP_ALIVE_CHECK
+									if (upstream_port_mask == tmp_shift_mask) { /* stability check, only for RE upstream */
+										if ( upstream_alive_check == 0 ) {
+											if ((stream_avg%2)==0) {
+												if(lldpcli_det())
+													stream_avg_cnt++;
+											}
+											if (--stream_avg == 0) {
+												if (stream_avg_cnt <= 2) {
+													_dprintf("[EE] upstream port=0x%02x without lyra,disable eth-backhaul\n", tmp_shift_mask);
+													nvram_set("eth_backl","0");
+													eval("hive_eth","0");
+													nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+												} else {
+													upstream_alive_check = STREAM_CHECK_ALIVE_TIME;
+												}
+											}
+										} else {
+											upstream_alive_check--;
+											if ( upstream_alive_check == 0) {
+												stream_avg = STREAM_CHECK_ALIVE_AVG_CNT;
+												stream_avg_cnt = 0; 
+											}
+										}
+									} else if (get_role() && downstream_port_mask == tmp_shift_mask) { /* stability check, only for RE */
+										if ( downstream_alive_check == 0 ) {
+											if ((stream_avg%2)==0) {
+												if(lldpcli_det2())
+													stream_avg_cnt++;
+											}
+											if (--stream_avg == 0) {
+												if (stream_avg_cnt <= 2) {
+													_dprintf("[EE] downstream port=0x%02x without lyra,disable eth-backhaul\n", tmp_shift_mask);
+													ifconfig(lan_device, 0, NULL, NULL);
+													port_state_machine[i]=RE_ETHBACKHAUL_TEARDOWNWAIT2; /* over write state */
+													port_state_machine[i]=eth_down_time;
+												} else {
+													downstream_alive_check = STREAM_CHECK_ALIVE_TIME;
+												}
+											}
+										} else {
+											downstream_alive_check--;
+											if ( downstream_alive_check == 0) {
+												stream_avg = STREAM_CHECK_ALIVE_AVG_CNT;
+												stream_avg_cnt = 0; 
+											}
+										}
+
+									}
+#endif
+								}
+								break;
+					case HIVE_ETH_WAIT:
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down */
+									port_state_machine[i]=NOLINK_STATE;
+									port_detected_ethbackl[i]=0;
+									p2d_buf.action='D';
+									p2d_buf.port_no=(unsigned char)i;
+									if(get_role()) //RE
+										memcpy(p2d_buf.WIFI1_MAC, nvram_get("eth_bh_CAPMAC"), EXCHANGE_MAC_LEN+1);
+									else
+										memcpy(p2d_buf.WIFI1_MAC, port_eth_bh_neighbor[i], EXCHANGE_MAC_LEN+1);
+									send(s_un , &p2d_buf, sizeof(p2d_buf), 0); /* notify daemon to handle eth_backl */
+								} else {
+									if (port_state_machine_timeout[i]==0) {
+										move_port_to(i+1, lan_device);
+										port_state_machine[i]=LINKUP_STABLE;
+									} else
+										port_state_machine_timeout[i]--;
+								}
+								break;
+#if 0 //#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
+					case	RE_DIRECTION_DETECTING: /* only RE */
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									re_abort_detect_dir_on_port(i+1);
+									isolate_port(i+1);
+									port_state_machine[i]=NOLINK_STATE;
+								}
+								else {
+									if (port_state_machine_timeout[i]==0) {
+										if (get_direction_detect_result(i+1)) { /* upstream */
+											re_move_port_upstream(i+1);
+											if (nvram_get_int("eth_backl")==0) {
+												port_state_machine[i]=LLDP_UPSTREAM_DETECT;
+												port_state_machine_timeout[i]=LLDP_UPSTREAM_DETECT_TIMEOUT; /* wait for being stable */
+											} else
+												port_state_machine[i]=LINKUP_STABLE;
+										} else { /* downstream */
+											re_move_port_downstream(i+1);
+											if (nvram_get_int("re_eth_backl")==0) {
+												port_state_machine[i]=LLDP_DOWNSTREAM_DETECT;
+												port_state_machine_timeout[i]=LLDP_DOWNSTREAM_DETECT_TIMEOUT; /* wait for being stable */
+											} else
+												port_state_machine[i]=LINKUP_STABLE;
+										}
+									} else
+										port_state_machine_timeout[i]--;
+								}
+								break;
+					case	LLDP_UPSTREAM_DETECT: /* only RE */
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									// if(get_role()) //RE
+									isolate_port(i+1);
+									port_state_machine[i]=NOLINK_STATE;
+								}
+								else {
+									if (port_state_machine_timeout[i]==0) {
+										if(nvram_get_int("eth_backl")==0) {
+											if(lldpcli_det()) {
+												nvram_set("eth_backl","1");
+												eval("hive_eth","1");
+												nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+												re_upstream_cap_downstream_port_mask = tmp_shift_mask;
+#if 0 //#ifdef KEEP_ALIVE_CHECK
+												upstream_alive_check = STREAM_CHECK_ALIVE_TIME;
+#endif
+											}
+										}
+										port_state_machine[i]=LINKUP_STABLE;
+									} else
+										port_state_machine_timeout[i]--;
+								}
+								break;
+					case	RE_DOWNSTREAM_ETHBACKHAUL_SETUPWAIT:
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									char ifname[32];
+									char *next;
+									foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+										ifconfig(ifname, IFUP, NULL, NULL);
+									nvram_set("re_eth_backl","0");
+									isolate_port(i+1);
+									port_state_machine[i]=NOLINK_STATE;
+								} else {
+									if (port_state_machine_timeout[i]==0) {
+										char ifname[32];
+										char *next;
+										foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+											ifconfig(ifname, IFUP, NULL, NULL);
+#if 0 // #ifdef KEEP_ALIVE_CHECK
+										upstream_alive_check = STREAM_CHECK_ALIVE_TIME;
+#endif
+										port_state_machine[i]=LINKUP_STABLE;
+									} else
+										port_state_machine_timeout[i]--;
+								}
+								break;
+#if 0 // #ifdef KEEP_ALIVE_CHECK
+					case	RE_ETHBACKHAUL_TEARDOWNWAIT2:
+#endif
+					case	RE_ETHBACKHAUL_TEARDOWNWAIT:
+								if (port_state_machine_timeout[i]==0) {
+									ifconfig(lan_device, IFUP, NULL, NULL);
+									nvram_set("re_eth_backl","0");
+									doSystem("killall -9 hyd");
+									notify_rc("start_dnsmasq");
+									if ( port_state_machine[i]==RE_ETHBACKHAUL_TEARDOWNWAIT)
+										port_state_machine[i]=NOLINK_STATE;
+								} else
+									port_state_machine_timeout[i]--;
+								break;
+					case	LLDP_DOWNSTREAM_DETECT:
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									if(get_role()) //RE
+										isolate_port(i+1);
+									port_state_machine[i]=NOLINK_STATE;
+								}
+								else {
+									if (port_state_machine_timeout[i]==0) {
+										if(get_role()) { //RE
+											if(nvram_get_int("re_eth_backl")==0) {
+												if(lldpcli_det2()) {
+													char ifname[32];
+													char *next;
+													nvram_set("re_eth_backl","1");
+													re_downstream_port_mask = tmp_shift_mask;
+													foreach(ifname, nvram_safe_get("wl_ifnames"), next)
+														ifconfig(ifname, 0, NULL, NULL);
+													port_state_machine[i]=RE_DOWNSTREAM_ETHBACKHAUL_SETUPWAIT;
+													port_state_machine_timeout[i]=15; /* old code */
+												} else {
+													port_state_machine[i]=LINKUP_STABLE;
+												}
+											}
+										} else { // CAP
+											if(nvram_get_int("eth_backl")==0) {
+												if(lldpcli_det()) {
+													nvram_set("eth_backl","1");
+													eval("hive_eth","1");
+													nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+													re_upstream_cap_downstream_port_mask = tmp_shift_mask;
+#if 0 // #ifdef KEEP_ALIVE_CHECK
+													downstream_alive_check = STREAM_CHECK_ALIVE_TIME;
+#endif
+												}
+											}
+											port_state_machine[i]=LINKUP_STABLE;
+										}
+									} else
+										port_state_machine_timeout[i]--;
+								}
+								break;
+#else /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+					case 	PEER_NODE_DETECTING:
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									if(!get_role()) { //CAP
+										char vlan_name[10];
+										snprintf(vlan_name, sizeof(vlan_name), "vlan%d", i+1+ISOLATED_VLAN_OFFSET);
+										eval("iptables", "-D", "INPUT", "-i", vlan_name, "-j", "ACCEPT");
+									}
+									if (peer_detect_pid[i]) {
+										kill(peer_detect_pid[i], SIGTERM);
+										peer_detect_pid[i]=0;
+									}
+									isolate_port(i+1);
+#ifdef UDPBCAST_SOCKET_RCV
+									under_link_detect_mask &= ~(1<<i);
+									nvram_set_int("eth_under_detmask", under_link_detect_mask);
+#endif
+									port_state_machine[i]=NOLINK_STATE;
+								}
+								else {
+									if (port_state_machine_timeout[i]==0) {
+										char peer_buf[EXCHANGE_BUF_LEN];
+										int detect_result;
+
+										peer_detect_pid[i]=0;
+										if(!get_role()) { //CAP
+											char vlan_name[10];
+											snprintf(vlan_name, sizeof(vlan_name), "vlan%d", i+1+ISOLATED_VLAN_OFFSET);
+											eval("iptables", "-D", "INPUT", "-i", vlan_name, "-j", "ACCEPT");
+										}
+#ifdef UDPBCAST_SOCKET_RCV
+										under_link_detect_mask &= ~(1<<i);
+										nvram_set_int("eth_under_detmask", under_link_detect_mask);
+#endif
+										detect_result = get_peer_detect_result(i+1, our_group_key, peer_buf, EXCHANGE_BUF_LEN);
+										if ( detect_result == 0 ) { /* got message */
+											exchange_message_pt mpt;
+											int result=0; /* 0: disable, 1: stable link, 3: stable lin+eth backhaul */
+											unsigned char CAP_MAC[EXCHANGE_MAC_LEN+1];
+											unsigned char neighbor_MAC[EXCHANGE_MAC_LEN+1];
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+											int my_dist, peer_dist;
+#endif
+											mpt = (exchange_message_pt)&peer_buf[0];
+											mpt->dist_str[sizeof(mpt->dist_str)-1]='\0';
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+											my_dist=get_my_dist();
+											peer_dist=atoi(mpt->dist_str);
+#endif
+											CAP_MAC[EXCHANGE_MAC_LEN]='\0';
+											neighbor_MAC[EXCHANGE_MAC_LEN]='\0';
+											memcpy(CAP_MAC, mpt->CAP_MAC, EXCHANGE_MAC_LEN);
+											memcpy(neighbor_MAC, mpt->WIFI1_MAC, EXCHANGE_MAC_LEN);
+
+											if (nvram_get_int("eth_backl")==0) { // not yet eth
+												if (get_role()) { //RE
+													if (mpt->role=='C') {
+														result = 3;
+													} else if (mpt->role=='R') {
+														if (mpt->mode=='N') {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+															if (my_dist == peer_dist) {
+																_dprintf("<<ETH BACKL>>: disable NonETH RE on port[%d], with same dist:%s\n", i+1, mpt->dist_str);
+																port_detected_ethbackl[i] = 3; // wake it up when we enter ETH
+															} else if (my_dist > peer_dist) { /* we got another short-cut */
+																_dprintf("<<ETH BACKL>>: detect another NonETH RE on port[%d], with dist:%d, mydist:%d, enable ETH\n", i+1, peer_dist, my_dist);
+																result = 3;
+															} else { /* we become upstream node */
+																//TBD. accroding to Eason's re_eth_backl  maybe we need to down/up LAN nic here
+																result = 4;
+															}
+#else
+															port_detected_ethbackl[i] = 3; // wake it up when we enter ETH
+#endif
+														} else if (mpt->mode=='E') {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+															_dprintf("<<ETH BACKL>>: detect new ETH RE on port[%d], dist:%d\n", i+1, peer_dist);
+															if ((peer_dist == 1) || (my_dist > peer_dist)) { /* we got another short-cut */
+																// if peer_dist is 1, we should connect to CAP directly after negotiation
+																_dprintf("               enter ETH BACKL, mydist:%d, peer_dist:%d\n", my_dist, peer_dist);
+																result = 3;
+															} else {
+																_dprintf("               disable port, mydist:%d, peer_dist:%d\n", my_dist, peer_dist);
+															}
+#else
+															result = 3;
+#endif
+														}
+													}
+												} else { // CAP
+													if (mpt->role=='R') {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+														result = 4;
+#else
+														if (mpt->mode=='N') {
+															result = 3;
+														}
+#endif
+													}
+												}
+											} else { /* we are already under eth_backl */
+												if (get_role()) { //RE
+													if (mpt->role=='R') {
+														if (mpt->mode=='N') { /* daisy chain case~~ */
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+															_dprintf("<<ETH BACKL>>: detect another RE[%s] on port[%d], dist:%d\n", neighbor_MAC, i+1, peer_dist);
+															if ((my_dist != 1) && (my_dist >= peer_dist)) { /* disable this port */
+																_dprintf("               disable port, mydist:%d, peer_dist:%d\n", my_dist, peer_dist);
+															} else { /* peer will enter eth backhaul */
+																result = 4;
+																// dont' care => port_detected_ethbackl[i]=2; // re down stream
+																//TBD. accroding to Eason's re_eth_backl maybe we need to down/up LAN nic here
+															}
+#else
+															result = 1;
+															port_detected_ethbackl[i]=2; // re down stream
+															// note: we cannot set this port as ethbackl!!
+#endif
+														}
+													}
+												} else { // CAP
+													if (mpt->role=='R') {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+														result=4;
+#else
+														if (mpt->mode=='N') {
+															result = 1;
+															port_detected_ethbackl[i]=1;
+														}
+#endif
+													}
+												}
+											}
+											if (result & 1) {
+												memcpy(port_eth_bh_neighbor[i], neighbor_MAC, EXCHANGE_MAC_LEN+1);
+												if (result & 2) {
+													p2d_buf.action='E';
+													port_state_machine_timeout[i]=HIVE_ETH_SCRIPT_TIMEOUT; /* old code */
+													port_state_machine[i]=HIVE_ETH_WAIT;
+													port_detected_ethbackl[i]=1;
+													if (get_role()) { //RE
+														int j;
+														for (j=0;j<MAX_WANLAN_PORT;j++)
+															if ( port_detected_ethbackl[j]==3 ) {
+																port_power_down_count[j]=2;
+																power_onoff_port(j+1, 0);
+															}
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+														if (mpt->role=='C')
+															nvram_set_int("eth_bh_up_cost", 1);
+														else {
+															if (mpt->mode=='E')
+																nvram_set_int("eth_bh_up_cost", peer_dist);
+															else
+																nvram_set_int("eth_bh_up_cost", peer_dist+1);
+														}
+														nvram_set("mesh_dist", nvram_get("eth_bh_up_cost"));
+														if (memcmp(CAP_MAC, "000000000000", 12)==0)
+															nvram_set("eth_bh_CAPMAC", neighbor_MAC);
+														else
+															nvram_set("eth_bh_CAPMAC", CAP_MAC);
+#else
+														nvram_set("eth_bh_CAPMAC", CAP_MAC);
+#endif
+													}
+													/* move to daemon
+													nvram_set("eth_backl","1");
+													eval("hive_eth","1");
+													nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+													*/ 
+												} else {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+													_dprintf("<<ETH BACKL>>: ERR, no such case[%d]!!!\n", i+1);
+#else
+													p2d_buf.action='A';
+													move_port_to(i+1, lan_device);
+													port_state_machine[i]=LINKUP_STABLE;
+#endif
+												}
+												p2d_buf.port_no=(unsigned char)i;
+												if (get_role()) //  RE
+													memcpy(p2d_buf.WIFI1_MAC, CAP_MAC, EXCHANGE_MAC_LEN+1);
+												else
+													memcpy(p2d_buf.WIFI1_MAC, neighbor_MAC, EXCHANGE_MAC_LEN+1);
+												send(s_un , &p2d_buf, sizeof(p2d_buf), 0);
+											}
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+											else if (result & 4) {
+												_dprintf("<<ETH BACKL>>: act as ETH upstream on port[%d]\n", i+1);
+												move_port_to(i+1, lan_device);
+												port_state_machine[i]=LINKUP_STABLE;
+											}
+#endif
+											else
+												port_state_machine[i]=PEER_PORT_DISABLE; /* default case */
+										} else if ( detect_result == 1 ) { /* chaos */
+											port_state_machine[i]=PEER_PORT_DISABLE;
+										} else { /* other client */
+											move_port_to(i+1, lan_device);
+											port_state_machine[i]=LINKUP_STABLE;
+										}
+									} else
+										port_state_machine_timeout[i]--;
+								}
+								break;
+					case 	PEER_PORT_DISABLE:
+								if ( tmp_shift_mask & change2_linkdown_mask ) { /* link down, isolate port */
+									isolate_port(i+1);
+									port_state_machine[i]=NOLINK_STATE;
+								}
+								break;
+#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
+					default :
+								break;
+				}
+			}
+			for (i=0; i < MAX_WANLAN_PORT; i++) { /* handle power state */
+				if (!port_power_down_count[i]) continue;
+				port_power_down_count[i]--;
+				if (!port_power_down_count[i]) {
+					power_onoff_port(i+1, 1);
+				}
+			}
+
+			reset_port=nvram_get_int("eth_bh_resetLAN");
+			if (reset_port) {
+				nvram_unset("eth_bh_resetLAN");
+				if ((reset_port&0xf)==4) { // leave ETH
+					for (i=0; i < MAX_WANLAN_PORT; i++) {
+						if ( get_role() && port_detected_ethbackl[i]==2 ) {
+							port_power_down_count[i]=2;
+							power_onoff_port(i+1, 0);
+						}
+						port_detected_ethbackl[i]=0;
+					}
+				} else {
+					unsigned int port_id = (reset_port&0xf0)>>4;
+					reset_port = reset_port & 0xf;
+					if ((reset_port == 1) && (port_id)){// disable specific port
+							isolate_port(port_id);
+							port_state_machine[port_id-1] = PEER_PORT_DISABLE;
+#ifdef VV_DEBUG
+							_dprintf("<<State Changed>>: disable port[%d] from daemon\n", port_id);
+#endif
+					} else {
+						for (i=0; i < MAX_WANLAN_PORT; i++) { /* handle power down count */
+							tmp_shift_mask = 1 << (i+1);
+							if (!(tmp_shift_mask & all_portmask)) continue;
+							power_onoff_port(i+1, 0);
+							port_power_down_count[i] = reset_port;
+						}
+					}
+				}
+			}
+		}
+		sleep(1);
+	} /* end of while(1) */
+}
+
+static unsigned short cksum(unsigned char *buf, int sz)
+{
+	int sum = 0;
+	unsigned short ans;
+	unsigned short *w = (unsigned short *)buf;
+
+	while (sz > 0) {
+		sum += *w++;
+		sz -= 2;
+	}
+	sum = (sum >> 16) + (sum & 0xFFFF);
+	sum += (sum >> 16);
+	ans = ~sum;
+	return ans;
+}
+
+static unsigned int find_port(char *mac_str)
+{
+	char buf[128];
+	char *pt;
+	doSystem("ssdk_sh fdb entry show | grep %s | awk '{print $4}' | sed '/:0/d' > /tmp/ff.txt", mac_str);
+        f_read_string("/tmp/ff.txt", buf, sizeof(buf));
+	if (pt = strstr(buf, "[dest_port]:")) {
+		pt += strlen("[dest_port]:");
+		return atoi(pt);
+	}
+	return 0;
+}
+
+#include <linux/if_packet.h>
+#include <linux/udp.h>
+#include <linux/ip.h>
+#include <sys/timeb.h>
+#define IP_HDR_SIZE		(sizeof(struct iphdr))
+#define	UDP_HDR_SIZE		(sizeof(struct udphdr))
+#define	ETH_HDR_SIZE		14
+int ethbh_peer_detect(char *nic, char *timestr, char *msg)
+{
+	int ss;
+	struct ifreq ifr;
+	int ifindex, i, msglen;
+	char out_buffer[EXCHANGE_BUF_LEN+ETH_HDR_SIZE+IP_HDR_SIZE+UDP_HDR_SIZE];
+	char final_result[MAX_RECORD_ETH_CLIENT][EXCHANGE_BUF_LEN];
+	int get_peer, timeout;
+	char get_frame[1514];
+	unsigned char exchange_magic[] = { 0xa2, 0x82, 0xf1, 0x90 };
+	char *pt;
+	time_t target_time;
+	struct timeb tnow, tlast;
+	unsigned short port_network_order;
+	unsigned char SMAC[6];
+	unsigned char BMAC[6];
+	struct sockaddr_ll me;
+	struct udphdr *udphdr_pt;
+	struct iphdr *iphdr_pt;
+	int found;
+	char smacbuf[EXCHANGE_MAC_LEN+1];
+
+	timeout = atoi(timestr);
+	if (timeout)
+		ss = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	else
+		ss = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+
+	if (ss < 0)
+		return -1;
+
+	memset(&ifr, 0, sizeof(ifr));
+	strncpy(ifr.ifr_name, nic, IFNAMSIZ-1);
+	if (ioctl(ss, SIOCGIFINDEX, &ifr) < 0)
+		return -2;
+
+	ifindex = ifr.ifr_ifindex;
+	if (ioctl(ss, SIOCGIFFLAGS, (char*)&ifr))
+		return -3;
+
+	if (timeout) {
+		if (!(ifr.ifr_flags&IFF_UP)) {
+			ifr.ifr_flags |= IFUP;
+			if (ioctl(ss, SIOCSIFFLAGS, (char*)&ifr))
+				return -4;
+		}
+	}
+
+	if (timeout) {
+		me.sll_family = AF_PACKET;
+		me.sll_ifindex = ifindex;
+		me.sll_protocol = htons(ETH_P_ALL);
+		if (bind(ss, (struct sockaddr*)&me, sizeof(me)) == -1)
+			return -5;
+	} else {
+		const int on=1;
+		setsockopt(ss, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+		setsockopt(ss, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+
+		if (setsockopt(ss, SOL_SOCKET, SO_BINDTODEVICE, (char *)&ifr, sizeof(ifr)) < 0)
+		return -5;
+	}
+
+        if (ioctl(ss, SIOCGIFHWADDR, &ifr))
+		return -6;
+
+	memcpy(SMAC, (const unsigned char *)ifr.ifr_hwaddr.sa_data, 6);
+
+	SMAC[0]=0x02; // locally administered
+	SMAC[1]=0x03;
+	SMAC[2]=0x22;
+	memset(BMAC, 0xff, sizeof(BMAC));
+
+	port_network_order = htons(EXCHANGE_PORT);
+
+	memset(out_buffer, 0x00, sizeof(out_buffer));
+
+	pt = &out_buffer[0];
+	if (timeout) {
+		memcpy(pt, BMAC, 6);
+		memcpy(pt+6, SMAC, 6);
+		pt[12]=0x08;
+		pt+=ETH_HDR_SIZE;
+	}
+	iphdr_pt = (struct iphdr *)pt;
+	iphdr_pt->version = 4;
+	iphdr_pt->ihl = 5;
+	if (timeout) {
+		iphdr_pt->tot_len = htons(EXCHANGE_BUF_LEN+IP_HDR_SIZE+UDP_HDR_SIZE);
+		iphdr_pt->id = 0x2312;
+	}
+	iphdr_pt->ttl = 5;
+	iphdr_pt->protocol = 17;
+	if (!timeout)
+		iphdr_pt->saddr = inet_addr("169.254.0.0");
+	iphdr_pt->daddr = -1;
+
+	if (timeout)
+		iphdr_pt->check = cksum(pt, IP_HDR_SIZE);
+	pt+=IP_HDR_SIZE;
+
+	udphdr_pt = (struct udphdr *)pt;
+	udphdr_pt->source = port_network_order;
+	udphdr_pt->dest = port_network_order;
+	udphdr_pt->len = htons(EXCHANGE_BUF_LEN + sizeof(struct udphdr));
+	pt+=UDP_HDR_SIZE;
+
+	memcpy(pt, exchange_magic, sizeof(exchange_magic));
+	pt+=sizeof(exchange_magic);
+	msglen = strlen(msg); // should be the same with sizeof(exchange_message_t)
+	memcpy(pt, msg, msglen);
+	{
+		exchange_message_pt mpt_tmp;
+		mpt_tmp = (exchange_message_pt)pt;
+		sprintf(smacbuf, "%02x%02x%02x%02x%02x%02x", SMAC[0], SMAC[1], SMAC[2], SMAC[3], SMAC[4], SMAC[5]);
+		memcpy(mpt_tmp->SRC_MAC, smacbuf, EXCHANGE_MAC_LEN);
+	}
+
+	get_peer = 0;
+	if (timeout) {
+		ftime(&tnow);
+		tlast=tnow;
+		tlast.time-=1; /* trigger first packet */
+		target_time = tnow.time + timeout;
+		for ( i=0; i<MAX_RECORD_ETH_CLIENT; i++)
+			final_result[i][0] = '\0';
+
+		while ( tnow.time < target_time ) {
+			if (((tnow.time-tlast.time)*1000 + tnow.millitm - tlast.millitm) > 300) {
+				send(ss, out_buffer, sizeof(out_buffer), 0);
+				tlast=tnow;
+			}
+			if (recv(ss, get_frame, sizeof(get_frame), MSG_DONTWAIT) > 0) {
+				exchange_message_pt mpt1, mpt2;
+				pt = &get_frame[0];
+				found=0;
+				if ((memcmp(pt, BMAC, sizeof(BMAC))==0) && (memcmp(pt+6, SMAC, sizeof(SMAC))!=0) && pt[12]==0x08) {
+					pt += ETH_HDR_SIZE;
+					iphdr_pt = (struct iphdr *)pt;
+					pt+=IP_HDR_SIZE;
+					udphdr_pt = (struct udphdr *)pt;
+					if ((iphdr_pt->daddr == -1) && (udphdr_pt->dest == port_network_order) &&  (udphdr_pt->source == port_network_order)) {
+						pt+=UDP_HDR_SIZE;
+						if (memcmp(pt, exchange_magic, sizeof(exchange_magic))==0) { /* the same peer */
+							pt += sizeof(exchange_magic);
+							mpt2 = (exchange_message_pt)pt;
+							if (memcmp(mpt2->SRC_MAC, smacbuf, EXCHANGE_MAC_LEN)==0) {
+								; /* ignore loopback packet */
+							} else
+								found=1;
+						}
+					}
+				}
+				if (found) {
+					int msg_type_offset;
+					found=0;
+					for (i=0; i<get_peer; i++) {
+						if (memcmp(final_result[i], pt, msglen)==0) { // got the same client
+							found=1;
+							break;
+						}
+						mpt1 = (exchange_message_pt)&final_result[i][0];
+						mpt2 = (exchange_message_pt)pt;
+						msg_type_offset = &mpt2->msg_type - pt;
+						if ((mpt1->role==mpt2->role) && (memcmp(&final_result[i][0]+msg_type_offset, pt+msg_type_offset, sizeof(exchange_message_t)-msg_type_offset)==0)) {
+							mpt1->mode = mpt2->mode;
+							found=1;
+							break;
+						}
+					}
+					if (!found) { /* add new record */
+						if (get_peer<MAX_RECORD_ETH_CLIENT) {
+							memcpy(final_result[i], pt, msglen);
+							final_result[i][msglen] = '\0';
+							get_peer++;
+						}
+					}
+				}
+			}
+			ftime(&tnow);
+		}
+
+		/* down the interface */
+		ifr.ifr_flags &= ~IFUP;
+		ioctl(ss, SIOCSIFFLAGS, (char*)&ifr);
+	} else { /* daemon */
+		int last_eth_backl, tmp_eth_backl;
+		int role=get_role();
+		fd_set rmask;
+		struct timeval select_timeout;
+		int select_ret, action, sendit;
+		unsigned char CAP_MAC[EXCHANGE_MAC_LEN+1];
+		exchange_message_pt mpt_out, mpt_in;
+		daemon_record_pt record_pt;
+		int s_un, max_select_fd;
+#ifdef	UDPBCAST_SOCKET_RCV
+		int sr;
+#endif
+		p2d_message_t p2d_buf;
+		struct sockaddr_un uaddr;
+		int rm_count, add_count;
+		time_t uptime_now;
+		unsigned int disabled_port;
+		unsigned char src_mac_fdb[EXCHANGE_MAC_LEN+1+5]; /* format: 60-45-cb-68-74-fb */
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+		int my_dist=0, peer_dist=0, last_dist=0;
+		int under_queue_eth=0;
+		time_t trigger_eth_stamp=0, eth_queue_time=0;
+#endif
+		struct sockaddr_in addrs_to;
+
+		bzero((char *) &addrs_to, sizeof(addrs_to));
+		addrs_to.sin_addr.s_addr = inet_addr("255.255.255.255");
+		addrs_to.sin_family = AF_INET;
+		addrs_to.sin_port = port_network_order;
+
+		signal(SIGCHLD, h_chld);
+		unlink(UN_PATH_PORT_TO_DAEMON);
+		if ((s_un=socket(AF_LOCAL,SOCK_DGRAM,0)) == -1) {
+			goto err_out;
+		} else {
+			const int on=1;
+			setsockopt(s_un, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+		}
+
+		memset ((char *)&uaddr,0,sizeof(uaddr));
+		uaddr.sun_family=AF_LOCAL;
+		strcpy(uaddr.sun_path, UN_PATH_PORT_TO_DAEMON);
+
+		if ( bind(s_un,(struct sockaddr *)&uaddr,sizeof(uaddr)) == -1 ) {
+			close(s_un);
+			goto err_out;
+		}
+
+#ifdef	UDPBCAST_SOCKET_RCV
+		if ((sr = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+			goto err_out;
+		} else {
+			const int on=1;
+			struct sockaddr_in addrs;
+			setsockopt(sr, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+			//setsockopt(sr, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+
+			bzero((char *) &addrs, sizeof(addrs));
+			addrs.sin_addr.s_addr = inet_addr("255.255.255.255");
+			addrs.sin_family = AF_INET;
+			addrs.sin_port = port_network_order;
+			if (bind(sr, (struct sockaddr *)&addrs,sizeof(addrs)) < 0) {
+				_dprintf("%s:%d bind fail!!!\n", __func__, __LINE__);
+				goto err_out;
+			}
+		}
+#endif
+		mpt_out = (exchange_message_pt)pt;
+
+		last_eth_backl=-1;
+		ftime(&tnow);
+		tlast=tnow;
+		tlast.time -= EXCHANGE_DAEMON_PERIOD; /* trigger first packet */
+		// init
+		for ( i=0; i<MAX_RECORD_ETH_CLIENT; i++) {
+			record_pt = (daemon_record_pt)final_result[i];
+			record_pt->is_used = 0;
+			record_pt->from_port = 255;
+		}
+#ifdef	UDPBCAST_SOCKET_RCV
+		max_select_fd = (s_un > sr)? s_un:sr;
+#else
+		max_select_fd = (s_un > ss)? s_un:ss;
+#endif
+		max_select_fd += 1;
+		while (1) {
+			FD_ZERO(&rmask);
+#ifdef	UDPBCAST_SOCKET_RCV
+			FD_SET(sr, &rmask);
+#else
+			FD_SET(ss, &rmask);
+#endif
+			FD_SET(s_un, &rmask);
+			select_timeout.tv_sec = EXCHANGE_DAEMON_PERIOD;
+			select_timeout.tv_usec = 0;
+			select_ret=select(max_select_fd, &rmask, NULL, NULL, &select_timeout);
+			tmp_eth_backl=nvram_get_int("eth_backl");
+			ftime(&tnow);
+			uptime_now = uptime();
+			found = 0;
+			action = 0;
+			rm_count = 0;
+			add_count = 0;
+			if (select_ret > 0) {
+#ifdef	UDPBCAST_SOCKET_RCV
+				if ( FD_ISSET(sr, &rmask) )
+#else
+				if ( FD_ISSET(ss, &rmask) )
+#endif
+				{
+					// retrieve packet
+#ifdef	UDPBCAST_SOCKET_RCV
+					if (recv(sr, get_frame, sizeof(get_frame), MSG_DONTWAIT) > 0)
+#else
+					if (recv(ss, get_frame, sizeof(get_frame), MSG_DONTWAIT) > 0)
+#endif
+					{
+						pt = &get_frame[0];
+
+#ifndef	UDPBCAST_SOCKET_RCV
+						if ((memcmp(pt, BMAC, sizeof(BMAC))==0) && (memcmp(pt+6, SMAC, sizeof(SMAC))!=0) && pt[12]==0x08) {
+							pt += ETH_HDR_SIZE;
+							iphdr_pt = (struct iphdr *)pt;
+							pt+=IP_HDR_SIZE;
+							udphdr_pt = (struct udphdr *)pt;
+							if ((iphdr_pt->daddr == -1) && (udphdr_pt->dest == port_network_order) &&  (udphdr_pt->source == port_network_order)) {
+								pt+=UDP_HDR_SIZE;
+#endif
+								if (memcmp(pt, exchange_magic, sizeof(exchange_magic))==0) { /* the same peer */
+									exchange_message_pt mpt_tmp;
+									pt += sizeof(exchange_magic);
+									mpt_tmp = (exchange_message_pt)pt;
+									if ( memcmp(mpt_tmp->WIFI1_MAC, mpt_out->WIFI1_MAC, EXCHANGE_MAC_LEN) == 0) {
+									} else
+										found=1;
+								}
+#ifndef	UDPBCAST_SOCKET_RCV
+							}
+						}
+#endif
+
+						if (found) {
+							mpt_in = (exchange_message_pt)pt;
+							for ( i=0; i<6; i++) {
+								src_mac_fdb[i*3] = mpt_in->SRC_MAC[i*2];
+								src_mac_fdb[i*3+1] = mpt_in->SRC_MAC[i*2+1];
+								if (i != 5)
+									src_mac_fdb[i*3+2] = '-';
+								else
+									src_mac_fdb[i*3+2] = '\0';
+							}
+							mpt_in->dist_str[sizeof(mpt_in->dist_str)-1]='\0';
+							peer_dist=atoi(mpt_in->dist_str);
+#ifdef UDPBCAST_SOCKET_RCV
+							if (nvram_get_int("eth_under_detmask")) { // special check
+								found = 0;
+								if (nvram_get_int("eth_backl")) {
+									/* we can retrieve which port the packet is coming to enhance the check */
+									record_pt = (daemon_record_pt)final_result[0];
+									if ((record_pt->is_used) && (memcmp(record_pt->WIFI1_MAC, mpt_in->WIFI1_MAC, EXCHANGE_MAC_LEN)==0))
+										found = 1;
+								}
+							}
+#endif
+						}
+					}
+				}
+
+				if ( FD_ISSET(s_un, &rmask) ) {
+					if (recv(s_un, &p2d_buf, sizeof(p2d_buf), 0) > 0) {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+						if (p2d_buf.action == 'E')
+#else
+						if ((p2d_buf.action == 'E') || (!role && p2d_buf.action == 'A'))
+#endif
+						{
+							for ( i=0; i<MAX_RECORD_ETH_CLIENT; i++) {
+								record_pt = (daemon_record_pt)final_result[i];
+								if (record_pt->is_used) continue;
+								record_pt->is_used = 1;
+								record_pt->from_port = p2d_buf.port_no;
+								record_pt->update_time = uptime_now + HIVE_ETH_SCRIPT_TIMEOUT; // time stamp in futhur
+								memcpy(record_pt->WIFI1_MAC, p2d_buf.WIFI1_MAC, EXCHANGE_MAC_LEN);
+								record_pt->WIFI1_MAC[EXCHANGE_MAC_LEN]='\0';
+								add_count++;
+								if (p2d_buf.action == 'E')
+									action |= EXCHANGE_DAEMON_ACT_ENTETH_L;
+								break;
+							}
+						} else if (p2d_buf.action == 'D') {
+							for ( i=0; i<MAX_RECORD_ETH_CLIENT; i++) {
+								record_pt = (daemon_record_pt)final_result[i];
+								if (!record_pt->is_used) continue;
+								if ((memcmp(record_pt->WIFI1_MAC, p2d_buf.WIFI1_MAC, EXCHANGE_MAC_LEN)==0) && (record_pt->from_port == p2d_buf.port_no)) {
+									record_pt->is_used=0;
+									rm_count++;
+									if (role)
+										action |= EXCHANGE_DAEMON_ACT_EXIT_ETH;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+			if (!role) { // CAP
+				if (found) {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+					if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)==0)
+						action |= EXCHANGE_DAEMON_ACT_SENDOUT;
+#else
+					if (tmp_eth_backl) {
+						if (mpt_in->msg_type == 'L')
+							action |= EXCHANGE_DAEMON_ACT_SENDOUT;
+						if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)==0) {
+							if (mpt_in->role == 'R') {
+								if (mpt_in->msg_type == 'D')
+									action |= EXCHANGE_DAEMON_ACT_UPDATE;
+							}
+							else if (mpt_in->role == 'C') {
+								action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+								disabled_port = find_port(src_mac_fdb);
+							}
+						}
+					} else {
+						if (mpt_in->msg_type == 'L')
+							action |= EXCHANGE_DAEMON_ACT_SENDOUT;
+						if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)==0) {
+							if (mpt_in->role == 'R')
+								action |= EXCHANGE_DAEMON_ACT_ENTETH_D;
+							else if (mpt_in->role == 'C') {
+								action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+								disabled_port = find_port(src_mac_fdb);
+							}
+						} else {
+							if ((mpt_in->msg_type == 'D') && (mpt_in->role == 'C')) {
+								action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+								disabled_port = find_port(src_mac_fdb);
+							}
+						}
+					}
+#endif
+				}
+			} else { // RE
+				if (tmp_eth_backl != last_eth_backl) {
+					strcpy(CAP_MAC, "000000000000");
+					if (tmp_eth_backl) {
+						if (nvram_get("eth_bh_CAPMAC"))
+							strcpy(mpt_out->CAP_MAC, nvram_get("eth_bh_CAPMAC"));
+					}
+					memcpy(mpt_out->CAP_MAC, CAP_MAC, EXCHANGE_MAC_LEN);
+				}
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+				my_dist=get_my_dist();
+				if (my_dist!=last_dist) {
+					sprintf(mpt_out->dist_str, "%03d", my_dist);
+					mpt_out->dist_str[3]='S';
+					last_dist=my_dist;
+				}
+#endif
+				if (found) {
+					if (tmp_eth_backl) {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+						if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)!=0) {
+							action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+							disabled_port = find_port(src_mac_fdb);
+						}
+						else if (mpt_in->msg_type == 'L') {
+							; // ignore Link message when we are in eth_backl mode, parent node(CAR or ETH root RE) will handle it
+						} else if (mpt_in->msg_type == 'D') {
+							if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)==0) {
+								action |= EXCHANGE_DAEMON_ACT_UPDATE;
+							}
+						}
+#else
+						if ((mpt_in->role == 'C') && (mpt_in->msg_type == 'D') && (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)==0))
+							action |= EXCHANGE_DAEMON_ACT_UPDATE;
+#endif
+					} else {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+						int go_eth=0;
+						action |= EXCHANGE_DAEMON_ACT_SENDOUT;
+						if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)!=0) {
+							action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+							disabled_port = find_port(src_mac_fdb);
+						}
+						else { // (mpt_in->msg_type == 'L') or (mpt_in->msg_type == 'D')
+							if (mpt_in->role == 'C')
+								go_eth=1;
+							else { /* peer is RE */
+								if (mpt_in->mode=='N') {
+									if (my_dist == peer_dist) {
+										_dprintf("<<Daemon>>: disable NonETH RE with same dist:%s\n", mpt_in->dist_str);
+										action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+										disabled_port = find_port(src_mac_fdb);
+									} else if (my_dist > peer_dist) { /* we got another short-cut */
+										_dprintf("<<Daemon>>: detect another NonETH RE with dist:%d, mydist:%d, enable ETH\n", peer_dist, my_dist);
+										go_eth=1;
+									} else { /* we become upstream node */
+										//TBD. accroding to Eason's re_eth_backl  maybe we need to down/up LAN nic here
+									}
+								} else if (mpt_in->mode=='E') {
+									if ((peer_dist == 1) || (my_dist > peer_dist)) { /* we got another short-cut */
+										// if peer_dist is 1, we should connect to CAP directly after negotiation
+										_dprintf("<<Daemon>>:  enter ETH BACKL, mydist:%d, peer_dist:%d\n", my_dist, peer_dist);
+										go_eth=1; /* we will update CAPMAC after following D meesage */
+									} else {
+										_dprintf("<<Daemon>>: disable ETH RE with mydist:%d, peer_dist:%d\n", my_dist, peer_dist);
+										action |= EXCHANGE_DAEMON_ACT_DIS_PORT;
+										disabled_port = find_port(src_mac_fdb);
+									}
+								}
+							}
+						}
+						if (go_eth) {
+							if (uptime_now - trigger_eth_stamp > HIVE_ETH_SCRIPT_TIMEOUT) {
+								action |= EXCHANGE_DAEMON_ACT_ENTETH_D;
+								if (mpt_in->role=='C')
+									nvram_set_int("eth_bh_up_cost", 1);
+								else {
+									if (mpt_in->mode=='E')
+										nvram_set_int("eth_bh_up_cost", peer_dist);
+									else
+										nvram_set_int("eth_bh_up_cost", peer_dist+1);
+								}
+								nvram_set("mesh_dist", nvram_get("eth_bh_up_cost"));
+								trigger_eth_stamp = uptime_now;
+							} else {
+								_dprintf("<<Daemon>>:  Already under Trans-ETH process...\n");
+							}
+						}
+#else
+						if (memcmp(mpt_in->group_key, mpt_out->group_key, EXCHANGE_GROUP_LEN)==0) {
+							if ((mpt_in->role == 'C') || (mpt_in->mode == 'E')) /* got some new route */
+								action |= EXCHANGE_DAEMON_ACT_RESET_ALL; /* we should enter ethbackl after reset */
+							else if (mpt_in->msg_type = 'L')
+								action |= EXCHANGE_DAEMON_ACT_BANG_PEER;
+							else
+								; /* if we can distinguish this message came from which port, disable it here! */
+						}
+#endif
+					}
+				}
+			} // end of RE
+			sendit=0;
+			if ((action & EXCHANGE_DAEMON_ACT_SENDOUT) || (action & EXCHANGE_DAEMON_ACT_BANG_PEER))
+				sendit=1;
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+			else if ( (!role)/*CAP*/ || !tmp_eth_backl/*none ETH*/ )
+#else
+			else if ( (!role)/*CAP*/ || tmp_eth_backl/*RE in ETH*/ )
+#endif
+			{
+				if (((tnow.time-tlast.time)*1000 + tnow.millitm - tlast.millitm) >= (EXCHANGE_DAEMON_PERIOD * 1000))
+					sendit=1;
+			}
+			if ( sendit ) {
+				if (tmp_eth_backl)
+					mpt_out->mode='E';
+				else
+					mpt_out->mode='N';
+				sendto(ss, out_buffer, sizeof(out_buffer), 0, (const struct sockaddr *)&addrs_to, sizeof(addrs_to));
+				tlast=tnow;
+			}
+
+			if (action & EXCHANGE_DAEMON_ACT_ENTETH_D) {
+				action |= EXCHANGE_DAEMON_ACT_UPDATE;
+			}
+
+			if (action & EXCHANGE_DAEMON_ACT_UPDATE) {
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+				found = 0;
+				record_pt = (daemon_record_pt)final_result[0];
+				if (record_pt->is_used) {
+					if (memcmp(record_pt->WIFI1_MAC, mpt_in->WIFI1_MAC, EXCHANGE_MAC_LEN)==0) {
+						record_pt->update_time = uptime_now;
+						found = 1;
+					} else {
+						if (peer_dist > record_pt->distance)
+							found = 1;
+					}
+				}
+				if (found == 0) { /* update record */
+					record_pt->is_used = 1;
+					record_pt->from_port = 255;
+					record_pt->distance = peer_dist;
+					record_pt->update_time = uptime_now;
+					memcpy(record_pt->WIFI1_MAC, mpt_in->WIFI1_MAC, EXCHANGE_MAC_LEN);
+					record_pt->WIFI1_MAC[EXCHANGE_MAC_LEN]='\0';
+					// update distance
+					nvram_set_int("eth_bh_up_cost", peer_dist+1);
+					nvram_set("mesh_dist", nvram_get("eth_bh_up_cost"));
+				}
+#else
+				int first_empty = -1;
+				found = 0;
+				for ( i=0; i<MAX_RECORD_ETH_CLIENT; i++) {
+					record_pt = (daemon_record_pt)final_result[i];
+					if (record_pt->is_used) {
+						if (memcmp(record_pt->WIFI1_MAC, mpt_in->WIFI1_MAC, EXCHANGE_MAC_LEN)==0) {
+							record_pt->update_time = uptime_now;
+							found = 1;
+							break;
+						}
+					} else {
+						if (first_empty == -1)
+							first_empty = i;
+					}
+				}
+				if (!found) {
+					if (first_empty != -1) {
+						record_pt = (daemon_record_pt)final_result[first_empty];
+						record_pt->is_used = 1;
+						record_pt->from_port = 255;
+						record_pt->update_time = uptime_now;
+						memcpy(record_pt->WIFI1_MAC, mpt_in->WIFI1_MAC, EXCHANGE_MAC_LEN);
+						record_pt->WIFI1_MAC[EXCHANGE_MAC_LEN]='\0';
+						add_count++;
+					}
+				}
+#endif
+			}
+
+			if (action & EXCHANGE_DAEMON_ACT_DIS_PORT) {
+				unsigned int val = (disabled_port<<4) | 1;
+				nvram_set_int("eth_bh_resetLAN", val);
+				/* add two message here for more assurance before port disable*/
+				send(ss, out_buffer, sizeof(out_buffer), 0);
+				send(ss, out_buffer, sizeof(out_buffer), 0);
+			}
+
+			if (action & EXCHANGE_DAEMON_ACT_RESET_ALL) {
+				nvram_set("eth_bh_resetLAN", "3");
+			}
+
+			if (!role) { /* CAP */
+#ifndef RTCONFIG_ETHBH_MIXED_MODE
+/* CAP & root node won't maintain neighbor list in mixed mode */
+				int count=0;
+				for ( i=0; i<MAX_RECORD_ETH_CLIENT; i++) {
+					record_pt = (daemon_record_pt)final_result[i];
+					if (!record_pt->is_used) continue;
+					if (record_pt->update_time+EXCHANGE_PEER_DIE_TIMEOUT < uptime_now) { /* RE timeout */
+						record_pt->is_used=0;
+						rm_count++;
+					} else
+						count++;
+				}
+				if ((add_count) || (rm_count)) {
+					if (!(action & (EXCHANGE_DAEMON_ACT_ENTETH_L | EXCHANGE_DAEMON_ACT_ENTETH_D)))
+						doSystem("killall -9 hyd");
+				} else if ((count==0) && (tmp_eth_backl)) { /* leave ETH backl */
+#ifdef VV_DEBUG
+					_dprintf("<<DAEMON ETH BACKL>>: CAP leave backhaul!\n");
+#endif
+					action |= EXCHANGE_DAEMON_ACT_EXIT_ETH;
+				}
+#endif
+			} else { /* RE */
+				/* check CAP timeout */
+				record_pt = (daemon_record_pt)final_result[0];
+				if ((record_pt->is_used) && (record_pt->update_time+EXCHANGE_PEER_DIE_TIMEOUT < uptime_now)) { /* CAP timeout */
+					record_pt->is_used=0;
+					if (tmp_eth_backl) {
+#ifdef VV_DEBUG
+						_dprintf("<<DAEMON ETH BACKL>>: RE leave backhaul!\n");
+#endif
+						action |= EXCHANGE_DAEMON_ACT_EXIT_ETH;
+					}
+				}
+			}
+
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+			if (under_queue_eth && ((uptime_now - eth_queue_time) > (HIVE_ETH_SCRIPT_TIMEOUT*2))) {
+				if (nvram_get_int("eth_queue_cmd")) {
+					nvram_unset("eth_queue_cmd");
+					if (under_queue_eth == 3)
+						action |= EXCHANGE_DAEMON_ACT_EXIT_ETH;
+					else if (under_queue_eth == 4)
+						action |= EXCHANGE_DAEMON_ACT_ENTETH_D;
+					under_queue_eth = 0;
+				}
+			}
+#endif
+			if (action & EXCHANGE_DAEMON_ACT_EXIT_ETH) {
+				int queue_cmd;
+				if ((action & EXCHANGE_DAEMON_ACT_ENTETH_L) || (action & EXCHANGE_DAEMON_ACT_ENTETH_D))
+					_dprintf("<<DAEMON ETH ERR>>: action is [%08x]\n", action);
+				queue_cmd = nvram_get_int("eth_queue_cmd");
+				if ( queue_cmd == 0 ) {
+					pid_t pid;
+					char *ent_eth[]={"hive_eth","0",NULL};
+
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+					under_queue_eth = 0;
+#endif
+					nvram_set("eth_backl","0");
+					tmp_eth_backl=0;
+					nvram_set("eth_queue_cmd", "1");
+					_eval(ent_eth, NULL, 0, &pid);
+				} else {
+#ifdef VV_DEBUG
+					_dprintf("<<DAEMON ETH BACKL>>: QUEUE to leave ETH BACKL1\n");
+#endif
+					nvram_set("eth_queue_cmd", "3"); /* queue */
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+					under_queue_eth = 3;
+					eth_queue_time = uptime_now;
+#endif
+				}
+				//nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+				//nvram_set("eth_bh_resetLAN", "4");
+			} else if ((action & EXCHANGE_DAEMON_ACT_ENTETH_L) || (action & EXCHANGE_DAEMON_ACT_ENTETH_D)) {
+				int queue_cmd;
+#ifdef VV_DEBUG
+				_dprintf("<<DAEMON ETH BACKL>>: enter ETH backhaul[%04x]!\n", action);
+#endif
+				queue_cmd = nvram_get_int("eth_queue_cmd");
+				if ( queue_cmd == 0 ) {
+					pid_t pid;
+					char *ent_eth[]={"hive_eth","1",NULL};
+
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+					under_queue_eth = 0;
+#endif
+					nvram_set("eth_backl","1");
+					set_hops_count();
+					tmp_eth_backl=1;
+					nvram_set("eth_queue_cmd", "2");
+					_eval(ent_eth, NULL, 0, &pid);
+				} else {
+#ifdef VV_DEBUG
+					_dprintf("<<DAEMON ETH BACKL>>: QUEUE to enter ETH\n");
+#endif
+					nvram_set("eth_queue_cmd", "4"); /* queue */
+#ifdef RTCONFIG_ETHBH_MIXED_MODE
+					under_queue_eth = 4;
+					eth_queue_time = uptime_now;
+#endif
+				}
+				//nvram_set_int("prelink_pap_status", -1); // trigger LED to change
+			}
+			last_eth_backl=tmp_eth_backl;
+		} // end of while(1)
+	}
+
+err_out:
+	close(ss);
+
+	if (timeout) {
+		sprintf(get_frame, "/tmp/"DETECT_PEER_RESULT_NAME, nic);
+		unlink(get_frame);
+		if (get_peer) {
+			FILE *fp=fopen(get_frame, "wb");
+			if (fp) {
+				for (i=0; i<get_peer; i++)
+					fprintf(fp,"%s\n", final_result[i]);
+				fclose(fp);
+			}
+		}
+	}
+	return 0;
+}
 #endif
 
 //for daisy chain
@@ -2114,7 +4677,7 @@ int sta_is_assoc(int band)
         FILE *fp;
         int len,ch;
         char *pt1,*temp=NULL,*iface=NULL;
-	char tmp[128],prefix_wl[]="wlxxxx_",tmpch[5];
+	char tmp[128],prefix_wl[]="wlxxxx_";
 
 	snprintf(prefix_wl, sizeof(prefix_wl), "wl%d_", band);
 	temp = nvram_safe_get(strcat_r(prefix_wl, "channel", tmp));
@@ -2199,23 +4762,28 @@ int wifimon_check_hops(int band)
                 }
         }
 	if(dbg_m)
-		_dprintf("=> RE: %s's distance from CAP is=%d\n",get_staifname(band),atoi(dist));
+		_dprintf("=> RE: %s's distance from CAP is=%d\n",get_staifname(band),dist?atoi(dist):255);
 	
-        return atoi(dist);
+	if(dist==NULL)
+		return 255;
+	else
+        	return atoi(dist);
 }
 
 //return 0 if current bssid is the same with new bssid 
 int diff_current_bssid(int band,char *new_mac)
 {
-  	char *now_mac = NULL;
-        char tmp[128];
+  	char now_mac[18];
 	int i,diff;
-        char prefix_mssid[] = "wlXXXXXXXXXX_mssid_";
-	snprintf(prefix_mssid, sizeof(prefix_mssid), "wl%d_", band);
-	now_mac = nvram_safe_get(strcat_r(prefix_mssid, "sta_bssid", tmp));
-	if (now_mac && strlen(now_mac))
+        //char tmp[128];
+	//char *now_mac=NULL;
+       // char prefix_mssid[] = "wlXXXXXXXXXX_mssid_";
+	//snprintf(prefix_mssid, sizeof(prefix_mssid), "wl%d_", band);
+	//now_mac = nvram_safe_get(strcat_r(prefix_mssid, "sta_bssid", tmp));
+	//if (now_mac && strlen(now_mac))
+ 	get_mac(get_staifname(band),now_mac);
+	if (strcmp(now_mac,"00:00:00:00:00:00")!=0)
 	{
-		
 		for(i=0;i<17;i++)
 		{
 			diff=abs((int)(*(now_mac+i)-*(new_mac+i)));
@@ -2239,18 +4807,47 @@ int diff_current_bssid(int band,char *new_mac)
  	return 1;
 }
 
+
+int get_mac(char *ifname,char *mac)
+{
+	struct iwreq wrq;
+	int ret;
+	if((ret = get_ap_mac(ifname, &wrq)) < 0)
+        	return ret;
+	sprintf(mac,"%02x:%02x:%02x:%02x:%02x:%02x",
+	wrq.u.ap_addr.sa_data[0], wrq.u.ap_addr.sa_data[1], wrq.u.ap_addr.sa_data[2]
+	, wrq.u.ap_addr.sa_data[3], wrq.u.ap_addr.sa_data[4], wrq.u.ap_addr.sa_data[5]);
+/*
+_dprintf("!!!!!!!!%s!!!!!!!ap_addr(%02x:%02x:%02x:%02x:%02x:%02x)\n",ifname
+, wrq.u.ap_addr.sa_data[0], wrq.u.ap_addr.sa_data[1], wrq.u.ap_addr.sa_data[2]
+, wrq.u.ap_addr.sa_data[3], wrq.u.ap_addr.sa_data[4], wrq.u.ap_addr.sa_data[5]);
+*/
+	return 1;
+}
+
+
 //set new bssid by wpa_cli tools.
 void wpa_cli_set_bssid(int band,char *mac)
 {
-	if(diff_current_bssid(band,mac))
+	if(chk_assoc(get_staifname(band))==0)  
+		goto wpaset;
+	else
 	{
-		//Restart the network with configured BSSID
-		doSystem("wpa_cli -p /var/run/wpa_supplicant-sta%d disable_network 0",band);
-		doSystem("wpa_cli -p /var/run/wpa_supplicant-sta%d set_network 0 bssid %s",band,mac);
-		doSystem("wpa_cli -p /var/run/wpa_supplicant-sta%d enable_network 0",band);
-		sleep(6);
-		_dprintf("=> RE: wpacli set sta%d's bssid as %s\n",band,mac);
+		if(diff_current_bssid(band,mac))
+			goto wpaset;
+		else 
+			return;
 	}
+
+wpaset:	
+	//Restart the network with configured BSSID
+	doSystem("wpa_cli -p /var/run/wpa_supplicant-sta%d disable_network 0",band);
+	doSystem("wpa_cli -p /var/run/wpa_supplicant-sta%d set_network 0 bssid %s",band,mac);
+	doSystem("wpa_cli -p /var/run/wpa_supplicant-sta%d enable_network 0",band);
+	sleep(6);
+	_dprintf("=> RE: wpacli set sta%d's bssid as %s\n",band,mac);
+	
+	return;
 }
 
 
@@ -2285,6 +4882,64 @@ void detect_5gband_bssid(void)
 }
 
 #ifdef RTCONFIG_DUAL_BACKHAUL
+int find_pap_bssid_and_config(band)
+{
+        char buf[1024];
+        FILE *fp;
+        int len,i;
+        char *pt1,*pt2=NULL;
+	char mac[17];
+
+        sprintf(buf, "iwpriv sta%d g_whc_ob_bssid",band?0:1);
+
+        fp = popen(buf, "r");
+        if (fp) {
+                memset(buf, 0, sizeof(buf));
+                len = fread(buf, 1, sizeof(buf), fp);
+                pclose(fp);
+                if (len > 1) {
+                        buf[len-1] = '\0';
+                        pt1 = strstr(buf, "g_whc_ob_bssid:");
+			if(pt1)
+			{
+                                pt2= pt1 + strlen("g_whc_ob_bssid:");
+                                chomp(pt2);
+			}
+                }
+        }
+	else
+		return 0;
+
+	memset(mac,0,sizeof(mac));
+	if(strcmp(pt2,"000000000000"))
+	{
+		for(i=0;i<6;i++)
+		{
+			if(i==0)
+				sprintf(mac,"%c%c",*(pt2+2*i),*(pt2+2*i+1));
+			else
+				sprintf(mac,"%s:%c%c",mac,*(pt2+2*i),*(pt2+2*i+1));
+		}
+	}
+	else
+	{
+		if(!band)
+		{
+			_dprintf("=> RE: can not resolve 2G bssid ! disable 2g..\n");
+			doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 disable_network 0");
+		}
+		return 0;
+	}	
+
+	_dprintf("=> RE: get %dG bssid=%s from sta%d\n",band?5:2,mac,band?0:1);
+	wpa_cli_set_bssid(band,mac);
+	if(band)
+		nvram_set("wl1_sta_bssid",mac);
+	else
+		nvram_set("wl0_sta_bssid",mac);
+        return 1;
+}
+/*
 int find_pap_2g_bssid_and_config(void)
 {
         char buf[1024];
@@ -2310,7 +4965,8 @@ int find_pap_2g_bssid_and_config(void)
 			}
                 }
         }
-
+	else
+		return 0;
 	memset(mac,0,sizeof(mac));
 	if(strcmp(pt2,"000000000000"))
 	{
@@ -2326,17 +4982,16 @@ int find_pap_2g_bssid_and_config(void)
 	{
 		_dprintf("=> RE: can not resolve 2G bssid ! disable 2g..\n");
 		doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 disable_network 0");
-		disable_2g=1;
 		return 0;
 	}	
 
 	_dprintf("=> RE: get 2G bssid=%s from sta1\n",mac);
 	wpa_cli_set_bssid(0,mac);
-	disable_2g=0;
 	nvram_set("wl0_sta_bssid",mac);
         return 1;
 
 }
+*/
 #endif
 
 //get CAP's 2G bssid and try configuring 2.4G backhaul bssid.
@@ -2365,7 +5020,8 @@ int config_cap_bssid(int band)
 			}
                 }
         }
-
+	else
+		return -1;
 	memset(mac,0,sizeof(mac));
 	if(strcmp(pt2,"000000000000"))
 	{
@@ -2467,6 +5123,8 @@ int find_best_bssid(int band)
 			}
                 }
         }
+	else
+		return -1;
 
 	memset(mac,0,sizeof(mac));
 	if(strcmp(pt2,"000000000000"))
@@ -2513,7 +5171,30 @@ int wait_assoc_stable(int band, int link_check_count)
 
 int pap_db_mac(void) //check if the 2G/5G connection to the same pap
 {
-	int j,macd1=0,macd2=0,cmp=0;
+	int j,cmp=0;
+	char mac1[18]="",mac2[18]="";
+	if((chk_assoc(STA_2G)>0) && (chk_assoc(STA_5G)>0))
+	{
+
+ 		get_mac(get_staifname(0),mac1);
+ 		get_mac(get_staifname(1),mac2);
+
+		for(j=0;j<15;j++)
+		{
+			cmp=abs(*(mac1+j)-*(mac2+j));
+			if(cmp!=0 && cmp!=32) //upper or lower 
+				return 0;
+		}
+
+		cmp=abs(*(mac1+15)-*(mac2+15));
+		if(cmp!=0 && cmp!=32) //upper or lower 
+			return 0;
+		else
+			return 1;
+	}
+	else
+		return 0;	
+/*
 	char mac1[18]="",mac2[18]="",tm[5]="";
 	if(!strlen(nvram_safe_get("wl0_sta_bssid")) || !strlen(nvram_safe_get("wl1_sta_bssid")))
 		return 0;
@@ -2529,34 +5210,21 @@ int pap_db_mac(void) //check if the 2G/5G connection to the same pap
 		if(cmp!=0 && cmp!=32) //upper or lower 
 			return 0;
 	}
-#if 0
-	//last macfield
-	memset(tm,0,sizeof(tm));
-	sprintf(tm,"%c%c",*(mac1+15),*(mac1+16));
-	sscanf(tm,"%x",&macd1);
-	memset(tm,0,sizeof(tm));
-	sprintf(tm,"%c%c",*(mac2+15),*(mac2+16));
-	sscanf(tm,"%x",&macd2);
-
-	if(abs(macd1-macd2)==2 || abs(macd1-macd2)==4)
-		return 1;
-	else	
-		return 0;	
-#else
 	cmp=abs(*(mac1+15)-*(mac2+15));
 	if(cmp!=0 && cmp!=32) //upper or lower 
 		return 0;
 	else
 		return 1;
-#endif
+*/
 }
+
 
 void force_down_2g(void)
 {
 #ifdef RTCONFIG_DUAL_BACKHAUL
 	_dprintf("=> RE: temporarily disable 2G...\n");
-	disable_2g=1;
 	resolving=0;
+	retry_2g=0;
 	nvram_unset("wl0_sta_bssid");
 	doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 disable_network 0");
 #endif
@@ -2595,25 +5263,63 @@ void check_iface_all(void)
 
 
 //only RE
-#if defined(RTCONFIG_CSU2_2)
 #ifdef DETECT_5G		
 int change_5g=0;
 int detect_5g=1;
 #endif
-int wifimon_check_assoc(int retry)
+int wifimon_check_assoc(int retry_2g_times)
 {
 #ifndef RTCONFIG_DUAL_BACKHAUL
 	int ch_2g;
+#endif
+
+#ifdef RTCONFIG_DUAL_BACKHAUL
+	if(nvram_get_int("dfs_check_period"))
+	{
+		if(sp_from_2g)
+		{
+			_dprintf("=> RE: connect 2G first...\n");
+			if(sta_is_assoc(0))
+			{
+				resolving=1;
+				find_pap_bssid_and_config(1); //set 5G bssid from sta0				
+				check_wsc_enrollee_status(7); //update current pap's bssid
+				sp_from_2g=0;
+				_dprintf("=> RE: connect 2G ok. config 5G bssid\n");
+				return 1;
+			}
+			else
+				return 3;
+		}
+	}
 #endif
 	if(sta_is_assoc(1))
 	{
 		check_wsc_enrollee_status(7); //update current pap's bssid
 		if(detect_loop())
 		{
-			_dprintf("=> RE: detect loop on 5G, reset!\n");
-			reset_loop();
-			force_down_2g();
-			return 2;
+#ifdef RTCONFIG_DUAL_BACKHAUL
+			if(nvram_get_int("dfs_check_period"))
+			{
+				if(sta_is_assoc(0) && pap_db_mac()) //2G loop,too...
+				{
+					_dprintf("=> RE: detect loop on 5G & 2G, reset!\n");
+					reset_loop();
+					force_down_2g();
+					return 3;
+				}
+				else	
+					find_pap_bssid_and_config(1); //set 5G bssid from sta0				
+				
+			}
+			else
+#endif
+			{
+				_dprintf("=> RE: detect loop on 5G, reset!\n");
+				reset_loop();
+				force_down_2g();
+				return 3;
+			}
 		}
 #ifdef  DETECT_5G		
 		if(getStaXRssi(1)<-80) //distance/sig level/link quality: 25m/-80dbm/30, 12m/-65dbm/80
@@ -2657,14 +5363,14 @@ int wifimon_check_assoc(int retry)
 		if(!resolving)
 		{
 			_dprintf("=> RE: 5G assoc ok. try to resolve 2G\n");
-			if(!find_pap_2g_bssid_and_config())//find 2G bssid,if y, config it
+			if(!find_pap_bssid_and_config(0))//find 2G bssid,if y, config it
 				return 1;		
 			else
 				resolving=1;
 		}
 		else
 		{
-			if(retry!=0xff && !sta_is_assoc(0))  //try resolve 2G until 2G is down
+			if(retry_2g_times!=0xff && !sta_is_assoc(0))  //try to resolve 2G until 2G is down
 			{
 				resolving=0;
 				nvram_unset("wl0_sta_bssid");
@@ -2677,11 +5383,20 @@ int wifimon_check_assoc(int retry)
 
 		if(sta_is_assoc(0))
 		{
+			ind_ath();			
 			if(!pap_db_mac())
 			{
-				force_down_2g();
-				_dprintf("=> RE: detcet diff bssid between 2G and 5G\n");
-				return 2;
+				if(nvram_get_int("dfs_check_period"))
+				{
+					_dprintf("=> RE: detcet diff bssid between 2G and 5G, we reconfig 5G bssid because of NOL\n");
+					find_pap_bssid_and_config(1);
+				}
+				else
+				{
+					force_down_2g();
+					_dprintf("=> RE: detcet diff bssid between 2G and 5G\n");
+				}
+				return 4;
 			}
 		}
 #else
@@ -2700,98 +5415,26 @@ int wifimon_check_assoc(int retry)
 	return 2;	
 }
 
-#else //NOT CSU2.2
-#ifdef RTCONFIG_DUAL_BACKHAUL
-int once=0;
-#endif
-//only RE
-int wifimon_check_assoc(void)
+//for DFS 5G
+void ind_ath(void)
 {
-	int dist;
-#ifdef RTCONFIG_DUAL_BACKHAUL
-	if(sta_is_assoc(0) && sta_is_assoc(1))
-#else
-	int ch_2g;
-	if(sta_is_assoc(1))
-#endif
+	char *outpt=NULL;
+	int num=0;
+	if((outpt=get_qca_iwpriv("ath1", "get_athnewind"))) 
 	{
-#ifdef RTCONFIG_DUAL_BACKHAUL
-		//_dprintf("=> RE: 2G is assoc and 5G is assoc\n");
-#endif
-		check_wsc_enrollee_status(7); //update current pap's bssid
-#ifdef RTCONFIG_DUAL_BACKHAUL
-		if(sta_is_assoc(1) && detect_loop())
-#else
-		if(detect_loop())
-#endif
-		{
-			_dprintf("=> RE: detect loop on 5G, reset!\n");
-			reset_loop();
-			return 2;
-		}
-#ifdef RTCONFIG_DUAL_BACKHAUL
-		_dprintf("=> RE: check pap's 2G mac and pap's 5G's mac.\n");
-		if(!pap_db_mac())
-			once=0;
-		else
-			once=1;
-		dist=wifimon_check_hops(1);
-		if(dist==1) //5G assoc at CAP
-		{
-			if(once)
-				return 0;
-			if(!disable_2g)
-			{
-
-				_dprintf("=>5G on CAP, try to redirect 2G on CAP\n");
-				config_cap_bssid(0); //get 2.4G CAP's bssid and restart it.
-				wait_assoc_stable(0,10);
-			}
-			else
-				_dprintf("=>5G on CAP, ignore 2G (disable 2g)\n");
-			once=1;
-			return 0;
-		}
-		else //5G assoc at RE , dist>1
-		{
-			if(once)
-				return 1;
-			if(!disable_2g)
-			{
-				_dprintf("=>5G on RE, try to redirect 2G on RE\n");
-				find_pap_2gband_bssid(); //find pap's 2G bssid and restart it.
-				wait_assoc_stable(0,10);
-			}
-			else
-				_dprintf("=>5G on CAP, ignore 2G (disable 2g)\n");
-			once=1;
-			return 1;
-		}
-#else
-		ch_2g=nvram_get_int("wl0_channel");
-		if(ch_2g!=0 && ch_2g!=get_ch(get_freq(0)))
-		{
-			_dprintf("=> RE: sync ath0 ch!!\n");
-                   	doSystem("iwconfig %s channel %d",nvram_get("wl0_ifname"),ch_2g);
-                }
-		check_iface_all();      
-
-		return 0;
-#endif
-	}	
-	else
-	{
-#ifdef RTCONFIG_DUAL_BACKHAUL
-		_dprintf("=> RE: 2G not-assoc or 5G not-assoc");
-		once=0;
-#else
-		_dprintf("=> RE: 5G not-assoc");
-#endif
+		num= atoi(outpt);
+		free(outpt);
 	}
-	return 2;	
-}
+	if(!num)
+		doSystem("iwpriv %s athnewind 1", get_wififname(1)); //keep ath1 alive now
 
-#endif
+	if(chk_assoc(get_wififname(1))==0)
+	{
+		_dprintf("RE => for indep, wake up ath1\n");
+		doSystem("ifconfig %s down", get_wififname(1)); 
+		doSystem("ifconfig %s up", get_wififname(1)); 
+	}
+}
 
 int get_cac_state(void)
 {
@@ -2817,7 +5460,10 @@ int get_cac_state(void)
                         }
                 }
         }
-        return atoi(cac);
+	if(cac==NULL)
+		return 0;
+	else
+        	return atoi(cac);
 }
 
 //measure the rate to the serving AP.
@@ -2847,6 +5493,8 @@ int monitor_rate(int band)
 			}
                 }
         }
+	else
+		return 0;
 	whc_rate=atoi(rate);
 	phyrate=get_phyrate(band);
 	if(dbg_m)
@@ -2910,11 +5558,11 @@ int detect_loop(void) //only for 5G
 	return 0;
 }
 
-int check_nol()
+int check_nol(void)
 {
-	char *outpt;
+	char *outpt=NULL;
 	int nolnum=0;
-	if (outpt=get_qca_iwpriv("wifi1", "get_nolcnt")) 
+	if ((outpt=get_qca_iwpriv("wifi1", "get_nolcnt"))) 
 	{
 		nolnum= atoi(outpt);
 		free(outpt);
@@ -2923,12 +5571,10 @@ int check_nol()
 	return nolnum;	
 }
 
-#if defined(RTCONFIG_CSU2_2)
 void start_wifimon_check(int delay)
 {
 	int i,state, assoc_timeout;
 	int restart_process=0;
-	int retry;
 	doSystem("iwpriv wifi0 ignore_dbg 1");
 
 	if(nvram_get_int("wifimon_dbg"))
@@ -2941,7 +5587,7 @@ void start_wifimon_check(int delay)
 	else
 		check_period=30;
 
-	retry=0;
+	retry_2g=0;
 	assoc_timeout=-1; //unknown
 	//temporarily disable 2G
 	force_down_2g();
@@ -2972,7 +5618,7 @@ void start_wifimon_check(int delay)
 	{
 		if(dbg_m)
 			_dprintf("=> RE: wifi monitor check ...\n");
-		state=wifimon_check_assoc(retry);
+		state=wifimon_check_assoc(retry_2g);
 		switch(state)
 		{
 			case 0:
@@ -2987,11 +5633,34 @@ void start_wifimon_check(int delay)
 				assoc_timeout=0;
 				break;
 			case 2: //5G not-assoc, 2G unknown
+			case 3: //5G not-assoc, 2G not-assoc 
+			case 4: //redirect 2G or 5G ...
 				if(assoc_timeout==-1 || assoc_timeout==0) 
 					set_hops_count();
 				if(assoc_timeout<0)  //fix assoc value if unknown or eth-backhaul case
 					assoc_timeout=0;
 				assoc_timeout++;
+				
+#ifdef RTCONFIG_DUAL_BACKHAUL
+				if(assoc_timeout==1)
+				{
+					if(state==2) //5G not-assoc but 2G is unknown.
+					{
+						if(nvram_get_int("dfs_check_period"))
+						{
+							if(chk_assoc(STA_2G) > 0)
+							{
+			 					find_pap_bssid_and_config(1);
+								_dprintf("=> RE: config 5G bssid and keep sta0 alive !!!!!!\n");
+							}
+							//_dprintf("=> RE: avoid getting stuck..\n");
+							//doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 disable_network 0");
+							//sleep(1);
+							//doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 enable_network 0");
+						}
+					}
+				}
+#endif	
 #ifdef RTCONFIG_ETHBACKHAUL
 				_dprintf("=> RE: eth_backl=%d\n",nvram_get_int("eth_backl"));
 				if(nvram_get_int("eth_detect_proc") || nvram_get_int("eth_backl")) //eth backhaul process, ignore wifimon
@@ -3008,7 +5677,8 @@ void start_wifimon_check(int delay)
 			if(sta_is_assoc(1))
 			{
 				_dprintf("=> RE: avoid long waiting-time, bring ath1 up!!!\n");
-				check_iface_all(); //avoid long waiting-time for bring-up ath1    
+				if(chk_assoc(get_wififname(1))==0)
+        				doSystem("ifconfig %s up",get_wififname(1));
 #ifdef RTCONFIG_DUAL_BACKHAUL
 				if( distance != short_distance())
 #else
@@ -3044,27 +5714,52 @@ void start_wifimon_check(int delay)
 			{
 				if(detect_loop())
 				{
-					_dprintf("=> RE: detect loop on 5G, reset2!\n");
-					reset_loop();
-					force_down_2g();
+  		                       if(nvram_get_int("dfs_check_period"))
+                  		       {
+                                		if(sta_is_assoc(0) && pap_db_mac()) //2G loop,too...
+                                		{
+							_dprintf("=> RE: detect loop on 5G & 2G, reset2!\n");
+                                        		reset_loop();
+                                        		force_down_2g();
+                                		}
+                                		else
+                                        		find_pap_bssid_and_config(1); //set 5G bssid from sta0                          
+                         
+                        		}
+                       			else
+                        		{
+
+						_dprintf("=> RE: detect loop on 5G, reset2!\n");
+                                		reset_loop();
+                                		force_down_2g();
+                        		}
+
 				}
 					
 				if(!sta_is_assoc(0))
 				{
-					if(retry>2)
+					if(retry_2g>2)
 					{
 						_dprintf("=> RE: 2G is down ...\n");
 						force_down_2g();
 						resolving=1;
-						retry=0xff;
+						retry_2g=0xff;
 					}
 					else
-						retry++;
+						retry_2g++;
 				}
 				else if(!pap_db_mac())
 				{	
-					force_down_2g();
-					_dprintf("=> RE: detcet diff bssid between 2G and 5G !!!\n");
+					if(nvram_get_int("dfs_check_period"))
+					{
+						_dprintf("=> RE: detcet diff bssid between 2G and 5G, we reconfig 5G bssid because of NOL!\n");
+						find_pap_bssid_and_config(1);
+					}
+					else
+					{
+						force_down_2g();
+						_dprintf("=> RE: detcet diff bssid between 2G and 5G !!!\n");
+					}
 				}
 				
 			}
@@ -3077,25 +5772,56 @@ void start_wifimon_check(int delay)
 #endif
 				{
 					_dprintf("=> RE: 5G is not assoc.Reset wpa_supplicant for 5G!!\n");
+
 #ifdef RADAR_FAILOVER
 					if(nvram_get_int("dfs_check_period") && check_nol())
 					{
+
 						_dprintf("=> RE: restart wireless for radar fail-over\n");
-						restart_wireless();
+						restart_wifi(1);
+						force_down_2g();
 					}
 					else
+#endif
+#ifdef RTCONFIG_DUAL_BACKHAUL
+					if(nvram_get_int("dfs_check_period"))
+					{
+						ind_ath();
+						if(chk_assoc(STA_2G) > 0)
+						{
+			 				find_pap_bssid_and_config(1);
+							_dprintf("=> RE: donot force down 2G!!\n");
+						}
+						else
+						{
+							_dprintf("=> RE: because 5G disconnect, we can not get 2G info. try 2G and stop 5G...\n");
+							force_down_2g();
+							doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 enable_network 0");
+							doSystem("wpa_cli -p /var/run/wpa_supplicant-sta1 disable_network 0");
+							sp_from_2g=1;
+						}
+
+					}
+					else
+
 #endif
 					{
 						wpa_supplicant_stop(1);
 						wpa_supplicant_start(1);
+						force_down_2g();
 					}
-					force_down_2g();
 #ifdef DETECT_5G
 					detect_5g=1;
 #endif
 				}
 			}
-			restart_process=1;
+
+#ifdef RTCONFIG_DUAL_BACKHAUL
+			if(nvram_get_int("dfs_check_period") && sta_is_assoc(0))
+				restart_process=0;
+			else
+#endif
+				restart_process=1;
 			assoc_timeout=-1;
 		}
 		else
@@ -3103,192 +5829,14 @@ void start_wifimon_check(int delay)
 		
 		if(!pids("watchdog"))
 		{
-			 nvram_set("wps_syncing","0");
-#if !defined(MAPAC1800)
+#if defined(RTCONFIG_LP5523)
                          lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
+#elif defined(MAPAC1750)
+			nvram_set("prelink_pap_status", "0");
 #endif
 			 start_watchdog();
 		}
 
 	}
 }
-#else //NOT CSU2.2
-
-void start_wifimon_check(int delay)
-{
-	int i,state, assoc_timeout;
-	int restart_process=0;
-	int retry_times;
-	doSystem("iwpriv wifi0 ignore_dbg 1");
-
-	if(nvram_get_int("wifimon_dbg"))
-		dbg_m=1;
-	else 
-		dbg_m=0;
-
-	if(nvram_get_int("dfs_check_period"))
-		check_period=60;
-	else
-		check_period=30;
-
-	assoc_timeout=0;
-	retry_times=0;
-#ifdef RTCONFIG_DUAL_BACKHAUL
-	disable_2g=0;
-#endif
-	if(dbg_m)
-		_dprintf("=> wifi monitor check: delay %d sec ...\n",delay);
-	sleep(delay);
-
-	for(i=0;i<2;i++)
-	{
-        	doSystem("ifconfig %s down",get_wififname(i));
-		sleep(1);
-        	doSystem("ifconfig %s up",get_wififname(i));
-	}
-	while(1)
-	{
-		if(dbg_m)
-			_dprintf("=> RE: wifi monitor check ...\n");
-		state=wifimon_check_assoc();
-		switch(state)
-		{
-			case 0:
-#ifdef RTCONFIG_DUAL_BACKHAUL
-			case 1:
-#endif
-				assoc_timeout=0;
-				retry_times=0;
-				break;
-			case 2: //2G not-assoc or 5G not-assoc
-				assoc_timeout++;
-				break;
-			default:
-				break;
-		}
-		sleep(check_period);
-
-		if(restart_process)
-		{
-#ifdef RTCONFIG_DUAL_BACKHAUL
-			_dprintf("=> RE:restart hyd/wsplcd/wifimon process after reset 2G or 5G\n");
-#else
-			_dprintf("=> RE:restart hyd/wsplcd/wifimon process after reset 5G\n");
-#endif
-			wsplcd_stop();
-			hyd_stop();
-			gen_wsplcd_conf(1, WSPLCD_CONF, 0);
-                	wsplcd_enable();
-			hyd_start(1);
-		}
-
-		if(assoc_timeout==0)
-		{
-			restart_process=0;
-		}
-		else if(assoc_timeout>=2)  //5G not assoc for more than 60 seconds
-		{
-#ifdef RTCONFIG_DUAL_BACKHAUL
-			if(sta_is_assoc(1))
-			{
-			//	if(dbg_m)
-					_dprintf("=> RE: 5G assoc but 2G is not assoc.\n");
-#if 0
-				wpa_supplicant_stop(0);
-				wpa_supplicant_start(0);
-#else
-				check_wsc_enrollee_status(10); //update 5g bssid
-
-				if(detect_loop())
-				{
-					_dprintf("=> RE: detect loop on 5G, reset2!\n");
-					reset_loop();
-				}
-				else
-				{
-					if(!disable_2g)
-					{
-						_dprintf("=> RE: try to find pap's 2G bssid\n");
-						find_pap_2gband_bssid(); //find pap's 2G bssid and restart it.
-
-						if(wait_assoc_stable(0,10)==0) //2G unstable
-						{
-							retry_times++;
-							if(retry_times>1) //120s
-							{
-								_dprintf("=> RE:try to disable 2G ....\n");
-								doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 disable_network 0");
-								disable_2g=1;
-								retry_times=0;
-							}
-						}
-					}
-/*
-					else
-					{
-						retry_times++;
-
-						if(retry_times>3) //240s
-						{
-								_dprintf("=> RE: try to wakeup 2G.....\n");
-								doSystem("wpa_cli -p /var/run/wpa_supplicant-sta0 enable_network 0");
-								disable_2g=0;
-								retry_times=0;
-						}
-					}
-*/
-				} //detect loop
-#endif
-			}
-			else
-			{
-			//	if(dbg_m)
-					_dprintf("=> RE: 5G is not assoc.Reset wpa_supplicant for 5G!!\n");
-#if 1
-				wpa_supplicant_stop(1);
-				wpa_supplicant_start(1);
-#else
-				wpacli_restart(1);
-#endif
-				if(!sta_is_assoc(0))
-				{
-			//		if(dbg_m)
-						_dprintf("=> RE:2G is not assoc.Reset wpa_supplicant for 2G!!\n");
-#if 1
-					wpa_supplicant_stop(0);
-					wpa_supplicant_start(0);
-#else
-				wpacli_restart(0);
-#endif
-					disable_2g=0;
-					retry_times=0;
-
-				}
-			}
-#else
-			if(!sta_is_assoc(1))
-			{
-				_dprintf("=> RE: 5G is not assoc.Reset wpa_supplicant for 5G!!\n");
-				wpa_supplicant_stop(1);
-				wpa_supplicant_start(1);
-			}
-#endif
-			restart_process=1;
-			assoc_timeout=0;
-		}
-		else
-			restart_process=0;
-		
-		if(!pids("watchdog"))
-		{
-			 nvram_set("wps_syncing","0");
-#if !defined(MAPAC1800)
-                         lp55xx_leds_proc(LP55XX_ALL_LEDS_OFF, LP55XX_PREVIOUS_STATE);
-#endif
-			 start_watchdog();
-		}
-
-	}
-}
-#endif
 #endif

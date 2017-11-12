@@ -668,10 +668,13 @@ static int process_beacon_event(struct nl_msg *msg, void *arg)
 		os_memset(&event, 0, sizeof(event));
 		event.rx_mgmt.frame = nla_data(tb[NL80211_ATTR_FRAME]);
 		event.rx_mgmt.frame_len = nla_len(tb[NL80211_ATTR_FRAME]);
-		event.rx_mgmt.ssi_signal = (s32) nla_get_u32(tb[NL80211_ATTR_RX_SIGNAL_DBM]);
+    if (!tb[NL80211_ATTR_RX_SIGNAL_DBM]){
+      event.rx_mgmt.ssi_signal = -5000;
+    } else {
+		  event.rx_mgmt.ssi_signal = (s32) nla_get_u32(tb[NL80211_ATTR_RX_SIGNAL_DBM]);
+    }
 		wpa_supplicant_event(drv->ctx, EVENT_RX_MGMT, &event);
 	}
-
 	return NL_SKIP;
 }
 
@@ -1744,10 +1747,10 @@ failed:
  * Returns: Pointer to private data, %NULL on failure
  */
 static void * wpa_driver_nl80211_init(void *ctx, const char *ifname,
-				      void *global_priv)
+				      void *global_priv, const char *param)
 {
 	return wpa_driver_nl80211_drv_init(ctx, ifname, global_priv, 0, NULL,
-					   NULL);
+			param);
 }
 
 
@@ -1812,6 +1815,14 @@ static int nl80211_register_action_frame(struct i802_bss *bss,
 					 const u8 *match, size_t match_len)
 {
 	u16 type = (WLAN_FC_TYPE_MGMT << 2) | (WLAN_FC_STYPE_ACTION << 4);
+	return nl80211_register_frame(bss, bss->nl_mgmt,
+				      type, match, match_len);
+}
+
+static int nl80211_register_mgmt_frame(struct i802_bss *bss, u16 stype,
+					 const u8 *match, size_t match_len)
+{
+	u16 type = (WLAN_FC_TYPE_MGMT << 2) | (stype << 4);
 	return nl80211_register_frame(bss, bss->nl_mgmt,
 				      type, match, match_len);
 }
@@ -1935,6 +1946,16 @@ static int nl80211_mgmt_subscribe_non_ap(struct i802_bss *bss)
 	/* Radio Measurement - Link Measurement Request */
 	if ((drv->capa.rrm_flags & WPA_DRIVER_FLAGS_TX_POWER_INSERTION) &&
 	    (nl80211_register_action_frame(bss, (u8 *) "\x05\x02", 2) < 0))
+		ret = -1;
+
+	if (drv->vendor_events_filter_len &&
+		nl80211_register_mgmt_frame(bss, WLAN_FC_STYPE_BEACON,
+		(u8 *) drv->vendor_events_filter, drv->vendor_events_filter_len) < 0)
+		ret = -1;
+
+	if (drv->vendor_events_filter_len &&
+		nl80211_register_mgmt_frame(bss, WLAN_FC_STYPE_PROBE_RESP,
+		(u8 *) drv->vendor_events_filter, drv->vendor_events_filter_len) < 0)
 		ret = -1;
 
 	nl80211_mgmt_handle_register_eloop(bss);
@@ -7208,6 +7229,7 @@ static int nl80211_set_param(void *priv, const char *param)
 {
 	struct i802_bss *bss = priv;
 	struct wpa_driver_nl80211_data *drv = bss->drv;
+	char *pos;
 
 	if (param == NULL)
 		return 0;
@@ -7236,6 +7258,14 @@ static int nl80211_set_param(void *priv, const char *param)
 	if (os_strstr(param, "no_offchannel_tx=1")) {
 		drv->capa.flags &= ~WPA_DRIVER_FLAGS_OFFCHANNEL_TX;
 		drv->test_use_roc_tx = 1;
+	}
+
+	pos = os_strstr(param, "vendor_events_filter=");
+	if (pos) {
+		pos += 21;
+		drv->vendor_events_filter_len = (os_strlen(pos) - 1) / 2;
+		if (drv->vendor_events_filter_len)
+			hexstr2bin(pos, drv->vendor_events_filter, drv->vendor_events_filter_len);
 	}
 
 	return 0;
@@ -9649,6 +9679,41 @@ static int nl80211_get_ext_capab(void *priv, enum wpa_driver_if_type type,
 	return 0;
 }
 
+#ifdef CONFIG_WDS_WPA
+int nl80211_set_wds_wpa_sta(void *priv, const u8 *addr, const u8 remove)
+{
+  int ret;
+  mtlk_mac_addr_list_cfg_t wds_wpa_cfg;
+
+  os_memcpy(wds_wpa_cfg.addr, addr, ETH_ALEN);
+  wds_wpa_cfg.remove = remove;
+  ret = nl80211_vendor_cmd(priv, OUI_LTQ,
+    LTQ_NL80211_VENDOR_SUBCMD_SET_WDS_WPA_STA, (u8*) &wds_wpa_cfg,
+    sizeof(wds_wpa_cfg), NULL);
+
+  if (ret < 0)
+    wpa_printf(MSG_ERROR, "nl80211: sending SET_WDS_WPA_STA failed: %i (%s)",
+         ret, strerror(-ret));
+  else
+    wpa_printf(MSG_DEBUG, MACSTR " %s WDS WPA station list", MAC2STR(addr),
+      remove ? "removed from" : "added to");
+
+  return ret;
+}
+#endif
+
+static int nl80211_block_tx(void *priv)
+{
+  int ret;
+
+  ret = nl80211_vendor_cmd(priv, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_BLOCK_TX,
+               NULL, 0, NULL);
+  if (ret < 0)
+    wpa_printf(MSG_ERROR, "nl80211: BLOCK TX: %s",
+         strerror(errno));
+
+  return ret;
+}
 
 const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.name = "nl80211",
@@ -9781,4 +9846,8 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 #endif /* CONFIG_DRIVER_NL80211_QCA */
 	.configure_data_frame_filters = nl80211_configure_data_frame_filters,
 	.get_ext_capab = nl80211_get_ext_capab,
+#ifdef CONFIG_WDS_WPA
+	.set_wds_wpa_sta = nl80211_set_wds_wpa_sta,
+#endif
+	.block_tx = nl80211_block_tx,
 };

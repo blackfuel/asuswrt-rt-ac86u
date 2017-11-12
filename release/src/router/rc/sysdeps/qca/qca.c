@@ -46,7 +46,7 @@
 
 #define	DEFAULT_SSID_2G	"ASUS"
 #define	DEFAULT_SSID_5G	"ASUS_5G"
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #define	QCA_MACCMD	"maccmd_sec"
 #define	QCA_ADDMAC	"addmac_sec"
 #else
@@ -882,6 +882,7 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 
 	fprintf(fp, "interface=%s\n",wif);
 	fprintf(fp, "ctrl_interface=/var/run/hostapd\n");
+	fprintf(fp, "dump_file=/tmp/hostapd.dump\n");
 	fprintf(fp, "driver=atheros\n");
 #if defined(RTCONFIG_TAGGED_BASED_VLAN) || defined(RTCONFIG_CAPTIVE_PORTAL)
 	char br_if[16]={0};
@@ -1030,14 +1031,14 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 #if defined(RTCONFIG_WIFI_QCA9990_QCA9990) || defined(RTCONFIG_WIFI_QCA9994_QCA9994) || defined(RTCONFIG_SOC_IPQ40XX) || defined(RPAC51)
 	// TX BeamForming, must be set before association with the station.
 	txbf = (nmode != 2)? !!nvram_get_int(strcat_r(tmpfix, "txbf", tmp)) : 0;
-	mumimo = (nmode != 2)? !!(band && nvram_get_int(strcat_r(tmpfix, "mumimo", tmp))) : 0;
-	fprintf(fp2, "iwpriv %s vhtsubfer %d\n", wif, txbf);	/* Single-user beam former */
-	fprintf(fp2, "iwpriv %s vhtsubfee %d\n", wif, txbf);	/* Single-user beam formee */
+	mumimo = (nmode != 2)? !!(nvram_get_int(strcat_r(tmpfix, "mumimo", tmp))) : 0;
 	if (!repeater_mode() && !mediabridge_mode()) {
 		fprintf(fp2, "iwpriv %s vhtmubfer %d\n", wif, mumimo);	/* Multiple-user beam former, AP only */
 	} else {
 		fprintf(fp2, "iwpriv %s vhtmubfee %d\n", wif, mumimo);	/* Multiple-user beam formee, STA only */
 	}
+	fprintf(fp2, "iwpriv %s vhtsubfer %d\n", wif, txbf);	/* Single-user beam former */
+	fprintf(fp2, "iwpriv %s vhtsubfee %d\n", wif, txbf);	/* Single-user beam formee */
 
 	if(mumimo)	
 		fprintf(fp2, "wifitool %s beeliner_fw_test 2 0\n", wif);	/* Improve Multiple-user mimo performance */
@@ -1397,7 +1398,9 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 				}
 
 				if (!only_20m && *t_bw == '\0') {
-					strlcpy(t_bw, "HT40", sizeof(t_bw));
+					sprintf(t_bw,"HT40");	
+
+#if !defined(RTCONFIG_SOC_IPQ40XX)
 					//ext ch
 					str = nvram_safe_get(strcat_r(tmpfix, "nctrlsb", tmp));
 					if(!strcmp(str,"lower"))
@@ -1406,6 +1409,7 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 						strlcpy(t_ext, "MINUS", sizeof(t_ext));
 
 					bw40_channel_check(band,t_ext);
+#endif
 				}
 			}
 		}
@@ -3155,7 +3159,7 @@ int wps_pin(int pincode)
 		if (i >= MAX_NR_WL_IF)
 			break;
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3200,7 +3204,7 @@ static int __wps_pbc(int multiband)
 		if (i >= MAX_NR_WL_IF)
 			break;
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3259,7 +3263,7 @@ void __wps_oob(const int multiband)
 		if (i >= MAX_NR_WL_IF)
 			break;
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3352,7 +3356,7 @@ void start_wsc(void)
 		if (i >= MAX_NR_WL_IF)
 			break;
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3405,7 +3409,7 @@ static void __stop_wsc(int multiband)
 		if (i >= MAX_NR_WL_IF)
 			break;
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3461,7 +3465,7 @@ void start_wsc_enrollee(void)
 		if(i>=2)        //only need sta0 & sta1
                        	break;
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3487,8 +3491,8 @@ void start_wsc_enrollee(void)
 			fprintf(fp, "ctrl_interface=/var/run/wpa_supplicant\n");
 			fprintf(fp, "update_config=1\n");
 			fclose(fp);
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
-			if(nvram_get_int("x_Setting") && sw_mode()==SW_MODE_AP)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+			if(nvram_get_int("x_Setting") && (sw_mode()==SW_MODE_AP && !nvram_match("cfg_master", "1")))
 				_dprintf("==>wps enrollee: using original sta%d vap\n",i);
 			else
 #endif
@@ -3523,7 +3527,7 @@ void stop_wsc_enrollee(void)
                         break;
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	
@@ -3544,8 +3548,8 @@ void stop_wsc_enrollee(void)
 			snprintf(fpath, sizeof(fpath), "/etc/Wireless/conf/wpa_supplicant-%s.conf", sta);
 			unlink(fpath);
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
-			if(nvram_get_int("x_Setting") && sw_mode()==SW_MODE_AP)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+			if(nvram_get_int("x_Setting") && (sw_mode()==SW_MODE_AP && !nvram_match("cfg_master", "1")))
 				_dprintf("==>wps enrollee: do not destroy original sta%d vap\n",i);
 			else
 #endif
@@ -3569,7 +3573,7 @@ void wifi_clone(int unit)
 	int len;
 	char *pt1, *pt2;
 	char tmp[128], prefix[] = "wlXXXXXXXXXX_";
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 	char stmp[128], sprefix[] = "wlXXXXXXXXXX_";
 #ifndef RTCONFIG_DUAL_BACKHAUL
 	if(unit==0)
@@ -3622,7 +3626,7 @@ void wifi_clone(int unit)
 			nvram_commit();
 		}
 	}
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 	snprintf(sprefix, sizeof(sprefix), "wl%d_", unit);
 	snprintf(prefix, sizeof(prefix), "wl%d_", unit?0:1);
 	nvram_set(strcat_r(prefix, "ssid", tmp), nvram_get(strcat_r(sprefix, "ssid", stmp)));
@@ -3886,7 +3890,7 @@ void platform_start_ate_mode(void)
 		break;
 #endif	/* RT4GAC55U */
 
-#if defined(RTAC88N) || defined(BRTAC828) || defined(RTAD7200) || defined(RTAC88S) || defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U)
+#if defined(RTAC88N) || defined(BRTAC828) || defined(RTAD7200) || defined(RTAC88S) || defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC3000)
 	case MODEL_RTAC88N:
 	case MODEL_BRTAC828:
 	case MODEL_RTAD7200:
@@ -3894,6 +3898,7 @@ void platform_start_ate_mode(void)
 	case MODEL_RTAC58U:
 	case MODEL_RT4GAC53U:
 	case MODEL_RTAC82U:
+	case MODEL_MAPAC3000:
 #ifndef RTCONFIG_ATEUSB3_FORCE
 		// this way is unstable
 		if(nvram_get_int("usb_usb3") == 0) {
@@ -3992,7 +3997,7 @@ getSiteSurvey(int band,char* ofile)
 	char ure_mac[18];
 	int wl_authorized = 0;
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 	int j,mac1=0,mac2=0,cmp=0;
 	char address2[18]="",tm[5]="";
 	char tmpnv[30],tmps[5];
@@ -4008,7 +4013,7 @@ getSiteSurvey(int band,char* ofile)
 	if (band < 0 || band >= MAX_NR_WL_IF)
 		return 0;
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 	sig_tmp=0;
 	sig_bk=0;
 	memset(addr_tmp,0,sizeof(addr_tmp));
@@ -4053,7 +4058,7 @@ getSiteSurvey(int band,char* ofile)
 		ifconfig(ssv_if, 0, NULL, NULL);
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 skip_init:
         lock = file_lock("sitesurvey");
         strcpy(ssv_if, get_staifname(band));
@@ -4067,7 +4072,7 @@ skip_init:
 	
 	snprintf(header, sizeof(header), "%-4s%-33s%-18s%-9s%-16s%-9s%-8s\n", "Ch", "SSID", "BSSID", "Enc", "Auth", "Siganl(%)", "W-Mode");
 
-#if !defined(MAPAC1300) && !defined(MAPAC2200) && !defined(VRZAC1300) && !defined(MAPAC1800)
+#if !defined(MAPAC1300) && !defined(MAPAC2200) && !defined(VZWAC1300) && !defined(MAPAC1750)
 	dbg("\n%s", header);
 #endif
 	if ((ofp = fopen(ofile, "a")) == NULL)
@@ -4124,7 +4129,7 @@ skip_init:
 		}
 #endif
 
-#if !defined(MAPAC1300) && !defined(MAPAC2200) && !defined(VRZAC1300) && !defined(MAPAC1800)
+#if !defined(MAPAC1300) && !defined(MAPAC2200) && !defined(VZWAC1300) && !defined(MAPAC1750)
 		dbg("\napCount=%d\n",apCount);
 #endif
 		apCount++;
@@ -4222,8 +4227,8 @@ skip_init:
 			memset(a2,0,sizeof(a2));
 			strncpy(a1,pt1+strlen("Quality="),pt2-pt1-strlen("Quality="));
 			strncpy(a2,pt2+1,strstr(pt2," ")-(pt2+1));
-			snprintf(sig, sizeof(sig), "%d", 100 * (safe_atoi(a1) + 6) / (safe_atoi(a2) + 6));
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
+			sprintf(sig,"%d",100*(atoi(a1)+6)/(atoi(a2)+6));
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
 			memset(siglv,0,sizeof(siglv));
 			memset(a3,0,sizeof(a3));
 			pt3=strstr(pt2,"Signal level=-");
@@ -4263,7 +4268,7 @@ skip_init:
 		else
 			strlcpy(wmode, "unknown", sizeof(wmode));
 
-#if !defined(MAPAC1300) && !defined(MAPAC2200) && !defined(VRZAC1300) && !defined(MAPAC1800)
+#if !defined(MAPAC1300) && !defined(MAPAC2200) && !defined(VZWAC1300) && !defined(MAPAC1750)
 #if 1
 		dbg("%-4s%-33s%-18s%-9s%-16s%-9s%-8s\n",ch,ssid,address,enc,auth,sig,wmode);
 #endif
@@ -4300,8 +4305,8 @@ skip_init:
 		fprintf(ofp, "\"%s\",", wmode); 
 
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
-		if(nvram_get_int("x_Setting") && sw_mode()==SW_MODE_AP) //RE
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+		if(nvram_get_int("x_Setting") && (sw_mode()==SW_MODE_AP && !nvram_match("cfg_master", "1"))) //RE
 		{
 			if(band)
 			{
@@ -4445,8 +4450,8 @@ skip_cmp:
 
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) || defined(MAPAC1800)
-	if(nvram_get_int("x_Setting") && sw_mode()==SW_MODE_AP) //RE
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+	if(nvram_get_int("x_Setting") && (sw_mode()==SW_MODE_AP && !nvram_match("cfg_master", "1"))) //RE
 	{
 		if(band)
 		{
@@ -4842,7 +4847,7 @@ int LanWanLedCtrl(void)
 }
 #endif	/* LAN4WAN_LED*/
 
-#if defined(MAPAC1300) || defined(VRZAC1300)
+#if defined(MAPAC1300) || defined(VZWAC1300)
 int get_wifi_thermal(int band)
 {
 	char thermal_path[64];
@@ -4977,5 +4982,5 @@ int thermal_txpwr_main(int argc, char *argv[])
 	}
 	return 0;
 }
-#endif	/* MAPAC1300 || VRZAC1300 */
+#endif	/* MAPAC1300 || VZWAC1300 */
 

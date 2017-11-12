@@ -87,6 +87,12 @@
 	width: 25px;
 	margin: auto;
 }
+.vpnc_limit_hint {
+	color: #FC0;
+	font-weight: bolder;
+	font-size: 13px;
+	text-align: center;
+}
 .vpn_illustration {
 	background-image: url('/images/vpn_illustration.png');
 	height: 90px;
@@ -732,12 +738,26 @@ function tabclickhandler(_type){
 		adjust_panel_block_top("openvpnc_setting_ipsec", 200);	
 	}
 
-	if (openvpn_arrayLength == 5 && openvpnd_support && add_profile_flag) {
-		document.getElementById('opencTitle_' + tab_id + '').style.display = "none";
+	var set_limit_hint = function(_type, _limitNum, _name) {
+		$("#tr_" + _type + "_limit_hint").css("display", "");
+		var hint = _name + " : <#List_limit#> " + _limitNum;
+		$("#openvpnc_setting_" + _type + "").find(".vpnc_limit_hint").html(hint);
+		$("#openvpnc_setting_" + _type + "").find("input,button,textarea,select").attr("disabled", true);
+		$("#cancelBtn_" + _type + "").attr("disabled", false);
+	};
+	var reset_limit_hint = function(_type) {
+		$("#tr_" + _type + "_limit_hint").css("display", "none");
+		$("#openvpnc_setting_" + _type + "").find("input,button,textarea,select").attr("disabled", false);
 	}
-	if(ipsec_arrayLength == 5 && ipsec_cli_support && add_profile_flag) {
-		document.getElementById('ipsecTitle_' + tab_id + '').style.display = "none";
-	}
+	if (openvpn_arrayLength == 5 && openvpnd_support && add_profile_flag)
+		set_limit_hint("openvpn", openvpn_arrayLength, "OpenVPN");
+	else
+		reset_limit_hint("openvpn");
+
+	if(ipsec_arrayLength == 5 && ipsec_cli_support && add_profile_flag)
+		set_limit_hint("ipsec", ipsec_arrayLength, "IPSec");
+	else
+		reset_limit_hint("ipsec");
 }
 
 function update_unit_option(){
@@ -2692,6 +2712,11 @@ function del_exception_list_confirm(_parArray) {
 				<div id="divTabMenu_ipsec"></div>
 			</td>
 		</tr>
+		<tr id="tr_ipsec_limit_hint" style="display:none;">
+			<td>
+				<div class="vpnc_limit_hint"></div>
+			</td>
+		</tr>
 		<tr>
 			<td>
 				<div class="formfonttitle"><#vpnc_net_client_peer#></div>
@@ -2961,7 +2986,7 @@ function del_exception_list_confirm(_parArray) {
 				<!-- Advanced Settings table end-->
 
 				<div style="margin-top:15px;width:100%;text-align:center;">
-					<input class="button_gen" type="button" onclick="cancel_ipsec_profile_panel();" value="<#CTL_Cancel#>">
+					<input id="cancelBtn_ipsec" class="button_gen" type="button" onclick="cancel_ipsec_profile_panel();" value="<#CTL_Cancel#>">
 					<input class="button_gen" type="button" onclick="save_ipsec_profile_panel();" value="<#CTL_onlysave#>">	
 				</div>
 			</td>
@@ -2996,6 +3021,11 @@ function del_exception_list_confirm(_parArray) {
 		<tr style="height:32px;">
 			<td>		
 				<div id="divTabMenu_openvpn"></div>
+			</td>
+		</tr>
+		<tr id="tr_openvpn_limit_hint" style="display:none;">
+			<td>
+				<div class="vpnc_limit_hint"></div>
 			</td>
 		</tr>
 		<tr>

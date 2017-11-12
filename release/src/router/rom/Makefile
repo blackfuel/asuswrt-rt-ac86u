@@ -151,6 +151,7 @@ ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/ssl_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 ifeq ($(RTCONFIG_CFGSYNC),y)
 	cp -f webs_scripts/ssl_webs_download.sh $(INSTALLDIR)/usr/sbin/webs_download.sh
+	cp -f webs_scripts/ssl_webs_note.sh $(INSTALLDIR)/usr/sbin/webs_note.sh
 endif
 else
 	cp -f webs_scripts/nozip_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
@@ -238,6 +239,6 @@ ifeq ($(RTCONFIG_LETSENCRYPT),y)
 endif
 
 ifeq ($(HND_ROUTER),y)
-	mkdir -p $(INSTALLDIR)/usr/share/zoneinfo
-	cp -rf zoneinfo/* $(INSTALLDIR)/usr/share/zoneinfo/
+	mkdir -p $(INSTALL_DIR)/rom/rom/usr/share/zoneinfo
+	cp -rf zoneinfo/* $(INSTALL_DIR)/rom/rom/usr/share/zoneinfo/
 endif

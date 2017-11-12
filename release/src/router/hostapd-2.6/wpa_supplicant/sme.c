@@ -563,6 +563,18 @@ static void sme_send_authentication(struct wpa_supplicant *wpa_s,
 		wpa_s->sme.wds = wpa_s->conf->wds;
 	}
 
+	if (wpa_s->vendor_elem[VENDOR_ELEM_AUTH_REQ]) {
+		struct wpabuf *buf = wpa_s->vendor_elem[VENDOR_ELEM_AUTH_REQ];
+		u8 auth_vs_ie[128];
+
+		if (params.ie) {
+			os_memcpy(params.ie + params.ie_len, wpabuf_head(buf), wpabuf_len(buf));
+		} else  {
+			os_memcpy(auth_vs_ie, wpabuf_head(buf), wpabuf_len(buf));
+			params.ie = auth_vs_ie;
+		}
+		params.ie_len += wpabuf_len(buf);
+	}
 
 	wpa_supplicant_cancel_sched_scan(wpa_s);
 	wpa_supplicant_cancel_scan(wpa_s);

@@ -45,6 +45,9 @@
 #include "mbo_ap.h"
 #include "rrm.h"
 #include "taxonomy.h"
+#ifdef CONFIG_WDS_WPA
+#include "wds_wpa.h"
+#endif
 
 
 u8 * hostapd_eid_supp_rates(struct hostapd_data *hapd, u8 *eid)
@@ -1508,6 +1511,37 @@ static u16 check_wmm(struct hostapd_data *hapd, struct sta_info *sta,
 	return WLAN_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_WDS_WPA
+static u16 check_wmm_wds(struct hostapd_data *hapd, struct sta_info *sta,
+         const u8 *wmm_ie, size_t wmm_ie_len)
+{
+  sta->flags &= ~WLAN_STA_WMM;
+  sta->qosinfo = 0;
+  if (wmm_ie && hapd->conf->wmm_enabled) {
+    struct wmm_information_element *wmm;
+
+    if (!hostapd_eid_wmm_valid_wds(hapd, wmm_ie, wmm_ie_len)) {
+      hostapd_logger(hapd, sta->addr,
+               HOSTAPD_MODULE_WPA,
+               HOSTAPD_LEVEL_DEBUG,
+               "invalid WMM element in association "
+               "request");
+      return WLAN_STATUS_UNSPECIFIED_FAILURE;
+    }
+
+    sta->flags |= WLAN_STA_WMM;
+    wmm = (struct wmm_information_element *) wmm_ie;
+    sta->qosinfo = wmm->qos_info;
+
+    /* clear UAPSD if it unsupported by BSS */
+    if (!hapd->conf->wmm_uapsd)
+      sta->qosinfo &= ~WMM_QOSINFO_STA_AC_MASK;
+
+  }
+  return WLAN_STATUS_SUCCESS;
+}
+#endif
+
 
 u16 copy_supp_rates(struct hostapd_data *hapd, struct sta_info *sta,
 			   struct ieee802_11_elems *elems)
@@ -1561,7 +1595,7 @@ static u16 check_ext_capab(struct hostapd_data *hapd, struct sta_info *sta,
 }
 
 
-static u16 check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
+u16 check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
 			   const u8 *ies, size_t ies_len, int reassoc)
 {
 	struct ieee802_11_elems elems;
@@ -1580,6 +1614,12 @@ static u16 check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
 	resp = check_ssid(hapd, sta, elems.ssid, elems.ssid_len);
 	if (resp != WLAN_STATUS_SUCCESS)
 		return resp;
+#ifdef CONFIG_WDS_WPA
+  if (hostapd_maclist_found(hapd->conf->wds_wpa_sta,
+    hapd->conf->num_wds_wpa_sta, sta->addr, NULL))
+    resp = check_wmm_wds(hapd, sta, elems.wmm, elems.wmm_len);
+  else
+#endif
 	resp = check_wmm(hapd, sta, elems.wmm, elems.wmm_len);
 	if (resp != WLAN_STATUS_SUCCESS)
 		return resp;
@@ -1959,6 +1999,7 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
 		p = hostapd_eid_ht_capabilities(hapd, p);
 	}
 	p = hostapd_eid_ht_operation(hapd, p);
+	p = hostapd_eid_overlapping_bss_scan_params(hapd, p);
 #endif /* CONFIG_IEEE80211N */
 
 #ifdef CONFIG_IEEE80211AC
@@ -2162,18 +2203,6 @@ static void handle_assoc(struct hostapd_data *hapd,
 		send_deauth(hapd, mgmt->sa,
 			    WLAN_REASON_CLASS2_FRAME_FROM_NONAUTH_STA);
 		return;
-	}
-
-	if ((!hapd->conf->ieee802_1x && !hapd->conf->wpa && !hapd->conf->osen) ||
-	    (sta && (sta->auth_alg == WLAN_AUTH_FT))) {
-	    /*
-	    * Open, static WEP, or FT protocol; no separate authorization
-	    * step.
-	    */
-	    ap_sta_set_authorized(hapd, sta, 1);
-	}
-	else {
-	    ap_sta_set_authorized(hapd, sta, 0);
 	}
 
 	if ((fc & WLAN_FC_RETRY) &&
@@ -2446,6 +2475,16 @@ static void handle_beacon(struct hostapd_data *hapd,
 				      len - (IEEE80211_HDRLEN +
 					     sizeof(mgmt->u.beacon)), &elems,
 				      0);
+#if 0
+	if (elems.vsie_len && elems.vsie)
+		printf("handle_beacon() " MACSTR " cb=%p num_cb=%d, vsie_len=%d, OUI=%02X:%02X:%02X\n", 
+			MAC2STR(mgmt->sa), 
+			hapd->probereq_cb, hapd->num_probereq_cb, 
+			elems.vsie_len, 
+			elems.vsie[0], 
+			elems.vsie[1], 
+			elems.vsie[2]);
+#endif
 
 	hostapd_obss_beacon(hapd, mgmt, &elems, fi->ssi_signal);
 	ap_list_process_beacon(hapd->iface, mgmt, &elems, fi);
@@ -3271,11 +3310,18 @@ void ieee802_11_rx_from_unknown(struct hostapd_data *hapd, const u8 *src,
 		return;
 	}
 
-	if (sta && (sta->flags & WLAN_STA_AUTH))
+	if (sta && (sta->flags & WLAN_STA_AUTH)) {
 		hostapd_drv_sta_disassoc(
 			hapd, src,
 			WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA);
-	else
+		return;
+	}
+#ifdef CONFIG_WDS_WPA
+  if (hostapd_maclist_found(hapd->conf->wds_wpa_sta,
+    hapd->conf->num_wds_wpa_sta, src, NULL))
+    ltq_wds_wpa_add(hapd, src);
+    else
+#endif
 		hostapd_drv_sta_deauth(
 			hapd, src,
 			WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA);

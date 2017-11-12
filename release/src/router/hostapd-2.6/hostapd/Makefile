@@ -22,7 +22,10 @@ CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
 
 CFLAGS += -I$(abspath ../../openssl/include)
-LDFLAGS += -L$(abspath ../../openssl) -L$(abspath ../../libnl-bf/source/lib/.libs)
+CFLAGS += -I$(abspath ../../libnl-bf/source/include)
+
+LDFLAGS += -L$(abspath ../../openssl)
+LDFLAGS += -L$(abspath ../../libnl-bf/source/lib/.libs)
 
 export BINDIR ?= /usr/local/bin/
 
@@ -293,6 +296,9 @@ endif
 ifdef CONFIG_IEEE80211R
 CFLAGS += -DCONFIG_IEEE80211R
 OBJS += ../src/ap/wpa_auth_ft.o
+ifdef CONFIG_WDS_WPA
+OBJS += ../src/rsn_supp/wpa_ft.o
+endif
 NEED_SHA256=y
 NEED_AES_OMAC1=y
 NEED_AES_UNWRAP=y
@@ -1015,6 +1021,16 @@ endif
 
 ifdef CONFIG_FANCY_LOG
 CFLAGS += -DCONFIG_FANCY_LOG
+endif
+
+ifdef CONFIG_WDS_WPA
+CFLAGS += -DCONFIG_WDS_WPA
+OBJS += ../src/ap/wds_wpa.o
+OBJS += ../src/rsn_supp/wpa.o
+OBJS += ../src/rsn_supp/preauth.o
+OBJS += ../src/rsn_supp/pmksa_cache.o
+OBJS += ../src/rsn_supp/peerkey.o
+OBJS += ../src/rsn_supp/wpa_ie.o
 endif
 
 ALL=hostapd hostapd_cli

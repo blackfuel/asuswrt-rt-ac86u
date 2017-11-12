@@ -820,6 +820,9 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 			     int ht_enabled, int chan_offset, int chan_width,
 			     int cf1, int cf2)
 {
+  int err;
+  struct hostapd_freq_params freq_params;
+
 	wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, DFS_EVENT_CAC_COMPLETED
 		"success=%d freq=%d ht_enabled=%d chan_offset=%d chan_width=%d cf1=%d cf2=%d"
 	  " timeout=%d",
@@ -827,11 +830,6 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 		iface->dfs_cac_ms / 1000);
 
 	if (success) {
-		struct vendor_cac_data chan_data;
-		chan_data.chan_width = chan_width_enum_to_freq(chan_width);
-		chan_data.cf1 = cf1;
-		chan_data.cf2 = cf2;
-
 		/* Complete iface/ap configuration */
 		if (iface->drv_flags & WPA_DRIVER_FLAGS_DFS_OFFLOAD) {
 			/* Complete AP configuration for the first bring up. */
@@ -843,18 +841,62 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 			set_dfs_state(iface, freq, ht_enabled, chan_offset,
 				      chan_width, cf1, cf2,
 				      HOSTAPD_CHAN_DFS_AVAILABLE);
-			iface->cac_started = 0;
-			hostapd_setup_interface_complete(iface, 0);
-
-		/* Set state back to usable to be able do the CAC again on the same channel */
-		set_dfs_state(iface, freq, ht_enabled, chan_offset,
-			      chan_width, cf1, cf2,
-			      HOSTAPD_CHAN_DFS_USABLE);
-
-		/* Notify driver that all vaps are set up after CAC and can change dfs flags */
-		if (hostapd_drv_vendor_cmd(iface->bss[0], OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_CAC_COMPLETE,
-			      (const u8*)&chan_data, sizeof(chan_data), NULL))
-			wpa_printf(MSG_WARNING, "Failed to send driver vendor command LTQ_NL80211_VENDOR_SUBCMD_CAC_COMPLETE");
+#ifdef CONFIG_ACS
+      if (iface->conf->acs_init_done)
+        acs_update_radar(iface);
+#endif
+      err = hostapd_set_freq_params(&freq_params,
+        iface->conf->hw_mode,
+        iface->freq,
+        iface->conf->channel,
+        iface->conf->ieee80211n,
+        iface->conf->ieee80211ac,
+        iface->conf->secondary_channel,
+        iface->conf->vht_oper_chwidth,
+        iface->conf->vht_oper_centr_freq_seg0_idx,
+        iface->conf->vht_oper_centr_freq_seg1_idx,
+        iface->current_mode->vht_capab);
+      if (err) {
+        wpa_printf(MSG_ERROR, "failed to calculate freq params");
+        return 0;
+      }
+      /* check if CAC was on our channel */
+#if 0
+      printf("Interface cac started %d freq %d ht_enabled %d secondary_channel %d "
+        "width %d freq1 %d freq2 %d\n",
+        iface->cac_started,
+        iface->freq,
+        iface->conf->ieee80211n,
+        iface->conf->secondary_channel,
+        get_num_width(iface->conf->vht_oper_chwidth, chan_offset),
+        acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg0_idx),
+        acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg1_idx));
+      printf("Interface cac started %d freq %d "
+        "width %d freq1 %d freq2 %d\n",
+        iface->cac_started,
+        freq_params.freq,
+        freq_params.bandwidth,
+        freq_params.center_freq1,
+        freq_params.center_freq2);
+      printf("CAC complete cac started %d freq %d ht_enabled %d secondary_channel %d "
+        "width %d freq1 %d freq2 %d\n",
+        iface->cac_started,
+        freq,
+        ht_enabled,
+        chan_offset,
+        chan_width_enum_to_freq(chan_width),
+        cf1,
+        cf2);
+#endif
+			if (iface->cac_started &&
+			  freq_params.freq == freq &&
+			  freq_params.bandwidth == chan_width_enum_to_freq(chan_width) &&
+			  freq_params.center_freq1 == cf1 &&
+			  freq_params.center_freq2 == cf2) {
+			    printf("CAC hostapd_setup_interface_complete\n");
+			    iface->cac_started = 0;
+			    hostapd_setup_interface_complete(iface, 0);
+			}
 		}
 	}
 
@@ -922,8 +964,7 @@ int hostapd_dfs_start_channel_switch_cac(struct hostapd_iface *iface)
 	u8 vht_oper_centr_freq_seg0_idx = 0;
 	u8 vht_oper_centr_freq_seg1_idx = 0;
 	int skip_radar = 0;
-	int err = 1, i;
-	int failsafe = 0;
+	int err = 1;
 	struct csa_settings settings;
 
     memset(&settings, 0, sizeof(settings));
@@ -943,8 +984,7 @@ int hostapd_dfs_start_channel_switch_cac(struct hostapd_iface *iface)
 	  if (!channel) {
 	    wpa_printf(MSG_ERROR, "Invalid/no failsafe frequency specified %d\n",
 	      iface->failsafe.freq);
-	  } else
-	  failsafe = 1;
+	  }
 	}
 
   if (!channel)
@@ -964,62 +1004,18 @@ int hostapd_dfs_start_channel_switch_cac(struct hostapd_iface *iface)
 		"freq=%d chan=%d sec_chan=%d", channel->freq,
 		channel->chan, secondary_channel);
 
-	if (!failsafe) {
-    iface->freq = channel->freq;
-    iface->conf->channel = channel->chan;
-    iface->conf->secondary_channel = secondary_channel;
-    iface->conf->vht_oper_centr_freq_seg0_idx =
-      vht_oper_centr_freq_seg0_idx;
-    iface->conf->vht_oper_centr_freq_seg1_idx =
-      vht_oper_centr_freq_seg1_idx;
-	}
+	iface->freq = channel->freq;
+	iface->conf->channel = channel->chan;
+	iface->conf->secondary_channel = secondary_channel;
+	iface->conf->vht_oper_centr_freq_seg0_idx =
+		vht_oper_centr_freq_seg0_idx;
+	iface->conf->vht_oper_centr_freq_seg1_idx =
+		vht_oper_centr_freq_seg1_idx;
+
 	err = 0;
-
 	iface->chan_switch_reason = HAPD_CHAN_SWITCH_RADAR_DETECTED;
-  /* check CAC required */
-  if ((channel->flag & HOSTAPD_CHAN_RADAR) &&
-      ((channel->flag & HOSTAPD_CHAN_DFS_MASK) != HOSTAPD_CHAN_DFS_AVAILABLE))
-    hostapd_setup_interface_complete(iface, err);
-  else {
-    settings.cs_count = 5;
-    settings.block_tx = 1;
-    if (!failsafe) {
-      err = hostapd_set_freq_params(&settings.freq_params,
-                  iface->conf->hw_mode,
-                  channel->freq,
-                  channel->chan,
-                  iface->conf->ieee80211n,
-                  iface->conf->ieee80211ac,
-                  secondary_channel,
-                  iface->conf->vht_oper_chwidth,
-                  vht_oper_centr_freq_seg0_idx,
-                  vht_oper_centr_freq_seg1_idx,
-                  iface->current_mode->vht_capab);
+	hostapd_setup_interface_complete(iface, err);
 
-      if (err) {
-        wpa_printf(MSG_ERROR, "DFS failed to calculate CSA freq params");
-        hostapd_disable_iface(iface);
-        return err;
-      }
-    }
-    if (failsafe && iface->failsafe.tx_ant > 0) {
-      err = hostapd_drv_set_antenna(iface->bss[0],
-        iface->failsafe.tx_ant,
-        iface->failsafe.rx_ant);
-      if (err < 0) {
-        wpa_printf(MSG_ERROR, "hostapd_dfs_start_channel_switch_cac: setting "
-          "antenna failed: %s", strerror(errno));
-      }
-    }
-    for (i = 0; i < iface->num_bss; i++) {
-      err = hostapd_switch_channel(iface->bss[i], &settings);
-      if (err) {
-        /* FIX: What do we do if CSA fails in the middle of
-         * submitting multi-BSS CSA requests? */
-        return err;
-      }
-    }
-  }
 	return err;
 }
 

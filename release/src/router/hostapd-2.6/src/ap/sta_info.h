@@ -151,6 +151,7 @@ struct sta_info {
 	u8 *challenge; /* IEEE 802.11 Shared Key Authentication Challenge */
 
 	struct wpa_state_machine *wpa_sm;
+	struct wpa_sm *wpa;
 	struct rsn_preauth_interface *preauth_iface;
 
 	int vlan_id; /* 0: none, >0: VID */

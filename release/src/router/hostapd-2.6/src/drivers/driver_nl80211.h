@@ -197,6 +197,8 @@ struct wpa_driver_nl80211_data {
 	int auth_wep_tx_keyidx;
 	int auth_local_state_change;
 	int auth_p2p;
+	u8 vendor_events_filter[32];
+	u8 vendor_events_filter_len;
 
 	/*
 	 * Tells whether the last scan issued from wpa_supplicant was a normal

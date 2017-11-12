@@ -39,7 +39,7 @@
 
 #include <wlscan.h>
 #include <bcmendian.h>
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 #include <bcmutils.h>
 #include <security_ipc.h>
 #endif
@@ -84,11 +84,11 @@ static wlc_ap_list_info_t ap_list[MAX_NUMBER_OF_APINFO];
 static char scan_result[WLC_SCAN_RESULT_BUF_LEN];
 
 /* The below macro handle endian mis-matches between wl utility and wl driver. */
-static bool g_swap = FALSE;
+//static bool g_swap = FALSE;
 #define htod32(i) (g_swap?bcmswap32(i):(uint32)(i))
 #define dtoh32(i) (g_swap?bcmswap32(i):(uint32)(i))
 
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 typedef struct escan_wksp_s {
 	uint8 packet[4096];
 	int event_fd;
@@ -475,7 +475,7 @@ wl_scan(int unit)
 	uint i, ap_count = 0;
 	char macstr[18];
 
-#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#if defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
 	if (wl_get_scan_results_escan(unit) == NULL)
 #else
 	if (wl_get_scan_results(unit) == NULL)
@@ -484,7 +484,7 @@ wl_scan(int unit)
 
 	if (list->count == 0)
 		return 0;
-#if !(defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER))
+#if !(defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER))
 	else if (list->version != WL_BSS_INFO_VERSION &&
 			list->version != LEGACY_WL_BSS_INFO_VERSION &&
 			list->version != LEGACY2_WL_BSS_INFO_VERSION) {

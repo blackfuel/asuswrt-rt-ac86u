@@ -426,8 +426,10 @@ start_igmpproxy(char *wan_ifname)
 			"-a", nvram_get("lan_ifname") ? : "br0");
 	}
 
+#if !defined(HND_ROUTER)
 	if (!nvram_get_int("mr_enable_x"))
 		return;
+#endif
 
 	_dprintf("start igmpproxy [%s]\n", wan_ifname);
 
@@ -1358,8 +1360,16 @@ TRACE_PT("3g begin with %s.\n", wan_ifname);
 		if(strlen(wan_ifname) <= 0)
 			return;
 
-		snprintf(wan_proto, sizeof(wan_proto), "%s", nvram_safe_get(strcat_r(prefix, "proto", tmp)));
+#if defined(RTCONFIG_DETWAN)
+#if defined(RTCONFIG_SOC_IPQ40XX)	//DETWAN_VLAN
+		if(nvram_match("detwan_v_phy", wan_ifname)) {
+			extern void detwan_set_def_vid(const char *wan, int vid, int tagged);
+			detwan_set_def_vid(wan_ifname, nvram_get_int("detwan_v_vid"), 1);
+		}
+#endif	/* RTCONFIG_SOC_IPQ40XX */
+#endif	/* RTCONFIG_DETWAN */
 
+		snprintf(wan_proto, sizeof(wan_proto), "%s", nvram_safe_get(strcat_r(prefix, "proto", tmp)));
 		if(!strcmp(wan_proto, "disabled")){
 			update_wan_state(prefix, WAN_STATE_DISABLED, 0);
 			return;
@@ -1455,10 +1465,12 @@ TRACE_PT("3g begin with %s.\n", wan_ifname);
 				}
 				nvram_set(strcat_r(prefix, "hwaddr", tmp), ether_etoa((unsigned char *) ifr.ifr_hwaddr.sa_data, eabuf));
 			}
+#if !(defined(RTCONFIG_DETWAN) && defined(RTCONFIG_ETHBACKHAUL))		// not to change MAC
 			else {
 				ifr.ifr_hwaddr.sa_family = ARPHRD_ETHER;
 				ioctl(s, SIOCSIFHWADDR, &ifr);
 			}
+#endif	/* ! RTCONFIG_ETHBACKHAUL */
 
 			/* Bring up i/f */
 			ifconfig(wan_ifname, IFUP, NULL, NULL);
@@ -1578,6 +1590,14 @@ TRACE_PT("3g begin with %s.\n", wan_ifname);
 			if (!strcmp(wan_proto, "pptp") && !module_loaded("pptp"))
 				modprobe("pptp");
 #endif
+
+#if defined(RTCONFIG_TCPDUMP) && defined(RTCONFIG_SOC_IPQ40XX) && defined(RTCONFIG_PSISTLOG)
+			{
+				char *tcpdump_argv[] = { "/usr/sbin/tcpdump", "-i", wan_ifname, "-nnXw", "/jffs/pppoe.pcap", NULL};
+				_eval(tcpdump_argv, NULL, 0, &pid);
+				sleep(1);
+			}
+#endif	/* RTCONFIG_TCPDUMP && RTCONFIG_SOC_IPQ40XX && RTCONFIG_PSISTLOG */
 
 			/* launch pppoe client daemon */
 			start_pppd(unit);
@@ -2582,21 +2602,15 @@ wan_up(const char *pwan_ifname)
 	stop_ovpn_eas();
 #endif
 
-#if 0 // unsure changes
-	if(wan_unit == wan_primary_ifunit()
-#ifdef RTCONFIG_DUALWAN
-					|| nvram_match("wans_mode", "lb")
-#endif
-			){
-		if(do_dns_detect(wan_unit))
-			nvram_set_int("link_internet", 2);
-		else
-			nvram_set_int("link_internet", 1);
-	}
-#endif
+	/* Sync time */
+	refresh_ntpc();
 
 #if !defined(RTCONFIG_MULTIWAN_CFG)
-	if (wan_unit != wan_primary_ifunit())
+	if (wan_unit != wan_primary_ifunit()
+#ifdef RTCONFIG_DUALWAN
+			|| nvram_match("wans_mode", "lb")
+#endif
+			)
 	{
 #ifdef RTCONFIG_OPENVPN
 		start_ovpn_eas();
@@ -2604,16 +2618,14 @@ wan_up(const char *pwan_ifname)
 		return;
 	}
 #endif
+
 	/* start multicast router when not VPN */
-	if (strcmp(wan_proto, "dhcp") == 0 ||
-	    strcmp(wan_proto, "static") == 0)
+	if (strcmp(wan_proto, "dhcp") == 0
+			|| strcmp(wan_proto, "static") == 0)
 		start_igmpproxy(wan_ifname);
 
 	stop_upnp();
 	start_upnp();
-
-	/* Sync time */
-	refresh_ntpc();
 
 #ifdef RTCONFIG_OPENVPN
 	start_ovpn_eas();
@@ -2696,33 +2708,25 @@ wan_up(const char *pwan_ifname)
 
 #if !defined(RTCONFIG_MULTIWAN_CFG)
 	/* FIXME: Protect below code from 2-nd WAN temporarilly. */
-	if (wan_unit == wan_primary_ifunit()) {
+	if(wan_unit == wan_primary_ifunit())
 #endif
-
+	{
 #ifdef RTCONFIG_TR069
-	start_tr();
+		start_tr();
 #endif
 
 #ifdef RTCONFIG_GETREALIP
-#ifdef RTCONFIG_DUALWAN
-	if(nvram_invmatch("wans_mode", "lb"))
-#endif
-	{
 		char *getip[] = {"getrealip.sh", NULL};
 		pid_t pid;
 
 		//_eval(getip, ">>/tmp/log.txt", 0, &pid);
 		_eval(getip, ">>/dev/null", 0, &pid);
-	}
 #endif
 
 #ifdef RTCONFIG_TCPDUMP
-	eval("killall", "tcpdump");
+		eval("killall", "tcpdump");
 #endif
-
-#if !defined(RTCONFIG_MULTIWAN_CFG)
 	}
-#endif
 
 #ifdef RTCONFIG_LANTIQ
 	snprintf(ppa_cmd, sizeof(ppa_cmd), "ppacmd delwan -i %s", wan_ifname);
@@ -2731,6 +2735,7 @@ wan_up(const char *pwan_ifname)
 
 	if(ppa_support(wan_unit) == 1){
 		sleep(1);
+
 		snprintf(ppa_cmd, sizeof(ppa_cmd), "ppacmd addwan -i %s", wan_ifname);
 		_dprintf("[%s][%d] %s\n", __func__, __LINE__, ppa_cmd);
 		system(ppa_cmd);
@@ -3213,7 +3218,7 @@ start_wan(void)
 	if (!is_routing_enabled())
 		return;
 
-#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VRZAC1300)
+#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VZWAC1300) || defined(MAPAC1750)
 	nvram_set("start_wan", "1");
 #endif
 
@@ -3287,6 +3292,9 @@ start_wan(void)
 #endif
 #endif // RTCONFIG_DUALWAN
 
+	sleep(1); // let wanduck's detect not be close with start_wan().
+	nvram_set("wanduck_start_detect", "1");
+
 #ifdef RTCONFIG_MULTICAST_IPTV
 	/* Start each configured and enabled wan connection and its undelying i/f */
 	if (nvram_get_int("switch_stb_x") > 6) {
@@ -3316,7 +3324,7 @@ stop_wan(void)
 {
 	int unit;
 
-#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VRZAC1300)
+#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VZWAC1300) || defined(MAPAC1750)
 	if (nvram_get("start_wan") == NULL)
 		return;
 	nvram_unset("start_wan");
@@ -3830,9 +3838,12 @@ void detwan_apply_wan(const char *wan_ifname, unsigned int wan_mask, unsigned in
 
 	nvram_set_int("wanports_mask", wan_mask);
 	nvram_set_int("lanports_mask", lan_mask);
+	nvram_set_int("detwan_wan_mask", wan_mask);
+	nvram_set_int("detwan_lan_mask", lan_mask);
 	nvram_set("lan_ifnames", lan);
 	nvram_set("wan_ifnames", wan_ifname);
 	nvram_set("wan0_ifname", wan_ifname);
+	nvram_set("detwan_ifname", wan_ifname);
 	nvram_set("wan0_gw_ifname", wan_ifname);
 	nvram_commit();
 
@@ -3900,6 +3911,11 @@ int detwan_check(char *ifname, unsigned int *wan_mask)
 			snprintf(var_name, sizeof(var_name), "detwan_name_%d", idx);
 			snprintf(var_value, sizeof(var_value), "%s", nvram_safe_get(var_name));
 
+#if defined(RTCONFIG_SOC_IPQ40XX)	//DETWAN_VLAN
+			extern void detwan_set_def_vid(const char *ifname, int vid, int tagged);
+			detwan_set_def_vid(var_value, 0, 0);	//restore to default setting
+#endif	/* DETWAN_VLAN */
+
 //			if(wan0_ifname == NULL || wan0_ifname[0] == '\0')
 			{ //No WAN
 				if(phy > 0 && inf_count < MAX_DETWAN && strlen(var_value) > 0) {
@@ -3929,15 +3945,23 @@ int detwan_check(char *ifname, unsigned int *wan_mask)
 		state = discover_interfaces(inf_count, (const char **) inf_names, nvram_match("wan0_proto", "dhcp"), &got_inf);
 		now = time(NULL);
 		logmessage(__func__, "1: wan0_ifname(%s) inf_count(%d) state(%d) got_inf(%d) %s", wan0_ifname, inf_count, state, got_inf, ctime(&now));
-		if(state <= 0 && inf_count == 1)
+
+		if(state <= 0 && inf_count == 1)	//set to the only phy with cable
 		{
 			state = 0;
 			got_inf = 0;
 		}
 		nvram_set_int("detwan_proto", state);
-		nvram_set("detwan_phy", inf_names[got_inf]);
-		strcpy(ifname, inf_names[got_inf]);
-		*wan_mask = inf_mask[got_inf];
+		if(got_inf < 0 || got_inf >= inf_count) {
+			nvram_unset("detwan_phy");
+			ifname[0] = '\0';
+			*wan_mask = 0;
+		}
+		else {
+			nvram_set("detwan_phy", inf_names[got_inf]);
+			strcpy(ifname, inf_names[got_inf]);
+			*wan_mask = inf_mask[got_inf];
+		}
 	}
 	else {
 		time_t now = time(NULL);

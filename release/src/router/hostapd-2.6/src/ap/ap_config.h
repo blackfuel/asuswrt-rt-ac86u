@@ -604,6 +604,11 @@ struct hostapd_bss_config {
 
 	int ftm_responder;
 	int ftm_initiator;
+
+#ifdef CONFIG_WDS_WPA
+	struct mac_acl_entry *wds_wpa_sta;
+	int num_wds_wpa_sta;
+#endif
 };
 
 
@@ -618,6 +623,9 @@ typedef struct acs_chan {
 #define ACS_NUM_GRP_PRIORITIES       6
 #define ACS_MAX_CHANNELS           197
 #define ACS_MAX_FACTOR             100
+
+#define ACS_INITIAL                  0
+#define ACS_INIT_CTRL                1
 
 /**
  * struct hostapd_config - Per-radio interface configuration

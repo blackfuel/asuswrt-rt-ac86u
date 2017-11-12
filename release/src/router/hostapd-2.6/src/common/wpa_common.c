@@ -842,6 +842,115 @@ int wpa_parse_wpa_ie_wpa(const u8 *wpa_ie, size_t wpa_ie_len,
 }
 
 
+#ifdef CONFIG_WDS_WPA
+/**
+ * wpa_modify_wpa_ie_rsn - Modify RSN IE
+ * @rsn_ie: Buffer containing RSN IE
+ * @rsn_ie_len: RSN IE buffer length (including IE number and length octets)
+ * @group_suite: Group Cipher suite
+ * @capab: Capabilities
+ * Returns: 0 on success, <0 on failure
+ * Function modifies Group Cipher suite and RSN Capabilities of RSN IE passed in
+ * rsn_ie with values group_suite and capab passed as parameters.
+ */
+int wpa_modify_wpa_ie_rsn(u8 *rsn_ie, size_t rsn_ie_len, u32 group_suite, u16 capab)
+{
+  u8 *pos;
+  int left;
+  int i, count;
+
+  if (rsn_ie_len == 0) {
+    /* No RSN IE - fail silently */
+    return -1;
+  }
+
+  if (rsn_ie_len < sizeof(struct rsn_ie_hdr)) {
+    wpa_printf(MSG_DEBUG, "%s: ie len too short %lu",
+         __func__, (unsigned long) rsn_ie_len);
+    return -1;
+  }
+
+  if (rsn_ie_len >= 6 && rsn_ie[1] >= 4 &&
+      rsn_ie[1] == rsn_ie_len - 2 &&
+      WPA_GET_BE32(&rsn_ie[2]) == OSEN_IE_VENDOR_TYPE) {
+    pos = rsn_ie + 6;
+    left = rsn_ie_len - 6;
+  } else {
+    const struct rsn_ie_hdr *hdr;
+
+    hdr = (const struct rsn_ie_hdr *) rsn_ie;
+
+    if (hdr->elem_id != WLAN_EID_RSN ||
+        hdr->len != rsn_ie_len - 2 ||
+        WPA_GET_LE16(hdr->version) != RSN_VERSION) {
+      wpa_printf(MSG_DEBUG, "%s: malformed ie or unknown version",
+           __func__);
+      return -2;
+    }
+
+    pos = (u8 *) (hdr + 1);
+    left = rsn_ie_len - sizeof(*hdr);
+  }
+
+  if (left >= RSN_SELECTOR_LEN) {
+    RSN_SELECTOR_PUT(pos, group_suite);
+    pos += RSN_SELECTOR_LEN;
+    left -= RSN_SELECTOR_LEN;
+  } else if (left > 0) {
+    wpa_printf(MSG_DEBUG, "%s: ie length mismatch, %u too much",
+         __func__, left);
+    return -3;
+  }
+
+  if (left >= 2) {
+    count = WPA_GET_LE16(pos);
+    pos += 2;
+    left -= 2;
+    if (count == 0 || count > left / RSN_SELECTOR_LEN) {
+      wpa_printf(MSG_DEBUG, "%s: ie count botch (pairwise), "
+           "count %u left %u", __func__, count, left);
+      return -4;
+    }
+    for (i = 0; i < count; i++) {
+      pos += RSN_SELECTOR_LEN;
+      left -= RSN_SELECTOR_LEN;
+    }
+  } else if (left == 1) {
+    wpa_printf(MSG_DEBUG, "%s: ie too short (for key mgmt)",
+         __func__);
+    return -5;
+  }
+
+  if (left >= 2) {
+    count = WPA_GET_LE16(pos);
+    pos += 2;
+    left -= 2;
+    if (count == 0 || count > left / RSN_SELECTOR_LEN) {
+      wpa_printf(MSG_DEBUG, "%s: ie count botch (key mgmt), "
+           "count %u left %u", __func__, count, left);
+      return -6;
+    }
+    for (i = 0; i < count; i++) {
+      pos += RSN_SELECTOR_LEN;
+      left -= RSN_SELECTOR_LEN;
+    }
+  } else if (left == 1) {
+    wpa_printf(MSG_DEBUG, "%s: ie too short (for capabilities)",
+         __func__);
+    return -7;
+  }
+
+  if (left >= 2) {
+    WPA_PUT_LE16(pos, capab);
+    pos += 2;
+    left -= 2;
+  }
+
+  return 0;
+}
+#endif
+
+
 #ifdef CONFIG_IEEE80211R
 
 /**

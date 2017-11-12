@@ -160,6 +160,7 @@ static char *AdvUpperCase(
 }
 */
 //---------------------------------------------------------------------------
+/*
 static char* dumpHEX(
 	unsigned char *src,
 	unsigned long src_size)
@@ -199,7 +200,7 @@ static char* dumpHEX(
 	free(P);
 	return NULL;	
 }
-
+*/
 //---------------------------------------------------------------------------
 /*
 static void replaceStr(

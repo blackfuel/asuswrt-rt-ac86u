@@ -79,6 +79,12 @@ extern "C" {
 /** Channel switch (followed by freq=<MHz> and other channel parameters) */
 #define WPA_EVENT_CHANNEL_SWITCH "CTRL-EVENT-CHANNEL-SWITCH "
 
+#define WPA_EVENT_BEACON		"CTRL-EVENT-BEACON "
+#define WPA_EVENT_PROBE_RSP		"CTRL-EVENT-PROBE-RSP "
+#define WPA_EVENT_AUTH_RSP		"CTRL-EVENT-AUTH-RSP "
+#define WPA_EVENT_ASSOC_RSP		"CTRL-EVENT-ASSOC-RSP "
+#define WPA_EVENT_REASSOC_RSP	"CTRL-EVENT-REASSOC-RSP "
+
 /** IP subnet status change notification
  *
  * When using an offloaded roaming mechanism where driver/firmware takes care
@@ -269,6 +275,7 @@ extern "C" {
 #define WPS_EVENT_AP_SETUP_UNLOCKED "WPS-AP-SETUP-UNLOCKED "
 #define WPS_EVENT_AP_PIN_ENABLED "WPS-AP-PIN-ENABLED "
 #define WPS_EVENT_AP_PIN_DISABLED "WPS-AP-PIN-DISABLED "
+#define AP_STA_PROBE_REQ "AP-STA-PROBEREQ "
 #define AP_STA_CONNECTED "AP-STA-CONNECTED "
 #define AP_STA_DISCONNECTED "AP-STA-DISCONNECTED "
 #define AP_STA_POSSIBLE_PSK_MISMATCH "AP-STA-POSSIBLE-PSK-MISMATCH "
@@ -358,6 +365,7 @@ enum wpa_vendor_elem_frame {
 	VENDOR_ELEM_P2P_ASSOC_RESP = 12,
 	VENDOR_ELEM_ASSOC_REQ = 13,
 	VENDOR_ELEM_PROBE_REQ = 14,
+	VENDOR_ELEM_AUTH_REQ = 15,
 	NUM_VENDOR_ELEM_FRAMES
 };
 

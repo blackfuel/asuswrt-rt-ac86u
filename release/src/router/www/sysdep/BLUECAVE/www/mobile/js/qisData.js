@@ -95,6 +95,10 @@ var wirelessObj = {
 	}
 }
 
+var smartConnectObj = {
+	"smart_connect_x": "1"
+}
+
 var wlcObj = {
 	"wlc_band": "",
 	"wlc_ssid": "",
@@ -171,8 +175,8 @@ var modemObj = {
 
 var systemVariable = {
 	"originWanType": "", /* ToDo: Secondary WAN support */
+	"manualWanType": false,
 	"wanDnsenable": "",
-	"manualWANSetup": false,
 	"detwanResult": {
 		"wanType": "",
 		"isIPConflict": false,
@@ -189,5 +193,6 @@ var systemVariable = {
 	"uiLanguage": "",
 	"territoryCode": "",
 	"default_http_passwd": "admin",
-	"forceChangePW": ""
+	"forceChangePW": "",
+	"rebootTime": ""
 }

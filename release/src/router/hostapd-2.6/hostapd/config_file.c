@@ -3959,6 +3959,15 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 			hostapd_atf_read_config (&conf->atf_cfg, conf->atf_config_file);
 		else
 			hostapd_atf_clean_config(&conf->atf_cfg);
+#ifdef CONFIG_WDS_WPA
+  } else if (os_strcmp(buf, "wds_wpa_sta_file") == 0) {
+    if (hostapd_config_read_maclist(pos, &bss->wds_wpa_sta,
+      &bss->num_wds_wpa_sta)) {
+      wpa_printf(MSG_ERROR, "Line %d: Failed to read wds_wpa_sta_file '%s'",
+        line, pos);
+      return 1;
+    }
+#endif
 	} else {
 		wpa_printf(MSG_ERROR,
 			   "Line %d: unknown configuration item '%s'",

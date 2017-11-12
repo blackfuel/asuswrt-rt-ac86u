@@ -1445,7 +1445,7 @@ function cancel(){
 function applyRule(){
 	document.form.action_script.value = "restart_wrs;restart_firewall";
 	
-	if(reset_wan_and_nat(document.form, document.form.bwdpi_db_enable.value)) {
+	if(reset_wan_to_fo(document.form, document.form.bwdpi_db_enable.value)) {
 		document.form.submit();
 	}
 	else {
@@ -1550,7 +1550,7 @@ function getClientCurrentName(_mac) {
 																			function(){
 																				if(document.form.TM_EULA.value == 0){
 																					var adjust_TM_eula_height = function(_objID) {
-																						var scrollTop = document.body.scrollTop;
+																						var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
 																						document.getElementById(_objID).style.top = (scrollTop + 10) + "px";
 																						var visiable_height = document.documentElement.clientHeight;
 																						var tm_eula_container_height = parseInt(document.getElementById(_objID).offsetHeight);
@@ -1622,7 +1622,7 @@ function getClientCurrentName(_mac) {
 										</table>								
 									</div>
 									<div style="margin-left:5px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
-									<div class="formfontdesc">Traffic Analyzer is to analyze the network traffic and present the results in a visual graph, which shows how your network is used and by which client devices or apps. The network traffic will be recorded every hour on the hour and displayed by clients or apps.</div>
+									<div class="formfontdesc"><#Traffic_Analyzer_desc#></div>
 									<div style="margin-left:10px;">
 										<label style="font-size:16px;"><#Statistic_last_date#>:</label>
 										<input class="input_12_table" id="datepicker" value="">	

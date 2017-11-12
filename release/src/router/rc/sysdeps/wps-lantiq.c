@@ -332,10 +332,10 @@ void wps_oob(void){
 	if(nvram_match("lan_ipaddr", ""))
 		return;
 
-	set_all_wps_config(nvram_get_int("w_Setting"));
-
 	nvram_set("wps_reset", "1");
 	restart_wireless();
+
+	nvram_commit();
 }
 
 void start_wsc(void){

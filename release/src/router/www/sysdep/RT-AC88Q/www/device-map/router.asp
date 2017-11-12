@@ -18,6 +18,15 @@
 <script>
 if(parent.location.pathname !== '<% abs_networkmap_page(); %>' && parent.location.pathname !== "/") top.location.href = "../"+'<% networkmap_page(); %>';
 
+$(function () {
+	if(amesh_support) {
+		$('<script>')
+			.attr('type', 'text/javascript')
+			.attr('src','/require/modules/amesh.js')
+			.appendTo('head');
+	}
+});
+
 <% wl_get_parameter(); %>
 var flag = '<% get_parameter("flag"); %>';
 var wireless_unit = cookie.get("wireless_unit");
@@ -792,6 +801,11 @@ function submitForm(){
 	}
 	document.form.wsc_config_state.value = "1";
 
+	if(amesh_support) {
+		if(!check_wl_auth_support(auth_mode, $("select[name=wl_auth_mode_x] option:selected")))
+			return false;
+	}
+
 	parent.showLoading();
 	if(based_modelid == "RT-AC87U" && "<% nvram_get("wl_unit"); %>" == "1"){
 		parent.stopFlag = '0';
@@ -1099,7 +1113,7 @@ function limit_auth_method(){
   				<table>
   					<tr>
   						<td style="padding:8px 5px 0px 2px;">
-  							<p class="formfonttitle_nwm" >Guest Status: </p>
+  							<p class="formfonttitle_nwm" ><#Guest_Network#> :</p>
   						</td>
   						<td>
   							<div class="left" style="width:94px;" id="radio_gn_enable"></div>

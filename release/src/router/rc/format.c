@@ -176,7 +176,7 @@ static int _find_active_vpnc_id()
 
 void adjust_vpnc_config(void)
 {
-	char *vpnc_clientlist, *vpnc_default_wan;
+	char *vpnc_clientlist;
 	char *vpnc_dev_policy_list;
 	int active_id, i, default_wan_idx = 0, flag = 0;
 	char buf[1024];

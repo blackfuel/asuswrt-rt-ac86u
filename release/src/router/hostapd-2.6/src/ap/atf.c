@@ -471,7 +471,7 @@ mtlk_atf_quotas_t* hostapd_atf_calc_quotas(struct atf_config* atf_cfg,
 				hapd->iface->atf_sta_in_driver, hapd->iface->atf_sta_has_quota))
 			return NULL; /* 'active' state for station did not change */
 
-		if (!hapd->iface->atf_enabled)
+		if (!hapd->iface->atf_enabled && !hapd->iconf->atf_cfg.distr_type)
 			return NULL; /* ATF function is OFF */
 
 		wpa_printf(MSG_DEBUG, "ATF: Recalculating quotas because STA " MACSTR

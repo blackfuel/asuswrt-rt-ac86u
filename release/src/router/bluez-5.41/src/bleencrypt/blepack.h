@@ -12,7 +12,6 @@ extern "C" {
 #include <bcmnvram.h>
 #include <bcmparams.h>
 #include <shared.h>
-#include <shutils.h>
 #include <ctype.h>
 
 #pragma pack(1)

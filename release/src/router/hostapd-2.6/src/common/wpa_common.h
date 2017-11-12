@@ -449,5 +449,8 @@ int wpa_parse_cipher(const char *value);
 int wpa_write_ciphers(char *start, char *end, int ciphers, const char *delim);
 int wpa_select_ap_group_cipher(int wpa, int wpa_pairwise, int rsn_pairwise);
 unsigned int wpa_mic_len(int akmp);
+#ifdef CONFIG_WDS_WPA
+int wpa_modify_wpa_ie_rsn(u8 *rsn_ie, size_t rsn_ie_len, u32 group_suite, u16 capab);
+#endif
 
 #endif /* WPA_COMMON_H */

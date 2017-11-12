@@ -28,9 +28,9 @@ else
 	libfapiwlancommon.so_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
 	libfapiwlancommon.so_ldflags := -L./ -L$(TOP)/libhelper-1.4.0.2
 
-	fapi_wlan_cli_sources := fapi_wlan_cli.c
-	fapi_wlan_cli_ldflags := -L./ -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lrt
-	fapi_wlan_cli_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include
+	fapi_wlan_cli_sources := ../hostapd-2.6/src/common/wpa_ctrl.c ../hostapd-2.6/src/utils/os_unix.c fapi_wlan_cli.c
+	fapi_wlan_cli_ldflags:= -L./ -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lrt
+	fapi_wlan_cli_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include -I./include -I../hostapd-2.6/src/common/ -I../hostapd-2.6/src/utils/  -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
 
 	fapi_wlan_beerock_cli_sources := ../hostapd-2.6/src/common/wpa_ctrl.c ../hostapd-2.6/src/utils/os_unix.c fapi_wlan_beerock_cli.c
 	fapi_wlan_beerock_cli_ldflags := -L./ -lfapiwlancommon -ldl -lhelper -lcurses -lreadline -lrt

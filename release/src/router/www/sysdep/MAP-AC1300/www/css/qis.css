@@ -204,6 +204,24 @@ a{
 	margin-top: 150px;
 	width: 100%;
 }
+#resetModemContainer{
+	width: 90%;
+	height: 300px;	
+	margin: auto;
+	margin-top: 100px;
+}
+#resetModem{
+	width: 95%;
+	height: 300px;
+	margin: auto;
+	background-size: contain;
+}
+.plug{
+	background: url('../../images/qis/modem_plug.png') no-repeat, url('../../images/qis/modem_background.png') no-repeat;
+}
+.unplug{
+	background: url('../../images/qis/modem_unplug.png') no-repeat, url('../../images/qis/modem_background.png') no-repeat;
+}
 .hint{
 	color: #F00;
 	position: absolute;

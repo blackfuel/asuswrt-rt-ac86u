@@ -1560,7 +1560,7 @@ get80211opmode(struct bsd_driver_data *drv)
 }
 
 static void *
-wpa_driver_bsd_init(void *ctx, const char *ifname, void *priv)
+wpa_driver_bsd_init(void *ctx, const char *ifname, void *priv, const char *param)
 {
 #define	GETPARAM(drv, param, v) \
 	(((v) = get80211param(drv, param)) != -1)

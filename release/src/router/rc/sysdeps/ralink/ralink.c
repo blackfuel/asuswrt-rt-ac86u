@@ -6112,3 +6112,90 @@ void set_default_psk()
 	}
 }
 
+#if defined(RTCONFIG_AMAS)
+int Pty_get_wlc_status(char *wif)
+{
+	char data[32] = {0};
+	struct iwreq wrq;
+	int status;
+	static int old_status[2] = {-1, -1};
+	char prefix[] = "wlXXXXXXXXXX_mssid_";
+	memset(prefix, 0x00, sizeof(prefix));
+	sprintf(prefix, "wl%d_", band);
+	char temp[128] = {0};
+	
+	//char *ifname = nvram_safe_get(strcat_r(prefix, "vifs", temp));
+	
+	memset(data, 0x00, sizeof(data));
+	wrq.u.data.length = sizeof(data);
+	wrq.u.data.pointer = (caddr_t) data;
+	wrq.u.data.flags = ASUS_SUBCMD_CONN_STATUS;
+
+	if (wl_ioctl(wif, RTPRIV_IOCTL_ASUSCMD, &wrq) < 0)
+	{
+		dbg("errors in getting %s CONN_STATUS result\n", wif);
+		return -1;
+	}
+
+	status = *(int*)wrq.u.data.pointer;
+	if (band >=0 && band <= 1 && old_status[band] != status)
+	{
+		cprintf("%s: %s connStatus(%d --> %d)\n", __func__, ifname, old_status[band], status);
+		old_status[band] = status;
+	}
+
+	if (status == 6)	// APCLI_CTRL_CONNECTED
+		return WLC_STATE_CONNECTED;
+	else if (status == 4)	// APCLI_CTRL_ASSOC
+		return WLC_STATE_CONNECTING;
+	return WLC_STATE_INITIALIZING;
+}
+
+void Pty_start_wlc_connect(int band)
+{					
+		char sbuf[32]={0};
+		sprintf(sbuf, "wlc%d_ssid", band);
+		if(strcmp(nvram_safe_get(sbuf),"")) {
+			memset(sbuf, 0x00, sizeof(sbuf));
+			sprintf(sbuf, "wl%d_vifs", band);
+			doSystem("iwpriv %s set ApCliAutoConnect=1", nvram_safe_get(sbuf));	
+			sleep(20);
+		}
+
+	return;
+}
+
+void Pty_stop_wlc_connect(int band)
+{
+	return;
+}
+
+int Pty_get_upstream_rssi(int band)
+{
+	int link_rssi = 0;
+	char data[16];
+	struct iwreq wrq;
+
+	char sbuf[32]={0};
+	memset(sbuf, 0x00, sizeof(sbuf));
+	sprintf(sbuf, "wl%d_vifs", band);
+	char *aif = nvram_safe_get(sbuf);
+	
+	memset(data, 0x00, sizeof(data));
+	wrq.u.data.length = sizeof(data);
+	wrq.u.data.pointer = (caddr_t) data;
+	wrq.u.data.flags = ASUS_SUBCMD_CLRSSI;
+
+	if (wl_ioctl(aif, RTPRIV_IOCTL_ASUSCMD, &wrq) < 0)
+	{
+		dbg("errors in getting ASUS_SUBCMD_CLRSSI result\n");
+		return 0;
+	}
+
+	link_rssi = atoi(data);
+
+	return link_rssi;
+		
+}
+#endif
+

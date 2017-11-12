@@ -13,11 +13,11 @@
 
 /* driver_ops */
 static inline void * wpa_drv_init(struct wpa_supplicant *wpa_s,
-				  const char *ifname)
+				  const char *ifname, const char *param)
 {
 	if (wpa_s->driver->init2)
 		return wpa_s->driver->init2(wpa_s, ifname,
-					    wpa_s->global_drv_priv);
+					    wpa_s->global_drv_priv, param);
 	if (wpa_s->driver->init) {
 		return wpa_s->driver->init(wpa_s, ifname);
 	}
@@ -982,6 +982,14 @@ static inline int wpa_drv_get_radio_info(struct wpa_supplicant *wpa_s,
   if (!wpa_s->driver->get_radio_info)
     return -1;
   return wpa_s->driver->get_radio_info(wpa_s->drv_priv, radio_info);
+}
+
+static inline int wpa_drv_unconnected_sta(struct wpa_supplicant *wpa_s,
+  struct hostapd_unconnected_sta_req_params *req)
+{
+  if (!wpa_s->driver->unconnected_sta)
+    return -1;
+  return wpa_s->driver->unconnected_sta(wpa_s->drv_priv, req);
 }
 
 #endif /* DRIVER_I_H */

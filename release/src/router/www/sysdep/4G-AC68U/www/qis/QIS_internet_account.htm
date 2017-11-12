@@ -100,16 +100,29 @@ function QKaccount_load_body(){
 	}
 	
 	get_value_from_parent();
-	if(!document.getElementById('vpn_client_check').checked){
-		if(parent.dual_ewan || parent.dualwan_enabled){
-			if((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0))
-				document.form.wan0_proto.value = "pppoe";
-			else if((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1))
-				document.form.wan1_proto.value = "pppoe";
-		}
+
+	if(((parent.dual_ewan && parent.cur_wan_unit == 0) || (parent.dualwan_enabled && parent.ewan_index == 0)) && 
+	   ((document.form.wan0_proto.value == "pptp") || (document.form.wan0_proto.value == "l2tp"))){
+		document.getElementById('vpn_client_check').checked = true;
+		document.form.vpn_option.style.display = "";
+		document.form.vpn_option.disabled = false;
+		if(document.form.wan0_proto.value == "pptp")
+			document.form.vpn_option.value = "pptp";
 		else
-			document.form.wan_proto.value = "pppoe";
+			document.form.vpn_option.value = "l2tp";
 	}
+	else if(((parent.dual_ewan && parent.cur_wan_unit == 1) || (parent.dualwan_enabled && parent.ewan_index == 1)) &&
+			((document.form.wan1_proto.value == "pptp") || (document.form.wan1_proto.value == "l2tp"))){
+		document.getElementById('vpn_client_check').checked = true;
+		document.form.vpn_option.style.display = "";
+		document.form.vpn_option.disabled = false;
+		if(document.form.wan1_proto.value == "pptp")
+			document.form.vpn_option.value = "pptp";
+		else
+			document.form.vpn_option.value = "l2tp";
+	}
+	else
+		document.getElementById('vpn_client_check').checked = false;
 
 	if( !parent.meoVoda_support ){
 		document.getElementById('meoOption').outerHTML = "";

@@ -48,6 +48,7 @@ struct ieee802_11_elems {
 	const u8 *vht_opmode_notif;
 	const u8 *vendor_ht_cap;
 	const u8 *vendor_vht;
+	const u8 *vendor_ie_to_notify;
 	const u8 *p2p;
 	const u8 *wfd;
 	const u8 *link_id;
@@ -64,6 +65,7 @@ struct ieee802_11_elems {
 	const u8 *pref_freq_list;
 	const u8 *supp_op_classes;
 	const u8 *rrm_enabled;
+	const u8 *vsie; // For ASUS used
 
 	u8 ssid_len;
 	u8 supp_rates_len;
@@ -82,6 +84,7 @@ struct ieee802_11_elems {
 	u8 peer_mgmt_len;
 	u8 vendor_ht_cap_len;
 	u8 vendor_vht_len;
+	u8 vendor_ie_to_notify_len;
 	u8 p2p_len;
 	u8 wfd_len;
 	u8 interworking_len;
@@ -96,6 +99,7 @@ struct ieee802_11_elems {
 	u8 pref_freq_list_len;
 	u8 supp_op_classes_len;
 	u8 rrm_enabled_len;
+	u8 vsie_len; // For ASUS used
 
 	struct mb_ies_info mb_ies;
 };

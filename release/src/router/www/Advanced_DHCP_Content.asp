@@ -21,6 +21,15 @@
 <script language="JavaScript" type="text/javascript" src="/client_function.js"></script>
 <script type="text/javascript" src="/js/jquery.js"></script>
 <script>
+$(function () {
+	if(amesh_support) {
+		$('<script>')
+			.attr('type', 'text/javascript')
+			.attr('src','/require/modules/amesh.js')
+			.appendTo('head');
+	}
+});
+
 var vpnc_dev_policy_list_array = []
 var vpnc_dev_policy_list_array_ori = [];
 
@@ -320,8 +329,15 @@ function applyRule(){
 			}
 		}
 
-		if(based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VRZ-AC1300")
+		if(based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "MAP-AC1750")
 			alert("By applying new LAN settings, please reboot all Lyras connected to main Lyra manually.");
+
+		if(amesh_support) {
+			var disable_dhcp = document.form.dhcp_enable_x[1].checked;
+			if(!check_dhcp_disable(disable_dhcp))
+				return false;
+		}
+
 		showLoading();
 		document.form.submit();
 	}

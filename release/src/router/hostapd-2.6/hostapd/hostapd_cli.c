@@ -1152,7 +1152,8 @@ static int hostapd_cli_cmd_chan_switch(struct wpa_ctrl *ctrl,
 		       "arguments (count and freq)\n"
 		       "usage: <cs_count> <freq> [sec_channel_offset=] "
 		       "[center_freq1=] [center_freq2=] [bandwidth=] "
-		       "[blocktx] [ht|vht] [tx_ant=] [rx_ant=]\n");
+		       "[blocktx] [ht|vht] [tx_ant_mask=<> rx_ant_mask=<>] "
+		       "[switch_type=<normal/scan>]\n");
 		return -1;
 	}
 
@@ -1765,7 +1766,7 @@ static int hostapd_cli_cmd_set_failsafe_chan(struct wpa_ctrl *ctrl,
   if (argc < 3 || argc > 6) {
     printf("Invalid set_failsafe_chan command\n"
            "usage: <freq> <center_freq1=> [center_freq2=] "
-           "<bandwidth=> [tx_ant=] [rx_ant=]\n");
+           "<bandwidth=> [tx_ant_mask=<> rx_ant_mask=<>]\n");
     return -1;
   }
 
@@ -1972,6 +1973,27 @@ static int hostapd_cli_cmd_cellular_pref_set(struct wpa_ctrl *ctrl, int argc, ch
 }
 #endif /* CONFIG_MBO */
 
+
+static int hostapd_cli_cmd_get_hw_features(struct wpa_ctrl *ctrl, int argc,
+  char *argv[])
+{
+  char cmd[256];
+  int res;
+
+  if (argc != 0) {
+    printf("get_hw_features doesn't require parameters\n");
+    return -1;
+  }
+
+  res = os_snprintf(cmd, sizeof(cmd), "GET_HW_FEATURES");
+  if (res < 0 || (size_t) res >= sizeof(cmd) - 1) {
+    printf("Too long GET_HW_FEATURES command.\n");
+    return -1;
+  }
+
+  return wpa_ctrl_command(ctrl, cmd);
+}
+
 struct hostapd_cli_cmd {
 	const char *cmd;
 	int (*handler)(struct wpa_ctrl *ctrl, int argc, char *argv[]);
@@ -2137,6 +2159,10 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
 	{ "mbo_bss_assoc_disallow", hostapd_cli_cmd_mbo_bss_assoc_disallow, NULL, NULL },
 	{ "cellular_pref_set", hostapd_cli_cmd_cellular_pref_set, NULL, NULL },
 #endif /* CONFIG_MBO */
+  { "get_hw_features", hostapd_cli_cmd_get_hw_features, NULL, "get hardware features" },
+#if 0
+  { "antennas_set", hostapd_cli_cmd_antennas_set, NULL, "<mask> set antenna mask"},
+#endif
 	{ NULL, NULL, NULL, NULL }
 };
 

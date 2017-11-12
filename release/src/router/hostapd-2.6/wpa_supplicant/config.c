@@ -4141,7 +4141,6 @@ static int wpa_config_process_ap_vendor_elements(
 	return 0;
 }
 
-
 #ifdef CONFIG_CTRL_IFACE
 static int wpa_config_process_no_ctrl_interface(
 	const struct global_parse_data *data,

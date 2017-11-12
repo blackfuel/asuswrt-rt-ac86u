@@ -707,6 +707,10 @@ void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 	os_free(conf->no_probe_resp_if_seen_on);
 	os_free(conf->no_auth_if_seen_on);
 
+#ifdef CONFIG_WDS_WPA
+  os_free(conf->wds_wpa_sta);
+#endif
+
 	os_free(conf);
 }
 

@@ -2285,6 +2285,10 @@ void wpa_sm_deinit(struct wpa_sm *sm)
 	os_free(sm->ap_wpa_ie);
 	os_free(sm->ap_rsn_ie);
 	wpa_sm_drop_sa(sm);
+#ifdef CONFIG_WDS_WPA
+  sm->ctx->cancel_auth_timeout(sm->ctx->ctx);
+  os_free(sm->ctx->ctx);
+#endif
 	os_free(sm->ctx);
 	peerkey_deinit(sm);
 #ifdef CONFIG_IEEE80211R

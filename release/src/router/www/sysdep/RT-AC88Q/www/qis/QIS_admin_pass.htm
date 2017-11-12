@@ -66,12 +66,6 @@ for(var i=0; i<accounts.length; i++){
 var wans_mode = '<% nvram_get("wans_mode"); %>';
 
 function QKinternettype_load_body(){
-	if(parent.based_modelid == "RT-N11P" || parent.based_modelid == "RT-N300" || parent.based_modelid == "PL-N12" || parent.based_modelid == "PL-AC56" || parent.based_modelid == "BRT-AC828"){
-			document.getElementById("point4").style.display = "none";
-	}
-	else{
-			document.getElementById("general_desc4").style.display = "";
-	}		
 	
 	if(parent.ISMOBILE){
 		parent.document.title = "<#Web_Title2#>";
@@ -608,7 +602,6 @@ function paste_password(){
 	<div id="adminPassDesc" class="QISTutorFont_admin_pass" style="height:200px;margin-left:-10px;">
 		<ul>
 			<li><#QIS_pass_desc3#>
-			<li id="point4"><div id="general_desc4" style="display:none;"><#QIS_pass_desc4#></div>
 			<li><#QIS_pass_desc5#>&nbsp;<% nvram_default_get("http_username"); %>&nbsp;/&nbsp;<% nvram_default_get("http_passwd"); %>
 		</ul>
 	</div>

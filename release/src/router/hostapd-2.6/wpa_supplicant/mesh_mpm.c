@@ -341,6 +341,7 @@ static void mesh_mpm_send_plink_action(struct wpa_supplicant *wpa_s,
 
 		pos = hostapd_eid_ht_capabilities(bss, ht_capa_oper);
 		pos = hostapd_eid_ht_operation(bss, pos);
+		pos = hostapd_eid_overlapping_bss_scan_params(hapd, pos);
 		wpabuf_put_data(buf, ht_capa_oper, pos - ht_capa_oper);
 	}
 #endif /* CONFIG_IEEE80211N */

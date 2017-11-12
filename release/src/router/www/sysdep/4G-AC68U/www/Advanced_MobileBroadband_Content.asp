@@ -153,8 +153,7 @@ var wans_hotstandby = '<% nvram_get("wans_standby"); %>';
 /* Data usage*/
 var old_sim_order = '';
 
-var orig_simdetect = '<% nvram_get("usb_modem_act_simdetect"); %>';
-
+var modem_roaming_scantime = parseInt('<% nvram_get("modem_roaming_scantime"); %>');
 
 if(dualWAN_support && wans_dualwan.search("usb") >= 0 ){
 	var wan_type_name = wans_dualwan.split(" ")[<% nvram_get("wan_unit"); %>];
@@ -1317,12 +1316,10 @@ function detect_scan_result(){
 			if( scan_end == '0'){
 				if(ispstr.length > 0){
 					show_roaming_isp_list(ispstr);
-					document.getElementById("loadingIcon").style.display = "none";
-					document.getElementById("isp_scan_button").style.display = "";
-					document.getElementById("warning_states").style.display = "";
 				}
-				else
-					setTimeout("detect_scan_result();", 5000);
+				document.getElementById("loadingIcon").style.display = "none";
+				document.getElementById("isp_scan_button").style.display = "";
+				document.getElementById("warning_states").style.display = "";
 			}
 			else if( scan_end == '2' || scan_end == '1' || scan_end == '3'){
 				setTimeout("detect_scan_result();", 5000);
@@ -1344,6 +1341,8 @@ function scan_isp(){
 	document.getElementById("warning_states").style.display = "none";
 	document.getElementById("connection_status").innerHTML = "Scanning";/*untranslated*/
 	document.getElementById("mconnect_status").innerHTML = "Scanning";
+	document.getElementById("loading_block2").innerHTML = "<#Mobile_roaming_warning#>  <#QIS_autoMAC_desc2#>";
+	showLoadingBar(modem_roaming_scantime);
 	setTimeout("detect_scan_result();", 10000);
 	document.simact_form.action_mode.value = "scan_isp";
 	document.simact_form.submit();
@@ -1359,7 +1358,7 @@ function cancel_action(){
 
 function set_verify_pin(){	
 	if(document.form.sim_pincode.value !=""){
-		if(document.form.sim_pincode.value.search(/^\d{4,8}$/)==-1){
+		if(document.form.sim_pincode.value.search(/^\d{4,12}$/)==-1){
 			document.getElementById("verify_pincode_status").innerHTML='<#JS_InvalidPIN#>';
 			document.getElementById("verify_pincode_status").style.display="";
 			document.form.sim_pincode.select();
@@ -1681,6 +1680,7 @@ function update_lte_fw(){
 	else{
 		document.simact_form.action_mode.value = "update_lte_fw";
 		document.simact_form.submit();
+		document.getElementById("loading_block2").innerHTML = "LTE module software is upgrading. Please wait about 6 minutes. <#Main_alert_proceeding_desc5#>";
 		showLoadingBar(390);
 		setTimeout("check_update();", 390000);
 	}
@@ -1714,8 +1714,7 @@ function update_lte_fw(){
 			<span id="proceeding_img_text"></span>
 			<div id="proceeding_img"></div>
 		</div>
-		<div id="loading_block2" style="margin:5px auto; width:85%;">LTE module software is upgrading. Please wait about 6 minutes. <#Main_alert_proceeding_desc5#></div>
-		<div id="loading_block3" style="margin:5px auto;width:85%; font-size:12pt;"></div>
+		<div id="loading_block2" style="margin:5px auto; width:85%;"></div>
 		</td>
 	</tr>
 </table>
@@ -2220,13 +2219,13 @@ function update_lte_fw(){
 							 		<tr id="sim_pincode_tr" style="display:none;">
 							 			<th id="sim_pincode_hd"></th>
 							 			<td>
-							 				<input id="sim_pincode" name="sim_pincode" class="input_20_table" type="text" maxLength="8" value="<% nvram_get("modem_pincode"); %>" onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
+											<input id="sim_pincode" name="sim_pincode" class="input_20_table" type="text" maxLength="12" value="<% nvram_get("modem_pincode"); %>" onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
 							 				<br><span id="verify_pincode_status" style="display:none;"></span>
 							 			</td>
 							 		</tr>
 				  					<tr id="sim_newpin_tr" style="display:none;">
 										<th><#Mobile_new_pin#></th>
-											<td><input type="text" maxlength="8" class="input_20_table" name="sim_newpin" value=""  onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
+											<td><input type="text" maxlength="12" class="input_20_table" name="sim_newpin" value=""  onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
 											<br><span id="new_pincode_status" style="display:none;"></span>
 											</td>
 				  					</tr>
@@ -2288,7 +2287,7 @@ function update_lte_fw(){
 					<tr id="pin_code_tr" style="display:none;">
 						<th><a class="hintstyle"  href="javascript:void(0);" onClick="openHint(21,2);"><#PIN_code#></a></th>
 						<td>
-							<input id="pincode" name="pincode" class="input_20_table" type="text" maxLength="8" value="" onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
+							<input id="pincode" name="pincode" class="input_20_table" type="text" maxLength="12" value="" onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>
 							<span id="save_pin_ckb_span"><input type="checkbox" name="save_pin_ckb" id="save_pin_ckb" value="" onclick=""><#Mobile_save_pin#></input></span>
 							<img id="loadingIcon_pin" style="margin-left:10px; display:none;" src="/images/InternetScan.gif">
 							<span><input  id="save_pin_btn" name="save_pin_btn" class="button_gen" type="button" onclick="configure_pin();" style="margin-left:10px;" value="<#CTL_ok#>"></span>

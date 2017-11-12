@@ -1292,8 +1292,11 @@ void start_vpnserver(int serverNum)
 
         if (taskset_ret != 0)
 #endif
-
+#ifdef HND_ROUTER
+	sprintf(&buffer[0], "/etc/openvpn/vpnserver%d --sndbuf 262144 --rcvbuf 262144 --cd /etc/openvpn/server%d --config config.ovpn", serverNum, serverNum);
+#else
 	sprintf(&buffer[0], "/etc/openvpn/vpnserver%d --cd /etc/openvpn/server%d --config config.ovpn", serverNum, serverNum);
+#endif
 	vpnlog(VPN_LOG_INFO,"Starting OpenVPN: %s",&buffer[0]);
 	for (argv[argc=0] = strtok(&buffer[0], " "); argv[argc] != NULL; argv[++argc] = strtok(NULL, " "));
 	if ( _eval(argv, NULL, 0, &pid) )

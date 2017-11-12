@@ -8,7 +8,7 @@
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="icon" href="images/favicon.png">
-<title><#Web_Title#> - Switch Control</title>
+<title><#Web_Title#> - <#Switch_itemname#></title>
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
 <link rel="stylesheet" type="text/css" href="other.css">
@@ -190,19 +190,6 @@ function applyRule(){
 }
 
 function valid_form(){
-	var nat_acceleration_orig = '<% nvram_get("qca_sfe"); %>';
-	if(document.form.qca_sfe.value == "1") {
-		if(nat_acceleration_orig != "1" && check_bwdpi_engine_status()) {
-			var confirm_flag = confirm("If you turn on the NAT Acceleration option, AiProtection function will be disable. Are you sure to process?");/*untranslated*/
-			if(confirm_flag) {
-				document.form.action_script.value = "dpi_disable;restart_allnet;";
-			}
-			else {
-				return false;
-			}
-		}
-	}
-	
 	if(productid == "BRT-AC828" || productid == "RT-AD7200") {
 		var lan_trunk;
 		var lan_trunk_type = "0";
@@ -401,9 +388,9 @@ function changeTrunkType(obj) {
 	<tr>
 		  <td bgcolor="#4D595D" valign="top"  >
 		  <div>&nbsp;</div>
-		  <div class="formfonttitle"><#menu5_2#> - Switch Control</div>
+		  <div class="formfonttitle"><#menu5_2#> - <#Switch_itemname#></div>
       <div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
-      <div class="formfontdesc">Setting <#Web_Title2#> switch control.</div>
+      <div class="formfontdesc"><#SwitchCtrl_desc#></div>
 		  
 		  <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
 		  	

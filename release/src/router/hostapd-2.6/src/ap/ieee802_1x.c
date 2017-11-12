@@ -32,7 +32,9 @@
 #include "wps_hostapd.h"
 #include "hs20.h"
 #include "ieee802_1x.h"
-
+#ifdef CONFIG_WDS_WPA
+#include "rsn_supp/wpa.h"
+#endif
 
 #ifdef CONFIG_HS20
 static void ieee802_1x_wnm_notif_send(void *eloop_ctx, void *timeout_ctx);
@@ -958,6 +960,11 @@ void ieee802_1x_receive(struct hostapd_data *hapd, const u8 *sa, const u8 *buf,
 	    hdr->type == IEEE802_1X_TYPE_EAPOL_KEY &&
 	    (key->type == EAPOL_KEY_TYPE_WPA ||
 	     key->type == EAPOL_KEY_TYPE_RSN)) {
+#ifdef CONFIG_WDS_WPA
+	if (sta->wpa)
+	  wpa_sm_rx_eapol(sta->wpa, sa, (u8 *) hdr, sizeof(*hdr) + datalen);
+	else
+#endif
 		wpa_receive(hapd->wpa_auth, sta->wpa_sm, (u8 *) hdr,
 			    sizeof(*hdr) + datalen);
 		return;

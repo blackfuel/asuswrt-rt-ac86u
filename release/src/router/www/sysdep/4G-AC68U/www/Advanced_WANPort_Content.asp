@@ -122,9 +122,9 @@ function initial(){
 		document.getElementById("wandog_title").innerHTML = "<#Enable_user_target#>";
 
 		update_consume_bytes();
-    }
-    else
-    	document.form.wans_mode.value = wans_mode_orig;
+	}
+
+	document.form.wans_mode.value = wans_mode_orig;
 
 	form_show(wans_flag);
 	setTimeout("showLANIPList();", 1000);
@@ -205,7 +205,7 @@ function form_show(v){
 		appendLANoption1(document.form.wans_primary);
 		appendLANoption2(document.form.wans_second);
 
-		appendModeOption(document.form.wans_mode.value);
+		appendModeOption(document.form.wans_mode_option.value);
 		show_wans_rules();
 		document.getElementById("wans_mode_tr").style.display = "";
 	}
@@ -227,6 +227,16 @@ function applyRule(){
 					return false;
 			if(!validator.range(document.form.wans_lb_ratio_1, 1, 9))
 					return false;
+
+			if(wans_mode_orig != "lb" && check_bwdpi_engine_status()) {
+				var confirm_flag = confirm("If you turn on the load balance option, AiProtection function will be disable. Are you sure to process?");/*untranslated*/
+				if(confirm_flag) {
+					document.form.action_script.value = "dpi_disable;reboot;";
+				}
+				else {
+					return false;
+				}
+			}
 
 			document.form.wans_lb_ratio.value = document.form.wans_lb_ratio_0.value + ":" + document.form.wans_lb_ratio_1.value;
 			
@@ -299,16 +309,7 @@ function applyRule(){
 			alert("<#RouterConfig_IPTV_conflict#>");
 			return;
 		}
-	}	
-	
-	if (document.form.wans_primary.value == "dsl") document.form.next_page.value = "Advanced_DSL_Content.asp";
-	if (document.form.wans_primary.value == "lan") document.form.next_page.value = "Advanced_WAN_Content.asp";
-	if (document.form.wans_primary.value == "usb"){
-		if(based_modelid == "4G-AC53U" || based_modelid == "4G-AC55U" || based_modelid == "4G-AC68U")
-			document.form.next_page.value = "Advanced_MobileBroadband_Content.asp";
-		else
-			document.form.next_page.value = "Advanced_Modem_Content.asp";
-	} 
+	}
 
 	wans_dualwan_array = document.form.wans_dualwan.value.split(" "); //update wans_dualwan_array
 	if(wans_dualwan_array[1] == "none")
@@ -578,6 +579,8 @@ function appendModeOption(v){
 				document.getElementById("wans_standby_tr").style.display = "";
 				inputCtrl(document.form.wans_standby, 1);
 			}
+
+			update_detection_time();
 		}
 }
 
@@ -1102,15 +1105,15 @@ function remain_origins(){
 													<option value="1" <% nvram_match("wans_lanport", "1", "selected"); %>>LAN Port 1</option>
 													<option value="2" <% nvram_match("wans_lanport", "2", "selected"); %>>LAN Port 2</option>
 													<option value="3" <% nvram_match("wans_lanport", "3", "selected"); %>>LAN Port 3</option>
-													<option value="4" <% nvram_match("wans_lanport", "4", "selected"); %>>LAN Port 4</option>												
-												</select>											
+													<option value="4" <% nvram_match("wans_lanport", "4", "selected"); %>>LAN Port 4</option>
+												</select>
 											</td>
 									  	</tr>
 
 										<tr id="wans_mode_tr">
 											<th><#dualwan_mode#></th>
 											<td>
-												<input type="hidden" name="wans_mode" value=''>
+												<input type="hidden" name="wans_mode" value='<% nvram_get("wans_mode"); %>'>
 												<select id="wans_mode_option" class="input_option" onchange="appendModeOption(this.value);">
 													<option value="fo"><#dualwan_mode_fo#></option>
 													<option value="lb" <% nvram_match("wans_mode", "lb", "selected"); %>><#dualwan_mode_lb#></option>
@@ -1163,7 +1166,7 @@ function remain_origins(){
 			          			<th><#dualwan_isp_primary#></th>
 			          			<td>
 			          					<select name="wan0_isp_country" class="input_option" onchange="appendcountry(this);" value=""></select>
-															<select name="wan0_isp_list" class="input_option" style="display:none;"value=""></select>
+										<select name="wan0_isp_list" class="input_option" style="display:none;"value=""></select>
 			          			</td>	
 			          		</tr>
 			          		
@@ -1171,7 +1174,7 @@ function remain_origins(){
 			          			<th><#dualwan_isp_secondary#></th>
 			          			<td>
 			          					<select name="wan1_isp_country" class="input_option" onchange="appendcountry(this);" value=""></select>
-															<select name="wan1_isp_list" class="input_option" style="display:none;"value=""></select>
+										<select name="wan1_isp_list" class="input_option" style="display:none;"value=""></select>
 			          			</td>	
 			          		</tr>			          		
 			          		

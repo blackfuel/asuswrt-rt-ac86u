@@ -36,7 +36,7 @@
 #define MAX_DEV_TICKET_EXP_LEN 	64
 #define MAX_ID_LEN		64
 #define MAX_STATUS_LEN		32
-#define MAX_DESC_LEN		64
+#define MAX_DESC_LEN		128
 #define MAX_PIN_LEN		64
 #define MAX_IP_ADDR_LEN		128 	//32
 
@@ -151,7 +151,7 @@ typedef struct _Updateiceinfo{
 
 typedef struct _Keepalive{
 	char	status[MAX_STATUS_LEN];
-	//char	deviceticketexpiretime[MAX_DEV_TICKET_EXP_LEN];
+	char	deviceticketexpiretime[MAX_DEV_TICKET_EXP_LEN];
 	char	time[MAX_TIME_LEN];
 }Keepalive, *pKeepalive;
 

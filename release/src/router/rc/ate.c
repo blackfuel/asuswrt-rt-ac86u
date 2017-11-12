@@ -1530,9 +1530,15 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 #endif
 #ifdef RTCONFIG_QCA
 #if defined(RTCONFIG_WIFI_QCA9557_QCA9882) || defined(RTCONFIG_QCA953X) || defined(RTCONFIG_QCA956X)
-#if 0
+#ifdef RTCONFIG_ART2_BUILDIN
 	else if (!strcmp(command, "Set_ART2")) {
 		Set_ART2();
+		return 0;
+	}
+#endif
+#if defined(RTCONFIG_PCIE_QCA9880) || defined(RTCONFIG_PCIE_QCA9882)
+	else if (!strcmp(command, "Set_Qcmbr")) {
+		Set_Qcmbr(value);
 		return 0;
 	}
 #endif
@@ -1564,7 +1570,7 @@ int asus_ate_command(const char *command, const char *value, const char *value2)
 		return 0;
 	}
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VRZAC1300) /* for Lyra */
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) /* for Lyra */
 	else if (!strcmp(command, "Set_DisableWifiDrv")) {
 		if (setDisableWifiDrv(value))
 		{
@@ -2002,14 +2008,15 @@ int ate_dev_status(void)
 #ifndef RTCONFIG_ALPINE
 #ifdef RTCONFIG_BT_CONN
 	{
+#define RETRY_MAX 100
 		int retry;
-		for(retry = 60; retry > 0; retry--){
+		for(retry = 0; retry < RETRY_MAX; retry++){
 			extern int check_bluetooth_device(const char *bt_dev);
 			if(check_bluetooth_device("hci0") == 0)
 				break;
 			sleep(1);
 		}
-		if(retry > 0)
+		if(retry < RETRY_MAX)
 		{
 			result = 'O';
 		}

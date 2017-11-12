@@ -58,6 +58,9 @@ CFLAGS += -DBCMINTERNAL -DBCMDBG
 ifneq ($(RTCONFIG_BCMWL6),y)
 LDFLAGS += -L$(TOP)/nvram -L$(INSTALLDIR)/nvram/usr/lib -lnvram
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
+ifeq ($(RTCONFIG_AMAS),y)
+LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
+endif
 endif
 
 #UTILS := mii-tool robocfg ttcp

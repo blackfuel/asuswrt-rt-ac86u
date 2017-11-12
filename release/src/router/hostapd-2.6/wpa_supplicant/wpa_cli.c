@@ -216,7 +216,7 @@ static void wpa_cli_msg_cb(char *msg, size_t len)
 
 static int _wpa_ctrl_command(struct wpa_ctrl *ctrl, char *cmd, int print)
 {
-	char buf[4096];
+	char buf[16384];
 	size_t len;
 	int ret;
 
@@ -1544,7 +1544,8 @@ static int wpa_cli_cmd_scan(struct wpa_ctrl *ctrl, int argc, char *argv[])
 static int wpa_cli_cmd_scan_results(struct wpa_ctrl *ctrl, int argc,
 				    char *argv[])
 {
-	return wpa_ctrl_command(ctrl, "SCAN_RESULTS");
+	//return wpa_ctrl_command(ctrl, "SCAN_RESULTS");
+	return wpa_cli_cmd(ctrl, "SCAN_RESULTS", 0, argc, argv);
 }
 
 
@@ -2338,6 +2339,7 @@ static int wpa_cli_cmd_p2p_remove_client(struct wpa_ctrl *ctrl, int argc,
 	return wpa_cli_cmd(ctrl, "P2P_REMOVE_CLIENT", 1, argc, argv);
 }
 
+#endif /* CONFIG_P2P */
 
 static int wpa_cli_cmd_vendor_elem_add(struct wpa_ctrl *ctrl, int argc,
 				       char *argv[])
@@ -2359,7 +2361,7 @@ static int wpa_cli_cmd_vendor_elem_remove(struct wpa_ctrl *ctrl, int argc,
 	return wpa_cli_cmd(ctrl, "VENDOR_ELEM_REMOVE", 2, argc, argv);
 }
 
-#endif /* CONFIG_P2P */
+
 
 #ifdef CONFIG_WIFI_DISPLAY
 
@@ -2741,6 +2743,12 @@ static int wpa_cli_cmd_data_routing_mode_get(struct wpa_ctrl *ctrl, int argc,
            char *argv[])
 {
   return wpa_cli_cmd(ctrl, "DATA_ROUTING_MODE_GET", 0, argc, argv);
+}
+
+static int wpa_cli_cmd_unconnected_sta(struct wpa_ctrl *ctrl, int argc,
+           char *argv[])
+{
+  return wpa_cli_cmd(ctrl, "UNCONNECTED_STA_RSSI", 4, argc, argv);
 }
 
 enum wpa_cli_cmd_flags {
@@ -3185,6 +3193,7 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
 	{ "p2p_remove_client", wpa_cli_cmd_p2p_remove_client,
 	  wpa_cli_complete_p2p_peer, cli_cmd_flag_none,
 	  "<address|iface=address> = remove a peer from all groups" },
+#endif /* CONFIG_P2P */
 	{ "vendor_elem_add", wpa_cli_cmd_vendor_elem_add, NULL,
 	  cli_cmd_flag_none,
 	  "<frame id> <hexdump of elem(s)> = add vendor specific IEs to frame(s)\n"
@@ -3197,7 +3206,6 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
 	  cli_cmd_flag_none,
 	  "<frame id> <hexdump of elem(s)> = remove vendor specific IE(s) in frame(s)\n"
 	  VENDOR_ELEM_FRAME_ID },
-#endif /* CONFIG_P2P */
 #ifdef CONFIG_WIFI_DISPLAY
 	{ "wfd_subelem_set", wpa_cli_cmd_wfd_subelem_set, NULL,
 	  cli_cmd_flag_none,
@@ -3347,6 +3355,10 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
 	{ "data_routing_mode_get", wpa_cli_cmd_data_routing_mode_get, NULL,
 	  cli_cmd_flag_none,
 	  "= get data routing mode" },
+	{ "unconnected_sta", wpa_cli_cmd_unconnected_sta, NULL,
+	  cli_cmd_flag_none,
+	  "<addr> <freq> <center_freq1=> [center_freq2=] <bandwidth=> "
+	  "= get unconnected station statistics" },
 	{ NULL, NULL, NULL, cli_cmd_flag_none, NULL }
 };
 
@@ -3679,9 +3691,21 @@ static void wpa_cli_action_process(const char *msg)
 		wpa_cli_exec(action_file, ifname, pos);
 	} else if (str_starts(pos, HS20_DEAUTH_IMMINENT_NOTICE)) {
 		wpa_cli_exec(action_file, ifname, pos);
+	} else if (str_starts(pos, WPA_EVENT_BEACON)) {
+		wpa_cli_exec(action_file, ifname, pos);
+	} else if (str_starts(pos, WPA_EVENT_PROBE_RSP)) {
+		wpa_cli_exec(action_file, ifname, pos);
+	} else if (str_starts(pos, WPA_EVENT_AUTH_RSP)) {
+		wpa_cli_exec(action_file, ifname, pos);
+	} else if (str_starts(pos, WPA_EVENT_ASSOC_RSP)) {
+		wpa_cli_exec(action_file, ifname, pos);
+	} else if (str_starts(pos, WPA_EVENT_REASSOC_RSP)) {
+		wpa_cli_exec(action_file, ifname, pos);
 	} else if (str_starts(pos, WPA_EVENT_TERMINATING)) {
 		printf("wpa_supplicant is terminating - stop monitoring\n");
 		wpa_cli_quit = 1;
+	} else if (str_starts(pos, WPA_EVENT_SCAN_RESULTS)) {
+		wpa_cli_exec(action_file, ifname, pos);
 	}
 }
 
