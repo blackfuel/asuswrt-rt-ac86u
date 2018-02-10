@@ -50,6 +50,10 @@
 #include <protect_srv.h>
 #endif
 
+#ifdef RTCONFIG_WIFI_SON
+#include <qca.h>
+#endif
+
 #define WEBSTRFILTER 1
 #define CONTENTFILTER 1
 
@@ -1193,10 +1197,15 @@ void redirect_nat_setting(void)
 		":PREROUTING ACCEPT [0:0]\n"
 		":POSTROUTING ACCEPT [0:0]\n"
 		":OUTPUT ACCEPT [0:0]\n");
-#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VZWAC1300) || defined(MAPAC1750)
-	if(sw_mode() == SW_MODE_AP && nvram_get("cfg_master") != NULL)
-#endif
+#ifdef RTCONFIG_WIFI_SON
+	if(sw_mode() == SW_MODE_AP && nvram_match("cfg_master", "1")){
+		fprintf(fp, "-A PREROUTING -p udp --dport 53 -i %s -j DNAT --to-destination %s:53\n",BR_GUEST, APMODE_BRGUEST_IP);
+		fprintf(fp, "-A PREROUTING -p udp --dport 53 -j DNAT --to-destination %s:53\n", lan_ip);
+		fprintf(fp, "-A POSTROUTING -o %s -j MASQUERADE\n",nvram_safe_get("lan_ifname"));
+	}
+#else
 	fprintf(fp, "-A PREROUTING -p udp --dport 53 -j DNAT --to-destination %s:53\n", lan_ip);
+#endif
 
 	fprintf(fp, "COMMIT\n");
 
@@ -1536,6 +1545,16 @@ void nat_setting(char *wan_if, char *wan_ip, char *wanx_if, char *wanx_ip, char 
 #ifdef RTCONFIG_MULTIWAN_CFG
 	int wanx_rules = 0;
 #endif
+#ifdef RTCONFIG_WIFI_SON
+	char g_lan_class[32];
+	char g_lan_ip[20];
+	unsigned int dip;
+	struct in_addr gst;
+
+	dip = ntohl(inet_addr(lan_ip)) + 0x100;
+	gst.s_addr = htonl(dip);
+	strcpy(g_lan_ip, inet_ntoa(gst));
+#endif
 
 	sprintf(name, "%s_%s_%s", NAT_RULES, wan_if, wanx_if);
 	remove_slash(name + strlen(NAT_RULES));
@@ -1783,6 +1802,11 @@ void nat_setting(char *wan_if, char *wan_ip, char *wanx_if, char *wanx_ip, char 
 
 		/* masquerade lan to lan */
 		fprintf(fp, "-A POSTROUTING %s -o %s -s %s -d %s -j MASQUERADE\n", p, lan_if, lan_class, lan_class);
+
+#ifdef RTCONFIG_WIFI_SON
+		ip2class(g_lan_ip, nvram_safe_get("lan_netmask"), g_lan_class);
+		fprintf(fp, "-A POSTROUTING %s -o %s -s %s -d %s -j MASQUERADE\n", p, BR_GUEST, g_lan_class, g_lan_class);
+#endif
 	}
 
 #ifdef RTCONFIG_FBWIFI
@@ -1826,17 +1850,15 @@ void nat_setting2(char *lan_if, char *lan_ip, char *logaccept, char *logdrop)	//
 #ifdef RTCONFIG_MULTIWAN_CFG
 	int wanx_rules = 0;
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+#ifdef RTCONFIG_WIFI_SON
 	char g_lan_class[32];
 	char g_lan_ip[20];
 	unsigned int dip;
-	struct in_addr  gst;
-	//if(nvram_get_int("wl0.1_bss_enabled"))
-	{
-		dip= ntohl(inet_addr(lan_ip))+0x100;                                
-		gst.s_addr = htonl(dip);
-                strcpy(g_lan_ip, inet_ntoa(gst));    
-	}
+	struct in_addr gst;
+
+	dip = ntohl(inet_addr(lan_ip)) + 0x100;
+	gst.s_addr = htonl(dip);
+	strcpy(g_lan_ip, inet_ntoa(gst));
 #endif
 
 	ip2class(lan_ip, nvram_safe_get("lan_netmask"), lan_class);
@@ -2155,6 +2177,11 @@ void nat_setting2(char *lan_if, char *lan_ip, char *logaccept, char *logdrop)	//
 
 		// masquerade lan to lan
 		fprintf(fp, "-A POSTROUTING %s -o %s -s %s -d %s -j MASQUERADE\n", p, lan_if, lan_class, lan_class);
+
+#ifdef RTCONFIG_WIFI_SON
+		ip2class(g_lan_ip, nvram_safe_get("lan_netmask"), g_lan_class);
+		fprintf(fp, "-A POSTROUTING %s -o %s -s %s -d %s -j MASQUERADE\n", p, BR_GUEST, g_lan_class, g_lan_class);
+#endif
 	}
 #ifdef RTCONFIG_FBWIFI
 	{
@@ -2213,7 +2240,7 @@ void redirect_setting(void)
 	}
 	ip2class(lan_ipaddr_t, lan_netmask_t, lan_class);
 
-	if ((redirect_fp = fopen("/tmp/redirect_rules", "w+")) == NULL) {
+	if ((redirect_fp = fopen(REDIRECT_RULES, "w+")) == NULL) {
 		fprintf(stderr, "*** Can't make the file of the redirect rules! ***\n");
 		return;
 	}
@@ -2355,55 +2382,8 @@ void write_access_restriction(FILE *fp)
 			fprintf(fp, "-A ACCESS_RESTRICTION -j DROP\n");
 		}
 	}
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
-	//if(nvram_get_int("wl0.1_bss_enabled"))
-	fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", "br+");
-	//else
-	//fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", lan_if);
-#endif
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
-        //if(nvram_get_int("wl0.1_bss_enabled"))
-        {
-                fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", lan_if, BR_GUEST);
-                fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", BR_GUEST,lan_if);
-        }
-#endif
 }
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
-void set_cap_apmode_filter(void)
-{
-	const char *cap_rules = "/tmp/cap_apmode_filter.default";
-	FILE *fp;
-	struct in_addr guest,guest1;
- 	char glan[24],glan1[24];
-	unsigned int dip;
-        dip= ntohl(inet_addr(nvram_safe_get("lan_ipaddr")));
-        guest.s_addr = htonl(dip)&0x0000FFFF;
-        guest1.s_addr = htonl(dip)&0x00FFFFFF;
-        strlcpy(glan, inet_ntoa(guest), sizeof(glan));
-        strlcpy(glan1, inet_ntoa(guest1), sizeof(glan1));
-
-	if((fp = fopen(cap_rules, "w")) == NULL)
-		return;
-
-	fprintf(fp, "*filter\n"
-		":INPUT ACCEPT [0:0]\n"
-		":FORWARD ACCEPT [0:0]\n"
-		":OUTPUT ACCEPT [0:0]\n"
-		);
-
-	fprintf(fp, "-A INPUT -d %s/24 -i %s -j DROP\n",glan1,BR_GUEST);
-	fprintf(fp, "-A FORWARD -d %s/32 -i %s -o %s -j ACCEPT\n",nvram_safe_get("lan_gateway"),BR_GUEST,nvram_safe_get("lan_ifname"));
-	fprintf(fp, "-A FORWARD -d %s/16 -i %s -o %s -j DROP\n",glan,BR_GUEST,nvram_safe_get("lan_ifname"));
-	fprintf(fp, "COMMIT\n\n");
-	fclose(fp);
-	eval("iptables-restore", cap_rules);
-#ifdef RTCONFIG_IPV6
-	eval("ip6tables-restore", cap_rules);
-#endif	/* RTCONFIG_IPV6 */
-}
-#endif
 /* Rules for LW Filter and MAC Filter
  * MAC ACCEPT
  *     ACCEPT -> MACS
@@ -2566,7 +2546,12 @@ start_default_filter(int lanunit)
 		fprintf(fp, "-A INPUT -i %s -j %sLAN\n", lan_if, PROTECT_SRV_RULE_CHAIN);
 	}
 #endif
+
+#ifdef RTCONFIG_WIFI_SON
+	fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", "br+");
+#else
 	fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", lan_if);
+#endif
 	fprintf(fp, "-A INPUT -i %s -m state --state NEW -j ACCEPT\n", "lo");
 	//fprintf(fp, "-A FORWARD -m state --state INVALID -j DROP\n");
 	fprintf(fp, "-A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT\n");
@@ -2580,6 +2565,11 @@ start_default_filter(int lanunit)
 #endif
 	fprintf(fp, "-A FORWARD -i %s -o %s -j ACCEPT\n", lan_if, lan_if);
 	fprintf(fp, "-A FORWARD -i %s -o %s -j ACCEPT\n", "lo", "lo");
+
+#ifdef RTCONFIG_WIFI_SON
+	fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", lan_if, BR_GUEST);
+	fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", BR_GUEST, lan_if);
+#endif
 
 	fprintf(fp, "-A logaccept -m state --state NEW -j LOG --log-prefix \"ACCEPT \" "
 		  "--log-tcp-sequence --log-tcp-options --log-ip-options\n"
@@ -2629,7 +2619,35 @@ start_default_filter(int lanunit)
 #endif
 }
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
+void set_cap_apmode_filter(void)
+{
+	const char *cap_rules = "/tmp/cap_apmode_filter.default";
+	FILE *fp;
+	char lan_class[32];
+
+	if((fp = fopen(cap_rules, "w")) == NULL)
+		return;
+
+	ip2class(nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), lan_class);
+
+	fprintf(fp, "*filter\n"
+		":INPUT ACCEPT [0:0]\n"
+		":FORWARD ACCEPT [0:0]\n"
+		":OUTPUT ACCEPT [0:0]\n"
+		);
+
+	fprintf(fp, "-A INPUT -d %s -i %s -j DROP\n", lan_class, BR_GUEST);
+	fprintf(fp, "-A FORWARD -d %s/32 -i %s -o %s -j ACCEPT\n", nvram_safe_get("lan_gateway"), BR_GUEST, nvram_safe_get("lan_ifname"));
+	fprintf(fp, "-A FORWARD -d %s -i %s -o %s -j DROP\n", lan_class, BR_GUEST, nvram_safe_get("lan_ifname"));
+	fprintf(fp, "COMMIT\n\n");
+	fclose(fp);
+	eval("iptables-restore", cap_rules);
+#ifdef RTCONFIG_IPV6
+	eval("ip6tables-restore", cap_rules);
+#endif	/* RTCONFIG_IPV6 */
+}
+
 void reset_filter(void)
 {
 	const char *filter_rules = "/tmp/hive_filter.default";
@@ -2797,7 +2815,7 @@ void write_UrlFilter(char *chain, char *lan_if, char *lan_ip, char *logdrop, FIL
 		if(nv) free(nv);
 	}
 
-	if (nvram_match("url_mode_x", "1")) {
+	if (nvram_match("url_mode_x", "1") && nvram_match("url_enable_x", "1")) {
 		fprintf(fp, "-A %s -i %s -p udp --dport 53 -m string --string \"asus\" --algo bm -j ACCEPT\n", chain, lan_if);
 		fprintf(fp, "-A %s -i br0 -p udp --dport 53 -j DROP\n", chain);
 #ifdef RTCONFIG_IPV6
@@ -2890,6 +2908,11 @@ filter_setting(char *wan_if, char *wan_ip, char *lan_if, char *lan_ip, char *log
 	char *wanx_if, *wanx_ip;
 #if defined(RTCONFIG_DUALWAN) || defined(RTCONFIG_USB_MODEM)
 	int unit = get_wan_unit(wan_if);
+#endif
+#ifdef RTCONFIG_WIFI_SON
+	char lan_class[32];
+
+	ip2class(lan_ip, nvram_safe_get("lan_netmask"), lan_class);
 #endif
 
 	if(wan_prefix(wan_if, prefix) < 0)
@@ -3110,7 +3133,16 @@ TRACE_PT("writing Parental Control\n");
 			fprintf(fp, "-A INPUT -i %s -j %sLAN\n", lan_if, PROTECT_SRV_RULE_CHAIN);
 		}
 #endif
+#ifdef RTCONFIG_WIFI_SON
+		fprintf(fp, "-A INPUT -i %s -d %s -j DROP\n", BR_GUEST, lan_class);
+		fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", "br+", "ACCEPT");
+#else
 		fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", lan_if, "ACCEPT");
+#endif
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+		if (nvram_get_int("pptpd_enable"))
+			fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", "pptp+", "ACCEPT");
+#endif
 		fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", "lo", "ACCEPT");
 #ifdef RTCONFIG_IPV6
 		if (ipv6_enabled()) {
@@ -3293,6 +3325,9 @@ TRACE_PT("writing Parental Control\n");
 
 	/* Clamp TCP MSS to PMTU of WAN interface before accepting RELATED packets */
 	if (
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+	    nvram_get_int("pptpd_enable") ||
+#endif
 #if defined(RTCONFIG_USB_MODEM)
 	    dualwan_unit__usbif(unit) ||
 #endif
@@ -3328,9 +3363,12 @@ TRACE_PT("writing Parental Control\n");
 	}
 #endif
 
-// ~ oleg patch
 	fprintf(fp, "-A FORWARD -m state --state ESTABLISHED,RELATED -j %s\n", logaccept);
-// ~ oleg patch
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+	if (nvram_get_int("pptpd_enable"))
+		fprintf(fp, "-A FORWARD -i %s -j %s\n", "pptp+", "ACCEPT");
+#endif
+
 	/* Filter out invalid WAN->WAN connections */
 #ifdef RTCONFIG_PORT_BASED_VLAN
 	/* Write forward rule for vlan */
@@ -3348,7 +3386,11 @@ TRACE_PT("writing Parental Control\n");
 	vlan_subnet_deny_forward(fp);
 #endif
 
+#ifdef RTCONFIG_WIFI_SON
+	fprintf(fp, "-A FORWARD -o %s ! -i %s -j %s\n", wan_if, "br+", logdrop);
+#else
 	fprintf(fp, "-A FORWARD -o %s ! -i %s -j %s\n", wan_if, lan_if, logdrop);
+#endif
 #ifdef RTCONFIG_IPV6
 	if (ipv6_enabled() && *wan6face) {
 		if (nvram_match("ipv6_fw_enable", "1")) {
@@ -3367,7 +3409,11 @@ TRACE_PT("writing Parental Control\n");
 			&& dualwan_unit__nonusbif(unit)
 #endif
 			)
+#ifdef RTCONFIG_WIFI_SON
+		fprintf(fp, "-A FORWARD -o %s ! -i %s -j %s\n", wanx_if, "br+", logdrop);
+#else
 		fprintf(fp, "-A FORWARD -o %s ! -i %s -j %s\n", wanx_if, lan_if, logdrop);
+#endif
 
 // oleg patch ~
 	/* Drop the wrong state, INVALID, packets */
@@ -3395,6 +3441,10 @@ TRACE_PT("writing Parental Control\n");
 #ifdef RTCONFIG_IPV6
 	if (ipv6_enabled())
 	fprintf(fp_ipv6, "-A FORWARD -i %s -o %s -j %s\n", lan_if, lan_if, logaccept);
+#endif
+#ifdef RTCONFIG_WIFI_SON
+	fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", lan_if, BR_GUEST);
+	fprintf(fp, "-A FORWARD -i %s -o %s -j DROP\n", BR_GUEST, lan_if);
 #endif
 
 #ifdef RTCONFIG_IPV6
@@ -4049,13 +4099,6 @@ TRACE_PT("writing Parental Control\n");
 		}
 #endif
 
-#if defined(MAPAC2200) || defined(MAPAC1300) || defined(VZWAC1300)
-	//CAP/RE's guest can not access CAP's UI/app.
-	char lan_class[32];
-	ip2class(nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), lan_class);
-	if((sw_mode() == SW_MODE_ROUTER || (sw_mode() == SW_MODE_AP && nvram_match("cfg_master", "1")))/* && nvram_get_int("wl0.1_bss_enabled")*/)
-		fprintf(fp, "-A INPUT -i %s -d %s -j DROP\n", BR_GUEST,lan_class);
-#endif
 	if (nvram_match("fw_enable_x", "1")) {
 		/* Drop ICMP before ESTABLISHED state */
 		if (nvram_get_int("misc_ping_x") == 0) {
@@ -4108,6 +4151,10 @@ TRACE_PT("writing Parental Control\n");
 		}
 #endif
 		fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", lan_if, "ACCEPT");
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+		if (nvram_get_int("pptpd_enable"))
+			fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", "pptp+", "ACCEPT");
+#endif
 		fprintf(fp, "-A INPUT -i %s -m state --state NEW -j %s\n", "lo", "ACCEPT");
 #ifdef RTCONFIG_IPV6
 		if (ipv6_enabled()) {
@@ -4293,9 +4340,13 @@ TRACE_PT("writing Parental Control\n");
 	if (nvram_get_int("mr_enable_x"))
 		fprintf(fp, "-A FORWARD -p udp -d 224.0.0.0/4 -j ACCEPT\n");
 
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+	if (nvram_get_int("pptpd_enable"))
+		goto clamp_mss;
+#endif
 	/* Clamp TCP MSS to PMTU of WAN interface before accepting RELATED packets */
-	for(unit = WAN_UNIT_FIRST; unit < wan_max_unit; ++unit){
-		if(!is_wan_connect(unit))
+	for (unit = WAN_UNIT_FIRST; unit < wan_max_unit; unit++) {
+		if (!is_wan_connect(unit))
 			continue;
 
 		snprintf(prefix, sizeof(prefix), "wan%d_", unit);
@@ -4307,6 +4358,9 @@ TRACE_PT("writing Parental Control\n");
 		    strcmp(wan_proto, "pppoe") == 0 ||
 		    strcmp(wan_proto, "pptp") == 0 ||
 		    strcmp(wan_proto, "l2tp") == 0) {
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+		clamp_mss:
+#endif
 			fprintf(fp, "-A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n");
 			if (*macaccept)
 				fprintf(fp, "-A %s -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu\n", macaccept);
@@ -4338,8 +4392,11 @@ TRACE_PT("writing Parental Control\n");
 	}
 #endif
 
-// ~ oleg patch
 	fprintf(fp, "-A FORWARD -m state --state ESTABLISHED,RELATED -j %s\n", logaccept);
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+	if (nvram_get_int("pptpd_enable"))
+		fprintf(fp, "-A FORWARD -i %s -j %s\n", "pptp+", "ACCEPT");
+#endif
 
 	for(unit = WAN_UNIT_FIRST; unit < wan_max_unit; ++unit){
 		if(!is_wan_connect(unit))
@@ -4374,7 +4431,6 @@ TRACE_PT("writing Parental Control\n");
 	vlan_subnet_deny_forward(fp);
 #endif
 
-// oleg patch ~
 	/* Drop the wrong state, INVALID, packets */
 	allow_sroutes(fp);
 	fprintf(fp, "-A FORWARD -m state --state INVALID -j %s\n", logdrop);
@@ -4960,6 +5016,8 @@ write_porttrigger(FILE *fp, char *wan_if, int is_nat)
 
 	nvp = nv = strdup(nvram_safe_get("autofw_rulelist"));
 	while (nv && (b = strsep(&nvp, "<")) != NULL) {
+		char *p;
+
 		if ((vstrsep(b, ">", &desc, &out_port, &out_proto, &in_port, &in_proto) != 5))
 			continue;
 
@@ -4972,6 +5030,9 @@ write_porttrigger(FILE *fp, char *wan_if, int is_nat)
 		(void)proto_conv(in_proto, in_protoptr);
 		(void)proto_conv(out_proto, out_protoptr);
 
+		/* parse_ports() of libipt_TRIGGER.c only accepts '-', not ':'. */
+		if ((p = strchr(in_port, ':')) != NULL)
+			*p = '-';
 		fprintf(fp, "-A FORWARD -p %s -m %s --dport %s "
 			"-j TRIGGER --trigger-type out --trigger-proto %s --trigger-match %s --trigger-relate %s\n",
 			out_protoptr, out_protoptr, out_port,
@@ -5783,7 +5844,7 @@ int start_firewall(int wanunit, int lanunit)
 
 	if ((fp=fopen("/proc/sys/net/ipv4/tcp_tw_recycle", "w+")))
 	{
-#if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_DUALWAN)
+#if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_DUALWAN) || defined(RTCONFIG_RALINK) || defined(RTCONFIG_REALTEK)
 		fputs("0", fp);
 #else
 		fputs("1", fp);

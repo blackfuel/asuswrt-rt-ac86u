@@ -3305,6 +3305,11 @@ wlc_vht_update_scb_state(wlc_vht_info_t *vhti, int band, struct scb *scb,
 	 */
 	if (SCB_LEGACY_WDS(scb)) {
 		scb->vhtcap_orig_mcsmap = vht_cap_ie->rx_mcs_map;
+
+		/* Force reinit ratesel for the scb when it gains VHT capabilities */
+		if (!vht_cap) {
+			reinit_ratesel = TRUE;
+		}
 	}
 
 	/* Merge incoming rate with MCS rate of this device and store

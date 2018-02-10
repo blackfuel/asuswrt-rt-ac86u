@@ -42,7 +42,6 @@ if( ( parent.document.QKform.sw_mode.value == 2 ) &&  ( wifi_Psk_orig != '' ) ) 
 }
 
 var smart_connect_qis_support = false;
-var contentM_height_orig = parent.document.getElementById("contentM").height;
 var smart_connect_desc_flag = '0';
 var wlc_state = '0';
 var wlc_sbstate = '0';
@@ -139,9 +138,32 @@ function QKWireless_load_body(){
 		}
 	
 		//while %w_Setting% == 1
-		if(parent.document.QKform.sw_mode.value != "2" && !smart_connect_support){
+		if(parent.w_Setting_tmp == 1 && parent.document.QKform.sw_mode.value != "2" && !smart_connect_support){
+			
+			document.getElementById("Continued_PrevSetting").innerHTML = "<#QIS_Previous_WLKey#>";					
+			document.getElementById("Continued_PrevSetting").style.display = "";
+			document.getElementById("radio_Continued_PrevSetting").style.display = "";
 			document.form.Cont_PrevSetting[0].checked = true;		
-			change_smart_con(1);
+			document.getElementById("btn_next_step").focus();
+
+			inputCtrl(document.form.wl0_ssid,0);
+			inputCtrl(document.form.wl0_wpa_psk,0);
+			if(band5g_support){
+					inputCtrl(document.form.sync_with_2ghz,0);
+					inputCtrl(document.form.wl1_ssid,0);
+					inputCtrl(document.form.wl1_wpa_psk,0);
+			}
+			if(wl_info.band5g_2_support){
+				inputCtrl(document.form.sync_with_5ghz,0);
+				inputCtrl(document.form.wl2_ssid,0);
+				inputCtrl(document.form.wl2_wpa_psk,0);						
+			}			
+		}
+		else{
+
+			document.getElementById("Continued_PrevSetting").style.display = "none";				
+			document.getElementById("radio_Continued_PrevSetting").style.display = "none";
+			setTimeout(function(){document.form.wl0_ssid.focus();}, 1);
 		}
 
 		if(smart_connect_support && (parent.document.QKform.sw_mode.value == 1 || parent.document.QKform.sw_mode.value == 3)){
@@ -760,7 +782,7 @@ function submitForm(){
 
 	// no need to restart wireless
 	if(document.form.action_script.value == "restart_wireless"){
-		document.form.action_script.value = "saveNvram";
+		document.form.action_script.value = "";
 		document.form.action_wait.value = "0";
 		
 		if(document.form.sw_mode.value == "1" && !document.form.wl0_ssid.disabled) 
@@ -778,11 +800,6 @@ function submitForm(){
 	}
 
 	document.form.submit();
-	if((document.form.sw_mode.value == "1" || document.form.sw_mode.value == "3") && !(!parent.flag_manual && parent.pppoe_failed_flag)){
-		setTimeout(function(){
-			location.href = "/qis/QIS_finish.htm";
-		}, 500)
-	}
 }
 
 function reset_wl_hwaddr(prefix){
@@ -979,7 +996,6 @@ function smartcon_desc_show(){
 		document.getElementById("smartcon_desc_button").value = "<#CTL_next#>";	
 		document.getElementById("field_general").style.border = "1px";
 		smart_connect_desc_flag = '1';
-		parent.document.getElementById("contentM").height = contentM_height_orig;
 	}else{
 		document.getElementById("field_general").style.display = "";
 		document.getElementById("smart_connect_desc").style.display = "none";
@@ -1003,8 +1019,6 @@ function smartcon_desc_show(){
 
 function change_smart_con(v){
 	if(v == '1'){
-		document.form.smart_connect_t[0].checked = "checked"
-
 		document.getElementById("wl_unit_field_1").style.display = "none";
 		document.getElementById("wl_unit_field_2").style.display = "none";
 		document.getElementById("wl_unit_field_3").style.display = "none";
@@ -1013,12 +1027,9 @@ function change_smart_con(v){
 			document.getElementById("wl_unit_field_5").style.display = "none";
 			document.getElementById("wl_unit_field_6").style.display = "none";
 		}
-		document.getElementById("wl0_desc_name").innerHTML = "";
+		document.getElementById("wl0_desc_name").innerHTML = "Tri-band Smart Connect Security";
 		document.getElementById("wl0_desc_name").style = "padding-bottom:10px";
-		parent.document.getElementById("contentM").height = contentM_height_orig;
 	}else if (v == '0'){
-		document.form.smart_connect_t[1].checked = "checked"
-
 		document.getElementById("wl_unit_field_1").style.display = "";
 		document.getElementById("wl_unit_field_2").style.display = "";
 		document.getElementById("wl_unit_field_3").style.display = "";
@@ -1028,7 +1039,6 @@ function change_smart_con(v){
 			document.getElementById("wl_unit_field_6").style.display = "";
 		}
 		document.getElementById("wl0_desc_name").innerHTML = "2.4 GHz - <#Security#>";
-		parent.document.getElementById("contentM").height = document.body.scrollHeight + 20;
 	}
 
 }
@@ -1479,10 +1489,10 @@ function detect_LANStatus(_flag){
 </fieldset>
 <fieldset id="field_general" style="display:none;">
 	<legend id="Continued_legend">
-			<span id="Continued_PrevSetting"><#smart_connect#></span>
+			<span id="Continued_PrevSetting"></span>
 			<span id="radio_Continued_PrevSetting">
-					<input type="radio" id="Cont_PrevSetting0" name="Cont_PrevSetting" tabindex="1" class="input" value="0" onclick="change_smart_con(1);"><#checkbox_Yes#>
-					<input type="radio" id="Cont_PrevSetting1" name="Cont_PrevSetting" tabindex="2" class="input" value="1" onclick="change_smart_con(0);"><#checkbox_No#>
+					<input type="radio" id="Cont_PrevSetting0" name="Cont_PrevSetting" tabindex="1" class="input" value="0" onclick="PrevSetting(this.value);"><#checkbox_Yes#>
+					<input type="radio" id="Cont_PrevSetting1" name="Cont_PrevSetting" tabindex="2" class="input" value="1" onclick="PrevSetting(this.value);"><#checkbox_No#>
 			</span>	
 			<span id="RP_UseParentSetting" style="display:none;">
 				<input type="checkbox" id="RP_parentSetting" checked="" onclick="RP_useParentSetting()"><#QIS_apextended_usedefault#>

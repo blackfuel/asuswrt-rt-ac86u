@@ -26,11 +26,11 @@
 #include "siutils_priv.h"
 
 
-#ifdef BCMDBG_ERR
+#ifdef BCMDBG
 #define	GCI_ERROR(args)	printf args
 #else
 #define	GCI_ERROR(args)
-#endif	/* BCMDBG_ERR */
+#endif	/* BCMDBG */
 
 #ifdef BCMDBG
 #define	GCI_MSG(args)	printf args

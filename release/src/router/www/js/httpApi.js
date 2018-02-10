@@ -238,83 +238,113 @@ var httpApi ={
 	},
 
 	"detwanGetRet": function(){
+		var wanInfo = httpApi.nvramGet(["wan0_state_t", "wan0_sbstate_t", "wan0_auxstate_t", "autodet_state", "autodet_auxstate", "wan0_proto", "link_internet"], true);
+	
+		var wanTypeList = {
+			"dhcp": "DHCP",
+			"static": "Static",
+			"pppoe": "PPPoE",
+			"l2tp": "L2TP",
+			"pptp": "PPTP",
+			"modem": "MODEM",
+			"check": "CHECKING",
+			"resetModem": "RESETMODEM",
+			"connected": "CONNECTED",
+			"noWan": "NOWAN"
+		}
+
 		var retData = {
 			"wanType": "CHECKING",
-			"isIPConflict": false,
+			"isIPConflict": (function(){
+				return (wanInfo.wan0_state_t == "4" && wanInfo.wan0_sbstate_t == "4")
+			})(),
 			"isError": false
 		};
 
-		var getDetWanStatus = function(state){
-			switch(parseInt(state)){
-				case 0:
-					if(hadPlugged("modem"))
-						retData.wanType = "MODEM";
-					else
-						retData.wanType = "NOWAN";
-					break;
-				case 2:
-				case 5:
-					retData.wanType = "DHCP";
-					break;
-				case 3:
-				case 6:
-					retData.wanType = "PPPoE";
-					break;
-				case 4:
-				case "":
-					retData.wanType = "CHECKING";
-					break;
-				case 7:
-					retData.wanType = "DHCP";
-					retData.isIPConflict = true;
-					break;
-				default:
-					if(hadPlugged("modem")){
-						retData.wanType = "MODEM";
-					}
-					else{
-						retData.wanType = "RESETMODEM";
-					}
-					break;
-			}
+		var hadPlugged = function(deviceType){
+			var usbDeviceList = httpApi.hookGet("show_usb_path")["show_usb_path"][0] || [];
+			return (usbDeviceList.join().search(deviceType) != -1)
 		}
 
-		$.ajax({
-			url: '/detwan.cgi?action_mode=GetWanStatus',
-			dataType: 'json',
-			async: false,
-			error: function(xhr){
-				if(asyncData.get.hasOwnProperty("detwanState")){
-					getDetWanStatus(asyncData.get["detwanState"]);
-					retData.isError = false;
-
-					delete asyncData.get["detwanState"];
-				}
-				else{
-					retData = {
-						"wanType": "CHECKING",
-						"isIPConflict": false,
-						"isError": true
-					}
-
-					$.ajax({
-						url: '/detwan.cgi?action_mode=GetWanStatus',
-						dataType: 'json',
-						error: function(xhr){
-							asyncData.get["detwanState"] = "UNKNOWN";
-						},
-						success: function(response){
-							asyncData.get["detwanState"] = response.state;
-						}
-					});
-				}
-			},
-			success: function(response){
-				getDetWanStatus(response.state)
+		if(wanInfo.isError){
+			retData.wanType = wanTypeList.check;
+			retData.isIPConflict = false;
+			retData.isError = true;
+		}
+		else if(
+			wanInfo.link_internet   == "2" &&
+			wanInfo.wan0_state_t    == "2" &&
+			wanInfo.wan0_sbstate_t  == "0" &&
+			wanInfo.wan0_auxstate_t == "0"
+		){
+			retData.wanType = wanTypeList.connected;
+		}
+		else if(wanInfo.autodet_state == ""){
+			retData.wanType = wanTypeList.check;			
+		}
+		else if(wanInfo.autodet_state == "6" || wanInfo.autodet_auxstate == "6"){
+			retData.wanType = wanTypeList.pppoe;
+		}
+		else if(hadPlugged("modem")){
+			retData.wanType = wanTypeList.modem;
+		}
+		else if(wanInfo.wan0_auxstate_t == "1"){
+			retData.wanType = wanTypeList.noWan;
+		}
+/*
+		else if(wanInfo.autodet_state == "2"){
+			retData.wanType = wanTypeList.dhcp;
+		}
+*/
+		else if(wanInfo.autodet_state == "3" || wanInfo.autodet_state == "5"){
+			retData.wanType = wanTypeList.resetModem;
+		}
+		else if(wanInfo.autodet_state == "4"){
+			if(wanInfo.wan0_auxstate_t != "1"){
+				httpApi.startAutoDet();
+				retData.wanType = wanTypeList.check;
+				retData.isIPConflict = false;
+				retData.isError = false;
 			}
-		});
+			else if(wanInfo.wan0_state_t == "4" && wanInfo.wan0_sbstate_t == "4"){
+				retData.wanType = wanTypeList.dhcp;
+				retData.isIPConflict = true;
+			}
+			else{
+				retData.wanType = wanTypeList.noWan;
+			}
+		}
+		else{
+			retData.wanType = wanTypeList.check;
+		}
 
 		return retData;
+	},
+
+	"isPppAuthFail": function(){
+		if(window.pppAuthFailChecked) return false;
+
+		var wanInfo = httpApi.nvramGet(["wan0_state_t", "wan0_sbstate_t", "wan0_auxstate_t", "wan0_proto", "sw_mode"], true);
+		var result = (	
+			wanInfo.sw_mode         == "1"     &&
+			wanInfo.wan0_proto	    == "pppoe" &&
+			wanInfo.wan0_state_t    == "4"     &&
+			wanInfo.wan0_sbstate_t  == "2"     &&
+			wanInfo.wan0_auxstate_t == "0"
+		)
+
+		window.pppAuthFailChecked = result;
+		return result;
+	},
+
+	"isConnected": function(){
+		var wanInfo = httpApi.nvramGet(["wan0_state_t", "wan0_sbstate_t", "wan0_auxstate_t", "link_internet"], true);
+		return (
+			wanInfo.link_internet   == "2" &&
+			wanInfo.wan0_state_t    == "2" &&
+			wanInfo.wan0_sbstate_t  == "0" &&
+			wanInfo.wan0_auxstate_t == "0"
+		)
 	},
 
 	"isAlive": function(hostOrigin, token, callback){
@@ -325,7 +355,7 @@ var httpApi ={
 	"checkCap": function(targetOrigin, targetId){
 		window.chcap = function(){
 			setTimeout(function(){
-				if(isPage("conncap_page")) window.location.href = targetOrigin + "/cfg_onboarding.cgi?id=" + targetId;
+				if(isPage("amasconncap_page")) window.location.href = targetOrigin + "/cfg_onboarding.cgi?id=" + targetId;
 			}, 3000);
 
 			// $("#connCapAlert").hide();
@@ -335,21 +365,97 @@ var httpApi ={
 		$.getJSON(targetOrigin + "/chcap.json?callback=?");
 	},
 
-	"checkWhatsNews": function(modelName){
-		window.whatsnews = function(content){
-			var newsString = "";
-			var newsId = httpApi.nvramGet(["extendno", "preferred_lang"]);
-
-			try{
-				newsString = (content[newsId.extendno].hasOwnProperty(newsId.preferred_lang)) ? content[newsId.extendno][newsId.preferred_lang] : content[newsId.extendno]["EN"];
+	"cleanLog": function(path, callback) {
+		if(path != "") {
+			var confirm_flag = confirm("Data will not be able to recover once deleted, are you sure you want to clean?");/*untranslated*/
+			if(confirm_flag) {
+				$.ajax({
+					url: '/cleanlog.cgi?path=' + path,
+					dataType: 'script',	
+					error: function(xhr) {
+						alert("Clean error!");/*untranslated*/
+					},
+					success: function(response) {
+						if(typeof callback == "function")
+							callback();
+					}
+				});
 			}
-			catch(e){
-				newsString = "";
-			}
-
-			// show what's news here
 		}
+		else {
+			alert("Clean error, no path!");/*untranslated*/
+		}
+	},
 
-		$.getJSON("https://dlcdnets.asus.com/pub/ASUS/LiveUpdate/Release/Wireless_SQ/News/" + modelName + "_NEWS.zip?callback=?");
+	"faqURL": function(_Objid, _faqNum, _URL1, _URL2){
+		// https://www.asus.com/tw/support/FAQ/1000906
+		var pLang = httpApi.nvramGet(["preferred_lang"]).preferred_lang;		
+		var faqLang = {
+			EN : "",
+			TW : "/tw",
+			CN : ".cn",
+			BR : "/br",
+			CZ : "/cz",
+			DA : "/dk",
+			DE : "/de",
+			ES : "/es",
+			FI : "/fi",
+			FR : "/fr",
+			HU : "/hu",
+			IT : "/it",
+			JP : "/jp",
+			KR : "/kr",
+			MS : "/my",
+			NL : "/nl",
+			NO : "/no",
+			PL : "/pl",
+			RO : "/ro",
+			RU : "/ru",
+			SL : "/sk",
+			SV : "/se",
+			TH : "/th",
+			TR : "/tr",
+			UK : "/ua"
+		}
+		var temp_URL_lang = _URL1+faqLang[pLang]+_URL2+_faqNum;
+		var temp_URL_global = _URL1+_URL2+_faqNum;
+		//console.log(temp_URL_lang);
+		$.ajax({
+			url: temp_URL_lang,
+			type: 'GET',
+			timeout: 1500,
+			error: function(response){
+				//console.log(response);
+				document.getElementById(_Objid).href = temp_URL_global;
+			},
+			success: function(response) {				
+				//console.log(response);
+				if(response.search("QAPage") >= 0)
+					document.getElementById(_Objid).href =  temp_URL_lang;
+				else
+					document.getElementById(_Objid).href = temp_URL_global;		
+			}
+		});
+	},
+
+	"nvram_match_x": function(postData, compareData, retData){
+		var queryString = "nvram_match_x(\"\",\""+postData+"\",\""+compareData+"\",\""+retData+"\")";
+		var retData = {};
+
+		$.ajax({
+			url: '/appGet.cgi?hook=' + queryString,
+			dataType: 'json',
+			async: false,
+			error: function(){
+				retData[postData] = "";
+				retData.isError = true;
+			},
+			success: function(response){
+				retData[postData] = response["nvram_match_x-"];
+				retData.isError = false;
+			}
+		});
+
+		return retData;
 	}
 }

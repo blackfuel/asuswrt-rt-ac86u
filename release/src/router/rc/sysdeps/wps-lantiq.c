@@ -423,8 +423,7 @@ int getWscStatusStr(int unit, char *buf, int buf_size){
 				pt3[0] = '\0';
 
 				snprintf(buf, buf_size, "%s", pt2);
-
-				return retVal;
+				break;
 			}
 		}
 		pclose(fp);

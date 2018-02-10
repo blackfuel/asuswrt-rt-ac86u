@@ -20,6 +20,7 @@
 <script language="JavaScript" type="text/javascript" src="form.js"></script>
 <script language="JavaScript" type="text/javascript" src="validator.js"></script>
 <script language="JavaScript" type="text/javascript" src="switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style type="text/css">
 .ipsec_profile_panel {
 	width: 650px;
@@ -130,6 +131,12 @@ var ipsec_profile_3 = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profi
 var ipsec_profile_4 = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_4"); %>');
 var ipsec_profile_5 = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_5"); %>');
 
+var ipsec_profile_1_ext = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_1_ext"); %>');
+var ipsec_profile_2_ext = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_2_ext"); %>');
+var ipsec_profile_3_ext = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_3_ext"); %>');
+var ipsec_profile_4_ext = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_4_ext"); %>');
+var ipsec_profile_5_ext = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_5_ext"); %>');
+
 var ipsec_client_list_1 = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_client_list_1"); %>');
 var ipsec_client_list_2 = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_client_list_2"); %>');
 var ipsec_client_list_3 = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_client_list_3"); %>');
@@ -201,6 +208,12 @@ function initial(){
 	document.getElementById("ipsec_profile_3").value = ipsec_profile_3;
 	document.getElementById("ipsec_profile_4").value = ipsec_profile_4;
 	document.getElementById("ipsec_profile_5").value = ipsec_profile_5;
+
+	document.getElementById("ipsec_profile_1_ext").value = ipsec_profile_1_ext;
+	document.getElementById("ipsec_profile_2_ext").value = ipsec_profile_2_ext;
+	document.getElementById("ipsec_profile_3_ext").value = ipsec_profile_3_ext;
+	document.getElementById("ipsec_profile_4_ext").value = ipsec_profile_4_ext;
+	document.getElementById("ipsec_profile_5_ext").value = ipsec_profile_5_ext;
 
 	document.getElementById("ipsec_client_list_1").value = ipsec_client_list_1;
 	document.getElementById("ipsec_client_list_2").value = ipsec_client_list_2;
@@ -279,26 +292,31 @@ function del_profile_list(obj) {
 	var delRowID = obj.parentNode.parentNode.id;
 	if(delRowID == "tr_ipsec_profile_1") {
 		ipsec_profile_1 = "";
+		ipsec_profile_1_ext = "";
 		ipsec_client_list_1 = "";
 		ipsec_ca_1 = "";
 	}
 	if(delRowID == "tr_ipsec_profile_2") {
 		ipsec_profile_2 = "";
+		ipsec_profile_2_ext = "";
 		ipsec_client_list_2 = "";
 		ipsec_ca_2 = "";
 	}
 	if(delRowID == "tr_ipsec_profile_3") {
 		ipsec_profile_3 = "";
+		ipsec_profile_3_ext = "";
 		ipsec_client_list_3 = "";
 		ipsec_ca_3 = "";
 	}
 	if(delRowID == "tr_ipsec_profile_4") {
 		ipsec_profile_4 = "";
+		ipsec_profile_4_ext = "";
 		ipsec_client_list_4 = "";
 		ipsec_ca_4 = "";
 	}
 	if(delRowID == "tr_ipsec_profile_5") {
 		ipsec_profile_5 = "";
+		ipsec_profile_5_ext = "";
 		ipsec_client_list_5 = "";
 		ipsec_ca_5 = "";
 	}
@@ -309,6 +327,12 @@ function del_profile_list(obj) {
 	document.list_form.ipsec_profile_3.value = ipsec_profile_3;
 	document.list_form.ipsec_profile_4.value = ipsec_profile_4;
 	document.list_form.ipsec_profile_5.value = ipsec_profile_5;
+
+	document.list_form.ipsec_profile_1_ext.value = ipsec_profile_1_ext;
+	document.list_form.ipsec_profile_2_ext.value = ipsec_profile_2_ext;
+	document.list_form.ipsec_profile_3_ext.value = ipsec_profile_3_ext;
+	document.list_form.ipsec_profile_4_ext.value = ipsec_profile_4_ext;
+	document.list_form.ipsec_profile_5_ext.value = ipsec_profile_5_ext;
 
 	document.list_form.ipsec_client_list_1.value = ipsec_client_list_1;
 	document.list_form.ipsec_client_list_2.value = ipsec_client_list_2;
@@ -327,6 +351,12 @@ function del_profile_list(obj) {
 	document.form.ipsec_profile_3.value = ipsec_profile_3;
 	document.form.ipsec_profile_4.value = ipsec_profile_4;
 	document.form.ipsec_profile_5.value = ipsec_profile_5;
+
+	document.form.ipsec_profile_1_ext.value = ipsec_profile_1_ext;
+	document.form.ipsec_profile_2_ext.value = ipsec_profile_2_ext;
+	document.form.ipsec_profile_3_ext.value = ipsec_profile_3_ext;
+	document.form.ipsec_profile_4_ext.value = ipsec_profile_4_ext;
+	document.form.ipsec_profile_5_ext.value = ipsec_profile_5_ext;
 
 	document.form.ipsec_client_list_1.value = ipsec_client_list_1;
 	document.form.ipsec_client_list_2.value = ipsec_client_list_2;
@@ -603,8 +633,6 @@ function initialIPSecProfile() {
 
 	settingRadioItemCheck(document.form.ipsec_ike, "auto");
 
-	document.form.ipsec_encryption_p1.value = "auto";
-	document.form.ipsec_hash_p1.value = "auto";
 	document.form.ipsec_keylife_p1.value = "172800";
 	settingRadioItemCheck(document.form.ipsec_xauth, "0");
 	document.form.ipsec_xauth_account.value = "";
@@ -616,8 +644,6 @@ function initialIPSecProfile() {
 	document.form.ipsec_dpd.value = "10";
 	settingRadioItemCheck(document.form.ipsec_dead_peer_detection, "1");
 	changeAdvDeadPeerDetection(document.form.ipsec_dead_peer_detection);
-	document.form.ipsec_encryption_p2.value = "auto";
-	document.form.ipsec_hash_p2.value = "auto";
 	document.form.ipsec_keylife_p2.value = "3600";
 	document.form.ipsec_keyingtries.value = "3";
 
@@ -632,8 +658,14 @@ function initialIPSecProfile() {
 	document.form.ipsec_dns2.value = "";
 	document.form.ipsec_wins1.value = "";
 	document.form.ipsec_wins2.value = "";
+
+	$('input:checkbox[name=ipsec_encryption_p1]').prop("checked", true);
+	$('input:checkbox[name=ipsec_hash_p1]').prop("checked", true);
+	$('input:checkbox[name=ipsec_dh_group_p1]').prop("checked", true);
+	$('input:checkbox[name=ipsec_encryption_p2]').prop("checked", true);
+	$('input:checkbox[name=ipsec_hash_p2]').prop("checked", true);
 }
-function UpdateIPSecProfile(array) {
+function UpdateIPSecProfile(array, array_ext) {
 	document.getElementById("ipsec_vpn_type_view").style.display = "";
 	document.form.ipsec_vpn_type.style.display = "none";
 	document.getElementById("ipsec_vpn_type_view").innerHTML = convertVPNType(array[1]);
@@ -744,8 +776,6 @@ function UpdateIPSecProfile(array) {
 		}
 	}
 	changeIKEVersion();
-	document.form.ipsec_encryption_p1.value = array[18];
-	document.form.ipsec_hash_p1.value = array[19];
 	document.form.ipsec_keylife_p1.value = array[23];
 	settingRadioItemCheck(document.form.ipsec_xauth, array[24]);
 	if(array[24] == "2" && array[17] != "auto") {
@@ -767,8 +797,6 @@ function UpdateIPSecProfile(array) {
 	if(array[32] == "0") {
 		showhide("tr_adv_dpd_interval", 0);
 	}
-	document.form.ipsec_encryption_p2.value = array[33];
-	document.form.ipsec_hash_p2.value = array[34]
 	document.form.ipsec_keylife_p2.value = array[35];
 	document.form.ipsec_keyingtries.value = array[36];
 
@@ -778,6 +806,30 @@ function UpdateIPSecProfile(array) {
 		document.form.ipsec_dns2.value = ipsec_samba_array[2];
 		document.form.ipsec_wins1.value = ipsec_samba_array[3];
 		document.form.ipsec_wins2.value = ipsec_samba_array[4];
+	}
+
+	if(array[1] == "1") {
+		$('input:checkbox[name=ipsec_encryption_p1]').prop("checked", false);
+		$('input:checkbox[name=ipsec_hash_p1]').prop("checked", false);
+		$('input:checkbox[name=ipsec_dh_group_p1]').prop("checked", false);
+		$('input:checkbox[name=ipsec_encryption_p2]').prop("checked", false);
+		$('input:checkbox[name=ipsec_hash_p2]').prop("checked", false);
+		var set_checkboxlist = function(_objName, _value) {
+			var binary = parseInt(_value).toString(2);
+			var binary_length = binary.length;
+			var binary_reverse = binary.split('').reverse().join('');
+			for(var i = 0; i < binary_length; i += 1) {
+				if(binary_reverse.charAt(i) == "1") {
+					var bit_to_int = 1 << i;
+					$('input:checkbox[name=' + _objName + '][value=' + bit_to_int+ ']').prop("checked", true);
+				}
+			}
+		};
+		set_checkboxlist("ipsec_encryption_p1", array_ext[0]);
+		set_checkboxlist("ipsec_hash_p1", array_ext[1]);
+		set_checkboxlist("ipsec_dh_group_p1", array_ext[2]);
+		set_checkboxlist("ipsec_encryption_p2", array_ext[3]);
+		set_checkboxlist("ipsec_hash_p2", array_ext[4]);
 	}
 
 	switch(document.form.ipsec_profile_item.value) {
@@ -857,30 +909,36 @@ function editIPSecProfile(mode) {
 	cal_panel_block("edit_ipsec_profile_panel", 0.25);
 	
 	var editProfileArray = [];
+	var editProfileExtArray = [];
 	switch (mode) {
 		case "ipsec_profile_1" :
 			editProfileArray = ipsec_profile_1.split(">");
 			editProfileArray.unshift("ipsec_profile_1");
+			editProfileExtArray = ipsec_profile_1_ext.split(">");
 			document.form.ipsec_profile_item.value = "ipsec_profile_1";
 			break;
 		case "ipsec_profile_2" :
 			editProfileArray = ipsec_profile_2.split(">");
 			editProfileArray.unshift("ipsec_profile_2");
+			editProfileExtArray = ipsec_profile_2_ext.split(">");
 			document.form.ipsec_profile_item.value = "ipsec_profile_2";
 			break;
 		case "ipsec_profile_3" :
 			editProfileArray = ipsec_profile_3.split(">");
 			editProfileArray.unshift("ipsec_profile_3");
+			editProfileExtArray = ipsec_profile_3_ext.split(">");
 			document.form.ipsec_profile_item.value = "ipsec_profile_3";
 			break;
 		case "ipsec_profile_4" :
 			editProfileArray = ipsec_profile_4.split(">");
 			editProfileArray.unshift("ipsec_profile_4");
+			editProfileExtArray = ipsec_profile_4_ext.split(">");
 			document.form.ipsec_profile_item.value = "ipsec_profile_4";
 			break;
 		case "ipsec_profile_5" :
 			editProfileArray = ipsec_profile_5.split(">");
 			editProfileArray.unshift("ipsec_profile_5");
+			editProfileExtArray = ipsec_profile_5_ext.split(">");
 			document.form.ipsec_profile_item.value = "ipsec_profile_5";
 			break;
 	}
@@ -892,7 +950,7 @@ function editIPSecProfile(mode) {
 		add_option(document.form.ipsec_vpn_type, type_text, type_value);
 	});
 	switchMode(editProfileArray[1]);
-	UpdateIPSecProfile(editProfileArray);
+	UpdateIPSecProfile(editProfileArray, editProfileExtArray);
 }
 function cancel_ipsec_profile_panel() {
 	$("#edit_ipsec_profile_panel").fadeOut(300);
@@ -1108,7 +1166,31 @@ function validForm() {
 
 		if(!valid_subnet("remote"))
 			return false;
+
+		if($('input:checkbox[name=ipsec_encryption_p1]:checked').length == 0) {
+			alert("Please choose at least one Phase 1 Encryption.");/*untranslated*/
+			return false;
+		}
+
+		if($('input:checkbox[name=ipsec_hash_p1]:checked').length == 0) {
+			alert("Please choose at least one Phase 1 Hash.");/*untranslated*/
+			return false;
+		}
 		
+		if($('input:checkbox[name=ipsec_dh_group_p1]:checked').length == 0) {
+			alert("Please choose at least one Diffile-Hellman Group");/*untranslated*/
+			return false;
+		}
+
+		if($('input:checkbox[name=ipsec_encryption_p2]:checked').length == 0) {
+			alert("Please choose at least one Phase 2 Encryption.");/*untranslated*/
+			return false;
+		}
+
+		if($('input:checkbox[name=ipsec_hash_p2]:checked').length == 0) {
+			alert("Please choose at least one Phase 2 Hash.");/*untranslated*/
+			return false;
+		}
 	}
 	else {
 		if(getRadioItemCheck(document.form.ipsec_virtual_ip) == "1") {
@@ -1245,11 +1327,11 @@ function save_ipsec_profile_panel() {
 			document.form.ipsec_local_public_interface.value, local_public_ip, getRadioItemCheck(document.form.ipsec_auth_method), auth_method_vaule, 
 			local_subnet_list, document.form.ipsec_local_port.value, remote_subnet_list, document.form.ipsec_remote_port.value, 
 			"tunnel", getRadioItemCheck(document.form.ipsec_virtual_ip), document.form.ipsec_virtual_subnet.value, accessible_networks, 
-			getRadioItemCheck(document.form.ipsec_ike), document.form.ipsec_encryption_p1.value, document.form.ipsec_hash_p1.value, getRadioItemCheck(document.form.ipsec_exchange), 
+			getRadioItemCheck(document.form.ipsec_ike), "auto", "auto", getRadioItemCheck(document.form.ipsec_exchange), 
 			document.form.ipsec_local_id.value, document.form.ipsec_remote_id.value, document.form.ipsec_keylife_p1.value, getRadioItemCheck(document.form.ipsec_xauth), 
 			document.form.ipsec_xauth_account.value, document.form.ipsec_xauth_password.value, document.form.ipsec_xauth_server_type.value, getRadioItemCheck(document.form.ipsec_traversal), 
 			document.form.ipsec_ike_isakmp.value, document.form.ipsec_ike_isakmp_nat.value, document.form.ipsec_dpd.value, getRadioItemCheck(document.form.ipsec_dead_peer_detection), 
-			document.form.ipsec_encryption_p2.value, document.form.ipsec_hash_p2.value, document.form.ipsec_keylife_p2.value, document.form.ipsec_keyingtries.value, 
+			"auto", "auto", document.form.ipsec_keylife_p2.value, document.form.ipsec_keyingtries.value, 
 			samba_list, 0
 		];
 
@@ -1302,11 +1384,37 @@ function save_ipsec_profile_panel() {
 						"null" + ">" + "null" + ">" + "null" + ">" + "null" + ">" + 
 						profile_array[37] + ">" + profile_array[38];
 				break;
-
 		}
+
+		/* data structure ext
+		1 encryption_p1, hash_p1, DHGroup, encryption_p2, hash_p2
+		*/
+		var result_ext = "";
+		var encryption_p1 = 0;
+		var hash_p1 = 0;
+		var dh_group = 0;
+		var encryption_p2 = 0;
+		var hash_p2 = 0;
+		if(profile_array[1] == "1") {
+			var get_checkboxlist = function(_objName) {
+				var value = 0;
+				$('input:checkbox[name=' + _objName + ']:checked').map(function() {
+					value = value + parseInt($(this).val());
+				});
+				return value;
+			};
+			encryption_p1 = get_checkboxlist("ipsec_encryption_p1");
+			hash_p1 = get_checkboxlist("ipsec_hash_p1");
+			dh_group = get_checkboxlist("ipsec_dh_group_p1");
+			encryption_p2 = get_checkboxlist("ipsec_encryption_p2");
+			hash_p2 = get_checkboxlist("ipsec_hash_p2");
+		}
+		var profile_ext_array = [encryption_p1, hash_p1, dh_group, encryption_p2, hash_p2];
+		result_ext = profile_ext_array.join(">");
 
 		var ipsecClientList = "ipsec_client_list_" + document.form.ipsec_profile_item.value.split("_")[2];
 		document.getElementById(document.form.ipsec_profile_item.value).value = result;
+		document.getElementById(document.form.ipsec_profile_item.value + "_ext").value = result_ext;
 
 		var ipsec_ca = "ipsec_ca_" + document.form.ipsec_profile_item.value.split("_")[2];
 		document.getElementById(ipsec_ca).value = document.getElementById('edit_ipsec_ca').value;
@@ -1316,26 +1424,31 @@ function save_ipsec_profile_panel() {
 		document.form.submit();
 		if(document.form.ipsec_profile_item.value == "ipsec_profile_1") {
 			ipsec_profile_1 = result;
+			ipsec_profile_1_ext = result_ext;
 			ipsec_client_list_1 = ipsec_client_list_array;
 			ipsec_ca_1 = document.form.edit_ipsec_ca.value;
 		}
 		if(document.form.ipsec_profile_item.value == "ipsec_profile_2") {
 			ipsec_profile_2 = result;
+			ipsec_profile_2_ext = result_ext;
 			ipsec_client_list_2 = ipsec_client_list_array;
 			ipsec_ca_2 = document.form.edit_ipsec_ca.value;
 		}	
 		if(document.form.ipsec_profile_item.value == "ipsec_profile_3") {
 			ipsec_profile_3 = result;
+			ipsec_profile_3_ext = result_ext;
 			ipsec_client_list_3 = ipsec_client_list_array;
 			ipsec_ca_3 = document.form.edit_ipsec_ca.value;
 		}
 		if(document.form.ipsec_profile_item.value == "ipsec_profile_4") {
 			ipsec_profile_4 = result;
+			ipsec_profile_4_ext = result_ext;
 			ipsec_client_list_4 = ipsec_client_list_array;
 			ipsec_ca_4 = document.form.edit_ipsec_ca.value;
 		}
 		if(document.form.ipsec_profile_item.value == "ipsec_profile_5") {
 			ipsec_profile_5 = result;
+			ipsec_profile_5_ext = result_ext;
 			ipsec_client_list_5 = ipsec_client_list_array;
 			ipsec_ca_5 = document.form.edit_ipsec_ca.value;
 		}
@@ -1399,7 +1512,7 @@ function switchMode(mode) {
 	var faq_text = ipsec_vpn_type_faq_array[$("select[name=ipsec_vpn_type]").val()][0];
 	var faq_num = ipsec_vpn_type_faq_array[$("select[name=ipsec_vpn_type]").val()][1];
 	$("#ipsec_vpn_type_faq").html(faq_text);
-	set_FAQ_link("ipsec_vpn_type_faq", faq_num, "IPSecAdv");
+	httpApi.faqURL("ipsec_vpn_type_faq", faq_num, "https://www.asus.com", "/support/FAQ/");
 
 	showhide("tr_SettingsMode", 1);
 	document.getElementById("selSwitchMode").value = "1";
@@ -1448,6 +1561,7 @@ function switchMode(mode) {
 	document.getElementById("ipsec_dead_peer_detection_restart_label").style.display = "";
 	showhide("tr_adv_encryption_p1", 1);
 	showhide("tr_adv_hash_p1", 1);
+	showhide("tr_adv_dh_group", 1);
 	showhide("tr_adv_local_id", 1);
 	showhide("tr_adv_remote_id", 1);
 	showhide("tr_adv_keylife_time_p1", 1);
@@ -1534,6 +1648,7 @@ function switchMode(mode) {
 			showhide("tr_adv_encryption_p1", 0);
 
 			showhide("tr_adv_hash_p1", 0);
+			showhide("tr_adv_dh_group", 0);
 			showhide("tr_adv_local_id", 0);
 			showhide("tr_adv_remote_id", 0);
 			showhide("tr_adv_keylife_time_p1", 0);
@@ -2015,6 +2130,12 @@ function changeExchangeMode() {
 <input type="hidden" name="ipsec_profile_4" id="ipsec_profile_4" value="">
 <input type="hidden" name="ipsec_profile_5" id="ipsec_profile_5" value="">
 
+<input type="hidden" name="ipsec_profile_1_ext" id="ipsec_profile_1_ext" value="">
+<input type="hidden" name="ipsec_profile_2_ext" id="ipsec_profile_2_ext" value="">
+<input type="hidden" name="ipsec_profile_3_ext" id="ipsec_profile_3_ext" value="">
+<input type="hidden" name="ipsec_profile_4_ext" id="ipsec_profile_4_ext" value="">
+<input type="hidden" name="ipsec_profile_5_ext" id="ipsec_profile_5_ext" value="">
+
 <input type="hidden" name="ipsec_client_list_1" id="ipsec_client_list_1" value="">
 <input type="hidden" name="ipsec_client_list_2" id="ipsec_client_list_2" value="">
 <input type="hidden" name="ipsec_client_list_3" id="ipsec_client_list_3" value="">
@@ -2370,30 +2491,37 @@ function changeExchangeMode() {
 			<tr id="tr_adv_encryption_p1">
 				<th><#vpn_ipsec_Encryption#></th>
 				<td>
-					<select name="ipsec_encryption_p1" class="input_option">
-						<option value="auto"><#Auto#></option>
-						<!--option value="des">DES</option-->
-						<option value="3des">3DES<!--untranslated--></option>
-						<option value="aes128">AES128<!--untranslated--></option>
-						<!--option value="aes192">AES192</option-->
-						<!--option value="aes256">AES256</option-->
-					</select>
+					<!--label><input type="checkbox" name="ipsec_encryption_p1" value="1">DES</label-->
+					<label><input type="checkbox" name="ipsec_encryption_p1" value="2">3DES</label>
+					<label><input type="checkbox" name="ipsec_encryption_p1" value="4">AES128</label>
+					<!--label><input type="checkbox" name="ipsec_encryption_p1" value="8">AES192</label>
+					<label><input type="checkbox" name="ipsec_encryption_p1" value="16">AES256</label-->
 				</td>
 			</tr>
 			<tr id="tr_adv_hash_p1">
 				<th><#vpn_ipsec_Hash#></th>
 				<td>
-					<select name="ipsec_hash_p1" class="input_option">
-						<option value="auto"><#Auto#></option>
-						<!--option value="md5">MD5</option-->
-						<option value="sha1">SHA1<!--untranslated--></option>
-						<option value="sha256">SHA256<!--untranslated--></option>
-						<!--option value="sha384">SHA384</option-->
-						<!--option value="sha512">SHA512</option-->
-					</select>
+					<!--label><input type="checkbox" name="ipsec_hash_p1" value="1">MD5</label-->
+					<label><input type="checkbox" name="ipsec_hash_p1" value="2">SHA1</label>
+					<label><input type="checkbox" name="ipsec_hash_p1" value="4">SHA256</label>
+					<!--label><input type="checkbox" name="ipsec_hash_p1" value="8">SHA384</label>
+					<label><input type="checkbox" name="ipsec_hash_p1" value="16">SHA512</label-->
 				</td>
 			</tr>
-				<tr id="tr_adv_exchange_mode">
+			<tr id="tr_adv_dh_group">
+				<th>Diffile-Hellman Groups<!--untranslated--></th>
+				<td>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="1">1</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="2">2</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="4">5</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="8">14</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="16">15</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="32">16</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="64">17</label>
+					<label><input type="checkbox" name="ipsec_dh_group_p1" value="128">18</label>
+				</td>
+			</tr>
+			<tr id="tr_adv_exchange_mode">
 				<th><#vpn_ipsec_Exchange_Mode#></th>
 				<td>
 					<input type="radio" name="ipsec_exchange" class="input" value="1" onchange="changeExchangeMode();"><#DHCPaggressive#>
@@ -2488,27 +2616,21 @@ function changeExchangeMode() {
 			<tr id="tr_adv_encryption_p2">
 				<th><#vpn_ipsec_Encryption#></th>
 				<td>
-					<select name="ipsec_encryption_p2" class="input_option">
-						<option value="auto"><#Auto#></option>
-						<!--option value="des">DES</option-->
-						<option value="3des">3DES<!--untranslated--></option>
-						<option value="aes128">AES128<!--untranslated--></option>
-						<!--option value="aes192">AES192</option-->
-						<!--option value="aes256">AES256</option-->
-					</select>
+					<!--label><input type="checkbox" name="ipsec_encryption_p2" value="1">DES</label-->
+					<label><input type="checkbox" name="ipsec_encryption_p2" value="2">3DES</label>
+					<label><input type="checkbox" name="ipsec_encryption_p2" value="4">AES128</label>
+					<!--label><input type="checkbox" name="ipsec_encryption_p2" value="8">AES192</label>
+					<label><input type="checkbox" name="ipsec_encryption_p2" value="16">AES256</label-->
 				</td>
 			</tr>
 			<tr id="tr_adv_hash_p2">
 				<th><#vpn_ipsec_Hash#></th>
 				<td>
-					<select name="ipsec_hash_p2" class="input_option">
-						<option value="auto"><#Auto#></option>
-						<!--option value="md5">MD5</option-->
-						<option value="sha1">SHA1<!--untranslated--></option>
-						<option value="sha256">SHA256<!--untranslated--></option>
-						<!--option value="sha384">SHA384</option-->
-						<!--option value="sha512">SHA512</option-->
-					</select>
+					<!--label><input type="checkbox" name="ipsec_hash_p2" value="1">MD5</label-->
+					<label><input type="checkbox" name="ipsec_hash_p2" value="2">SHA1</label>
+					<label><input type="checkbox" name="ipsec_hash_p2" value="4">SHA256</label>
+					<!--label><input type="checkbox" name="ipsec_hash_p2" value="8">SHA384</label>
+					<label><input type="checkbox" name="ipsec_hash_p2" value="16">SHA512</label-->
 				</td>
 			</tr>
 			<tr id="tr_adv_keylife_time_p2">
@@ -2575,6 +2697,11 @@ function changeExchangeMode() {
 	<input type="hidden" name="ipsec_profile_3" value="">
 	<input type="hidden" name="ipsec_profile_4" value="">
 	<input type="hidden" name="ipsec_profile_5" value="">
+	<input type="hidden" name="ipsec_profile_1_ext" value="">
+	<input type="hidden" name="ipsec_profile_2_ext" value="">
+	<input type="hidden" name="ipsec_profile_3_ext" value="">
+	<input type="hidden" name="ipsec_profile_4_ext" value="">
+	<input type="hidden" name="ipsec_profile_5_ext" value="">
 	<input type="hidden" name="ipsec_client_list_1" value="">
 	<input type="hidden" name="ipsec_client_list_2" value="">
 	<input type="hidden" name="ipsec_client_list_3" value="">

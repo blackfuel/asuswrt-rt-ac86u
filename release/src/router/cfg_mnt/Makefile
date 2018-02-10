@@ -2,7 +2,7 @@ include ../common.mak
 include $(SRCBASE)/router/.config
 
 CFLAGS += -Wall -Os $(EXTRACFLAGS)
-CFLAGS += -I. -I$(TOP)/shared -I$(SRCBASE) -I$(SRCBASE)/include -I./include -I$(TOP)/libevent-2.0.21 -I$(TOP)/libevent-2.0.21/include -I$(TOP)/networkmap
+CFLAGS += -I. -I$(TOP)/shared -I$(SRCBASE) -I$(SRCBASE)/include -I./include -I$(TOP)/networkmap
 CFLAGS += -I./sysdeps
 CFLAGS += -I$(TOP)/openssl/include
 CFLAGS += -I$(TOP)/json-c
@@ -12,7 +12,6 @@ LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
 LDFLAGS += -lpthread
 LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
 LDFLAGS += -lm
-LDFLAGS += -L$(TOP)/libevent-2.0.21/.libs -levent
 
 ifeq ($(RTCONFIG_AMAS),y)
 CFLAGS += -I$(TOP)/amas-utils -I$(TOP)/shared/sysdeps/amas -DUPDATECOST
@@ -20,8 +19,12 @@ LDFLAGS += -L$(TOP)/amas-utils -lamas-utils
 endif
 
 ifeq ($(HND_ROUTER),y)
-CFLAGS += -DPTHREAD_STACK_SIZE_1M
+CFLAGS += -DPTHREAD_STACK_SIZE_256K -DPTHREAD_EXIT
 LDFLAGS += -L$(TOP)/wlcsm -lwlcsm
+endif
+
+ifeq ($(RTCONFIG_DHDAP), y)
+CFLAGS += -DDEBUG_WL
 endif
 
 ifeq ($(RTCONFIG_INTEL),y)
@@ -70,12 +73,12 @@ endif
 ifeq ($(RTCONFIG_AMAS),y)
 COMMON_OBJS += chmgmt.o
 endif
-COMMON_OBJS += encrypt.o cfg_crc.o cfg_udp.o cfg_dencrypt.o cfg_common.o cfg_ipc.o cfg_wevent.o cfg_upgrade.o cfg_clientlist.o
+COMMON_OBJS += encrypt.o cfg_crc.o cfg_udp.o cfg_dencrypt.o cfg_common.o cfg_ipc.o cfg_wevent.o cfg_upgrade.o cfg_clientlist.o cfg_sched.o
 SERVER_OBJS += $(COMMON_OBJS) cfg_mnt.o
 CLIENT_OBJS += $(COMMON_OBJS) cfg_client.o
 REPORTSTATUS_OBJS += cfg_common.o cfg_reportstatus.o
 
-ifeq ($(or $(MAPAC1300),$(MAPAC2200),$(VZWAC1300),$(MAPAC1750)),y)
+ifeq ($(RTCONFIG_WIFI_SON),y)
 CFLAGS += -DREPORT_PAP_INFO
 #COMMON_OBJS += cfg_onboarding.o
 #CFLAGS += -DONBOARDING
@@ -86,7 +89,7 @@ CFLAGS += -DLEGACY_ROAMING
 COMMON_OBJS += cfg_onboarding.o
 CFLAGS += -DONBOARDING -DRSSI_LIST
 # for wireless channel sync
-#CFLAGS += -DSYNC_WCHANNEL
+CFLAGS += -DSYNC_WCHANNEL
 # for roaming info for sta
 #COMMON_OBJS += cfg_roaminginfo.o
 #CFLAGS += -DROAMING_INFO

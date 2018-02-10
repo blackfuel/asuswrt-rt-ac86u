@@ -224,6 +224,10 @@ fill_smbpasswd_input_file(const char *passwd)
 
 void add_usb_host_module(void)
 {
+#if defined(HND_ROUTER)
+	tweak_usb_affinity(1);
+#endif
+
 #if defined(RTCONFIG_USB_XHCI)
 #if defined(RTN65U) || defined(RTCONFIG_QCA) || defined(RTAC85U)
 	char *u3_param = "u3intf=0";
@@ -339,6 +343,7 @@ void add_usb_modem_modules(void){
 	modprobe("libphy");
 #endif
 	modprobe("asix");
+	modprobe("ax88179_178a");
 	modprobe("cdc_ether");
 	modprobe("rndis_host");
 	modprobe("cdc_ncm");
@@ -371,6 +376,7 @@ void remove_usb_modem_modules(void)
 	modprobe_r("cdc_ncm");
 	modprobe_r("rndis_host");
 	modprobe_r("cdc_ether");
+	modprobe_r("ax88179_178a");
 	modprobe_r("asix");
 #if LINUX_KERNEL_VERSION >= KERNEL_VERSION(4,1,0)
 	modprobe_r("libphy");
@@ -672,7 +678,14 @@ void start_usb(int orig)
 			}
 
 			if (nvram_get_int("usb_fs_fat")) {
-#ifdef RTCONFIG_TFAT
+#ifdef RTCONFIG_OPENPLUS_TFAT
+				if(nvram_match("usb_fatfs_mod", "tuxera"))
+					modprobe("tfat");
+				else{
+					modprobe("fat");
+					modprobe("vfat");
+				}
+#elif defined(RTCONFIG_TFAT)
 				modprobe("tfat");
 #else
 				modprobe("fat");
@@ -740,7 +753,7 @@ void start_usb(int orig)
 	}
 }
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
+#ifdef RTCONFIG_SOC_IPQ40XX
 void remove_dakota_usb_modules(void)
 {
 	modprobe_r(USB_DWC3);
@@ -770,7 +783,14 @@ void remove_usb_storage_module(void)
 #ifdef LINUX26
 	modprobe_r("mbcache");
 #endif
-#ifdef RTCONFIG_TFAT
+#ifdef RTCONFIG_OPENPLUS_TFAT
+	if(nvram_match("usb_fatfs_mod", "tuxera"))
+		modprobe_r("tfat");
+	else{
+		modprobe_r("vfat");
+		modprobe_r("fat");
+	}
+#elif defined(RTCONFIG_TFAT)
 	modprobe_r("tfat");
 #else
 	modprobe_r("vfat");
@@ -867,21 +887,22 @@ void remove_usb_host_module(void)
 #endif
 	modprobe_r(USB30_MOD);
 #endif
+#else  // HND_ROUTER
+	tweak_usb_affinity(0);
 #endif
 
 #if defined(RTCONFIG_BLINK_LED)
 	/* If both bled and USB Bus traffic statistics are enabled,
 	 * don't remove USB core and USB common kernel module.
 	 */
-	if (!((nvram_get_int("led_usb_gpio") | nvram_get_int("led_usb3_gpio")) & GPIO_BLINK_LED)) {
+	if (!((nvram_get_int("led_usb_gpio") | nvram_get_int("led_usb3_gpio")) & GPIO_BLINK_LED))
 #endif
+	{
 		modprobe_r(USBCORE_MOD);
 #if LINUX_KERNEL_VERSION >= KERNEL_VERSION(3,2,0)
 		modprobe_r(USBCOMMON_MOD);
 #endif
-#if defined(RTCONFIG_BLINK_LED)
 	}
-#endif
 }
 
 void remove_usb_module(void)
@@ -898,7 +919,7 @@ void remove_usb_module(void)
 	remove_usb_led_module();
 	remove_usb_host_module();
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
+#ifdef RTCONFIG_SOC_IPQ40XX
 	remove_dakota_usb_modules();
 #endif
 }
@@ -1054,7 +1075,7 @@ void stop_usb(int f_force)
 		}
 	}
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
+#ifdef RTCONFIG_SOC_IPQ40XX
 	if(disabled)remove_dakota_usb_modules();
 #endif
 #endif // HND_ROUTER
@@ -1168,7 +1189,22 @@ int mount_r(char *mnt_dev, char *mnt_dir, char *_type)
 			}
 
 			sprintf(options + strlen(options), ",shortname=winnt" + (options[0] ? 0 : 1));
-#ifdef RTCONFIG_TFAT
+#ifdef RTCONFIG_OPENPLUS_TFAT
+			if(nvram_match("usb_fatfs_mod", "tuxera")){
+#if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_QCA)
+				if(nvram_get_int("stop_iostreaming"))
+					sprintf(options + strlen(options), ",nodev" + (options[0] ? 0 : 1));
+				else
+					sprintf(options + strlen(options), ",nodev,iostreaming" + (options[0] ? 0 : 1));
+#else
+				sprintf(options + strlen(options), ",noatime" + (options[0] ? 0 : 1));
+#endif
+			}
+#ifdef LINUX26
+			else
+				sprintf(options + strlen(options), ",flush" + (options[0] ? 0 : 1));
+#endif
+#elif defined(RTCONFIG_TFAT)
 #if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_QCA)
 			if(nvram_get_int("stop_iostreaming"))
 				sprintf(options + strlen(options), ",nodev" + (options[0] ? 0 : 1));
@@ -1241,17 +1277,23 @@ int mount_r(char *mnt_dev, char *mnt_dir, char *_type)
 				f_write(flagfn, NULL, 0, 0, 0);
 			}
 
-#ifdef RTCONFIG_TFAT
 			if(!strncmp(type, "vfat", 4)){
+#ifdef RTCONFIG_OPENPLUS_TFAT
+				if(nvram_match("usb_fatfs_mod", "tuxera"))
+					ret = eval("mount", "-t", "tfat", "-o", options, mnt_dev, mnt_dir);
+				else
+					ret = eval("mount", "-t", "vfat", "-o", options, mnt_dev, mnt_dir);
+#elif defined(RTCONFIG_TFAT)
 				ret = eval("mount", "-t", "tfat", "-o", options, mnt_dev, mnt_dir);
+#else
+				ret = eval("mount", "-t", "vfat", "-o", options, mnt_dev, mnt_dir);
+#endif
 				if(ret != 0){
 					syslog(LOG_INFO, "USB %s(%s) failed to mount at the first try!" , mnt_dev, type);
 					TRACE_PT("USB %s(%s) failed to mount at the first try!\n", mnt_dev, type);
 				}
 			}
-
 			else
-#endif
 			{
 				ret = mount(mnt_dev, mnt_dir, type, flags, options[0] ? options : "");
 				if(ret != 0){
@@ -2930,12 +2972,16 @@ start_samba(void)
 {
 	int acc_num;
 	char cmd[256];
-#if defined(SMP) && !defined(HND_ROUTER)
+#if defined(SMP)
+#if defined(GTAC5300)
+	char *cpu_list = "3";
+#else
 	char *cpu_list = "1";
 #endif
-#if (defined(RTCONFIG_BCMARM) || defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SAMBA36X)) && defined(SMP) && !defined(HND_ROUTER)
+#if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SAMBA36X)
 	int cpu_num = sysconf(_SC_NPROCESSORS_CONF);
 	int taskset_ret = -1;
+#endif
 #endif
 	char smbd_cmd[32];
 
@@ -3069,8 +3115,8 @@ start_samba(void)
 	snprintf(smbd_cmd, 32, "%s/smbd", "/usr/sbin");
 #endif
 
-#if (defined(RTCONFIG_BCMARM) || defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SAMBA36X)) && !defined(HND_ROUTER)
-#ifdef SMP
+#if defined(SMP)
+#if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SAMBA36X)
 #if 0
 	if(cpu_num > 1)
 		taskset_ret = cpu_eval(NULL, "1", "ionice", "-c1", "-n0", smbd_cmd, "-D", "-s", "/etc/smb.conf");
@@ -3707,6 +3753,12 @@ ifdef RTCONFIG_TUNNEL
 
 	/* WebDav SSL support */
 	//write_webdav_server_pem();
+	if(f_size(LIGHTTPD_CERTKEY) != f_size(HTTPD_KEY) + f_size(HTTPD_CERT))
+	{
+		char buf[256];
+		snprintf(buf, sizeof(buf), "cat %s %s > %s", HTTPD_KEY, HTTPD_CERT, LIGHTTPD_CERTKEY);
+		system(buf);
+	}
 
 	/* write WebDav configure file*/
 	system("/sbin/write_webdav_conf");

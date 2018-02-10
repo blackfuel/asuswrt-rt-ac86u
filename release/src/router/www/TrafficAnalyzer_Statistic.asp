@@ -22,6 +22,7 @@
 <script type="text/javascript" src="/client_function.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script type="text/javascript" src="/popup.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
 #holder {
     height: 330px;
@@ -64,7 +65,19 @@
 	background-image: url("data:image/svg+xml;charset=US-ASCII,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22iso-8859-1%22%3F%3E%0A%3Csvg%20version%3D%221.1%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%20x%3D%220px%22%20y%3D%220px%22%0A%09%20viewBox%3D%220%200%20402.5%20402.5%22%20enable-background%3D%22new%200%200%20402.5%20402.5%22%20xml%3Aspace%3D%22preserve%22%3E%0A%3Cpath%20fill%3D%22%23FFF%22%20d%3D%22M200.9%2C401C90.7%2C400.6%2C1.2%2C310.9%2C1.5%2C201C1.8%2C90.7%2C92.1%2C0.8%2C201.9%2C1.5C312.2%2C2.2%2C401.5%2C91.9%2C401%2C201.7%0A%09C400.5%2C311.9%2C310.7%2C401.4%2C200.9%2C401z%20M164.7%2C286.6l116.2-67.1c6.5-3.8%2C10.5-10.7%2C10.5-18.2s-4-14.5-10.5-18.2l-116.2-67.1%0A%09c-3.3-1.9-6.9-2.8-10.5-2.8c-3.6%2C0-7.3%2C0.9-10.5%2C2.8c-6.5%2C3.8-10.5%2C10.7-10.5%2C18.2v134.2c0%2C7.5%2C4%2C14.5%2C10.5%2C18.2%0A%09c3.3%2C1.9%2C6.9%2C2.8%2C10.5%2C2.8C157.8%2C289.4%2C161.4%2C288.5%2C164.7%2C286.6z%22%2F%3E%0A%3C%2Fsvg%3E");
 }
 .icon_play_active{
-	background-image: url("data:image/svg+xml;charset=US-ASCII,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22iso-8859-1%22%3F%3E%0A%3Csvg%20version%3D%221.1%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%20x%3D%220px%22%20y%3D%220px%22%0A%09%20viewBox%3D%220%200%20402.5%20402.5%22%20enable-background%3D%22new%200%200%20402.5%20402.5%22%20xml%3Aspace%3D%22preserve%22%3E%0A%3Cpath%20fill%3D%22%2369DAFE%22%20d%3D%22M200.9%2C401C90.7%2C400.6%2C1.2%2C310.9%2C1.5%2C201C1.8%2C90.7%2C92.1%2C0.8%2C201.9%2C1.5C312.2%2C2.2%2C401.5%2C91.9%2C401%2C201.7%0A%09C400.5%2C311.9%2C310.7%2C401.4%2C200.9%2C401z%20M164.7%2C286.6l116.2-67.1c6.5-3.8%2C10.5-10.7%2C10.5-18.2s-4-14.5-10.5-18.2l-116.2-67.1%0A%09c-3.3-1.9-6.9-2.8-10.5-2.8c-3.6%2C0-7.3%2C0.9-10.5%2C2.8c-6.5%2C3.8-10.5%2C10.7-10.5%2C18.2v134.2c0%2C7.5%2C4%2C14.5%2C10.5%2C18.2%0A%09c3.3%2C1.9%2C6.9%2C2.8%2C10.5%2C2.8C157.8%2C289.4%2C161.4%2C288.5%2C164.7%2C286.6z%22%2F%3E%0A%3C%2Fsvg%3E%0A");	}
+	background-image: url("data:image/svg+xml;charset=US-ASCII,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22iso-8859-1%22%3F%3E%0A%3Csvg%20version%3D%221.1%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%20x%3D%220px%22%20y%3D%220px%22%0A%09%20viewBox%3D%220%200%20402.5%20402.5%22%20enable-background%3D%22new%200%200%20402.5%20402.5%22%20xml%3Aspace%3D%22preserve%22%3E%0A%3Cpath%20fill%3D%22%2369DAFE%22%20d%3D%22M200.9%2C401C90.7%2C400.6%2C1.2%2C310.9%2C1.5%2C201C1.8%2C90.7%2C92.1%2C0.8%2C201.9%2C1.5C312.2%2C2.2%2C401.5%2C91.9%2C401%2C201.7%0A%09C400.5%2C311.9%2C310.7%2C401.4%2C200.9%2C401z%20M164.7%2C286.6l116.2-67.1c6.5-3.8%2C10.5-10.7%2C10.5-18.2s-4-14.5-10.5-18.2l-116.2-67.1%0A%09c-3.3-1.9-6.9-2.8-10.5-2.8c-3.6%2C0-7.3%2C0.9-10.5%2C2.8c-6.5%2C3.8-10.5%2C10.7-10.5%2C18.2v134.2c0%2C7.5%2C4%2C14.5%2C10.5%2C18.2%0A%09c3.3%2C1.9%2C6.9%2C2.8%2C10.5%2C2.8C157.8%2C289.4%2C161.4%2C288.5%2C164.7%2C286.6z%22%2F%3E%0A%3C%2Fsvg%3E%0A");
+}
+.clean_log {
+	float: right;
+	background-image: url("images/New_ui/delete.svg");
+	height: 35px;
+	width: 35px;
+	background-repeat: no-repeat;
+	margin-right: 10px;
+	cursor: pointer;
+}
+.clean_log:hover {
+	background-image: url("images/New_ui/delete_hover.svg");
 }
 </style>
 <script>
@@ -1484,6 +1497,9 @@ function getClientCurrentName(_mac) {
 	}
 	return clientName;
 }
+function updateTrafficAnalyzer() {
+	initial();
+}
 </script>
 </head>
 <body onload="initial();" onunload="unload_body();">
@@ -1629,55 +1645,59 @@ function getClientCurrentName(_mac) {
 										<div id="statistic_hint" style="text-align:right;margin-top:-21px;padding-right:15px;color:#FC0;font-size:14px;">* <#Traffic_Analyzer_note#></div>
 									</div>
 									<div style="margin:10px 0 10px 4px;">
-										<table>
-											<tr>
-												<td style="width:400px">
-													<div>
-														<table>
-															<tr>
-																<td>
-																	<div style="font-size:16px;"><#Statistic_display_type#>:</div>
-																</td>
-																<td>
-																	<div id="router" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter_pressed" onclick="switch_content(this);">Clients</div>
-																</td>
-																<td>
-																	<div id="apps" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter" onclick="switch_content(this);"><#Apps#></div>
-																</td>
-																<!--td>
-																	<div id="details" style="width:80px;text-align:center;font-size:14px;border-radius:5px" class="block_filter" onclick="switch_content(this);">Details</div>
-																</td-->															
-															</tr>
-														</table>
-													</div>
-												</td>
-												<td>
-													<div>
-														<table>
-															<tr>
-																<td>
-																	<div style="font-size:16px;"><#Statistic_show_type#>:</div>
-																</td>
-																<td>
-																	<select class="input_option" id="traffic_option" onChange="change_traffic_direction(this);">
-																		<option value="both" selected><#option_both_direction#></option>
-																		<option value="down"><#option_download#></option>
-																		<option value="up"><#option_upload#></option>																		
-																	</select>
-																</td>
-																<td>
-																	<select class="input_option" id="duration_option" onChange="switch_date_type(this);">
-																		<option value="monthly"><#diskUtility_monthly#></option>
-																		<option value="weekly"><#diskUtility_weekly#></option>
-																		<option value="daily" selected><#diskUtility_daily#></option>																
-																	</select>		
-																</td>	
-															</tr>
-														</table>										
-													</div>
-												</td>
-											</tr>
-										</table>
+										<div style="float:left;">
+											<table>
+												<tr>
+													<td style="width:400px">
+														<div>
+															<table>
+																<tr>
+																	<td>
+																		<div style="font-size:16px;"><#Statistic_display_type#>:</div>
+																	</td>
+																	<td>
+																		<div id="router" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter_pressed" onclick="switch_content(this);">Clients</div>
+																	</td>
+																	<td>
+																		<div id="apps" style="width:100px;text-align:center;font-size:14px;border-radius:5px" class="block_filter" onclick="switch_content(this);"><#Apps#></div>
+																	</td>
+																	<!--td>
+																		<div id="details" style="width:80px;text-align:center;font-size:14px;border-radius:5px" class="block_filter" onclick="switch_content(this);">Details</div>
+																	</td-->
+																</tr>
+															</table>
+														</div>
+													</td>
+													<td>
+														<div>
+															<table>
+																<tr>
+																	<td>
+																		<div style="font-size:16px;"><#Statistic_show_type#>:</div>
+																	</td>
+																	<td>
+																		<select class="input_option" id="traffic_option" onChange="change_traffic_direction(this);">
+																			<option value="both" selected><#option_both_direction#></option>
+																			<option value="down"><#option_download#></option>
+																			<option value="up"><#option_upload#></option>
+																		</select>
+																	</td>
+																	<td>
+																		<select class="input_option" id="duration_option" onChange="switch_date_type(this);">
+																			<option value="monthly"><#diskUtility_monthly#></option>
+																			<option value="weekly"><#diskUtility_weekly#></option>
+																			<option value="daily" selected><#diskUtility_daily#></option>
+																		</select>
+																	</td>
+																</tr>
+															</table>
+														</div>
+													</td>
+												</tr>
+											</table>
+										</div>
+										<div class="clean_log" onClick="httpApi.cleanLog('traffic_analyzer', updateTrafficAnalyzer);"></div>
+										<div style="clear:both;"></div>
 									</div>
 									<div class="analysis_bg" style="border-radius:4px;width:100%">
 										<div style="padding-top:5px;">

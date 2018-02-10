@@ -1183,17 +1183,17 @@ color:#FFFFFF;
 	text-align: center;
 }
 .tab_item  {
-	background-color: #323E41;
+	background-color: rgb(104,5,22);
 	border-radius: 6px 6px 0 0;
 	height: 100%;
 	width: 99%;
 	display: table;
 }
 .tab_item:hover {
-	background-color: #4F5B5F;
+	background-color: rgb(207,10,44);
 }
 .tab_item_click {  
-	background-color: #4F5B5F;
+	background-color: rgb(62,3,13);
 	border-radius: 6px 6px 0 0;
 	height: 100%;
 	width: 99%;

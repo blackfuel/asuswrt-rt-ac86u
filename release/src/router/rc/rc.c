@@ -104,7 +104,7 @@ wbd_restore_defaults(void)
 #ifdef WLHOSTFBT
 
 /* Clear FBT_APs NVRAMS based on prefix */
-static void
+void
 fbt_aps_restore_defaults(char *prefix)
 {
 	char tmp_prefix[] = "wlXXXXXXXXXXXXXXXXXXXXXXXXXXXX_mssid_";
@@ -168,7 +168,7 @@ fbt_all_aps:
 }
 
 /* Clear all the FBT NVRAMs */
-static void
+void
 fbt_restore_defaults(void)
 {
 	char tmp[100], prefix[] = "wlXXXXXXXXXXXXXXXXXXXXXXXXXXXX_mssid_";
@@ -476,7 +476,7 @@ static int rctest_main(int argc, char *argv[])
 					f_write_string("/proc/sys/net/ipv4/conf/all/force_igmp_version", "2", 0, 0);
 #endif
 
-#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined (RTAC1200GU) || defined(RTAC85U) || defined(RTAC51UP) || defined(RTAC53)
+#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined (RTAC1200GU) || defined(RTAC85U) || defined(RTAC51UP) || defined(RTAC53) || defined(RTN800HP)
 					if (!(!nvram_match("switch_wantag", "none")&&!nvram_match("switch_wantag", "")))
 #endif
 					{
@@ -772,7 +772,7 @@ static const applets_t applets[] = {
 #ifdef RTCONFIG_LANTIQ
 	{ "wave_monitor",		wave_monitor_main		},
 #endif
-#ifdef RTCONFIG_USB
+#if defined(RTCONFIG_USB) && !defined(RTCONFIG_NO_USBPORT)
 	{ "usbled",			usbled_main			},
 #endif
 	{ "ddns_updated", 		ddns_updated_main		},
@@ -889,13 +889,14 @@ static const applets_t applets[] = {
 #endif
 #if defined(MAPAC1300) || defined(VZWAC1300)
 	{ "thermal_txpwr",		thermal_txpwr_main		},
-#endif	/* MAPAC1300 VZWAC1300 */
+#endif
 #ifdef RTCONFIG_ADTBW
 	{ "adtbw",			adtbw_main		},
 #endif
 	{NULL, NULL}
 };
 
+extern void gen_spcmd(char *);
 int main(int argc, char **argv)
 {
 	char *base;
@@ -980,7 +981,7 @@ int main(int argc, char **argv)
 	}
 
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
         if(!strcmp(base, "hive_cap")){
                 if(nvram_get_int("sw_mode")==SW_MODE_ROUTER || nvram_match("cfg_master", "1")) {
                         printf("start central ap...\n");
@@ -1019,8 +1020,11 @@ int main(int argc, char **argv)
         if(!strcmp(base, "hive_cmd")){
                 if(nvram_get_int("sw_mode")==SW_MODE_ROUTER || nvram_match("cfg_master", "1")) {
                         printf("start central ap...\n");
-			if(argv[1] && strlen(argv[1]))
+			if(argv[1] && strlen(argv[1])) {
+				if (!strcmp(argv[1], "reboot"))
+					gen_spcmd("xx");
                                 start_cmd(argv[1]);
+			}
                         else
                                 printf("error command.\n");
                 }
@@ -1303,7 +1307,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 #endif
-#endif
+#endif /* RTCONFIG_WIFI_SON */
 
 	if (!strcmp(base, "restart_wireless")) {
 		printf("restart wireless...\n");
@@ -1600,6 +1604,13 @@ int main(int argc, char **argv)
 #if defined(CONFIG_BCMWL5) || defined(RTCONFIG_RALINK) || defined(RTCONFIG_QCA) || defined(RTCONFIG_REALTEK)
 	else if (!strcmp(base, "set_factory_mode")) {
 		set_factory_mode();
+		return 0;
+	}
+#endif
+#if defined(RTCONFIG_OPENPLUS_TFAT) || defined(RTCONFIG_OPENPLUSPARAGON_NTFS) || defined(RTCONFIG_OPENPLUSTUXERA_NTFS) || defined(RTCONFIG_OPENPLUSPARAGON_HFS) || defined(RTCONFIG_OPENPLUSTUXERA_HFS)
+	else if(!strcmp(base, "set_fs_coexist")){
+		set_fs_coexist();
+		puts("1");
 		return 0;
 	}
 #endif

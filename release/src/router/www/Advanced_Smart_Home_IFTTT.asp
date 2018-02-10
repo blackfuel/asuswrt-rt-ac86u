@@ -16,6 +16,7 @@
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
 <script language="JavaScript" type="text/javascript" src="/popup.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
 .div_table{
 	display:table;
@@ -32,8 +33,7 @@
 }
 
 .div_img {
-	padding-top: 30px;
-	padding-left:25px;
+	padding: 35px 0px 50px 25px;
 }
 
 .step_1{
@@ -99,9 +99,21 @@
 	position:absolute;
 	background: rgba(0,0,0,0.95);
 	z-index:10;
-	margin-left:100px;
+	margin:-340px;
 	border-radius:10px;
 	padding:10px;
+	display: none;
+}
+
+.alert_ASUS_EULA{
+	width:480px;
+	height:auto;
+	position:absolute;
+	background: rgba(0,0,0,0.9);
+	z-index:10;
+	margin:-340px;
+	border-radius:10px;
+	padding:25px;
 	display: none;
 }
 </style>
@@ -112,12 +124,39 @@ var remaining_time_min;
 var remaining_time_sec;
 var remaining_time_show;
 var countdownid;
-
-var external_ip = -1;
 var MAX_RETRY_NUM = 5;
 var external_ip_retry_cnt = MAX_RETRY_NUM;
+var external_ip = -1;
+var AAE_MAX_RETRY_NUM = 3;
+var flag = '<% get_parameter("flag"); %>';
+var realip_state = "";
+
+var StatusList = {
+	"NoInetrnet": "Internet is disconnected. Please check your WAN connection for remote control",
+	"SvrFail": "Server connection failed",
+	"StepAccount": "Please follow steps to pair your account",
+	"EnableRemoteCtrl": "<#Alexa_Register1#>",
+	"Success": "IFTTT account is registered"
+}
+
+var AccLinkStatus = {
+	"RemoteStatus":{
+		"ddns_enable_x":'<% nvram_get("ddns_enable_x"); %>',
+		"ddns_hostname_x":'<% nvram_get("ddns_hostname_x"); %>',
+		"ddns_server_x":'<% nvram_get("ddns_server_x"); %>',
+		"misc_http_x":'<% nvram_get("misc_http_x"); %>',
+		"link_internet":'<% nvram_get("link_internet"); %>',
+	},
+	"getoken":{
+		"ifttt_token":('<% nvram_match_x("","ifttt_token", "", "1"); %>' == '1')?false:true,
+	},
+	"AAE_SIP":{
+		"aae_sip_connected":'<% nvram_get("aae_sip_connected"); %>',
+	}
+}
 
 function initial(){
+
 	show_menu();
 
 	if(!alexa_support){
@@ -125,15 +164,25 @@ function initial(){
 		document.getElementById("formfonttitle").innerHTML = "IFTTT";
 	}
 
+	if(flag == 'from_endpoint'){
+		AAE_MAX_RETRY_NUM = 10;
+		get_activation_code();
+	}
+
 	tag_control();
-	get_real_ip();
+	setTimeout("get_real_ip();", 1000);
+	setTimeout("update_acc_link_status();", 1000);
 }
 
 function tag_control(){
-	document.getElementById("remote_control_here").style="text-decoration: underline;cursor:pointer;";
-	document.getElementById("remote_control_here").onclick=function(){
-		enable_remote_control();
-	};
+
+	var obj;
+	if((obj = document.getElementById('remote_control_here')) != null){
+		obj.style="text-decoration: underline;cursor:pointer;";
+		obj.onclick=function(){
+			enable_remote_control();
+		};
+	}
 
 	document.getElementById("ifttt_signin").style="font-weight:bolder;text-decoration:underline;color:#FFCC00;";
 	document.getElementById("ifttt_signin").href="https://ifttt.com/login";
@@ -142,35 +191,27 @@ function tag_control(){
 	document.getElementById("ifttt_asus_channel").style="font-weight:bolder;text-decoration:underline;color:#FFCC00;";
 	document.getElementById("ifttt_asus_channel").href="https://ifttt.com/asusrouter";
 	document.getElementById("ifttt_asus_channel").target="_blank";
-
-	document.getElementById("ifttt_applet_link").style="font-weight:bolder;text-decoration:underline;color:#FFCC00;";
-	document.getElementById("ifttt_applet_link").href="https://ifttt.com/asusrouter";
-	document.getElementById("ifttt_applet_link").target="_blank";
-
-}
-
-function show_remote_control(){
-	if(stopFlag != 1 && external_ip_retry_cnt > 0)
-		setTimeout("get_real_ip();", 3000);
-
-	if(external_ip == 1 && ('<% nvram_get("ddns_enable_x"); %>' == '0' || '<% nvram_get("ddns_hostname_x"); %>' == '' || '<% nvram_get("misc_http_x"); %>' == '0'))
-			document.getElementById("remote_control").style.display = "";
-	else
-			document.getElementById("remote_control").style.display = "none";
 }
 
 function get_real_ip(){
-	$.ajax({
-		url: 'get_real_ip.asp',
-		dataType: 'script',
-		error: function(xhr){
-			setTimeout("get_real_ip();", 3000);
-		},
-		success: function(response){
-			external_ip_retry_cnt--;
-			show_remote_control();
-		}
-	});
+	if(AccLinkStatus.RemoteStatus.link_internet == '2'){
+		$.ajax({
+			url: 'get_real_ip.asp',
+			dataType: 'script',
+			error: function(xhr){
+				setTimeout("get_real_ip();", 3000);
+			},
+			success: function(response){
+				external_ip_retry_cnt--;
+				if(realip_state != "2" && external_ip_retry_cnt > 0){
+					setTimeout("get_real_ip();", 3000);
+				}
+			}
+		});
+	}else{
+		external_ip_retry_cnt--;
+		setTimeout("get_real_ip();", 3000);
+	}
 }
 
 function enable_remote_control(){
@@ -182,9 +223,64 @@ function enable_remote_control(){
 }
 
 function hide_remote_control(){
-	stopFlag = 1;
 	showLoading(5);
 	setTimeout("location.href=document.form.current_page.value", 5000);
+}
+
+function send_gen_pincode(){
+
+	close_alert('alert_ASUS_EULA');
+
+	if(flag == 'from_endpoint')
+		location.href = "/send_IFTTTPincode.cgi";
+	else
+		gen_new_pincode();
+}
+
+function detcet_aae_state(){
+	$.ajax({
+		url: '/appGet.cgi?hook=nvram_get(aae_enable)',
+		dataType: 'json',
+		error: function(xhr){
+		setTimeout("detcet_aae_state()", 1000);
+		},
+		success: function(response){
+			if(response.aae_enable == '1')
+				send_gen_pincode();
+			else{
+				AAE_MAX_RETRY_NUM--;
+				if(AAE_MAX_RETRY_NUM == 0)
+					send_gen_pincode();
+				else
+					setTimeout("detcet_aae_state()", 1000);
+			}
+		}
+	});
+}
+
+function setting_ASUS_EULA(){
+	if(document.form.ASUS_EULA_enable.checked == true){
+		require(['/require/modules/makeRequest.js'], function(makeRequest){
+			makeRequest.start('/enable_ASUS_EULA.cgi', function(){
+				document.form.ASUS_EULA.value = "1";
+				document.getElementById("eula_agree").style.display = "none";
+				document.getElementById("eula_button").style.display = "none";
+				document.getElementById("eula_loading").style.display = "";
+				detcet_aae_state();},
+				function(){});
+		});
+	}else{
+		document.form.ASUS_EULA_enable.focus();
+	}
+}
+
+function get_activation_code(){
+	if(document.form.ASUS_EULA.value != 1){
+		cal_panel_block("alert_ASUS_EULA");
+		$('#alert_ASUS_EULA').fadeIn(1000);
+	}else{
+		gen_new_pincode();
+	}
 }
 
 function gen_new_pincode(){
@@ -207,9 +303,13 @@ function show_alert_pin(xhr){
 	countdownid = window.setInterval(countdownfunc,1000);
 }
 
-function close_alert_pin(){
-	clearInterval(countdownid);
-	$('#alert_pin').fadeOut(100);
+function close_alert(name){
+	if(name == 'alert_pin'){
+		clearInterval(countdownid);
+	}else if(name == 'alert_ASUS_EULA'){
+		document.form.ASUS_EULA_enable.checked = false;
+	}
+	$('#'+name).fadeOut(100);
 }
 
 function checkTime(i){
@@ -239,11 +339,7 @@ function cal_panel_block(obj){
 		blockmarginLeft= (winWidth)*0.2 + document.body.scrollLeft;
 	}
 
-	if(obj == "alert_pin"){
-		document.getElementById(obj).style.marginLeft = (blockmarginLeft - 190)+"px";
-	}
-	else
-		document.getElementById(obj).style.marginLeft = blockmarginLeft+"px";
+	document.getElementById(obj).style.marginLeft = (blockmarginLeft-400)+"px";
 }
 
 function countdownfunc(){
@@ -253,7 +349,7 @@ function countdownfunc(){
 	document.getElementById("rtime").innerHTML = remaining_time_show;
 	if (remaining_time<0){
 		clearInterval(countdownid);
-		setTimeout("close_alert_pin();", 2000);
+		setTimeout("close_alert('alert_pin');", 2000);
 	}
 	remaining_time--;
 }
@@ -266,12 +362,59 @@ function clipboard(ID_value)
 		input.value = document.getElementById(ID_value).innerHTML;
 	else
 		input.value = document.getElementById(ID_value).value;
-	input.focus();
 	input.select();
 	document.execCommand('Copy');
 	input.remove();
 }
 
+function update_acc_link_status(){
+
+	AccLinkStatus.RemoteStatus = httpApi.nvramGet(["ddns_enable_x", "ddns_hostname_x", "ddns_server_x", "misc_http_x", "link_internet"],true);
+	AccLinkStatus.AAE_SIP = httpApi.nvramGet(["aae_sip_connected"],true);
+	AccLinkStatus.getoken = httpApi.nvram_match_x("ifttt_token","","1");
+
+	setTimeout("update_acc_link_status()", 5000);
+	show_account_state();
+}
+
+function show_account_state(){
+
+	var RetDDNSstatus = function(){
+
+		if(AccLinkStatus.RemoteStatus.ddns_enable_x == '0' || AccLinkStatus.RemoteStatus.ddns_hostname_x == '' || AccLinkStatus.RemoteStatus.misc_http_x == '0')
+			return false;
+		else
+			return true;
+	}
+
+	var RetAccLink = {
+		"AccLink":(AccLinkStatus.getoken.ifttt_token == '1')?false:true,
+		"AAE_SIP":(AccLinkStatus.AAE_SIP.aae_sip_connected == "1")?true:false,
+		"DDNSLink":RetDDNSstatus()
+	}
+
+	var RetStatus;
+	if(AccLinkStatus.RemoteStatus.link_internet != "2"){
+		RetStatus = StatusList.NoInetrnet;
+	}
+	else if(external_ip == 1){	//public ip
+		if(RetAccLink.DDNSLink)
+			RetStatus = (RetAccLink.AccLink)?StatusList.Success:StatusList.StepAccount;
+		else
+			RetStatus = StatusList.EnableRemoteCtrl;
+	}
+	else{
+		if(RetAccLink.AccLink)
+			RetStatus = (RetAccLink.AAE_SIP)?StatusList.Success:StatusList.SvrFail;
+		else
+			RetStatus = StatusList.StepAccount;
+	}
+
+	document.getElementById("acc_link_status").innerHTML = RetStatus;
+
+	if(RetStatus == StatusList.EnableRemoteCtrl)
+		tag_control();
+}
 </script>
 </head>
 <body onload="initial();" onunLoad="return unload_body();">
@@ -289,6 +432,7 @@ function clipboard(ID_value)
 <input type="hidden" name="action_script" value="">
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>" disabled>
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
+<input type="hidden" name="ASUS_EULA" value="<% nvram_get("ASUS_EULA"); %>">
 <table class="content" align="center" cellpadding="0" cellspacing="0">
 	<tr>
 		<td width="17">&nbsp;</td>
@@ -325,7 +469,7 @@ function clipboard(ID_value)
 														<a style="font-size:13px;padding-top: 2px;padding-left: 20px;font-style:italic;text-decoration: underline;cursor:pointer;" href="https://ifttt.com/asusrouter" target="_blank"><#IFTTT_more_applets#></a>
 													</div>
 													<div style="text-align:center;padding-top:60px;font-family:Arial, Helvetica, sans-serif;font-style:italic;font-weight:lighter;font-size:18px;"><#IFTTT_start0#></div>
-													<div id="remote_control" style="text-align:center;padding-top:10px;font-size:15px;color:#FFCC00;font-weight:bolder;display:none;"><#Alexa_Register1#></div> <!-- id="remote_control_here" -->
+													<div id="acc_link_status" style="text-align:center;padding-top:10px;font-size:15px;color:#FFCC00;font-weight:bolder;"></div> <!-- id="remote_control_here" -->
 													<div class="div_img">
 														<table style="width:99%">
 															<div style="font-size:20px;color:#c0c0c0;padding-bottom:20px;"><#IFTTT_start1#></div>
@@ -362,13 +506,42 @@ function clipboard(ID_value)
 																	<div class="div_td" style="vertical-align:top;">
 																		<div class="step_3"></div>
 																	</div>
-																	<div class="div_td" style="font-size:16px;vertical-align:middle;padding:5px 0px 0px 10px;width:320px;">
-																		<div style="color:#c0c0c0"><#IFTTT_Register0#></div> <!-- id="ifttt_applet_link" -->
+																	<div class="div_td" style="font-size:16px;padding:5px 0px 0px 10px;">
+																		<div><span style="color:#FFCC00;text-decoration:underline;cursor:pointer;" onclick="get_activation_code();">Get Activation Code</span> ,Paste activation code to link IFTTT account and your ASUS Router</div>
 																	</div>
 																</div>
 																<div style="font-weight:bolder;font-size:20px;color:#c0c0c0;padding-top:57px;padding-left:15px;"><#IFTTT_and#></div>
 																<div class="smh_ifttt" style="cursor:pointer;" onclick="window.open('https://ifttt.com/asusrouter');" target="_blank"></div>
 															</div>
+														</table>
+													</div>
+													<div id="alert_ASUS_EULA" class="alert_ASUS_EULA">
+														<table style="width:99%">
+															<tr>
+																<th colspan="2">
+																	<div style="font-size:17px;padding-bottom:8px;">To get activation code for IFTTT acount linking, you have to agree ASUS EULA by pressing below button.</div>
+																</th>
+															</tr>
+															<tr id="eula_agree">
+																<td colspan="2">
+																	<span style="font-size:15px;padding-left:20px; color:#FFCC00"><input type="checkbox" name="ASUS_EULA_enable" value="0"> I agree to the <a style="color:#FFCC00;text-decoration:underline" target="_blank" href="https://www.asus.com/us/Terms_of_Use_Notice_Privacy_Policy/Official-Site/">ASUS Terms Of Use Notice</a> and <a style="color:#FFCC00;text-decoration:underline" target="_blank" href="https://www.asus.com/us/Terms_of_Use_Notice_Privacy_Policy/Privacy_Policy/">Privacy Policy</a></span>
+																</td>
+															</tr>
+															<tr id="eula_button">
+																<td>
+																	<div style="text-align:right;padding:20px 10px 0px 0px;">
+																		<input class="button_gen" type="button" onclick="setting_ASUS_EULA();" value="<#CTL_Agree#>">
+																	</div>
+																</td>
+																<td>
+																	<div style="text-align:left;padding:20px 0px 0px 10px;">
+																		<input class="button_gen" type="button" onclick="close_alert('alert_ASUS_EULA');" value="<#CTL_close#>">
+																	</div>
+																</td>
+															</tr>
+															<tr id="eula_loading" style="display:none">
+																<td width="20%" height="80" align="center"><img src="/images/loading.gif"></td>
+															</tr>
 														</table>
 													</div>
 													<div id="alert_pin" class="alertpin">
@@ -400,7 +573,7 @@ function clipboard(ID_value)
 																</td>
 																<td>
 																	<div style="text-align:left;padding:20px 0px 0px 10px;">
-																		<input class="button_gen" type="button" onclick="close_alert_pin();" value="<#CTL_close#>">
+																		<input class="button_gen" type="button" onclick="close_alert('alert_pin');" value="<#CTL_close#>">
 																	</div>
 																</td>
 															</tr>
@@ -408,16 +581,12 @@ function clipboard(ID_value)
 													</div>
 												</div>
 											</div>
-											<div style="padding:102px 19px 0px 0px;text-align:right;">
-												<span style="cursor:pointer;font-family:Arial, Helvetica, sans-serif;font-style:italic;font-weight:lighter;font-size:14px;text-decoration: underline;" onclick="gen_new_pincode();" >Advanced</span>
-											</div>
 									</div>
 								</td>
 							</tr>
 							</tbody>
 						</table>
 					</td>
-</form>
 				</tr>
 			</table>
 		<!--===================================Ending of Main Content===========================================-->
@@ -425,7 +594,7 @@ function clipboard(ID_value)
 		<td width="10" align="center" valign="top">&nbsp;</td>
 	</tr>
 </table>
-
+</form>
 <div id="footer"></div>
 </body>
 </html>

@@ -203,6 +203,10 @@ int send_getservicearea_req(
 	const char* serviceid, 
 	const char* userid, 
 	const char* passwd,
+	const char* devicetype, 
+	const char* fwver, 
+	const int apilevel,
+	const char* modelname,
 	GetServiceArea* pGSA//out put
 	);
 
@@ -310,6 +314,10 @@ int send_pns_sendmsg_req(
 	const char *deviceticket,
     const char *appids,
 	const char *todeviceid,
+	const char* devicetype, 
+	const char* fwver, 
+	const char* apilevel,
+	const char* modelname,
 	const char *msg,
 	PnsSendMsg *pPsm
 );

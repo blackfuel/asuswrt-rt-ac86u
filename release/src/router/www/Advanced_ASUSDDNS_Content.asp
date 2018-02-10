@@ -17,7 +17,7 @@
 <script type="text/javascript" language="JavaScript" src="/help.js"></script>
 <script type="text/javascript" language="JavaScript" src="/validator.js"></script>
 <script type="text/javaScript" src="/js/jquery.js"></script>
-
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style type="text/css">
 .contentM_upload{
 	position:absolute;
@@ -71,6 +71,8 @@ var le_state = '<% nvram_get("le_state"); %>';
 
 function init(){
 	show_menu();
+	//	https://www.asus.com/us/support/FAQ/1034294
+	httpApi.faqURL("faq", "1034294", "https://www.asus.com", "/support/FAQ/");
     ddns_load_body();
 	update_ddns_wan_unit_option();
 
@@ -148,9 +150,9 @@ function submitForm(){
 		else if(http_enable != "0" && document.form.le_enable.value != orig_le_enable){
 			document.form.action_wait.value = "10";
 			if(orig_le_enable == "1")
-				document.form.action_script.value = "restart_httpd;restart_ddns_le";
+				document.form.action_script.value = "restart_httpd;restart_webdav;restart_ddns_le";
 			else
-				document.form.action_script.value += ";restart_httpd";
+				document.form.action_script.value += ";restart_httpd;restart_webdav";
 		}
 	}
 
@@ -458,10 +460,10 @@ function change_cert_method(cert_method){
 
 			case "1":
 				document.getElementById("cert_desc").style.display = "";
-				document.getElementById("le_desc").innerHTML = "Let's Encrypt is a service to provide free domain-validated certificate and certificate will be renewed automatically. Now Let's Encrypt certificate only supports ASUS DDNS service on "+ productid+"."; //untranslated
+				document.getElementById("le_desc").innerHTML = "<#LANHostConfig_x_DDNSLetsEncrypt_desc#>"; //untranslated
 				html_code = '<div style="margin-top:5px;"><input type="checkbox" name="letsEncryptTerm_check" checked>';
 				html_code += "I agree to the Let's Encrypt";//untranslated
-				html_code += '<a href="https://letsencrypt.org/documents/LE-SA-v1.1.1-August-1-2016.pdf" target="_blank" style="margin-left: 5px; color:#FFF; text-decoration: underline;">Term of Service</a>'
+				html_code += '<a href="https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf" target="_blank" style="margin-left: 5px; color:#FFF; text-decoration: underline;">Term of Service</a>'
 				html_code += "</div>";
 				document.getElementById("cert_act").innerHTML = html_code;
 
@@ -549,6 +551,10 @@ function upload_cert_key(){
 		hide_upload_window();
 		show_cert_details();
 	}
+}
+
+function save_cert_key(){
+	location.href = "cert_key.tar";
 }
 </script>
 </head>
@@ -699,13 +705,18 @@ function upload_cert_key(){
 					<span id="self_signed" style="color:#FFF;">
 					<input type="radio" value="0" name="le_enable" onClick="change_cert_method(this.value);" <% nvram_match("le_enable", "0", "checked"); %>><#wl_securitylevel_0#>
 					</span>	
-					<div id="cert_desc" style="color:#FFCC00; margin-top: 5px;"><span id="le_desc"></span><span id="le_faq"><a href="https://www.asus.com/us/support/FAQ/1034294" target="_blank" style="margin-left: 5px; color:#FFCC00; text-decoration: underline;">FAQ</a></span></div>
+					<div id="cert_desc" style="color:#FFCC00; margin-top: 5px;">
+						<span id="le_desc"></span>
+						<span id="le_faq">
+							<a id="faq" href="" target="_blank" style="margin-left: 5px; color:#FFCC00; text-decoration: underline;">FAQ</a>
+						</span>
+					</div>
 					<div id="cert_act" style="margin-top: 5px;"></div>
 				</td>
 			</tr>
 
 			<tr id="cert_details" style="display:none;">
-				<th>Server Certificate</th>
+				<th>Server Certificate</th><!--untranslated-->
 				<td>
 					<div style="display:table-row;">
 						<div style="display:table-cell;"><#Status_Str#> :</div>
@@ -722,6 +733,9 @@ function upload_cert_key(){
 					<div style="display:table-row;">
 						<div style="display:table-cell;">Expires on :</div> <!--untranslated-->
 						<div id="expireOn" style="display:table-cell; padding-left:10px;"></div>
+					</div>
+					<div>
+						<input class="button_gen" onclick="save_cert_key();" type="button" value="<#btn_Export#>" />
 					</div>
 				</td>
 			</tr>
@@ -763,6 +777,7 @@ function upload_cert_key(){
 		<div style="display:table-cell; width: 45%;">SSL Certificate :</div>
 		<div style="display:table-cell;"><input type="file" name="file_cert" class="input Upload_file"></div>
 	</div>
+	<div style="color: #FC0; margin-left: 15px; margin-top: 20px">*Private keys cannot be passphrase protected.</div>
 	<div align="center" style="margin-top:30px; padding-bottom:15px;">
 		<div style="display:table-cell;"><input class="button_gen" type="button" onclick="hide_upload_window();" id="cancelBtn" value="<#CTL_Cancel#>"></div>
 		<div style="display:table-cell; padding-left: 5px;"><input class="button_gen" type="button" onclick="upload_cert_key();" value="<#CTL_ok#>"></div>

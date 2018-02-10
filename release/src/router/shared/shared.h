@@ -221,10 +221,13 @@
 //version.c
 extern const char *rt_version;
 extern const char *rt_serialno;
+extern const char *rt_rcno;
 extern const char *rt_extendno;
 extern const char *rt_buildname;
 extern const char *rt_buildinfo;
 extern const char *rt_swpjverno;
+
+extern void set_basic_fw_name(void);
 
 #ifdef DEBUG_NOISY
 #define _dprintf		cprintf
@@ -391,6 +394,12 @@ struct ip_mask_s {
 #define VLAN_MAX_NUM			8	/* FIXME */
 #endif
 
+#define DHCP_STATICLIST_EXAMPLE		"<00:03:7f:00:00:02>192.168.100.200"
+#define SUBNET_RULE_EXAMPLE		"<192.168.100.254>255.255.255.128>1>192.168.100.102>192.168.100.253>864000>12345678901234567890123456789012>192.168.100.100>192.168.100.099>1>"
+#define SUBNET_STATICLIST_EXAMPLE	"00:03:7f:20:00:01 192.168.120.101;"
+#define STATIC_MAC_IP_BINDING_PER_LAN	64
+#define STATIC_MAC_IP_BINDING_PER_VLAN	8
+
 #define EXCLUDE_NET_USB_MODEM		(1U << 0)
 #define EXCLUDE_NET_LAN			(1U << 1)
 #define EXCLUDE_NET_WAN			(1U << 2)
@@ -516,6 +525,9 @@ extern char *get_wififname(int band);
 extern unsigned int get_radio_status(char *ifname);
 extern int get_radio(int unit, int subunit);
 extern void set_radio(int on, int unit, int subunit);
+
+extern char *nvram_get_r(const char *name, char *buf, size_t buflen);
+#define nvram_safe_get_r(name, buf, bufsize) (nvram_get_r(name, buf, bufsize) ? : "")
 extern char *nvram_pf_get(char *prefix, const char *name);
 #define nvram_pf_safe_get(prefix, name) (nvram_pf_get(prefix, name) ? : "")
 extern int nvram_pf_set(char *prefix, const char *name, const char *value);
@@ -658,6 +670,7 @@ enum {
 	MODEL_RTN11P_B1,
 	MODEL_RPAC87,
 	MODEL_RTAC85U,
+	MODEL_RTN800HP,
 	MODEL_RTAC88N,
 	MODEL_BRTAC828,
 	MODEL_RTAC88S,
@@ -742,6 +755,7 @@ extern int supports(unsigned long attr);
 
 // pids.c
 extern int pids(char *appname);
+extern pid_t* find_pid_by_name(const char *);
 
 // process.c
 extern char *psname(int pid, char *buffer, int maxlen);
@@ -876,6 +890,7 @@ enum led_id {
 #ifdef RTCONFIG_INTERNAL_GOBI
 #if defined(RT4GAC53U)
 	LED_LTE_OFF,
+	LED_POWER_RED,
 #else
 	LED_3G,
 	LED_LTE,
@@ -925,7 +940,7 @@ enum led_id {
 	LED_FAR,
 	LED_NEAR,
 #endif
-#ifdef RPAC87
+#if defined(RPAC87)
 	LED_2G_GREEN1 ,
 	LED_2G_GREEN2,
 	LED_2G_GREEN3,
@@ -1022,7 +1037,11 @@ static inline int have_sata_led(__attribute__ ((unused)) int model) { return 0; 
 #if defined(BRTAC828)
 #define MAX_NO_MSSID	8
 #else
+#ifdef RTCONFIG_PSR_GUEST
+#define MAX_NO_MSSID	5
+#else
 #define MAX_NO_MSSID	4
+#endif
 #endif
 
 #ifndef ARRAY_SIZE
@@ -1301,7 +1320,7 @@ static inline int guest_wlif(char *ifname)
 #define GUEST_IF_NUM 6
 static inline int guest_wlif(char *ifname)
 {
-	char *p = ifname + 5;
+	// char *p = ifname + 5;
 	int i;
 
 	char *guest_wlif_name[GUEST_IF_NUM] = {
@@ -1377,13 +1396,16 @@ extern int get_maxassoc(char *ifname);
 #if defined(RTCONFIG_LANTIQ)
 extern int get_wl_sta_list(void);
 extern int get_maxassoc(char *ifname);
+extern int get_psta_status(int unit);
 #endif
-
+#if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
+extern int get_psta_status(int unit);
+#endif
 
 #define WLSTA_JSON_FILE 				"/tmp/wl_sta_list.json"
 #define MAX_STA_COUNT 128
 #define MAX_SUBIF_NUM 4
-#if defined(RTCONFIG_RALINK) || defined(RTCONFIG_LANTIQ)
+#if defined(RTCONFIG_LANTIQ)
 #define MACF    "%02x:%02x:%02x:%02x:%02x:%02x"
 #define ETHERP_TO_MACF(ea)      ((struct ether_addr *) (ea))->ether_addr_octet[0], \
                                 ((struct ether_addr *) (ea))->ether_addr_octet[1], \
@@ -1525,6 +1547,9 @@ extern uint32_t set_ex53134_ctrl(uint32_t portmask, int ctrl);
 //extern char *get_pap_bssid(int unit);
 extern int get_wlan_service_status(int bssidx, int vifidx);
 extern void set_wlan_service_status(int bssidx, int vifidx, int enabled);
+#endif
+#ifdef RTCONFIG_LACP
+extern uint32_t traffic_trunk(int port_num, uint32_t *rx, uint32_t *tx);
 #endif
 
 // base64.c
@@ -1854,6 +1879,7 @@ static inline int wan2_red_led_control(__attribute__ ((unused)) int onoff) { ret
 extern int __config_netdev_bled(const char *led_gpio, const char *ifname, unsigned int min_blink_speed, unsigned int interval);
 extern int config_netdev_bled(const char *led_gpio, const char *ifname);
 extern int set_bled_udef_pattern(const char *led_gpio, unsigned int interval, const char *pattern);
+extern int set_bled_udef_tigger(const char *main_led_gpio, const char *tigger);
 extern int set_bled_normal_mode(const char *led_gpio);
 extern int set_bled_udef_pattern_mode(const char *led_gpio);
 extern int start_bled(unsigned int gpio_nr);
@@ -1867,6 +1893,7 @@ extern int __config_usbbus_bled(const char *led_gpio, char *bus_list, unsigned i
 extern int is_swports_bled(const char *led_gpio);
 extern int __config_interrupt_bled(const char *led_gpio, char *interrupt_list, unsigned int min_blink_speed, unsigned int interval);
 extern int config_interrupt_bled(const char *led_gpio, char *interrupt_list);
+extern int add_gpio_to_bled(const char *main_led_gpio, const char *led_gpio);
 #if (defined(PLN12) || defined(PLAC56))
 extern void set_wifiled(int mode);
 #elif defined(MAPAC1750)
@@ -1886,9 +1913,13 @@ extern void set_wifiled(int mode);
 /* blink */
 #define RGBLED_SBLINK			0x10
 #define RGBLED_3ON1OFF			0x20
-#define RGBLED_BLINK_MESK		RGBLED_SBLINK | RGBLED_3ON1OFF
+#define RGBLED_ATE_MODE			0x40
+#define RGBLED_3ON3OFF			0x80
+#define RGBLED_BLINK_MESK		RGBLED_SBLINK | RGBLED_3ON1OFF | RGBLED_ATE_MODE | RGBLED_3ON3OFF
 /* color+blink */
-#define RGBLED_GREEN_3ON1OFF		RGBLED_GREEN | RGBLED_3ON1OFF
+#define RGBLED_BLUE_3ON1OFF		RGBLED_BLUE | RGBLED_3ON1OFF
+#define RGBLED_BLUE_3ON3OFF		RGBLED_BLUE | RGBLED_3ON3OFF
+#define RGBLED_PURPLE_3ON1OFF		RGBLED_PURPLE | RGBLED_3ON1OFF
 #define RGBLED_WHITE_SBLINK		RGBLED_WHITE | RGBLED_SBLINK
 #define RGBLED_YELLOW_SBLINK		RGBLED_YELLOW | RGBLED_SBLINK
 extern void set_rgbled(unsigned int mode);
@@ -1914,7 +1945,7 @@ static inline void enable_wifi_bled(char *ifname)
 		if(!get_radio(1, 0) && unit==1) //*5G WiFi not ready. Don't turn on WiFi GPIO LED . */
 		 	v=LED_OFF;
 #endif		
-#if defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U)
+#if defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTN800HP)
 		if(!get_radio(0, 0) && unit==0) //*2G WiFi not ready. Don't turn on WiFi GPIO LED . */
 		 	v=LED_OFF;
 #endif		
@@ -1972,6 +2003,7 @@ static inline int config_usbbus_bled(const char *led_gpio, char *bus_list)
 static inline int __config_netdev_bled(__attribute__ ((unused)) const char *led_gpio, __attribute__ ((unused)) const char *ifname, __attribute__ ((unused)) unsigned int min_blink_speed, __attribute__ ((unused)) unsigned int interval) { return 0; }
 static inline int config_netdev_bled(__attribute__ ((unused)) const char *led_gpio, __attribute__ ((unused)) const char *ifname) { return 0; }
 static inline int set_bled_udef_pattern(__attribute__ ((unused)) const char *led_gpio, __attribute__ ((unused)) unsigned int interval, __attribute__ ((unused)) const char *pattern) { return 0; }
+static inline int set_bled_udef_tigger(__attribute__ ((unused)) const char *main_led_gpio, __attribute__ ((unused)) const char *tigger) { return 0; }
 static inline int set_bled_normal_mode(__attribute__ ((unused)) const char *led_gpio) { return 0; }
 static inline int set_bled_udef_pattern_mode(__attribute__ ((unused)) const char *led_gpio) { return 0; }
 static inline int start_bled(__attribute__ ((unused)) unsigned int gpio_nr) { return 0; }
@@ -1992,6 +2024,7 @@ static inline int config_swports_bled(__attribute__ ((unused)) const char *led_g
 static inline int config_swports_bled_sleep(__attribute__ ((unused)) const char *led_gpio, __attribute__ ((unused)) unsigned int port_mask) { return 0; }
 static inline int config_usbbus_bled(__attribute__ ((unused)) const char *led_gpio, __attribute__ ((unused)) char *bus_list) { return 0; }
 static inline int is_swports_bled(__attribute__ ((unused)) const char *led_gpio) { return 0; }
+static inline int add_gpio_to_bled(__attribute__ ((unused)) const char *main_led_gpio, __attribute__ ((unused)) const char *led_gpio) { return 0; }
 
 #endif	/* RTCONFIG_BLINK_LED */
 
@@ -2076,6 +2109,7 @@ extern int FindBrifByWlif(char *wl_ifname, char *brif_name, int size);
 #ifdef RTCONFIG_HTTPS
 #define HTTPD_CERT	"/etc/cert.pem"
 #define HTTPD_KEY	"/etc/key.pem"
+#define LIGHTTPD_CERTKEY	"/etc/server.pem"
 #define UPLOAD_CERT_FOLDER	"/jffs/.cert"
 #define UPLOAD_CERT	"/jffs/.cert/cert.pem"
 #define UPLOAD_KEY	"/jffs/.cert/key.pem"
@@ -2088,6 +2122,7 @@ extern int FindBrifByWlif(char *wl_ifname, char *brif_name, int size);
 extern int is_ac66u_v2_series();
 extern int is_n66u_v2();
 extern int is_ssid_rev3_series();
+extern void ac68u_cofs();
 #endif
 
 /* rtstate.c */
@@ -2150,6 +2185,7 @@ enum {
 	CKN_STR2999 = 2999,
 	CKN_STR3999 = 3999,
 	CKN_STR4096 = 4096,
+	CKN_STR5500 = 5500,
 	CKN_STR_MAX = 65535
 };
 
@@ -2176,5 +2212,13 @@ extern void deauth_guest_sta(char *, char *);
 extern int is_valid_group_id(const char *);
 extern char *if_nametoalias(char *name, char *alias, int alias_len);
 #endif
+
+#if defined(RTCONFIG_DETWAN) && (defined(RTCONFIG_SOC_IPQ40XX))
+extern void vlan_accept_vid_via_switch(int accept, int wan, int lan);
+extern int detwan_set_def_vid(const char *ifname, int vid, int needTagged, int avoidVid);
+#endif
+
+extern int IPTV_ports_cnt(void);
+
 
 #endif	/* !__SHARED_H__ */

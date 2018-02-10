@@ -2004,6 +2004,26 @@ int ubi_getinfo(const char *ubiname, int *dev, int *part, int *size)
 
 // -----------------------------------------------------------------------------
 
+/* 
+ * Get the value of an NVRAM variable, using supplied buffer.
+ * @param	name	name of variable to get
+ * @param	buf	local buffer for the value
+ * @param	bufsize	local buffer size
+ * @return	value of variable copied to local buffer or
+ *		NULL if undefined.
+ */
+char *nvram_get_r(const char *name, char *buf, size_t buflen)
+{
+	char *v = nvram_get(name);
+
+	if (v && buf) {
+		strlcpy(buf, v, buflen);
+		return buf;
+	}
+
+	return v;
+}
+
 /**
  * Combine prefix and name before nvram_get().
  * @prefix:
@@ -2721,12 +2741,7 @@ int is_psta(int unit)
 	if (unit < 0) return 0;
 	if ((sw_mode() == SW_MODE_AP) &&
 		(nvram_get_int("wlc_psta") == 1) &&
-		(
-#ifdef RTCONFIG_DPSTA
-		is_dpsta(unit) ||
-#endif
-		(nvram_get_int("wlc_band") == unit)
-		))
+		(nvram_get_int("wlc_band") == unit))
 		return 1;
 
 	return 0;
@@ -2742,14 +2757,17 @@ int is_psr(int unit)
 		(nvram_get_int("wlc_psta") == 2) &&
 		(
 #ifdef RTCONFIG_DPSTA
-#if 0
 		is_dpsta(unit) ||
-#else
-		dpsta_mode() ||
-#endif
 #endif
 		is_dpsr(unit) ||
-		(nvram_get_int("wlc_band") == unit)
+#if defined(RTCONFIG_AMAS) && defined(RTCONFIG_DPSTA)
+		dpsta_mode() ||
+#endif
+		((nvram_get_int("wlc_band") == unit) && !dpsr_mode()
+#ifdef RTCONFIG_DPSTA
+		&& !dpsta_mode()
+#endif
+		)
 		))
 		return 1;
 
@@ -3639,8 +3657,11 @@ char *if_nametoalias(char *name, char *alias, int alias_len)
 			if (!strcmp(ifname, name)) {
 #if defined(CONFIG_BCMWL5) || defined(RTCONFIG_BCMARM)
 				if (nvram_get_int("sw_mode") == SW_MODE_REPEATER
-#if defined(RTCONFIG_PROXYSTA) && defined(RTCONFIG_DPSTA)
-					|| dpsta_mode() || dpsr_mode()
+#ifdef RTCONFIG_PROXYSTA
+					|| dpsr_mode()
+#ifdef RTCONFIG_DPSTA
+					|| dpsta_mode()
+#endif
 #endif
 					)
 					snprintf(alias, alias_len, "%s", unit ? (unit == 2 ? "5G1" : "5G") : "2G");
@@ -3729,9 +3750,12 @@ int ppa_support(int wan_unit)
 	int ret = 1;
 	char wan_proto[16];
 	char tmp[100], prefix[32];
+	int ctf_disable_force = 0 ;
+
+	ctf_disable_force = nvram_get_int("ctf_disable_force");
 
 	/* recover the NAT accelerator*/
-	nvram_set("ctf_disable_force", "0");
+	// nvram_set("ctf_disable_force", "0");
 
 #ifdef RTCONFIG_USB_MODEM
 	char modem_type[32];
@@ -3757,11 +3781,15 @@ int ppa_support(int wan_unit)
 		1. traditaional qos / bandwidth limiter / disable NAT accelerator
 		2. stop_ppa_wan : debug usage
 	*/
-	if((nvram_get_int("qos_enable") == 1 && (nvram_get_int("qos_type") != 1))
-		|| nvram_match("ctf_disable_force", "1") || nvram_match("stop_ppa_wan", "1"))
+	if((nvram_get_int("qos_enable") == 1 &&
+		(nvram_get_int("qos_type") != 1)))
 	{
 		ret = 0;
 	}
+
+	if(ctf_disable_force == 1) ret = 0;
+
+	if (nvram_match("stop_ppa_wan", "1")) ret = 0;
 
 	snprintf(prefix, sizeof(prefix), "wan%d_", wan_unit);
 	snprintf(wan_proto, sizeof(wan_proto), "%s", nvram_safe_get(strcat_r(prefix, "proto", tmp)));
@@ -3770,15 +3798,48 @@ int ppa_support(int wan_unit)
 	if(strcmp(wan_proto, "l2tp") == 0) ret = 0;
 	if(strcmp(nvram_safe_get(strcat_r(prefix, "hwaddr_x", tmp)), "")) ret = 0;
 
-	/* when ppa wan interface removed, show NAT accelerator status */
-	if (ret == 0) {
-		nvram_set("ctf_disable", "1"); // GUI display
-		nvram_set("ctf_disable_force", "1");
-	}
-	else {
-		nvram_set("ctf_disable", "0"); // GUI display
-	}
+	if(ret == 0) nvram_set_int("ppa_running", 0);
+	else nvram_set_int("ppa_running", 1);
 
 	return ret;
 }
 #endif
+
+#ifdef RTCONFIG_MULTICAST_IPTV
+#define MOVISTART_PORT 1
+#else
+#define MOVISTART_PORT 3
+#endif
+int IPTV_ports_cnt(void)
+{
+	int cnt = 0;
+	const char *switch_wantag = nvram_safe_get("switch_wantag");
+
+	if (switch_wantag[0] == '\0' || strcmp(switch_wantag, "none") == 0)
+	{
+		int switch_stb_x = nvram_get_int("switch_stb_x");
+		if (switch_stb_x >= 1 && switch_stb_x <= 4)
+			cnt = 2;
+		else if (switch_stb_x >= 5 && switch_stb_x <= 6)
+			cnt = 3;
+	}
+	else if (strcmp(switch_wantag, "unifi_biz") == 0)
+		cnt = 1;
+	else if (strcmp(switch_wantag, "singtel_mio") == 0 
+	      || strcmp(switch_wantag, "vodafone") == 0)
+		cnt = 3;
+	else if (strcmp(switch_wantag, "movistar") == 0) {
+		cnt = MOVISTART_PORT;
+	}
+	else if (strcmp(switch_wantag, "manual") == 0) {
+		if (nvram_safe_get("switch_wan0tagid")[0] != 0)
+			cnt++;
+		if (nvram_safe_get("switch_wan1tagid")[0] != 0)
+			cnt++;
+		if (nvram_safe_get("switch_wan2tagid")[0] != 0)
+			cnt++;
+	}
+	else
+		cnt = 2;
+	return cnt;
+}

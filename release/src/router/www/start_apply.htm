@@ -12,6 +12,7 @@ var restart_time = 0;
 var rc_support = '<% nvram_get("rc_support"); %>'; 
 var dsl_support = (rc_support.search("dsl") == -1) ? false : true;
 var tmo_support = (rc_support.search("tmo") == -1) ? false : true;
+var amesh_support = (rc_support.search("amas") == -1) ? false : true;
 var current_page = '<% get_parameter("current_page"); %>';
 var next_page = '<% get_parameter("next_page"); %>';
 var action_script = '<% get_parameter("action_script"); %>';
@@ -609,6 +610,9 @@ function initial(){
 		parent.show_block();
 	}
 	else if(page_modified == 1){
+		if(amesh_support && current_page == "device-map/amesh.asp") {
+			return;
+		}
 		if(parent.based_modelid == "BLUECAVE"){
 			if(group_id == "mumimo" || group_id == "location"){
 				restart_time += 20;

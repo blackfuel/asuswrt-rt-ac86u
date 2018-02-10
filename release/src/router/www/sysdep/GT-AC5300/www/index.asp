@@ -235,6 +235,20 @@ function initial(){
 	else
 		show_middle_status(document.form.wl_auth_mode_x.value, parseInt(document.form.wl_wep_x.value));
 
+	if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+		var html = '<a id="clientStatusLink" href="device-map/amesh.asp" target="statusframe">';
+		html += '<div id="iconAMesh" class="iconAMesh_dis" style="margin-top:20px;" onclick="clickEvent(this);"></div>';
+		html += '</a>';
+		html += '<div class="clients" id="ameshNumber" style="cursor:pointer;">AiMesh Node: <span>0</span></div>';/* untranslated */
+		$("#ameshContainer").html(html);
+		require(['/require/modules/amesh.js'], function(){
+			updateAMeshCount();
+			setInterval(updateAMeshCount, 5000);
+		});
+	}
+	else
+		$("#ameshContainer").remove();
+
 	set_default_choice();
 
 	if(!parent.usb_support || usbPortMax == 0){
@@ -411,20 +425,7 @@ function initial(){
 	}
 
 	orig_NM_container_height = parseInt($(".NM_radius_bottom_container").css("height"));
-
-	if(amesh_support) {
-		var html = '<a id="clientStatusLink" href="device-map/amesh.asp" target="statusframe">';
-		html += '<div id="iconAMesh" class="iconAMesh_dis" style="margin-top:20px;" onclick="clickEvent(this);"></div>';
-		html += '</a>';
-		html += '<div class="clients" id="ameshNumber" style="cursor:pointer;">AiMesh Node: <span>0</span></div>';/* untranslated */
-		$("#ameshContainer").html(html);
-		require(['/require/modules/amesh.js'], function(){
-			updateAMeshCount();
-			setInterval(updateAMeshCount, 5000);
-		});
-	}
-	else
-		$("#ameshContainer").remove();
+	
 }
 
 function show_smart_connect_status(){
@@ -711,7 +712,7 @@ function get_clicked_device_order(){
 }
 
 function clickEvent(obj){
-	if(amesh_support) {
+	if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
 		require(['/require/modules/amesh.js'], function(){
 			initial_amesh_obj();
 		});	
@@ -2017,12 +2018,12 @@ function updateClientsCount() {
 			var re_tune_client_count = function() {
 				var count = 0;
 				var fromNetworkmapd_array = [];
-				for(var i in fromNetworkmapd.maclist){
-					if (fromNetworkmapd.maclist.hasOwnProperty(i)) {
-						fromNetworkmapd_array[fromNetworkmapd.maclist[i]] = 1;
+				for(var i in fromNetworkmapd_maclist[0]){
+					if (fromNetworkmapd_maclist[0].hasOwnProperty(i)) {
+						fromNetworkmapd_array[fromNetworkmapd_maclist[0][i]] = 1;
 					}
 				}
-				count = fromNetworkmapd.maclist.length;
+				count = fromNetworkmapd_maclist[0].length;
 				for(var i in get_cfg_clientlist[0]){
 					if (get_cfg_clientlist[0].hasOwnProperty(i)) {
 						if(fromNetworkmapd_array[get_cfg_clientlist[0][i].mac] != undefined)
@@ -2035,20 +2036,20 @@ function updateClientsCount() {
 			if(lastName != "iconClient") {
 				if(document.getElementById("clientlist_viewlist_content")) {
 					if(document.getElementById("clientlist_viewlist_content").style.display == "none") {
-						if(amesh_support)
+						if(amesh_support && (isSwMode("rt") || isSwMode("ap")))
 							show_client_status(re_tune_client_count());
 						else
-							show_client_status(fromNetworkmapd.maclist.length);
+							show_client_status(fromNetworkmapd_maclist[0].length);
 					}
 				}
 				else {
-					if(amesh_support)
+					if(amesh_support && (isSwMode("rt") || isSwMode("ap")))
 						show_client_status(re_tune_client_count());
 					else
-						show_client_status(fromNetworkmapd.maclist.length);
+						show_client_status(fromNetworkmapd_maclist[0].length);
 				}
 			}
-			setTimeout("updateClientsCount();", 3000);
+			setTimeout("updateClientsCount();", 5000);
 		}
 	});
 }
@@ -2445,8 +2446,9 @@ function check_wireless(){
 		<div id="tabMenu"></div>
 		<div id="NM_shift" style="margin-top:-140px;"></div>
 		<div id="NM_table" class="NM_table" >
-		<div id="NM_table_div">
-			<table id="_NM_table" style="background:url('images/New_ui/networkmap/networkmap_bg.png') no-repeat rgba(0,0,0,.5);background-position-x: 15px; height:805px;" border="0" cellpadding="0" cellspacing="0" style="opacity:.95;" >
+		<div id="NM_table_div" style="background-color:rgba(0,0,0,.5);height:805px;">
+			<div style="width:51%;float:left;background:url('images/New_ui/networkmap/networkmap_bg.png') no-repeat rgba(0,0,0,.5);background-position-x: 14px; height:805px;">
+			<table id="_NM_table" border="0" cellpadding="0" cellspacing="0" style="opacity:.95;" >
 				<tr>
 					<td width="40px" rowspan="11" valign="center"></td>
 					<!--== Dual WAN ==-->
@@ -2474,7 +2476,7 @@ function check_wireless(){
 					<td id="single_wan_icon" align="right" class="NM_radius_left" style="display:none;height:180px" onclick="showstausframe('Internet');">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet" onclick="clickEvent(this);"></div></a>
 					</td>
-					<td id="single_wan_status" colspan="2" class="NM_radius_right" onclick="" style="padding:5px;cursor:auto;width:180px;height:130px">
+					<td id="single_wan_status" colspan="2" class="NM_radius_right" onclick="" style="padding:5px;cursor:auto;width:180px;height:170px">
 						<div>
 							<span id="NM_connect_title" style="font-size:12px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#statusTitle_Internet#>:</span>
 							<br>
@@ -2502,32 +2504,7 @@ function check_wireless(){
 							<strong id="rssi_status" class="index_status" style="font-size:14px;"></strong>
 						</div>
 					</td>
-					<td width="40px" rowspan="11" valign="top">
-						<div class="statusTitle" id="statusTitle_NM">
-							<div id="helpname" style="padding-top:10px;font-size:16px;"></div>
-						</div>							
-						<div class="NM_radius_bottom_container">
-							<iframe id="statusframe" class="NM_radius_bottom" style="display:none;margin-left:0px;height:760px;width:320px;\9" name="statusframe" frameborder="0"></iframe>
-						</div>
-				
-						<script>
-							(function(){
-								setTimeout(function(){
-									document.getElementById("statusframe").src = "/device-map/router.asp";	
-								}, 1);
-								
-								var $iframe = $("#statusframe");
-								$iframe.on("load", function(){
-									$iframe.show();
-									document.getElementById("statusframe").contentWindow.onbeforeunload = function(){
-										$iframe.hide();
-									};
-								});
-							})()
-						</script>
-
-					</td>	
-				</tr>			
+				</tr>
 				<tr style="display:none">
 					<!--==line of dual wan==-->
 					<td id="primary_wan_line"  height="35px" style="display:none;">
@@ -2626,6 +2603,37 @@ function check_wireless(){
 					</td>
 				</tr>
 			</table>
+			</div>
+			<div style="width:49%;float:left;">
+			<table id="_NM_table" border="0" cellpadding="0" cellspacing="0" style="opacity:.95;">
+				<tr>
+					<td valign="top">
+						<div class="statusTitle" id="statusTitle_NM">
+							<div id="helpname" style="padding-top:10px;font-size:16px;"></div>
+						</div>
+						<div class="NM_radius_bottom_container">
+							<iframe id="statusframe" class="NM_radius_bottom" style="display:none;margin-left:0px;height:760px;width:320px;\9" name="statusframe" frameborder="0"></iframe>
+						</div>
+						<script>
+							(function(){
+								setTimeout(function(){
+									document.getElementById("statusframe").src = "/device-map/router.asp";
+								}, 1);
+
+								var $iframe = $("#statusframe");
+								$iframe.on("load", function(){
+									$iframe.show();
+									document.getElementById("statusframe").contentWindow.onbeforeunload = function(){
+										$iframe.hide();
+									};
+								});
+							})()
+						</script>
+					</td>
+				</tr>
+			</table>
+			</div>
+			<div style="clear:both;"></div>
 		</div>
 	</div>
 <!--==============Ending of hint content=============-->

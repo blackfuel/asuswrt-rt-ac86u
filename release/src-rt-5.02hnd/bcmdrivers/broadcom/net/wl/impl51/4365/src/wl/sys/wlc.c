@@ -464,7 +464,7 @@
 	(wlc->cfg->associated && wlc->cfg->pm->PM != PM_OFF && wlc->pub->align_wd_tbtt)
 /* debug/trace */
 uint wl_msg_level =
-#if defined(BCMDBG) || defined(BCMDBG_ERR)
+#if defined(BCMDBG)
 	WL_ERROR_VAL;
 #else
 	0;

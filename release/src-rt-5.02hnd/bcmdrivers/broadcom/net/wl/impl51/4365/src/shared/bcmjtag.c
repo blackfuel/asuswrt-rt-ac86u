@@ -35,11 +35,11 @@ struct bcmjtag_info {
 #define JTAG_ADDR_MASK	0x3fffffff /* JTAG address is 30 bit long */
 
 /* debugging macros */
-#ifdef BCMDBG_ERR
+#ifdef BCMDBG
 #define JT_MSG(x)	printf x
 #else
 #define JT_MSG(x)
-#endif /* BCMDBG_ERR */
+#endif /* BCMDBG */
 
 /*
  * Attach to JTAG master. Allocate resources to enable access to

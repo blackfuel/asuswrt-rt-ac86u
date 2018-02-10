@@ -2482,6 +2482,21 @@ wlc_assoc_scan_complete(void *arg, int status, wlc_bsscfg_t *cfg)
 		wlc_bss_list_xfer(wlc->scan_results, wlc->as_info->join_targets);
 
 	wlc->as_info->join_targets_last = wlc->as_info->join_targets->count;
+#ifdef PSTA /* Avoid 2 repeater with the same ssid connected to each other */
+	if ((PSTA_IS_REPEATER(wlc) || DWDS_ENAB(cfg)) && (wlc->as_info->join_targets->count > 0)) {
+		struct scb *scb = NULL;
+		FOREACH_BSS(wlc, idx, valid_cfg) {
+			scb = wlc_scbfind(wlc, valid_cfg,
+				(struct ether_addr *)&wlc->as_info->join_targets->ptrs[0]->BSSID);
+			if ((valid_cfg->_ap == 1) && scb && SCB_ASSOCIATED(scb)) {
+				WL_ASSOC(("wl%d: %s: This BSSID is already assoc to our AP mode, exit!!\n",
+					WLCWLUNIT(wlc), __FUNCTION__));
+				wlc_assoc_done(cfg, WLC_E_STATUS_FAIL);
+				goto exit;
+			}
+		}
+	}
+#endif
 
 	if (wlc->as_info->join_targets->count > 0) {
 		WL_ASSOC(("wl%d: SCAN for %s%s: SSID scan complete, %d results for \"%s\"\n",

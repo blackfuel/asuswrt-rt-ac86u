@@ -2362,12 +2362,36 @@ reg_proto_create_m8(RegData *regInfo, BufferObj *msg)
 		/* Now assemble the message */
 		tlv_serialize(WPS_ID_VERSION, msg, &reg_proto_version, WPS_ID_VERSION_S);
 		tlv_serialize(WPS_ID_MSG_TYPE, msg, &message, WPS_ID_MSG_TYPE_S);
+
+#ifdef AMAS
+		char str_groupid[] = "DC1A2BFCBCAE839DF23EF0F3B676C0DB";
+		unsigned char groupid[16];
+		char hexstr[3];
+		char *src, *dest;
+		int idx;
+		unsigned char val;
+		src = (unsigned char*) str_groupid;
+		dest = groupid;
+		for (idx = 0; idx < sizeof(groupid); idx++) {
+			hexstr[0] = src[0];
+			hexstr[1] = src[1];
+			hexstr[2] = '\0';
+
+			val = (unsigned char) strtoul(hexstr, NULL, 16);
+			*dest++ = val;
+
+			src += 2;
+		}
+		tlv_serialize(WPS_ID_GROUP_ID, msg, groupid, 16);
+		TUTRACE((TUTRACE_INFO, "WPS: add new ie [%s] to M8\n", str_groupid));
+
 		tlv_serialize(WPS_ID_ENROLLEE_NONCE, msg, regInfo->enrolleeNonce, SIZE_128_BITS);
 
 		encrSettings_tlv.iv = iv->pBase;
 		encrSettings_tlv.ip_encryptedData = cipherText->pBase;
 		encrSettings_tlv.encrDataLength = cipherText->m_dataLength;
 		tlv_encrSettingsWrite(&encrSettings_tlv, msg);
+#endif
 
 		if (regInfo->x509Cert->m_dataLength) {
 			tlv_serialize(WPS_ID_X509_CERT, msg, regInfo->x509Cert->pBase,

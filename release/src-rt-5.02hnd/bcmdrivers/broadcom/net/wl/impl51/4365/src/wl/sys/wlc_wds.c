@@ -56,6 +56,9 @@
 #ifdef PSPRETEND
 #include <wlc_apps.h>
 #endif /* PSPRETEND */
+#if defined(PROP_TXSTATUS)
+#include <wlfc_proto.h>
+#endif /* PROP_TXSTATUS */
 #ifdef WLAMPDU
 #include <wlc_ampdu_cmn.h>
 #endif
@@ -453,6 +456,15 @@ wlc_wds_ioctl(void *hdl, int cmd, void *arg, int len, struct wlc_if *wlcif)
 				bcmerror = BCME_NOMEM;
 				break;
 			}
+
+#ifdef PROP_TXSTATUS
+			if (wlc_scb_wlfc_entry_add(wlc, scb) == BCME_OK) {
+				WLFC_DBGMESG(("AP: MAC-ADD for "MACF" handle [%d] if:%d t_idx:%d\n",
+					ETHER_TO_MACF(scb->ea), scb->mac_address_handle,
+					((scb->bsscfg == NULL) ? 0 : scb->bsscfg->wlcif->index),
+					WLFC_MAC_DESC_GET_LOOKUP_INDEX(scb->mac_address_handle)));
+			}
+#endif /* PROP_TXSTATUS */
 
 			bcmerror = wlc_wds_create(wlc, scb, 0);
 			if (bcmerror) {

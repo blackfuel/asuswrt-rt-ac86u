@@ -281,6 +281,17 @@ set_wep_key(char *wl_keyi, char *key, int key_len)
 	return 0;
 }
 
+int num_of_wl_if()
+{
+	char word[256], *next;
+	int count = 0;
+
+	foreach (word, nvram_safe_get("wl_ifnames"), next)
+		count++;
+
+	return count;
+}
+
 static int
 set_wsec(char *ifname, void *credential, int mode)
 {
@@ -294,6 +305,8 @@ set_wsec(char *ifname, void *credential, int mode)
 	char pfcred[] = "wlc_";
 	char pfcred0[] = "wlc0_";
 	char pfcred1[] = "wlc1_";
+	char pfcred2[] = "wlc2_";
+	int wlif_num = num_of_wl_if();
 
 	value = nvram_get("wps_version2");
 	if (value && !strcmp(value, "enabled"))
@@ -338,6 +351,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "auth_mode", tmp), "psk");
 			wps_osl_set_conf(strcat_r(pfcred0, "auth_mode", tmp), "psk");
 			wps_osl_set_conf(strcat_r(pfcred1, "auth_mode", tmp), "psk");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "auth_mode", tmp), "psk");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "auth_mode_x", tmp), "psk");
@@ -349,6 +364,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "auth_mode", tmp), "psk2");
 			wps_osl_set_conf(strcat_r(pfcred0, "auth_mode", tmp), "psk2");
 			wps_osl_set_conf(strcat_r(pfcred1, "auth_mode", tmp), "psk2");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "auth_mode", tmp), "psk2");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "auth_mode_x", tmp), "psk2");
@@ -360,6 +377,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "auth_mode", tmp), "psk2");
 			wps_osl_set_conf(strcat_r(pfcred0, "auth_mode", tmp), "psk2");
 			wps_osl_set_conf(strcat_r(pfcred1, "auth_mode", tmp), "psk2");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "auth_mode", tmp), "psk2");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "auth_mode_x", tmp), "pskpsk2");
@@ -371,6 +390,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "auth_mode", tmp), "open");
 			wps_osl_set_conf(strcat_r(pfcred0, "auth_mode", tmp), "open");
 			wps_osl_set_conf(strcat_r(pfcred1, "auth_mode", tmp), "open");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "auth_mode", tmp), "open");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "auth_mode_x", tmp), "open");
@@ -385,6 +406,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "auth_mode", tmp), "shared");
 			wps_osl_set_conf(strcat_r(pfcred0, "auth_mode", tmp), "shared");
 			wps_osl_set_conf(strcat_r(pfcred1, "auth_mode", tmp), "shared");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "auth_mode", tmp), "shared");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "auth_mode_x", tmp), "shared");
@@ -399,6 +422,8 @@ set_wsec(char *ifname, void *credential, int mode)
 		wps_osl_set_conf(strcat_r(pfcred, "ssid", tmp), cred->ssid);
 		wps_osl_set_conf(strcat_r(pfcred0, "ssid", tmp), cred->ssid);
 		wps_osl_set_conf(strcat_r(pfcred1, "ssid", tmp), cred->ssid);
+		if (wlif_num == 3)
+		wps_osl_set_conf(strcat_r(pfcred2, "ssid", tmp), cred->ssid);
 	}
 	if (psk_mode)
 	{
@@ -408,6 +433,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "wep", tmp), "0");
 			wps_osl_set_conf(strcat_r(pfcred0, "wep", tmp), "0");
 			wps_osl_set_conf(strcat_r(pfcred1, "wep", tmp), "0");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "wep", tmp), "0");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "wep_x", tmp), "0");
@@ -426,6 +453,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "wep", tmp), "0");
 			wps_osl_set_conf(strcat_r(pfcred0, "wep", tmp), "0");
 			wps_osl_set_conf(strcat_r(pfcred1, "wep", tmp), "0");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "wep", tmp), "0");
 		}
 		else
 		wps_osl_set_conf(strcat_r(prefix, "wep_x", tmp), "0");
@@ -438,6 +467,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "crypto", tmp), "tkip");
 			wps_osl_set_conf(strcat_r(pfcred0, "crypto", tmp), "tkip");
 			wps_osl_set_conf(strcat_r(pfcred1, "crypto", tmp), "tkip");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "crypto", tmp), "tkip");
 		}
 	} else if (cred->encrType == WPS_ENCRTYPE_AES) {
 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "aes");
@@ -446,6 +477,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "crypto", tmp), "aes");
 			wps_osl_set_conf(strcat_r(pfcred0, "crypto", tmp), "aes");
 			wps_osl_set_conf(strcat_r(pfcred1, "crypto", tmp), "aes");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "crypto", tmp), "aes");
 		}
 	} else if (cred->encrType == (WPS_ENCRTYPE_TKIP | WPS_ENCRTYPE_AES)) {
 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "tkip+aes");
@@ -454,6 +487,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "crypto", tmp), "aes");
 			wps_osl_set_conf(strcat_r(pfcred0, "crypto", tmp), "aes");
 			wps_osl_set_conf(strcat_r(pfcred1, "crypto", tmp), "aes");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "crypto", tmp), "aes");
 		}
 	} else {
 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "tkip");
@@ -462,6 +497,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "crypto", tmp), "tkip");
 			wps_osl_set_conf(strcat_r(pfcred0, "crypto", tmp), "tkip");
 			wps_osl_set_conf(strcat_r(pfcred1, "crypto", tmp), "tkip");
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "crypto", tmp), "tkip");
 		}
 	}
 
@@ -474,6 +511,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			wps_osl_set_conf(strcat_r(pfcred, "key", tmp), buf);
 			wps_osl_set_conf(strcat_r(pfcred0, "key", tmp), buf);
 			wps_osl_set_conf(strcat_r(pfcred1, "key", tmp), buf);
+			if (wlif_num == 3)
+			wps_osl_set_conf(strcat_r(pfcred2, "key", tmp), buf);
 		}
 		sprintf(buf, "key%d", cred->wepIndex);
 		set_wep_key(strcat_r(prefix, buf, tmp), cred->nwKey, cred->nwKeyLen);
@@ -481,6 +520,8 @@ set_wsec(char *ifname, void *credential, int mode)
 			set_wep_key(strcat_r(pfcred, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
 			set_wep_key(strcat_r(pfcred0, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
 			set_wep_key(strcat_r(pfcred1, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
+			if (wlif_num == 3)
+			set_wep_key(strcat_r(pfcred2, "wep_key", tmp), cred->nwKey, cred->nwKeyLen);
 		}
 		if ((cred->nwKeyLen == 5) || (cred->nwKeyLen == 10)) {
 			if (wps_ui_act_enroll)
@@ -488,6 +529,8 @@ set_wsec(char *ifname, void *credential, int mode)
 				wps_osl_set_conf(strcat_r(pfcred, "wep", tmp), "1");
 				wps_osl_set_conf(strcat_r(pfcred0, "wep", tmp), "1");
 				wps_osl_set_conf(strcat_r(pfcred1, "wep", tmp), "1");
+				if (wlif_num == 3)
+				wps_osl_set_conf(strcat_r(pfcred2, "wep", tmp), "1");
 			}
 			else
 			wps_osl_set_conf(strcat_r(prefix, "wep_x", tmp), "1");
@@ -497,6 +540,8 @@ set_wsec(char *ifname, void *credential, int mode)
 				wps_osl_set_conf(strcat_r(pfcred, "wep", tmp), "2");
 				wps_osl_set_conf(strcat_r(pfcred0, "wep", tmp), "2");
 				wps_osl_set_conf(strcat_r(pfcred1, "wep", tmp), "2");
+				if (wlif_num == 3)
+				wps_osl_set_conf(strcat_r(pfcred2, "wep", tmp), "2");
 			}
 			else
 			wps_osl_set_conf(strcat_r(prefix, "wep_x", tmp), "2");
@@ -511,6 +556,8 @@ set_wsec(char *ifname, void *credential, int mode)
 				wps_osl_set_conf(strcat_r(pfcred, "wpa_psk", tmp), cred->nwKey);
 				wps_osl_set_conf(strcat_r(pfcred0, "wpa_psk", tmp), cred->nwKey);
 				wps_osl_set_conf(strcat_r(pfcred1, "wpa_psk", tmp), cred->nwKey);
+				if (wlif_num == 3)
+				wps_osl_set_conf(strcat_r(pfcred2, "wpa_psk", tmp), cred->nwKey);
 			}
 		}
 		else {
@@ -523,6 +570,8 @@ set_wsec(char *ifname, void *credential, int mode)
 				wps_osl_set_conf(strcat_r(pfcred, "wpa_psk", tmp), temp_key);
 				wps_osl_set_conf(strcat_r(pfcred0, "wpa_psk", tmp), temp_key);
 				wps_osl_set_conf(strcat_r(pfcred1, "wpa_psk", tmp), temp_key);
+				if (wlif_num == 3)
+				wps_osl_set_conf(strcat_r(pfcred2, "wpa_psk", tmp), temp_key);
 			}
 		}
 	}

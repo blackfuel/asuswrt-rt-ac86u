@@ -16,7 +16,8 @@ CFLAGS=-Wall -Werror -I$(SRCDIR)/common/include/ -I$(SRCDIR)/include/ -I../inclu
 LDFLAGS=-L$(SRCBASE_ROUTER)/json-c/.libs \
 		-L$(SRCBASE_ROUTER)/libxml2/.libs \
 		-lpthread -lxml2 -ljson-c -L$(SRCBASE_ROUTER)/nvram${BCMEX}$(EX7) \
-		-L$(INSTALLDIR)/nvram/usr/lib -lnvram
+		-L$(INSTALLDIR)/nvram/usr/lib -lnvram \
+		-L$(SRCBASE_ROUTER)/shared -lshared
 if IS_BCA_HNDROUTER
 LDFLAGS += -L$(SRCBASE_ROUTER)/wlcsm -lwlcsm
 endif

@@ -15,7 +15,7 @@
 #include <bcmdefs.h>
 #ifdef BCMDRIVER
 #include <osl.h>
-#ifdef BCMDBG_ERR
+#ifdef BCMDBG
 #define JTM_MSG(x) printf x
 #else
 #define JTM_MSG(x)

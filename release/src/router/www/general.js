@@ -278,6 +278,7 @@ function onSubmitCtrlOnly(o, s){
 		else{
 			alert("<#JS_Shareblanktest#>");
 			document.form.file.focus();
+			return false;
 		}
 	}
 	stopFlag = 1;

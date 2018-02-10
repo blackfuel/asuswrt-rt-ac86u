@@ -16,7 +16,7 @@ CFLAGS=-Wall -Werror -I$(SRCDIR)/shared/bcmwifi/include/ \
 	-DVERSION=\"$(VERSION)\" -DPROG="\"$(PACKAGE)\""
 
 LDFLAGS= -L$(SRCBASE_ROUTER)/libxml2/.libs \
-		-lxml2 -lpthread -L$(SRCBASE_ROUTER)/nvram${BCMEX}$(EX7) -L$(INSTALLDIR)/nvram/usr/lib -lnvram
+		-lxml2 -lpthread -L$(SRCBASE_ROUTER)/nvram${BCMEX}$(EX7) -L$(INSTALLDIR)/nvram/usr/lib -lnvram -L$(SRCBASE_ROUTER)/shared -lshared
 
 if IS_BCA_HNDROUTER
 LDFLAGS += -L$(SRCBASE_ROUTER)/wlcsm -lwlcsm

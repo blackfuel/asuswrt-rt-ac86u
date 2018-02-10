@@ -210,6 +210,11 @@ a{
 	width: 90%;
 	max-width: 1000px;
 }
+.descSteps{
+	color: #007AFF;
+	font-size: 1.4em;
+	margin-bottom: 10px;
+}
 .tosDesc{
 	font-family: Helvetica, Arial;
 	font-size: 1.6em;
@@ -329,14 +334,14 @@ a{
 	width: 100%;
 }
 #resetModemContainer{
-	width: 90%;
-	height: 300px;	
+	width: 100%;
+	height: 350px;	
 	margin: auto;
-	margin-top: 100px;
+	margin-top: 50px;
 }
 #resetModem{
-	width: 95%;
-	height: 300px;
+	width: 90%;
+	height: 350px;
 	margin: auto;
 	background-size: contain;
 }
@@ -855,5 +860,229 @@ a{
 	}
 	.desktop_left_field{
 		display: none;
+	}
+}
+
+.aimesh_illustration_bg {
+	width: 95%;
+	height: 130px;
+	margin: auto;
+	margin-top: 2%;
+}
+.aimesh_illustration_second_bg {
+	width: 95%;
+	height: 260px;
+	margin: auto;
+}
+.aimesh_illustration_bg.text {
+	height: 30px;
+	margin-top: 1%;
+}
+.aimesh_illustration_bg.computer {
+	margin-top: 0%;
+	height: 240px;
+}
+.aimesh_illustration_computer_bg {
+	height: 100%;
+	width: 55%;
+	float: right;
+}
+.aimesh_illustration_icon {
+	background-image: url(/images/New_ui/amesh/AiMesh_component.svg);
+	background-repeat: no-repeat;
+	height: 100%;
+	float: left;
+	width: 24%;
+	background-size: 350%;
+}
+.aimesh_illustration_icon.modem {
+	background-position: -3% 3%;
+}
+.aimesh_illustration_icon.ethernet {
+	width: 14%;
+	background-size: 850%;
+	background-position: 7% 30%;
+}
+.aimesh_illustration_icon.router {
+	background-position: 40% 3%;
+}
+.aimesh_illustration_icon.router_back {
+	background-position: 85% 3%;
+}
+.aimesh_illustration_icon.wifi {
+	width: 13%;
+	background-size: 700%;
+	background-position: 33% 30%;
+	animation: breath 2s infinite linear;
+}
+.aimesh_illustration_icon.empty {
+	width: 43%;
+	background-image: none;
+}
+.aimesh_illustration_icon.connect_left {
+	width: 14%;
+	background-size: 600%;
+	animation: connect_left_change 9s steps(1) infinite;
+}
+.aimesh_illustration_icon.connect_right {
+	width: 14%;
+	background-size: 600%;
+	animation: connect_right_change 9s steps(1) infinite;
+}
+.aimesh_illustration_icon.computer {
+	width: 25%;
+	background-size: 445%;
+	background-position: 1% 103%;
+	position: relative;
+}
+.aimesh_illustration_icon.computer_content {
+	width: 76%;
+	background-size: 635%;
+	height: 52%;
+	bottom: 23%;
+	position: absolute;
+	right: 4%;
+	animation: computer_content_change 9s steps(1) infinite;
+}
+@keyframes breath {
+	0% {
+		opacity: 0.2;
+	}
+	20% {
+		opacity: 0.6;
+	}
+	40% {
+		opacity: 1;
+	}
+	60% {
+		opacity: 1;
+	}
+	80% {
+		opacity: 0.6;
+	}
+	100% {
+		opacity: 0.2;
+	}
+}
+@keyframes connect_left_change {
+	0% {
+		background-position: 0% 70%;
+	}
+	60% {
+		background-position: 60% 70%;
+	}
+}
+@keyframes connect_right_change {
+	0% {
+		background-position: 93% 70%;
+	}
+	30% {
+		background-position: 38% 70%;
+	}
+}
+@keyframes computer_content_change {
+	0% {
+		background-position: 35.6% 94.3%;
+	}
+	30% {
+		background-position: 66.6% 94.3%;
+	}
+	60% {
+		background-position: 98% 94.3%;
+	}
+}
+.aimesh_illustration_text {
+	width: 24%;
+	float: left;
+	font-family: Helvetica, Arial;
+	font-size: 1.4em;
+	color: #EEE;
+	text-align: center;
+	font-weight: bolder;
+	height: 15%;
+}
+.aimesh_illustration_text.ethernet {
+	width: 14%;
+}
+.aimesh_illustration_text.wifi {
+	width: 13%;
+}
+@media screen and (orientation: landscape) {
+	@media screen and (max-width: 1280px) {
+		.aimesh_illustration_bg {
+			height: 120px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 210px;
+		}
+	}
+	@media screen and (max-width: 1184px) {
+		.aimesh_illustration_bg {
+			height: 110px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 190px;
+		}
+	}
+	@media screen and (max-width: 1024px) {
+		.aimesh_illustration_bg {
+			height: 130px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 170px;
+		}
+	}
+	@media screen and (max-width: 960px) {
+		.aimesh_illustration_bg {
+			height: 120px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 220px;
+		}
+	}
+	@media screen and (max-width: 720px) {
+		.aimesh_illustration_bg {
+			height: 90px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 160px;
+		}
+	}
+	@media screen and (max-width: 640px) {
+		.aimesh_illustration_bg {
+			height: 80px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 150px;
+		}
+	}
+}
+@media screen and (orientation: portrait) {
+	@media screen and (max-width: 960px) {
+		.aimesh_illustration_bg {
+			height: 120px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 185px;
+		}
+	}
+	@media screen and (max-width: 720px) {
+		.aimesh_illustration_bg {
+			height: 90px;
+		}
+		.aimesh_illustration_text {
+			font-size: 1em;
+		}
+		.aimesh_illustration_second_bg {
+			height: 175px;
+		}
+	}
+	@media screen and (max-width: 640px) {
+		.aimesh_illustration_bg {
+			height: 80px;
+		}
+		.aimesh_illustration_second_bg {
+			height: 155px;
+		}
 	}
 }

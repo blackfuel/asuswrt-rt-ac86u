@@ -857,7 +857,7 @@ void config_switch(void)
 			eval("rtkswitch", "25", parm_buf);
 		}
 	}
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 	else if (access_point_mode() && nvram_match("cfg_master", "1"))
 		; //not to merge_wan_port_into_lan_ports.
 #endif
@@ -1114,6 +1114,9 @@ static void __load_wifi_driver(int testmode)
 					f_write_string("/proc/net/skb_recycler/max_spare_skbs", "10", 0, 0);
 					/* *v++ = "low_mem_system=1"; obsoleted in new driver */
 				}
+#elif defined(MAPAC1750)
+				f_write_string("/proc/net/skb_recycler/flush", "1", 0, 0);
+				f_write_string("/proc/net/skb_recycler/max_skbs", "256", 0, 0);
 #endif
 			}
 			else {
@@ -1200,6 +1203,8 @@ static void __load_wifi_driver(int testmode)
 		strncpy(code_str, nvram_safe_get("wl2_txpower"), sizeof(code_str)-1);
 		eval("iwpriv", (char*) VPHY_5G2, "txpwrpc", code_str);
 #endif
+		/* add acs channel weight */
+		acs_ch_weight_param();
 
 #if defined(RTCONFIG_HAS_5G_2)
 		strlcpy(country, nvram_safe_get("wl2_country_code"), sizeof(country));
@@ -1217,15 +1222,20 @@ static void __load_wifi_driver(int testmode)
 		eval("iw", "reg", "set", code_str);
 #endif
 
-#if defined(RTCONFIG_SOC_IPQ40XX)
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+		if(nvram_get_int("x_Setting")) {
+#if defined(RTCONFIG_WIFI_SON)
 		eval("iwpriv", (char*) VPHY_2G, "no_vlan", "1");
 		eval("iwpriv", (char*) VPHY_5G, "no_vlan", "1");
+		//send RCSA to uplink/CAP/PAP when detect radar
+		if(nvram_get_int("dfs_check_period"))
+			eval("iwpriv", (char*) VPHY_5G, "CSwOpts", "0x30");
 #if defined(MAPAC2200) 
+		if (nvram_get_int("ncb_enable"))
+			doSystem("iwpriv %s ncb_enable %s", VPHY_5G, nvram_get("ncb_enable"));
 		eval("iwpriv", (char*) VPHY_5G2, "no_vlan", "1");
-#endif		
 #endif
 #endif
+		}
 
 #if defined(BRTAC828) || defined(RTAD7200)
 		set_irq_smp_affinity(68, 1);	/* wifi0 = 2G ==> core 0 */
@@ -1396,7 +1406,7 @@ void init_wl(void)
 #endif
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 		if((sw_mode() != SW_MODE_ROUTER && !nvram_match("cfg_master", "1")) || nvram_match("wps_e_success", "1"))
 		{
 			if(nvram_get_int("x_Setting"))
@@ -1418,7 +1428,7 @@ void init_wl(void)
 #endif
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 	int i;
 	if(sw_mode() == SW_MODE_AP && !nvram_match("cfg_master", "1")) //router->ap
 	{
@@ -1457,9 +1467,14 @@ void init_wl(void)
 	if(nvram_get_int("wl0.1_bss_enabled"))
 	{
 		eval("vconfig","set_name_type","DEV_PLUS_VID_NO_PAD");
-		eval("vconfig", "add","ath1","1");
-		eval("ifconfig","ath1.1","up");
-		eval("brctl","addif",BR_GUEST,"ath1.1");
+		eval("vconfig", "add","ath1","55");
+		eval("ifconfig","ath1.55","up");
+		eval("brctl","addif",BR_GUEST,"ath1.55");
+#ifdef RTCONFIG_ETHBACKHAUL
+		eval("vconfig", "add", MII_IFNAME, "55");
+		eval("ifconfig", MII_IFNAME".55", "up");
+		eval("brctl", "addif", BR_GUEST, MII_IFNAME".55");
+#endif
 	}
 	
 #endif
@@ -1508,6 +1523,8 @@ void fini_wl(void)
 			}
 		}
 	}
+	/* in case of pid file is gone...*/
+	doSystem("killall hostapd");
 
 #ifdef RTCONFIG_WIRELESSREPEATER
 		if(sw_mode()==SW_MODE_REPEATER)
@@ -1528,7 +1545,8 @@ void fini_wl(void)
 		}      
 #endif
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
+	eval("killall", "-SIGTERM", "wpa_supplicant");
 	if((sw_mode() != SW_MODE_ROUTER && !nvram_match("cfg_master", "1")) || nvram_match("wps_e_success", "1"))
 	{
 		if(nvram_get_int("x_Setting"))
@@ -1642,10 +1660,7 @@ void init_syspara(void)
 	char cfg_group_buf[CFGSYNC_GROUPID_LEN+1];
 #endif /* RTCONFIG_CFGSYNC */
 
-	nvram_set("buildno", rt_serialno);
-	nvram_set("extendno", rt_extendno);
-	nvram_set("buildinfo", rt_buildinfo);
-	nvram_set("swpjverno", rt_swpjverno);
+	set_basic_fw_name();
 
 	/* /dev/mtd/2, RF parameters, starts from 0x40000 */
 	dst = buffer;
@@ -1933,6 +1948,12 @@ void reinit_sfe(int unit)
 		act = 0;
 #endif
 
+#if defined(RTCONFIG_QCA956X) && defined(RTCONFIG_BWDPI)
+	/* For MAP-AC1750, not to integrate fast-path in stage 1 */
+	if (check_bwdpi_nvram_setting() == 1)
+		act = 0;
+#endif
+
 #if defined(RTCONFIG_SOC_IPQ40XX)
 	/* URL filter and keyword filter are not compatible to IPQ806x NSS NAT acceleration and IPQ40XX shortcut-fe.
 	 * But they do works with QCA955X shortcut-fe.
@@ -1942,8 +1963,12 @@ void reinit_sfe(int unit)
 		act = 0;
 #endif
 
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+#else
 	if (act > 0 && !nvram_match("switch_wantag", "none") && !nvram_match("switch_wantag", ""))
 		act = 0;
+
+#endif
 
 	if (act > 0) {
 #if defined(RTCONFIG_DUALWAN)
@@ -1970,10 +1995,11 @@ void reinit_sfe(int unit)
 #endif
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 	if ((sw_mode() != SW_MODE_ROUTER) && !nvram_match("cfg_master", "1"))
 		act = 0;
 #endif
+#if !defined(RT4GAC53U) /* for Gobi */
 	if (act > 0) {
 #if defined(RTCONFIG_DUALWAN)
 		if (unit < 0 || unit > WAN_UNIT_SECOND || nvram_match("wans_mode", "lb")) {
@@ -1988,6 +2014,7 @@ void reinit_sfe(int unit)
 			act = 0;
 #endif
 	}
+#endif
 
 #if defined(RTCONFIG_DUALWAN)
 	if (act != 0 &&
@@ -2103,8 +2130,9 @@ int ecm_selection(void)
 
 	/* If QoS is enabled, disable ecm.
 	 * Including AiProtection due to BWDPI dep. module is compatible to IPQ806x NSS NAT acceleration.
+	 * dpi engine doesn't integrate QCA Hardware QoS, so A.QoS needs to "echo 1 >  ecm_nss_ipv[4/6]/stop"
 	 */
-	if (nvram_get_int("qos_enable") == 1 && nvram_get_int("qos_type") != 1)
+	if (nvram_get_int("qos_enable") == 1)
 		act = 0;
 
 	/* If IPSec is enabled, disable ecm. */
@@ -2234,7 +2262,7 @@ int wl_exist(char *ifname, int band)
 		break;
 	case WL_60G_BAND:
 		r = _ifconfig_get(ifname, &flags, NULL, NULL, NULL, NULL);
-		if (r < 0 || (flags & IFUP) != IFUP) {
+		if (r != 0 || (flags & IFUP) != IFUP) {
 			dbg("%s: can't get flags of %s or it is not up. (flags 0x%x)\n",
 				__func__, ifname, flags);
 			ret = 1;
@@ -2278,6 +2306,13 @@ set_wan_tag(char *interface) {
 		if (nvram_match("switch_wantag", "stuff_fibre"))
 			eval("vconfig", "set_egress_map", wan_dev, "3", "5");
 #endif
+		break;
+	case MODEL_MAPAC1300:
+	case MODEL_VZWAC1300:
+	case MODEL_MAPAC2200:
+#if defined(RTCONFIG_SOC_IPQ40XX)
+		detwan_set_def_vid(interface, wan_vid, 1, 0);
+#endif	/* RTCONFIG_SOC_IPQ40XX */
 		break;
 	}
 

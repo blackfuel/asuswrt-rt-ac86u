@@ -68,6 +68,7 @@ enum {
 	IOV_DFS_AP_MOVE,	/* Move the AP to specified RADAR Channel using second core. */
 	IOV_DFS_STATUS_ALL,	/* dfs status of multiple cores / parallel radar scans */
 	IOV_DYN160,		/* toggle dynamic 160MHz to 80MHz mode active */
+	IOV_DFS_BW_FALLBACK,
 	IOV_LAST
 };
 
@@ -81,6 +82,7 @@ static const bcm_iovar_t wlc_dfs_iovars[] = {
 	{"dfs_ap_move", IOV_DFS_AP_MOVE, (0), IOVT_BUFFER, 0},
 	{"dfs_status_all", IOV_DFS_STATUS_ALL, (0), IOVT_BUFFER, 0},
 	{"dyn160", IOV_DYN160, 0, IOVT_UINT32, 0},
+	{"dfs_bw_fallback", IOV_DFS_BW_FALLBACK, 0, IOVT_UINT32, 0},
 	{NULL, 0, 0, 0, 0}
 };
 
@@ -206,6 +208,7 @@ struct wlc_dfs_info {
 	uint16 actionfr_retry_counter;
 	bool radar_report_timer_running;
 	struct wl_timer *radar_report_timer;	/* timer for dfs cac handler */
+	bool bw_fallback;
 };
 
 /* local functions */
@@ -289,7 +292,9 @@ static void wlc_dfs_cacstate_csa(wlc_dfs_info_t *dfs);
 static void wlc_dfs_cacstate_ooc(wlc_dfs_info_t *dfs);
 static void wlc_dfs_cacstate_handler(void *arg);
 static bool wlc_dfs_validate_forced_param(wlc_info_t *wlc, chanspec_t chanspec);
-
+static chanspec_t wlc_dfs_radar_channel_bw_fallback(wlc_dfs_info_t *dfs);
+static void wlc_dfs_chanspec_post_oos(wlc_dfs_info_t *dfs, chanspec_t cur_chanspec,
+		chanspec_t sel_chanspec);
 /* IE mgmt */
 #ifdef STA
 #ifdef BCMDBG
@@ -982,6 +987,13 @@ wlc_dfs_doiovar(void *ctx, const bcm_iovar_t *vi, uint32 actionid, const char *n
 #else
 		err = BCME_UNSUPPORTED;
 #endif /* DYN160 && DYN160_DISABLED */
+		break;
+	case IOV_GVAL(IOV_DFS_BW_FALLBACK):
+		*ret_int_ptr = (int32) dfs->bw_fallback;
+		break;
+
+	case IOV_SVAL(IOV_DFS_BW_FALLBACK):
+		dfs->bw_fallback = (uint32) int_val;
 		break;
 
 	default:
@@ -2086,6 +2098,50 @@ wlc_dfs_timer_delete(wlc_dfs_info_t *dfs)
 }
 
 static void
+wlc_dfs_chanspec_post_oos(wlc_dfs_info_t *dfs, chanspec_t cur_chanspec, chanspec_t sel_chanspec)
+{
+	wlc_info_t* wlc = dfs->wlc;
+	bool has_subband_info = DFS_HAS_SUBBAND_INFO(wlc);
+	uint8 channel, pos_20 = LOWER_20_POS_20MHZ;
+	chanspec_t chspec;
+
+	if (CHSPEC_IS160(cur_chanspec) || CHSPEC_IS8080(cur_chanspec)) {
+		pos_20 = LOWER_20_POS_160MHZ;
+	} else if (CHSPEC_IS80(cur_chanspec)) {
+		pos_20 = LOWER_20_POS_80MHZ;
+	} else if (CHSPEC_IS40(cur_chanspec)) {
+		pos_20 = LOWER_20_POS_40MHZ;
+	}
+	WL_DFS(("wl%d: %s: put out of service cur_chspec 0x%04x sel_chspec 0x%x \n",
+			wlc->pub->unit, __FUNCTION__, cur_chanspec, sel_chanspec));
+
+	/* radar_subbands has the bit map of all the subbands of a chanspec
+	 * this is an 8 bit value for 160/80p80 MHz and a 4 bit value for 80 MHz, ...
+	 */
+	if (has_subband_info) {
+		FOREACH_20_SB(cur_chanspec, channel) {
+			chspec =  CH20MHZ_CHSPEC(channel);
+			if (!wlc_radar_chanspec(wlc->cmi, chspec)) {
+				pos_20 >>= 1;
+				continue;
+			}
+
+			if (!wlc_quiet_chanspec(wlc->cmi, chspec)) {
+				if ((sel_chanspec != 0) &&
+						wf_chspec_overlap(chspec, sel_chanspec)) {
+					pos_20 >>= 1;
+					continue;
+				}
+
+				wlc_set_quiet_chanspec(wlc->cmi, chspec);
+			}
+			pos_20 >>= 1;
+		}
+	}
+}
+
+
+static void
 wlc_dfs_chanspec_oos(wlc_dfs_info_t *dfs, chanspec_t chanspec)
 {
 	wlc_info_t* wlc = dfs->wlc;
@@ -2130,7 +2186,9 @@ wlc_dfs_chanspec_oos(wlc_dfs_info_t *dfs, chanspec_t chanspec)
 			} else if (channel == TDWR_CH20_MAX) {
 				radar_on_tdwr_right = TRUE;
 			}
-		} else if (!is_edcrs_eu) { // in non-EU, on moving out of radar ch, mark it passive
+		}
+		else if (!dfs->bw_fallback && !is_edcrs_eu) {
+			// in non-EU, on moving out of radar ch, mark it passive
 			wlc_set_quiet_chanspec(wlc->cmi, CH20MHZ_CHSPEC(channel));
 		}
 		pos_20 >>= 1;
@@ -2378,6 +2436,44 @@ wlc_dfs_rearrange_channel_list(wlc_dfs_info_t *dfs, chanspec_list_t *ch_list)
 	}
 }
 
+
+/* Returns a valid channel or 0 on error */
+static chanspec_t
+wlc_dfs_radar_channel_bw_fallback(wlc_dfs_info_t *dfs)
+{
+	wlc_info_t *wlc = dfs->wlc;
+	chanspec_t chspec, crnt_chspec = WLC_BAND_PI_RADIO_CHANSPEC;
+	uint16 crnt_bw = CHSPEC_BW(crnt_chspec);
+
+	if (crnt_bw == WL_CHANSPEC_BW_80) {
+		chspec = wf_chspec_primary40_chspec(crnt_chspec);
+
+		if (wlc_valid_dfs_chanspec(wlc, chspec)) {
+			WL_DFS(("wl%d: %s : select chanspec 0x%04x bw: 0x%x\n", wlc->pub->unit,
+				__FUNCTION__, chspec, CHSPEC_BW(chspec)));
+
+			return chspec;
+		} else
+			crnt_bw = WL_CHANSPEC_BW_40;
+	}
+
+	if (crnt_bw == WL_CHANSPEC_BW_40) {
+
+		chspec = CH20MHZ_CHSPEC(wf_chspec_ctlchan(crnt_chspec));
+
+		if (wlc_valid_dfs_chanspec(wlc, chspec)) {
+			WL_DFS(("wl%d: %s : chanspec 0x%04x bw: 0x%x\n", wlc->pub->unit,
+				__FUNCTION__, chspec, CHSPEC_BW(chspec)));
+
+			return chspec;
+		} else
+			return 0;
+	}
+
+	return 0;
+}
+
+
 /*
  * Returns a forced channel if valid or does a random channel selection for DFS
  * Returns a valid chanspec of a valid radar free channel, using the AP configuration
@@ -2391,6 +2487,10 @@ wlc_dfs_chanspec(wlc_dfs_info_t *dfs, bool radar_detected)
 	chanspec_t chspec;
 
 	chspec = wlc_dfs_valid_forced_chanspec(dfs);
+
+	/* return fallback bw channel */
+	if (dfs->bw_fallback && (chspec == 0) && radar_detected)
+		chspec = wlc_dfs_radar_channel_bw_fallback(dfs);
 
 	/* return if suitable channel is in forced list */
 	if (chspec == 0) {
@@ -2890,6 +2990,11 @@ wlc_dfs_to_backup_channel(wlc_dfs_info_t *dfs, bool radar_detected)
 		wlc_dfs_chanspec_oos(dfs, WLC_BAND_PI_RADIO_CHANSPEC);
 	}
 	dfs->dfs_cac.chanspec_next = wlc_dfs_chanspec(dfs, radar_detected);
+
+	if (dfs->bw_fallback && radar_detected && !wlc_is_edcrs_eu(wlc))
+		wlc_dfs_chanspec_post_oos(dfs, WLC_BAND_PI_RADIO_CHANSPEC,
+			dfs->dfs_cac.chanspec_next);
+
 	if (!dfs->dfs_cac.chanspec_next) {
 		/* out of channels */
 		if (dfs->dfs_cac.status.state == WL_DFS_CACSTATE_PREISM_CAC) {
@@ -2967,6 +3072,11 @@ wlc_dfs_cacstate_cac(wlc_dfs_info_t *dfs)
 					wlc_set_chanspec(wlc, chanspec);
 					wlc_enable_mac(wlc);
 				}
+
+				if (dfs->bw_fallback && !wlc_is_edcrs_eu(wlc))
+					wlc_dfs_chanspec_post_oos(dfs,
+						WLC_BAND_PI_RADIO_CHANSPEC, chanspec);
+
 				/* Non Occupancy Period begins. */
 				wlc_dfs_cacstate_idle_set(dfs); /* set to IDLE */
 				return;
@@ -3092,6 +3202,10 @@ wlc_dfs_cacstate_ism(wlc_dfs_info_t *dfs)
 		/* continue with CSA */
 		/* it will be included in csa */
 		dfs->dfs_cac.chanspec_next = wlc_dfs_chanspec(dfs, TRUE);
+
+		if (dfs->bw_fallback && !wlc_is_edcrs_eu(wlc))
+			wlc_dfs_chanspec_post_oos(dfs, WLC_BAND_PI_RADIO_CHANSPEC,
+				dfs->dfs_cac.chanspec_next);
 		WL_DFS(("Selected new channel 0x%x\n", dfs->dfs_cac.chanspec_next));
 		/* Downgrade BW if newer channel is of lower BW */
 		if (CHSPEC_IS160(WLC_BAND_PI_RADIO_CHANSPEC) &&
@@ -3390,6 +3504,8 @@ wlc_dfs_cacstate_init(wlc_dfs_info_t *dfs)
 	if (!BSSCFG_IS_PRIMARY(cfg)) {
 		return;
 	}
+
+	phy_radar_detect_enable((phy_info_t *)WLC_PI(wlc), dfs->radar != 0);
 
 #ifdef BGDFS
 	/* override chanspec with scan core's if scan core is active (eg. in 3x1 mode) */

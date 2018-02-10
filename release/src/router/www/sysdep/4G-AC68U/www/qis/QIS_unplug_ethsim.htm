@@ -23,6 +23,14 @@ function initial(){
 		document.getElementById("detectAgain").focus();
 	}
 
+	if(parent.based_modelid == "4G-AC53U"){
+		var code = "";
+		code += "<ol type=\"1\">";
+		code += "<li style=\"line-height:25px;\"><#QIS_unplug_step1#></li>";
+		code += "<li style=\"line-height:25px;\"><#QIS_unplug_step3#></li>";
+		code += "</ol>";
+		document.getElementById("unplug_step").innerHTML = code;
+	}
 }
 
 function redirect_page(redirect_flag){
@@ -113,7 +121,7 @@ function update_wan_info(flag){
 		</div>
 		<p class="QISGeneralFont"><#QIS_unplug_desc1#></p></br>
 		<p class="QISGeneralFont"><#QIS_unplug_desc2#></p>
-		<div class="QISGeneralFont">				
+		<div class="QISGeneralFont" id="unplug_step">
 				<ol type="1">		
 					<li style="line-height:25px;"><#QIS_unplug_step1#></li>
 					<li style="line-height:25px;"><#QIS_unplug_step2#></li>

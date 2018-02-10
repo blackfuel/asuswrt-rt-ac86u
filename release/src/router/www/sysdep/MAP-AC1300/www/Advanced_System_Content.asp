@@ -1586,7 +1586,6 @@ function control_all_rule_status(obj) {
 					<td>
 						<input type="radio" name="sw_mode_radio" value="1" <% nvram_match_x("","sw_mode","3", "checked"); %> ><#checkbox_Yes#>
 						<input type="radio" name="sw_mode_radio" value="0" <% nvram_match_x("","sw_mode","1", "checked"); %> ><#checkbox_No#>
-						<span>(<#Beta_test_only#>)</span>
 					</td>
 				</tr>
 			</table>

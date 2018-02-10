@@ -45,6 +45,9 @@
 # the brand directory or the target directory in which images are built.
 #
 
+EXTRA_DFLAGS += -DBCMDBG_ERR
+EXTRA_DFLAGS += -DWLMSG_ASSOC
+
 # sanity checks
 ifeq ($(TOPDIR),)
 $(error TOPDIR is not defined)

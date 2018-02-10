@@ -1140,6 +1140,7 @@ wlc_flow_ring_reset_weight(wlc_info_t *wlc, struct wlc_if *wlcif,
 			op.phyrate = phyrate;
 			op.weight = weight_avg;
 			op.mumimo = SCB_MU(scb);
+			op.dwds = SCB_DWDS(scb);
 
 			wlfc_upd_flr_weight(wlc->wl, scb->mac_address_handle, fl, (void*)&op);
 		}
@@ -1194,6 +1195,7 @@ wlc_scb_upd_all_flr_weight(wlc_info_t *wlc, struct scb *scb)
 				op.phyrate = phyrate;
 				op.weight = avg_weight;
 				op.mumimo = SCB_MU(scb);
+				op.dwds = SCB_DWDS(scb);
 
 				wlfc_upd_flr_weight(wlc->wl, scb->mac_address_handle,
 					fl, (void*)&op);

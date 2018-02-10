@@ -559,8 +559,8 @@ send_token_headers( int status, char* title, char* extra_header, char* mime_type
 		strncpy(asus_token, gen_token, sizeof(asus_token));
 	}else{
 		generate_token(asus_token, sizeof(asus_token));
-		add_asus_token(asus_token);
 	}
+	add_asus_token(asus_token);
 
     (void) fprintf( conn_fp, "%s %d %s\r\n", PROTOCOL, status, title );
     (void) fprintf( conn_fp, "Server: %s\r\n", SERVER_NAME );
@@ -755,6 +755,8 @@ void set_referer_host(void)
 	}else if(!strcmp(DUT_DOMAIN_NAME, host_name))	//transfer http domain to ip
 		strlcpy(referer_host, lan_ipaddr, sizeof(referer_host));
 	else if(!strncmp(lan_ipaddr, host_name, ip_len) && *(host_name + ip_len) == ':' && (port = atoi(host_name + ip_len + 1)) == 80)	//filter send hostip:80
+		strlcpy(referer_host, lan_ipaddr, sizeof(referer_host));
+	else if(nvram_match("x_Setting", "0"))
 		strlcpy(referer_host, lan_ipaddr, sizeof(referer_host));
 	else
 		strlcpy(referer_host, host_name, sizeof(referer_host));
@@ -1190,11 +1192,9 @@ handle_request(void)
 			nvram_set_int("httpd_handle_request_fromapp", fromapp);
 			if(login_state==3 && !fromapp) { // few pages can be shown even someone else login
 				if(!(mime_exception&MIME_EXCEPTION_MAINPAGE || (strncmp(file, "Main_Login.asp", 14)==0 && login_error_status == 9) || ((!handler->auth) && strncmp(file, "Main_Login.asp", 14) != 0))) {
-					if(strcasecmp(method, "post") == 0){
-						if (handler->input) {
-							handler->input(file, conn_fp, cl, boundary);
-						}
-					}
+					if(strcasecmp(method, "post") == 0 && handler->input)	//response post request
+						while (cl--) (void)fgetc(conn_fp);
+
 					send_login_page(fromapp, NOLOGIN, NULL, NULL, 0, NOLOGINTRY);
 					return;
 				}
@@ -1203,7 +1203,7 @@ handle_request(void)
 				if ((mime_exception&MIME_EXCEPTION_NOAUTH_FIRST)&&!x_Setting) {
 					//skip_auth=1;
 				}
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 				else if(!fromapp && !nvram_match("sw_mode", "1") && (nvram_match("sw_mode", "3") && !nvram_match("cfg_master", "1")) && strcmp(nvram_safe_get("hive_ui"), "") == 0){
 					snprintf(inviteCode, sizeof(inviteCode), "<meta http-equiv=\"refresh\" content=\"0; url=message.htm\">\r\n");
 					send_page( 200, "OK", (char*) 0, inviteCode, 0);
@@ -1215,17 +1215,23 @@ handle_request(void)
 					send_page( 200, "OK", (char*) 0, inviteCode, 0);
 				}
 #endif
+#ifdef RTCONFIG_AMAS
+				//RD can do firmware upgrade, if re_upgrade set to 1.
+				else if(!fromapp && nvram_match("re_mode", "1") && nvram_get_int("re_upgrade") == 0 && !check_AiMesh_whitelist(file)){
+					snprintf(inviteCode, sizeof(inviteCode), "<meta http-equiv=\"refresh\" content=\"0; url=message.htm\">\r\n");
+					send_page( 200, "OK", (char*) 0, inviteCode, 0);
+					return;
+				}
+#endif
 				else if((mime_exception&MIME_EXCEPTION_NOAUTH_ALL)) {
 				}
 				else {
 					if(do_referer&CHECK_REFERER){
 						referer_result = referer_check(referer, fromapp);
 						if(referer_result != 0){
-							if(strcasecmp(method, "post") == 0){
-								if (handler->input) {
-									handler->input(file, conn_fp, cl, boundary);
-								}
-							}
+							if(strcasecmp(method, "post") == 0 && handler->input)	//response post request
+								while (cl--) (void)fgetc(conn_fp);
+
 							send_login_page(fromapp, referer_result, NULL, NULL, 0, NOLOGINTRY);
 							//if(!fromapp) http_logout(login_ip_tmp, cookies);
 							return;
@@ -1235,44 +1241,12 @@ handle_request(void)
 					auth_result = auth_check(auth_realm, authorization, url, file, cookies, fromapp);
 					if (auth_result != 0)
 					{
-#ifdef RTCONFIG_AMAS
-						//RD can do firmware upgrade, if re_upgrade set to 1.
-						if(!fromapp && nvram_match("re_mode", "1") && nvram_get_int("re_upgrade") == 0){
-							if(!check_AiMesh_whitelist(file)) {
-								snprintf(inviteCode, sizeof(inviteCode), "<meta http-equiv=\"refresh\" content=\"0; url=message.htm\">\r\n");
-								send_page( 200, "OK", (char*) 0, inviteCode, 0);
-								return;
-							}
-							else {
-								if(strcasecmp(method, "post") == 0){
-									if (handler->input) {
-											handler->input(file, conn_fp, cl, boundary);
-										}
-								}
-								send_login_page(fromapp, auth_result, url, file, auth_check_dt, add_try);
-								return;
-							}
-						}
-#endif
-						if(strcasecmp(method, "post") == 0){
-							if (handler->input) {
-									handler->input(file, conn_fp, cl, boundary);
-								}
-						}
+						if(strcasecmp(method, "post") == 0 && handler->input)	//response post request
+							while (cl--) (void)fgetc(conn_fp);
+
 						send_login_page(fromapp, auth_result, url, file, auth_check_dt, add_try);
 						return;
 					}
-#ifdef RTCONFIG_AMAS
-					else {
-						if(!fromapp && nvram_match("re_mode", "1") && nvram_get_int("re_upgrade") == 0){
-							if(!check_AiMesh_whitelist(file)) {
-								snprintf(inviteCode, sizeof(inviteCode), "<meta http-equiv=\"refresh\" content=\"0; url=message.htm\">\r\n");
-								send_page( 200, "OK", (char*) 0, inviteCode, 0);
-								return;
-							}
-						}
-					}
-#endif
 				}
 
 				if(!fromapp) {
@@ -1293,11 +1267,9 @@ handle_request(void)
 				if(do_referer&CHECK_REFERER){
 					referer_result = check_noauth_referrer(referer, fromapp);
 					if(referer_result != 0){
-						if(strcasecmp(method, "post") == 0){
-							if (handler->input) {
-								handler->input(file, conn_fp, cl, boundary);
-							}
-						}
+						if(strcasecmp(method, "post") == 0 && handler->input)	//response post request
+							while (cl--) (void)fgetc(conn_fp);
+
 						send_login_page(fromapp, referer_result, NULL, NULL, 0, NOLOGINTRY);
 						//if(!fromapp) http_logout(login_ip_tmp, cookies);
 						return;
@@ -1350,11 +1322,11 @@ handle_request(void)
 #if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA)
 					&& !strstr(file, "asustitle.png")
 #endif
-					){
+					&& !strstr(file,"cert_key.tar")){
 				send_error( 404, "Not Found", (char*) 0, "File not found." );
 				return;
 			}
-			if((strcmp(url, "QIS_default.cgi")==0 || strcmp(url, "page_default.cgi")==0) && nvram_match("x_Setting", "0")){
+			if(nvram_match("x_Setting", "0") && (strcmp(url, "QIS_default.cgi")==0 || strcmp(url, "page_default.cgi")==0 || !strcmp(websGetVar(file, "x_Setting", ""), "1"))){
 				if(!fromapp) set_referer_host();
 				send_token_headers( 200, "Ok", handler->extra_header, handler->mime_type, fromapp);
 
@@ -1975,12 +1947,13 @@ int main(int argc, char **argv)
 	//int do_ssl = 0;
 
 	do_ssl = 0; // default
+	char log_filename[128] = {0};
 
 #if defined(RTCONFIG_SW_HW_AUTH)
 	//if(!httpd_sw_hw_check()) return 0;
 #endif
 	// usage : httpd -s -p [port]
-	while ((c = getopt(argc, argv, "sp:i:")) != -1) {
+	while ((c = getopt(argc, argv, "sp:i:w:")) != -1) {
 		switch (c) {
 		case 's':
 #ifdef RTCONFIG_HTTPS
@@ -1993,6 +1966,13 @@ int main(int argc, char **argv)
 		case 'i':
 			http_ifname = optarg;
 			break;
+		case 'w':
+			//Generate Wi-Fi log
+			snprintf(log_filename, sizeof(log_filename), "%s", optarg);
+			FILE *fp = fopen(log_filename, "w");
+			ej_wl_status_2g(0, fp, 0, NULL);
+			fclose(fp);
+			return 0;
 		default:
 			fprintf(stderr, "ERROR: unknown option %c\n", c);
 			break;

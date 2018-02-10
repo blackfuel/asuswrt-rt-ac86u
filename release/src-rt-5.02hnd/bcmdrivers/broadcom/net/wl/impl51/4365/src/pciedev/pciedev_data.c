@@ -402,7 +402,9 @@ pciedev_normalize_flow_ring_weight(struct dngl_bus *pciedev,
 		SCHEDCXT_FL_W(flow_ring) = w;
 #ifdef FFSHCED_SATURATED_MODE
 		/* flow ring without pkt add additional sum */
-		SCHEDCXT_MAX_W(pciedev) = MAX(SCHEDCXT_MAX_W(pciedev), w);
+		if (flow_ring->status & FLOW_RING_PKT_PENDING)  {
+			SCHEDCXT_MAX_W(pciedev) = MAX(SCHEDCXT_MAX_W(pciedev), w);
+		}
 #endif /* FFSHCED_SATURATED_MODE */
 	}
 	if (num > 0) {
@@ -609,26 +611,26 @@ pciedev_flow_ring_calc_maxpktcnt(struct dngl_bus *pciedev,
 	ASSERT(SCHEDCXT_SUM_W(pciedev));
 
 #ifdef FFSHCED_SATURATED_MODE
-		if (FFSHCED_SATURATED(pciedev)) {
-			FL_MAXPKTCNT(flow_ring) =
-				FL_MAXPKTCNT(flow_ring) * SCHEDCXT_FL_W(flow_ring) /
-				SCHEDCXT_MAX_W(pciedev);
-		} else 
+	if (FFSHCED_SATURATED(pciedev)) {
+		FL_MAXPKTCNT(flow_ring) =
+			FL_MAXPKTCNT(flow_ring) * SCHEDCXT_FL_W(flow_ring) /
+			SCHEDCXT_MAX_W(pciedev);
+	} else
 #endif /* FFSHCED_SATURATED_MODE */
-		if (SCHEDCXT_SUM_W(pciedev) > SCHEDCXT_FL_W(flow_ring)) {
+	if (SCHEDCXT_SUM_W(pciedev) > SCHEDCXT_FL_W(flow_ring)) {
 
-			/* Shaping pkt max fetch count */
-			FL_MAXPKTCNT(flow_ring) =
-				(FL_MAXPKTCNT(flow_ring) * SCHEDCXT_FL_W(flow_ring)) /
-				SCHEDCXT_SUM_W(pciedev);
+		/* Shaping pkt max fetch count */
+		FL_MAXPKTCNT(flow_ring) =
+			(FL_MAXPKTCNT(flow_ring) * SCHEDCXT_FL_W(flow_ring)) /
+			SCHEDCXT_SUM_W(pciedev);
 #ifndef FFSHCED_SATURATED_MODE
-			if (FL_MAXPKTCNT(flow_ring) == 0)
-				FL_MAXPKTCNT(flow_ring) = PCIEDEV_MIN_PACKETFETCH_COUNT;
-#endif
-		}
-#ifdef FFSHCED_SATURATED_MODE
 		if (FL_MAXPKTCNT(flow_ring) == 0)
 			FL_MAXPKTCNT(flow_ring) = PCIEDEV_MIN_PACKETFETCH_COUNT;
+#endif
+	}
+#ifdef FFSHCED_SATURATED_MODE
+	if (FL_MAXPKTCNT(flow_ring) == 0)
+		FL_MAXPKTCNT(flow_ring) = PCIEDEV_MIN_PACKETFETCH_COUNT;
 
 #endif /* FFSHCED_SATURATED_MODE */
 }
@@ -989,8 +991,14 @@ void pciedev_upd_flr_weight(struct dngl_bus * pciedev, uint8 mac_handle, uint8 a
 				}
 
 				updated = TRUE;
-				break;
 
+				/* For DWDS clients 2 sets of flowrings are created.
+				 * One set under AP interface and other set under WDS interface.
+				 * Weights should be updated for both sets.
+				 */
+				if (!op->dwds) {
+					break;
+				}
 			}
 
 			/* Next node */

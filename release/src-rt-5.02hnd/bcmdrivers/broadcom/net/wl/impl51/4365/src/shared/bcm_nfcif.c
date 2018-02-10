@@ -21,11 +21,11 @@
 #include <bcm_nfcif.h>
 #include <hnd_cons.h>
 
-#ifdef BCMDBG_ERR
+#ifdef BCMDBG
 #define NFCIF_ERR(args) printf args
 #else
 #define NFCIF_ERR(args)
-#endif  /* BCMDBG_ERR */
+#endif  /* BCMDBG */
 
 #define	NFC_MAX_PAYLOAD_LENGTH	60
 

@@ -84,14 +84,28 @@ endif
 
 export BRANCH := $(shell git branch)
 
+ifneq ($(RCNO),)
+RCSTRING="rc$(RCNO)"
+RC_EXT_NO1=$(shell expr $(RCNO) + 1)
+RC_EXT_NO=$(shell expr $(RC_EXT_NO1) \* 10000)
+
+# At runtime, set the tag of RCNO.
+export RUN_TAG=$(shell git tag -fa asuswrt_$(KERNEL_VER).$(FS_VER).$(SERIALNO)$(RCSTRING) -m "Released $(RCSTRING)" HEAD)
+else
+RCSTRING=""
+RC_EXT_NO=0
+endif
+EXTENDNO1=$(shell git log --pretty=oneline asuswrt_$(KERNEL_VER).$(FS_VER).$(SERIALNO)..HEAD | wc -l)
+
 ifeq ($(BRANCH),)
 include ./router/extendno.conf
 else
-ifeq ($(EXTENDTYPE),)
-export EXTENDNO := $(shell git log --pretty=oneline asuswrt_$(KERNEL_VER).$(FS_VER).$(SERIALNO)..HEAD | wc -l)-g$(shell git log --pretty=format:'%h' -n 1|sed -e "s,\([0-9a-z]\{7\}\)[0-9a-z]*,\1,")
+ifneq ($(EXTENDTYPE),)
+EXSTRING="-$(EXTENDTYPE)"
 else
-export EXTENDNO := $(shell git log --pretty=oneline asuswrt_$(KERNEL_VER).$(FS_VER).$(SERIALNO)..HEAD | wc -l)-g$(shell git log --pretty=format:'%h' -n 1|sed -e "s,\([0-9a-z]\{7\}\)[0-9a-z]*,\1,")-$(EXTENDTYPE)
+EXSTRING=""
 endif
+export EXTENDNO := $(shell expr $(EXTENDNO1) + $(RC_EXT_NO))-g$(shell git log --pretty=format:'%h' -n 1|sed -e "s,\([0-9a-z]\{7\}\)[0-9a-z]*,\1,")$(EXSTRING)
 endif
 
 ifeq ($(EXTENDNO),)
@@ -354,9 +368,19 @@ rt_ver:
 	@echo '#define RT_VERSION "$(KERNEL_VER).$(FS_VER)"' >> router/shared/version.h
 ifeq ($(FAKEID),y)
 	@echo '#define RT_SERIALNO "$(FORCE_SN)"' >> router/shared/version.h
+ifneq ($(RCNO),)
+	@echo '#define RT_RCNO "$(FORCE_RN)"' >> router/shared/version.h
+else
+	@echo '#define RT_RCNO NULL' >> router/shared/version.h
+endif
 	@echo '#define RT_EXTENDNO "$(FORCE_EN)"' >> router/shared/version.h
 else
 	@echo '#define RT_SERIALNO "$(SERIALNO)"' >> router/shared/version.h
+ifneq ($(RCNO),)
+	@echo '#define RT_RCNO "$(RCNO)"' >> router/shared/version.h
+else
+	@echo '#define RT_RCNO NULL' >> router/shared/version.h
+endif
 	@echo '#define RT_EXTENDNO "$(EXTENDNO)"' >> router/shared/version.h
 endif
 	@echo '#define RT_SWPJVERNO "$(SWPJVERNO)"' >> router/shared/version.h
@@ -499,7 +523,7 @@ ifeq ($(CONFIG_RALINK),y)
 	PAD2=`expr $${ISIZE} - $${KSIZE} - $${RSIZE}` ; \
 	RFSOFFSET=`expr 64 + $${KSIZE} + $${PAD2}` ; \
 	echo "PAD2: $${PAD2}" ; \
-	if [ "$(BUILD_NAME)" = "RT-N56UB1" ] || [ "$(BUILD_NAME)" = "RT-N56UB2" ] || [ "$(BUILD_NAME)" = "RT-AC1200GA1" ] || [ "$(BUILD_NAME)" = "RT-AC1200GU" ] || [ "$(BUILD_NAME)" = "RP-AC56" ] || [ "$(BUILD_NAME)" = "RP-AC87" ] || [ "$(BUILD_NAME)" = "RT-AC85U" ] || [ "$(BUILD_NAME)" = "RT-AC65U" ] ; then \
+	if [ "$(BUILD_NAME)" = "RT-N56UB1" ] || [ "$(BUILD_NAME)" = "RT-N56UB2" ] || [ "$(BUILD_NAME)" = "RT-AC1200GA1" ] || [ "$(BUILD_NAME)" = "RT-AC1200GU" ] || [ "$(BUILD_NAME)" = "RP-AC56" ] || [ "$(BUILD_NAME)" = "RP-AC87" ] || [ "$(BUILD_NAME)" = "RT-AC85U" ] || [ "$(BUILD_NAME)" = "RT-AC65U" ] || [ "$(BUILD_NAME)" = "RT-N800HP" ]; then \
 		asustools/mkimage -A mips -O linux -T kernel -C lzma -a 80001000 -e $${ENTRY} -r $${RFSOFFSET} \
 		-n $(BUILD_NAME) -V "$(KERNEL_VER)" "$(FS_VER)"  "$(SERIALNO)" "$(EXTENDNO)" "0" "0" "0" "0" "0" "0"  \
 		-d $(PLATFORMDIR)/zImage.img image/$(IMGNAME).trx ; \
@@ -709,14 +733,13 @@ export_config:
 kernel_patch:
 ifeq ($(CONFIG_LANTIQ),y)
 	cd proprietary; rm -rf ltq_eip97_1.2.25; tar zxf ltq_eip97_1.2.25.tar.gz
-	cd proprietary; rm -rf ${SRCBASE}/router/rom_lantiq/; tar zxf rom_lantiq_05.04.00.61.tgz -C ${SRCBASE}/router/ ; mv ${SRCBASE}/router/rom_lantiq_05.04.00.61 ${SRCBASE}/router/rom_lantiq/
+	cd proprietary; rm -rf ${SRCBASE}/router/rom_lantiq/; tar zxf rom_lantiq_05.04.00.61.7_AE.tgz -C ${SRCBASE}/router/ ; mv ${SRCBASE}/router/rom_lantiq_05.04.00.61.7_AE ${SRCBASE}/router/rom_lantiq/
+	cp patches/iptables-1.4.21/extensions/* ${SRCBASE}/router/iptables-1.4.21/extensions/
 	# rm -f ${SRCBASE}/router/rom_lantiq/opt/lantiq/wave/images/cal_wlan0.bin
 	# rm -f ${SRCBASE}/router/rom_lantiq/opt/lantiq/wave/images/cal_wlan1.bin
 	# rm -f proprietary/rom_lantiq/opt/lantiq/wave/images/cal_wlan0.bin
 	# rm -f proprietary/rom_lantiq/opt/lantiq/wave/images/cal_wlan1.bin
-	cd proprietary; cp -rf rom_lantiq_05.04.00.61_patch/* ${SRCBASE}/router/rom_lantiq/
-	rm ${SRCBASE}/router/rom_lantiq/opt/lantiq/wave/images/ap_lower_gen5b.bin
-	rm ${SRCBASE}/router/rom_lantiq/opt/lantiq/wave/images/ap_upper_gen5b.bin
+	cd proprietary; cp -rf rom_lantiq_05.04.00.61.7_AE_patch/* ${SRCBASE}/router/rom_lantiq/
 	# cp -f proprietary/linux-3.10.104/firmware/lantiq/phy11g_ip_BE.bin linux/linux-3.10.104/firmware/lantiq/phy11g_ip_BE.bin
 endif
 
@@ -737,7 +760,7 @@ ifeq ($(CONFIG_LANTIQ),y)
 	fi
 endif
 	if [ ! -f "${SRCBASE}/tools/${TOOLCHAIN_NAME}/.patched" ] ; then \
-		cd ${SRCBASE}/tools/${TOOLCHAIN_NAME}/lib; cp ${SRCBASE}/patches/toolchain/lib/libnsl-0.9.33.2.so .; ln -s libnsl-0.9.33.2.so libnsl.so.0; ln -s libnsl.so.0 libnsl.so ; \
+		cd ${SRCBASE}/tools/${TOOLCHAIN_NAME}/lib; cp ${SRCBASE}/patches/toolchain/lib/libnsl-0.9.33.2.so .; cp ${SRCBASE}/patches/toolchain/lib/libresolv-0.9.33.2.so . ; ln -s libnsl-0.9.33.2.so libnsl.so.0; ln -s libnsl.so.0 libnsl.so ; ln -s libresolv-0.9.33.2.so libresolv.so.0 ; \
 		touch ${SRCBASE}/tools/${TOOLCHAIN_NAME}/.patched ; \
 	fi
 ifeq ($(CONFIG_LANTIQ),y)
@@ -958,8 +981,6 @@ define RouterOptions
 		echo "# RTCONFIG_JFFS2 is not set" >>$(1); \
 		sed -i "/RTCONFIG_JFFSV1/d" $(1); \
 		echo "# RTCONFIG_JFFSV1 is not set" >>$(1); \
-		sed -i "/RTCONFIG_JFFS2USERICON/d" $(1); \
-		echo "RTCONFIG_JFFS2USERICON=y" >>$(1); \
 	fi; \
 	if [ "$(FANCTRL)" = "y" ]; then \
 		sed -i "/RTCONFIG_FANCTRL/d" $(1); \
@@ -1331,7 +1352,7 @@ define RouterOptions
 		echo "RTCONFIG_NEW_USER_LOW_RSSI=y" >>$(1); \
 	fi; \
 	if [ "$(USB)" = "USB" ]; then \
-		sed -i "/RTCONFIG_USB is not set/d" $(1); \
+		sed -i "/RTCONFIG_USB\b/d" $(1); \
 		echo "RTCONFIG_USB=y" >>$(1); \
 		if [ "$(USBEXTRAS)" = "y" ]; then \
 			sed -i "/RTCONFIG_USB_EXTRAS/d" $(1); \
@@ -1345,9 +1366,13 @@ define RouterOptions
 			sed -i "/RTCONFIG_EXT4FS/d" $(1); \
 			echo "RTCONFIG_EXT4FS=y" >>$(1); \
 		fi; \
-		if [ "$(TFAT)" = "y" ]; then \
+		if [ "$(TFAT)" != "" ]; then \
 			sed -i "/RTCONFIG_TFAT/d" $(1); \
 			echo "RTCONFIG_TFAT=y" >>$(1); \
+			if [ "$(findstring open, $(TFAT))" = "open" ]; then \
+				sed -i "/RTCONFIG_OPENPLUS_TFAT/d" $(1); \
+				echo "RTCONFIG_OPENPLUS_TFAT=y" >>$(1); \
+			fi; \
 		fi; \
 		if [ "$(NTFS)" != "" ]; then \
 			sed -i "/RTCONFIG_NTFS/d" $(1); \
@@ -1557,6 +1582,8 @@ define RouterOptions
 		echo "# RTCONFIG_FTP is not set" >>$(1); \
 	fi; \
 	if [ "$(NO_USBSTORAGE)" = "y" ]; then \
+		sed -i "/RTCONFIG_NO_USBPORT/d" $(1); \
+		echo "RTCONFIG_NO_USBPORT=y" >>$(1); \
 		sed -i "/RTCONFIG_SAMBASRV/d" $(1); \
 		echo "# RTCONFIG_SAMBASRV is not set" >>$(1); \
 		sed -i "/RTCONFIG_FTP/d" $(1); \
@@ -1573,6 +1600,10 @@ define RouterOptions
 	if [ "$(BRCM_NAND_JFFS2)" = "y" ]; then \
 		sed -i "/RTCONFIG_BRCM_NAND_JFFS2/d" $(1); \
 		echo "RTCONFIG_BRCM_NAND_JFFS2=y" >>$(1); \
+	fi; \
+	if [ "$(JFFS_NVRAM)" = "y" ]; then \
+		sed -i "/RTCONFIG_JFFS_NVRAM/d" $(1); \
+		echo "RTCONFIG_JFFS_NVRAM=y" >>$(1); \
 	fi; \
 	if [ "$(JFFS1)" = "y" ]; then \
 		sed -i "/RTCONFIG_JFFSV1/d" $(1); \
@@ -1681,6 +1712,8 @@ define RouterOptions
 			echo "# RTCONFIG_JFFS2 is not set" >>$(1); \
 			sed -i "/RTCONFIG_JFFSV1/d" $(1); \
 			echo "# RTCONFIG_JFFSV1 is not set" >>$(1); \
+			sed -i "/RTCONFIG_JFFS2USERICON/d" $(1); \
+			echo "RTCONFIG_JFFS2USERICON=y" >>$(1); \
 		else \
 			sed -i "/RTCONFIG_UBIFS/d" $(1); \
 			echo "# RTCONFIG_UBIFS is not set" >>$(1); \
@@ -1942,10 +1975,14 @@ define RouterOptions
 		sed -i "/RTCONFIG_WLCEVENTD/d" $(1); \
 		echo "RTCONFIG_WLCEVENTD=y" >>$(1); \
 	fi; \
-        if [ "$(HAPDEVENT)" = "y" ] || [ "$(CONFIG_LANTIQ)" = "y" ]; then \
-                sed -i "/RTCONFIG_HAPDEVENT/d" $(1); \
-                echo "RTCONFIG_HAPDEVENT=y" >>$(1); \
-        fi; \
+	if [ "$(FBT)" = "y" ]; then \
+		sed -i "/RTCONFIG_FBT/d" $(1); \
+		echo "RTCONFIG_FBT=y" >>$(1); \
+	fi; \
+	if [ "$(HAPDEVENT)" = "y" ] || [ "$(CONFIG_LANTIQ)" = "y" ]; then \
+		sed -i "/RTCONFIG_HAPDEVENT/d" $(1); \
+		echo "RTCONFIG_HAPDEVENT=y" >>$(1); \
+	fi; \
 	if [ "$(ADBLOCK)" = "y" ]; then \
 		sed -i "/RTCONFIG_ADBLOCK/d" $(1); \
 		echo "RTCONFIG_ADBLOCK=y" >>$(1); \
@@ -1992,7 +2029,7 @@ define RouterOptions
 		sed -i "/RTCONFIG_BCMBSD/d" $(1); \
 		echo "RTCONFIG_BCMBSD=y" >>$(1); \
 		sed -i "/RTCONFIG_GMAC3/d" $(1); \
-		echo "RTCONFIG_GMAC3=y" >>$(1); \
+		echo "# RTCONFIG_GMAC3 is not set" >>$(1); \
 	fi; \
 	if [ "$(HND_ROUTER)" = "y" ]; then \
 		sed -i "/RTCONFIG_HND_ROUTER/d" $(1); \
@@ -2016,6 +2053,11 @@ define RouterOptions
 			echo "RTCONFIG_VISUALIZATION=y" >>$(1); \
 		else \
 			echo "# RTCONFIG_VISUALIZATION is not set" >>$(1); \
+		fi; \
+		if [ "$(DFS_US)" = "y" ]; then \
+			echo "RTCONFIG_DFS_US=y" >>$(1); \
+		else \
+			echo "# RTCONFIG_DFS_US is not set" >>$(1); \
 		fi; \
 	fi; \
 	if [ "$(HND_ROUTER_F1)" = "y" ]; then \
@@ -2391,7 +2433,7 @@ define RouterOptions
 	if [ "$(RALINK)" = "y" -o "$(QCA)" = "y" -o "$(REALTEK)" = "y" ]; then \
 		sed -i "/CONFIG_LIBBCM/d" $(1); \
 		echo "# CONFIG_LIBBCM is not set" >>$(1); \
-  fi; \
+	fi; \
 	if [ "$(CFGSYNC)" = "y" ]; then \
 		sed -i "/RTCONFIG_CFGSYNC/d" $(1); \
 		echo "RTCONFIG_CFGSYNC=y" >>$(1); \
@@ -2428,9 +2470,21 @@ define RouterOptions
 		sed -i "/RTCONFIG_SSID_AMAPS/d" $(1); \
 		echo "RTCONFIG_SSID_AMAPS=y" >>$(1); \
 	fi; \
-	if [ "$(DUAL_BACKHAUL)" = "y" ]; then \
-		sed -i "/RTCONFIG_DUAL_BACKHAUL/d" $(1); \
-		echo "RTCONFIG_DUAL_BACKHAUL=y" >>$(1); \
+	if [ "$(QCA)" = "y" ] && [ "$(MESH)" = "y" ]; then \
+		sed -i "/RTCONFIG_WIFI_SON/d" $(1); \
+		echo "RTCONFIG_WIFI_SON=y" >>$(1); \
+		if [ "$(ETHBACKHAUL)" = "y" ]; then \
+			sed -i "/RTCONFIG_ETHBACKHAUL/d" $(1); \
+			echo "RTCONFIG_ETHBACKHAUL=y" >>$(1); \
+		fi; \
+		if [ "$(DUAL_BACKHAUL)" = "y" ]; then \
+			sed -i "/RTCONFIG_DUAL_BACKHAUL/d" $(1); \
+			echo "RTCONFIG_DUAL_BACKHAUL=y" >>$(1); \
+		fi; \
+	fi; \
+	if [ "$(AUTHSUPP)" = "y" ]; then \
+		sed -i "/RTCONFIG_AUTHSUPP/d" $(1); \
+		echo "RTCONFIG_AUTHSUPP=y" >>$(1); \
 	fi; \
 	if [ "$(VPN_FUSION)" = "y" ]; then \
 		sed -i "/RTCONFIG_VPN_FUSION/d" $(1); \
@@ -3249,20 +3303,23 @@ fi; \
 		echo "CONFIG_HAVE_LATENCYTOP_SUPPORT=y" >>$(1); \
 		sed -i "/CONFIG_GENERIC_LOCKBREAK/d" $(1); \
 		echo "CONFIG_BROKEN_ON_SMP=y" >>$(1); \
-		sed -i "/CONFIG_TREE_RCU=y/# CONFIG_TREE_RCU is not set/g" >>$(1); \
+		sed -i "/CONFIG_TREE_RCU/d" $(1); \
+		echo "# CONFIG_TREE_RCU is not set" >>$(1); \
+		sed -i "/CONFIG_TREE_PREEMPT_RCU/d" $(1); \
 		echo "CONFIG_TREE_PREEMPT_RCU=y" >>$(1); \
+		sed -i "/CONFIG_TINY_RCU/d" $(1); \
 		echo "# CONFIG_TINY_RCU is not set" >>$(1); \
 		sed -i "/CONFIG_USE_GENERIC_SMP_HELPERS/d" $(1); \
 		sed -i "/CONFIG_STOP_MACHINE/d" $(1); \
 		sed -i "/CONFIG_MUTEX_SPIN_ON_OWNER/d" $(1); \
 		echo "# CONFIG_MUTEX_SPIN_ON_OWNER is not set" >>$(1); \
-		sed -i "/# CONFIG_ARM_ERRATA_742230 is not set/d" $(1); \
-		sed -i "/# CONFIG_ARM_ERRATA_742231 is not set/d" $(1); \
-		sed -i "/# CONFIG_ARM_ERRATA_720789 is not set/d" $(1); \
-		sed -i "/CONFIG_SMP=y/d" $(1); \
+		sed -i "/CONFIG_ARM_ERRATA_742230/d" $(1); \
+		sed -i "/CONFIG_ARM_ERRATA_742231/d" $(1); \
+		sed -i "/CONFIG_ARM_ERRATA_720789/d" $(1); \
+		sed -i "/CONFIG_SMP\b/d" $(1); \
 		echo "# CONFIG_SMP is not set" >>$(1); \
 		sed -i "/CONFIG_NR_CPUS=2/d" $(1); \
-		sed -i "/# CONFIG_HOTPLUG_CPU is not set/d" $(1); \
+		sed -i "/CONFIG_HOTPLUG_CPU/d" $(1); \
 		sed -i "/CONFIG_RPS=y/d" $(1); \
 	fi; \
 	if [ "$(ALPINE)" = "y" ]; then \
@@ -3416,6 +3473,12 @@ fi; \
 	else \
 		echo "# CONFIG_DUMP_PREV_OOPS_MSG is not set" >>$(1); \
 	fi; \
+	sed -i "/CONFIG_JFFS_NVRAM/d" $(1); \
+	if [ "$(JFFS_NVRAM)" = "y" ]; then \
+                echo "CONFIG_JFFS_NVRAM=y" >>$(1); \
+	else \
+		echo "# CONFIG_JFFS_NVRAM is not set" >>$(1); \
+        fi; \
 	sed -i "/CONFIG_RTAC3200/d" $(1); \
 	if [ "$(BUILD_NAME)" = "RT-AC3200" ]; then \
 		echo "CONFIG_RTAC3200=y" >>$(1); \
@@ -4125,6 +4188,8 @@ endif
 get_extendno:
 	@if [ "$(ID)" == "" ]; then echo "No ID is assigned"; exit 1; fi
 	git log --pretty=oneline asuswrt_$(KERNEL_VER).$(FS_VER).$(SERIALNO)..$(ID) | wc -l
+	@echo $(RC_EXT_NO)
+	@echo $(EXTENDNO)
 
 .PHONY: all clean distclean cleanimage cleantools cleankernel prepk what setprofile libc help image default bin_file
 .PHONY: a b c d m Makefile allversions

@@ -26,11 +26,11 @@
 #include <sflash.h>
 #include <hndsoc.h>
 
-#ifdef BCMDBG_ERR
+#ifdef BCMDBG
 #define NVR_MSG(x) printf x
 #else
 #define NVR_MSG(x)
-#endif	/* BCMDBG_ERR */
+#endif	/* BCMDBG */
 
 #define NUM_VSIZES 16
 typedef struct _vars {

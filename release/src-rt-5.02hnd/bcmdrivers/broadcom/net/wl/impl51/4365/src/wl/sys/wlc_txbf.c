@@ -2318,7 +2318,7 @@ wlc_txbf_scb_state_upd_cb(void *ctx, scb_state_upd_data_t *notif_data)
 	*/
 	if ((oldstate & ASSOCIATED) && !SCB_ASSOCIATED(scb))
 		wlc_txbf_delete_link(txbf, scb);
-	else if (SCB_ASSOCIATED(scb) && !SCB_AUTHORIZED(scb))
+	else if (!(oldstate & ASSOCIATED) && SCB_ASSOCIATED(scb))
 		wlc_txbf_init_link(txbf, scb);
 }
 

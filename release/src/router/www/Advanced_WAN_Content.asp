@@ -32,6 +32,8 @@
 <script type="text/javascript" src="/popup.js"></script>
 <script type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" src="/validator.js"></script>
+<script type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <script>
 
 var wans_dualwan = '<% nvram_get("wans_dualwan"); %>';
@@ -64,6 +66,7 @@ var original_wan_type = wan_proto_orig;
 var original_wan_dhcpenable = parseInt('<% nvram_get("wan_dhcpenable_x"); %>');
 var original_dnsenable = parseInt('<% nvram_get("wan_dnsenable_x"); %>');
 var original_ppp_echo = parseInt('<% nvram_get("wan_ppp_echo"); %>');
+var default_ppp_echo = parseInt('<% nvram_default_get("wan_ppp_echo"); %>');
 var wan_unit_flag = '<% nvram_get("wan_unit"); %>';
 
 if(yadns_support){
@@ -87,7 +90,9 @@ function initial(){
 		}
 	}
 	
-	show_menu();			
+	show_menu();
+	// https://www.asus.com/support/FAQ/1011715/
+	httpApi.faqURL("faq", "1011715", "https://www.asus.com", "/support/FAQ/");
 	change_wan_type(document.form.wan_proto.value, 0);	
 	fixed_change_wan_type(document.form.wan_proto.value);
 	genWANSoption();
@@ -105,8 +110,6 @@ function initial(){
 			document.getElementById("yadns_hint").innerHTML = "<span><#YandexDNS_settings_hint#></span>";
 		}
 	}
-
-	addOnlineHelp(document.getElementById("faq"), ["UPnP"]);
 
 	if(gobi_support){
 		document.getElementById("page_title").innerHTML = "<#WAN_page_desc#>";
@@ -476,6 +479,7 @@ function change_wan_type(wan_type, flag){
 		inputCtrl(document.form.wan_pppoe_mru, 1);
 		inputCtrl(document.form.wan_pppoe_service, 1);
 		inputCtrl(document.form.wan_pppoe_ac, 1);
+		inputCtrl(document.form.wan_pppoe_hostuniq, 1);
 		inputCtrl(document.form.dhcpc_mode, 0);
 		
 		// 2008.03 James. patch for Oleg's patch. {
@@ -500,6 +504,7 @@ function change_wan_type(wan_type, flag){
 		inputCtrl(document.form.wan_pppoe_mru, 0);
 		inputCtrl(document.form.wan_pppoe_service, 0);
 		inputCtrl(document.form.wan_pppoe_ac, 0);
+		inputCtrl(document.form.wan_pppoe_hostuniq, 0);
 		inputCtrl(document.form.dhcpc_mode, 0);
 		
 		// 2008.03 James. patch for Oleg's patch. {
@@ -524,6 +529,7 @@ function change_wan_type(wan_type, flag){
 		inputCtrl(document.form.wan_pppoe_mru, 0);
 		inputCtrl(document.form.wan_pppoe_service, 0);
 		inputCtrl(document.form.wan_pppoe_ac, 0);
+		inputCtrl(document.form.wan_pppoe_hostuniq, 0);
 		inputCtrl(document.form.dhcpc_mode, 0);
 		
 		// 2008.03 James. patch for Oleg's patch. {
@@ -548,6 +554,7 @@ function change_wan_type(wan_type, flag){
 		inputCtrl(document.form.wan_pppoe_mru, 0);
 		inputCtrl(document.form.wan_pppoe_service, 0);
 		inputCtrl(document.form.wan_pppoe_ac, 0);
+		inputCtrl(document.form.wan_pppoe_hostuniq, 0);
 		inputCtrl(document.form.dhcpc_mode, 0);
 		
 		// 2008.03 James. patch for Oleg's patch. {
@@ -572,6 +579,7 @@ function change_wan_type(wan_type, flag){
 		inputCtrl(document.form.wan_pppoe_mru, 0);
 		inputCtrl(document.form.wan_pppoe_service, 0);
 		inputCtrl(document.form.wan_pppoe_ac, 0);
+		inputCtrl(document.form.wan_pppoe_hostuniq, 0);
 		inputCtrl(document.form.dhcpc_mode, 1);
 		
 		// 2008.03 James. patch for Oleg's patch. {
@@ -612,7 +620,7 @@ function fixed_change_wan_type(wan_type){
 			document.form.wan_dnsenable_x[0].checked = 1;
 			document.form.wan_dnsenable_x[1].checked = 0;
 			change_common_radio(document.form.wan_dnsenable_x, 'IPConnection', 'wan_dnsenable_x', 1);
-			document.form.wan_ppp_echo.value = 1;
+			document.form.wan_ppp_echo.value = default_ppp_echo;
 			ppp_echo_control();
 		}		
 	}else if(wan_type == "pptp"	|| wan_type == "l2tp"){	
@@ -629,7 +637,7 @@ function fixed_change_wan_type(wan_type){
 			change_common_radio(document.form.wan_dnsenable_x, 'IPConnection', 'wan_dnsenable_x', 0);
 			inputCtrl(document.form.wan_dnsenable_x[0], 1);
 			inputCtrl(document.form.wan_dnsenable_x[1], 1);
-			document.form.wan_ppp_echo.value = 1;
+			document.form.wan_ppp_echo.value = default_ppp_echo;
 			ppp_echo_control();
 		}
 	}
@@ -795,7 +803,7 @@ function ppp_echo_control(flag){
 	var enable = (flag == 1) ? 1 : 0;
 	inputCtrl(document.form.wan_ppp_echo_interval, enable);
 	inputCtrl(document.form.wan_ppp_echo_failure, enable);
-	var enable = (flag == 2) ? 1 : 0;
+	enable = (flag == 2) ? 1 : 0;
 	//inputCtrl(document.form.dns_probe_timeout, enable);
 	inputCtrl(document.form.dns_delay_round, enable);
 }

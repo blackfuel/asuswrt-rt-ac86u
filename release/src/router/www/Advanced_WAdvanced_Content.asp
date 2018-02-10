@@ -124,6 +124,14 @@
 
 </style>
 <script>
+$(function () {
+	if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+		$('<script>')
+			.attr('type', 'text/javascript')
+			.attr('src','/require/modules/amesh.js')
+			.appendTo('head');
+	}
+});
 //Get boot loader version and convert type form string to Integer
 var bl_version = '<% nvram_get("bl_version"); %>';
 var bl_version_array = bl_version.split(".");
@@ -577,11 +585,11 @@ function initial(){
 	}
 }
 
+var tcode = ttc.substring(0,2);
 function generate_country_selection(){
 	var code = '';
 	var matched = false;
-	var tcode = ttc.substring(0,2);
-
+	
 	code += '<select class="input_option" name="location_code">';
 	for(i=0; i<country_array.length; i++){
 		var index = country_array[i];
@@ -717,7 +725,12 @@ function applyRule(){
 		}
 		
 		if(document.form.usb_usb3.disabled == false && document.form.usb_usb3.value != '<% nvram_get("usb_usb3"); %>'){
-			FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+			if(based_modelid == "BLUECAVE"){
+				FormActions("start_apply.htm", "apply", "restart_wireless", "");
+			}
+			else{
+				FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+			}
 		}
 
 		if(no_finiwl_support &&  wl_txpower_orig != document.form.wl_txpower.value){
@@ -730,7 +743,8 @@ function applyRule(){
 		}
 		
 		if(location_list_support){
-			if(orig_region.length >= 0 && orig_region != document.form.location_code.value){
+			if((orig_region.length > 0 && orig_region != document.form.location_code.value)
+			|| (orig_region == "" && document.form.location_code.value != tcode)){
 				if(lantiq_support){
 					document.form.action_script.value = "restart_wireless";
 					document.form.group_id.value = "location"
@@ -756,6 +770,11 @@ function applyRule(){
 		}
 		
 		document.form.wl_sched.value = wifi_schedule_value;	
+		if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+			var radio_value = (document.form.wl_radio[0].checked) ? 1 : 0;
+			if(!AiMesh_confirm_msg("Wireless_Radio",radio_value))
+				return;
+		}
 		showLoading();
 		document.form.submit();
 	}

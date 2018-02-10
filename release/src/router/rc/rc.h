@@ -86,7 +86,7 @@
 #define USB20_MOD	"ehci-hcd"
 #endif
 
-#if defined(RTAC58U) || defined(RT4GAC53U) || defined(RTAC82U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000)
+#ifdef RTCONFIG_SOC_IPQ40XX
 #define USB_DWC3	"dwc3"
 #define USB_DWC3_IPQ	"dwc3-ipq40xx"
 #define USB_PHY1	"phy-qca-baldur"
@@ -148,6 +148,7 @@ static inline int before(int ver1, int ver2)
 #endif
 
 #define NAT_RULES	"/tmp/nat_rules"
+#define REDIRECT_RULES	"/tmp/redirect_rules"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(ary) (sizeof(ary) / sizeof((ary)[0]))
@@ -275,6 +276,9 @@ extern int wanport_status(int wan_unit);
 
 /* board API under sysdeps directory */
 extern void set_factory_mode();
+#if defined(RTCONFIG_OPENPLUS_TFAT) || defined(RTCONFIG_OPENPLUSPARAGON_NTFS) || defined(RTCONFIG_OPENPLUSTUXERA_NTFS) || defined(RTCONFIG_OPENPLUSPARAGON_HFS) || defined(RTCONFIG_OPENPLUSTUXERA_HFS)
+extern void set_fs_coexist();
+#endif
 extern int _dump_powertable();
 extern void ate_commit_bootlog(char *err_code);
 extern int setAllLedOn(void);
@@ -470,7 +474,9 @@ extern u_int ieee80211_mhz2ieee(u_int freq);
 
 /* board API under sysdeps/lantiq/lantiq.c */
 #if defined(RTCONFIG_LANTIQ)
-extern char *wav_get_security_str(const char *auth, const char *crypto);
+extern char *wav_get_security_str(const char *auth, const char *crypto, int weptype);
+extern char *wav_get_beacon_type(const char *crypto);
+extern char *wav_get_encrypt(const char *crypto);
 extern int start_repeater(void);
 extern int set_wps_enable(int unit);
 extern int set_all_wps_config(int configured);
@@ -573,6 +579,9 @@ extern void wl_disband5grp();
 extern int setWanLedMode1(void);
 extern int setWanLedMode2(void);
 extern void tweak_smp_affinity(int enable_samba);
+#ifdef HND_ROUTER
+extern void tweak_usb_affinity(int enable);
+#endif
 #endif
 #ifdef WLCLMLOAD
 extern int download_clmblob_files();
@@ -606,8 +615,7 @@ extern int hw_vht_cap();
 #endif
 #endif
 
-#if defined(RTCONFIG_QCA)
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 extern int start_cap(int c);
 extern void start_re(int c);
 extern int start_cmd(char *cmd);
@@ -631,7 +639,6 @@ extern void start_eth_bh_mon();
 extern int ethbh_peer_detect(char *nic, char *timeout, char *msg);
 extern int check_eth_time;
 extern int eth_down_time;
-#endif
 #endif
 #endif
 
@@ -675,6 +682,9 @@ extern void adjust_ddns_config();
 extern void adjust_access_restrict_config();
 #if defined(RTCONFIG_VPN_FUSION)	
 extern void adjust_vpnc_config(void);
+#endif
+#if defined(RTCONFIG_NOTIFICATION_CENTER)
+extern void force_off_push_msg(void);
 #endif
 
 // format.c
@@ -827,7 +837,7 @@ extern void redirect_nat_setting(void);
 extern void set_load_balance(void);
 #endif
 extern void ip2class(char *lan_ip, char *netmask, char *buf);
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)
+#ifdef RTCONFIG_WIFI_SON
 extern void set_cap_apmode_filter(void);
 #endif
 
@@ -1100,6 +1110,11 @@ extern int setup_dnsmq(int mode);
 // ssh.c
 
 // usb.c
+#if defined(RTCONFIG_OPENPLUS_TFAT) \
+		|| defined(RTCONFIG_OPENPLUSPARAGON_NTFS) || defined(RTCONFIG_OPENPLUSTUXERA_NTFS) \
+		|| defined(RTCONFIG_OPENPLUSPARAGON_HFS) || defined(RTCONFIG_OPENPLUSTUXERA_HFS)
+extern int fs_coexist();
+#endif
 #ifdef RTCONFIG_USB
 FILE* fopen_or_warn(const char *path, const char *mode);
 extern void hotplug_usb(void);
@@ -1130,8 +1145,10 @@ extern int ejusb_main(int argc, char *argv[]);
 extern int __ejusb_main(const char *port_path, int unplug);
 extern void webdav_account_default(void);
 extern void remove_storage_main(int shutdn);
+#ifndef RTCONFIG_NO_USBPORT
 extern int start_usbled(void);
 extern int stop_usbled(void);
+#endif
 extern void restart_nas_services(int stop, int start);
 extern void stop_nas_services(int force);
 extern int sd_partition_num();
@@ -1503,7 +1520,6 @@ extern int start_dsl_diag(void);
 #ifdef RTCONFIG_PUSH_EMAIL
 extern void start_DSLsendmail(void);
 #ifdef RTCONFIG_DBLOG
-extern void generate_trans_id(void);
 extern void start_senddblog(char *path);
 extern void start_dblog(int option);
 extern void stop_dblog(void);
@@ -1540,6 +1556,8 @@ extern void stop_mdns(void);
 extern void restart_mdns(void);
 extern int mkdir_if_none(const char *path);
 #endif
+extern void start_snooper(void);
+extern void stop_snooper(void);
 #ifdef RTCONFIG_DUALWAN
 extern int restart_dualwan(void);
 #endif
@@ -1741,7 +1759,7 @@ extern void config_PVID(void);
 extern void start_tagged_based_vlan(char *input);
 extern void stop_vlan_ifnames(void);
 extern void stop_vlan_wl_ifnames(void);
-extern int check_used_subnet(char *subnet_name, char *brif, int sizeofbrif);
+extern int check_used_subnet(char *subnet_name, char *brif);
 extern int check_internet(char *name);
 extern int check_intranet_only(char *name);
 extern void vlan_subnet_dnsmasq_conf(FILE *fp);
@@ -1906,6 +1924,7 @@ extern int factory_debug();
 #if !(defined(RTCONFIG_CFEZ) && defined(RTCONFIG_BCMARM))
 extern char *ATE_BRCM_PREFIX(void);
 extern int ATE_BRCM_SET(const char *name, const char *value);
+extern int ATE_BRCM_UNSET(const char *name);
 extern void ATE_BRCM_COMMIT(void);
 #endif
 #endif
@@ -1996,8 +2015,8 @@ extern void start_erp_monitor();
 #endif
 
 #ifdef RTCONFIG_USB_SWAP	
-extern int stop_usb_swap(path);
-extern int start_usb_swap(path);
+extern int stop_usb_swap(char *path);
+extern int start_usb_swap(char *path);
 #endif	
 
 #ifdef RTCONFIG_HD_SPINDOWN
@@ -2010,6 +2029,11 @@ void stop_usb_idle(void);
 extern int adtbw_main(int argc, char **argv);
 extern void stop_adtbw();
 extern void start_adtbw();
+#endif
+
+// natnl_api.c
+#ifdef RTCONFIG_TUNNEL
+extern void start_aae();
 #endif
 
 #endif	/* __RC_H__ */

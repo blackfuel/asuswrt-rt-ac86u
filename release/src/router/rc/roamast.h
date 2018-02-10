@@ -87,21 +87,21 @@
 	do {    \
 		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
-			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, fmt, ##arg); \
+			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
 	} while (0)
 #define RAST_DBG(fmt, arg...) \
 	do {    \
 		if(rast_dbg || f_exists(RAST_DEBUG)) \
 		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
-			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, fmt, ##arg); \
+			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
 	} while (0)
 #define RAST_SYSLOG(fmt, arg...) \
         do {    \
                 _dprintf("RAST %lu: "fmt, uptime(), ##arg); \
                 logmessage("roamast", ""fmt, ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
-			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, fmt, ##arg); \
+			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
         } while (0)
 #else
 #define RAST_INFO(fmt, arg...) \

@@ -114,7 +114,7 @@ int is_wps_stopped(void)
 			continue;
 		}
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 #ifndef RTCONFIG_DUAL_BACKHAUL
 		if(i==0)
 		{	

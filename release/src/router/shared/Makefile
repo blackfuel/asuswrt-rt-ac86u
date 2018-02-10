@@ -100,11 +100,6 @@ ifeq ($(BUILD_NAME), RT-N10P_V3)
 CFLAGS += -DRTN10P_V3
 endif
 
-ifeq ($(RTCONFIG_AMAS),y)
-CFLAGS += -fPIC -I$(TOP)/json-c 
-LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
-endif
-
 OBJS = shutils.o linux_timer.o defaults.o model.o rtstate.o boardapi.o
 OBJS += network_utility.o
 OBJS += misc.o version.o files.o strings.o process.o 
@@ -144,7 +139,7 @@ OBJS += flash_mtd.o api-ralink.o
 ifeq ($(RTCONFIG_RALINK_RT3052),y)
 OBJS += ra3052.o
 endif
-ifeq ($(RTN14U)$(RTAC52U)$(RTAC51U)$(RTN11P)$(RTN300)$(RTN54U)$(RTAC1200HP)$(RTN56UB1)$(RTN56UB2)$(RTAC54U)$(RTAC1200GA1)$(RTAC1200GU)$(RPAC87)$(RTAC85U),y)
+ifeq ($(RTN14U)$(RTAC52U)$(RTAC51U)$(RTN11P)$(RTN300)$(RTN54U)$(RTAC1200HP)$(RTN56UB1)$(RTN56UB2)$(RTAC54U)$(RTAC1200GA1)$(RTAC1200GU)$(RPAC87)$(RTAC85U)$(RTN800HP),y)
 CFLAGS += -DRA_ESW
 OBJS += mt7620.o
 else
@@ -285,7 +280,6 @@ endif
 
 ifeq ($(RTCONFIG_AMAS),y)
 CFLAGS += -I$(TOP)/shared/sysdeps/amas
-OBJS += amas_utils.o
 endif
 
 vpath %.c sysdeps $(SRCBASE)/shared/ $(WLAN_ComponentSrcDirs)

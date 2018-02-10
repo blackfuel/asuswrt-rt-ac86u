@@ -152,12 +152,7 @@ wifi/%.o: %.c
 	$(CC) -c $(CFLAGS) -DRWL_WIFI -o $@ $^
 endif
 
-ifeq ($(PREBUILT_BCMBIN),1)
-robocfg:
-	-cp -f $(SRCBASE)/wl/exe/prebuilt/robocfg robocfg
-else
 robocfg: robocfg.c etc53xx.h
-endif
 
 clean:
 	rm -f *.o *~ $(UTILS)

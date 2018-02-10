@@ -30,6 +30,9 @@
 #include <sys/stat.h>
 #include <sys/sysinfo.h>
 #endif
+#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+#include <confmtd_utils.h>
+#endif
 
 #ifdef RTCONFIG_RALINK
 #include <ralink.h>
@@ -497,6 +500,10 @@ wl_defaults(void)
 #endif
 		/* including primary ssid */
 		max_mssid = num_of_mssid_support(unit);
+#ifdef RTCONFIG_PSR_GUEST
+		max_mssid++;
+#endif
+
 		for (subunit = 1; subunit < max_mssid+1; subunit++)
 		{
 			snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, subunit);
@@ -518,6 +525,22 @@ wl_defaults(void)
 				else {
 					nvram_set(strcat_r(prefix, "bss_enabled", tmp), "0");
 				}
+#endif
+			}
+#endif
+
+#if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
+			if (is_psta(unit))
+				nvram_set(strcat_r(prefix, "bss_enabled", tmp), "0");
+			else if (is_psr(unit) && (subunit == 1)) {
+#ifdef RTCONFIG_DPSTA
+#ifdef RTCONFIG_AMAS
+					nvram_set(strcat_r(prefix, "bss_enabled", tmp), ((!dpsta_mode() && !dpsr_mode()) || is_dpsta(unit) || is_dpsr(unit) || dpsta_mode()) ? "1" : "0");
+#else
+					nvram_set(strcat_r(prefix, "bss_enabled", tmp), ((!dpsta_mode() && !dpsr_mode()) || is_dpsta(unit) || is_dpsr(unit)) ? "1" : "0");
+#endif
+#else
+					nvram_set(strcat_r(prefix, "bss_enabled", tmp), "1");
 #endif
 			}
 #endif
@@ -679,7 +702,7 @@ wl_defaults(void)
 		snprintf(prefix, sizeof(prefix), "wl%d_", unit);
 		if (strlen(wlx_vifnames))
 		{
-#if defined(RTCONFIG_AMAS)			
+#if defined(RTCONFIG_AMAS)
 			if(strlen(sta_ifnames) == 0) 
 				strncpy(sta_ifnames, wlx_vifnames, strlen(wlx_vifnames));
 			else
@@ -716,7 +739,7 @@ wl_defaults(void)
 		subunit_x = 0;
 	}
 	
-#if defined(RTCONFIG_AMAS)	
+#if defined(RTCONFIG_AMAS)
 #if defined(RTCONFIG_CONCURRENTREPEATER)
 	nvram_set("sta_ifnames", sta_ifnames);
 	nvram_set("sta_phy_ifnames", sta_ifnames);
@@ -792,6 +815,7 @@ wl_default_wps(int unit)
 void
 restore_defaults_wifi(int all)
 {
+	int rev3 = 0;
 	char ssid[32];
 	int defpsk = strlen(nvram_safe_get("wifi_psk")) && nvram_contains_word("rc_support", "defpsk");
 	char word[256], *next;
@@ -799,13 +823,9 @@ restore_defaults_wifi(int all)
 	unsigned int max_mssid;
 	char prefix[]="wlXXXXXX_", tmp[100];
 
-#if !defined(RTCONFIG_NEWSSID_REV2) && !defined(RTCONFIG_SSID_AMAPS) /* AMAPS default is open system */
-#if !defined(VZWAC1300)
-	if (!defpsk)
-		return;
+#ifdef RTCONFIG_NEWSSID_REV2
+	rev3 = 1;
 #endif
-#endif
-
 	unit = 0;
 	foreach (word, nvram_safe_get("wl_ifnames"), next) {
 		SKIP_ABSENT_BAND_AND_INC_UNIT(unit);
@@ -813,7 +833,15 @@ restore_defaults_wifi(int all)
 		max_mssid = num_of_mssid_support(unit);
 
 		strlcpy(ssid, get_default_ssid(unit, 0), sizeof(ssid));
-		nvram_set(strcat_r(prefix, "ssid", tmp), ssid);
+#ifndef RTCONFIG_SSID_AMAPS
+		if (defpsk
+			|| (rev3
+#ifdef RTAC68U
+			&& is_ssid_rev3_series()
+#endif
+		))
+#endif
+			nvram_set(strcat_r(prefix, "ssid", tmp), ssid);
 
 		if (defpsk)
 		{
@@ -827,7 +855,15 @@ restore_defaults_wifi(int all)
 			snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, subunit);
 
 			strlcpy(ssid, get_default_ssid(unit, subunit), sizeof(ssid));
-			nvram_set(strcat_r(prefix, "ssid", tmp), ssid);
+#ifndef RTCONFIG_SSID_AMAPS
+			if (defpsk
+				|| (rev3
+#ifdef RTAC68U
+				&& is_ssid_rev3_series()
+#endif
+			))
+#endif
+				nvram_set(strcat_r(prefix, "ssid", tmp), ssid);
 
 			if (defpsk)
 			{
@@ -899,10 +935,11 @@ tagged_vlan_defaults(void)
 {
 	char *buf, *g, *p;
 	char *mac, *ip, *gateway, *lan_ipaddr;
-	char subnet_rulelist[1024], dhcp_staticlist[512];
+	char dhcp_staticlist[sizeof(DHCP_STATICLIST_EXAMPLE) * STATIC_MAC_IP_BINDING_PER_LAN + 8];			/* 2240 + 8 */
+	char subnet_rulelist[(sizeof(SUBNET_RULE_EXAMPLE) + sizeof(SUBNET_STATICLIST_EXAMPLE) * STATIC_MAC_IP_BINDING_PER_VLAN) * (VLAN_MAX_NUM - 1) + sizeof(dhcp_staticlist)];	/* 2954 + 2240 + 8 */
 
-	memset(subnet_rulelist, 0, 1024);
-	memset(dhcp_staticlist, 0, 512);
+	memset(subnet_rulelist, 0, sizeof(subnet_rulelist));
+	memset(dhcp_staticlist, 0, sizeof(dhcp_staticlist));
 	nvram_set("vlan_enable", "0");
 	nvram_set("vlan_rulelist", "<1>1>0>0000>00FF00FF>007F>007F>default>1>0");
 	nvram_set("vlan_if_list","00>00FF>007F>007F");
@@ -1519,6 +1556,10 @@ misc_defaults(int restore_defaults)
 
 	nvram_set("success_start_service", "0");
 
+#ifdef RTCONFIG_AMAS
+	nvram_set("start_service_ready", "0");
+#endif
+
 #if defined(RTAC66U) || defined(BCM4352)
 	nvram_set("led_5g", "0");
 #endif
@@ -1646,7 +1687,9 @@ misc_defaults(int restore_defaults)
 #ifdef RTCONFIG_AMAS
 	nvram_unset("amesh_found_cap");
 	nvram_unset("amesh_led");
+#ifdef RTCONFIG_LANTIQ
 	nvram_unset("amesh_hexdata");
+#endif
 #endif
 }
 
@@ -1823,6 +1866,7 @@ restore_defaults(void)
 	}
 
 	if (!nvram_match("buildno_org", nvram_safe_get("buildno")) ||
+	    !nvram_match("rcno_org", nvram_safe_get("rcno")) ||
 	    !nvram_match("extendno_org", nvram_safe_get("extendno")))
 		nvram_commit();
 
@@ -2457,7 +2501,7 @@ static int set_basic_ifname_vars(char *wan, char *lan, char *wl_ifaces[WL_NR_BAN
 	}
 
 #if (defined(RTCONFIG_DUALWAN) && defined(RTCONFIG_QCA))
-#if (defined(PLN12) || defined(PLAC56) || defined(PLAC66U) || defined(RTAC82U) || defined(RTAC58U) || defined(RT4GAC53U) || defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC3000))
+#if (defined(PLN12) || defined(PLAC56) || defined(PLAC66U) || defined(RTCONFIG_SOC_IPQ40XX))
 #else /* RT-AC55U || 4G-AC55U */
 	if(enable_dw_wan) {
 		nvram_set("vlan2hwname", "et0");
@@ -3568,6 +3612,47 @@ int init_nvram(void)
 		break;
 #endif	/* RP-AC87 */
 
+#if defined(RTN800HP)
+	case MODEL_RTN800HP:
+
+		nvram_set("boardflags", "0x100"); // although it is not used in ralink driver, set for vlan
+		nvram_set("vlan1hwname", "et0");  // vlan. used to get "%smacaddr" for compare and find parent interface.
+		nvram_set("vlan2hwname", "et0");  // vlan. used to get "%smacaddr" for compare and find parent interface.
+		nvram_set("lan_ifname", "br0");
+		wl_ifaces[WL_2G_BAND] = "ra0";
+
+		set_basic_ifname_vars("eth3", "vlan1", wl_ifaces, NULL, "vlan1", NULL, "vlan3", NULL, 0);
+
+		nvram_set_int("btn_rst_gpio",  16|GPIO_ACTIVE_LOW);
+		nvram_set_int("btn_wps_gpio",  18|GPIO_ACTIVE_LOW);
+		nvram_set_int("led_wan_gpio",  13|GPIO_ACTIVE_LOW);
+		nvram_set_int("led_pwr_gpio",  12|GPIO_ACTIVE_LOW);
+		nvram_set_int("led_wps_gpio",  12|GPIO_ACTIVE_LOW);
+		nvram_set_int("led_2g_gpio",   14|GPIO_ACTIVE_LOW);
+
+		eval("rtkswitch", "11");
+
+		config_swports_bled("led_wan_gpio", 0);
+		config_netdev_bled("led_2g_gpio", "ra0");
+
+		if (nvram_get("wl_mssid") && nvram_match("wl_mssid", "1"))
+			add_rc_support("mssid");
+		add_rc_support("2.4G update");
+		add_rc_support("rawifi");
+		add_rc_support("switchctrl");
+		add_rc_support("manual_stb");
+		add_rc_support("11AC");
+		add_rc_support("meoVoda");
+		add_rc_support("movistarTriple");
+
+		// the following values is model dep. so move it from default.c to here
+		nvram_set("wl0_HT_TxStream", "4");
+		nvram_set("wl0_HT_RxStream", "4");
+
+		//nvram_set("wl_time", "15");
+		break;
+#endif	/* RT-N800HP */
+
 #if defined(RTAC85U)
 	case MODEL_RTAC85U:
 		nvram_set("boardflags", "0x100"); // although it is not used in ralink driver, set for vlan
@@ -3783,6 +3868,21 @@ int init_nvram(void)
 		wl_ifaces[WL_2G_BAND] = "ath0";
 		wl_ifaces[WL_5G_BAND] = "ath1";
 #ifdef RTCONFIG_DETWAN
+		if(IPTV_ports_cnt() > 0) {
+			const char *wan = "eth1";
+			const char *wan_mask = "16";
+			const char *lan_mask = "32";
+			nvram_set("detwan_ifname", wan);
+			nvram_set("detwan_phy", wan);
+			nvram_set("wan0_ifname", wan);
+			nvram_set("wan_ifnames", wan);
+			nvram_set("wan0_gw_ifname", wan);
+			nvram_set("wanports_mask", wan_mask);
+			nvram_set("lanports_mask", lan_mask);
+			nvram_set("detwan_wan_mask", wan_mask);
+			nvram_set("detwan_lan_mask", lan_mask);
+		}
+
 		if(nvram_safe_get("wan0_ifname")[0] == '\0' || sw_mode() != SW_MODE_ROUTER)
 		{
 #ifdef RTCONFIG_CFGSYNC
@@ -3878,9 +3978,6 @@ int init_nvram(void)
 		nvram_set("wl0_HT_RxStream", "2");
 		nvram_set("wl1_HT_TxStream", "2");
 		nvram_set("wl1_HT_RxStream", "2");
-#ifdef RTCONFIG_LYRA_HIDE
-		add_rc_support("lyra_hide");
-#endif
 		break;
 #endif //MAPAC1300
 
@@ -3892,6 +3989,21 @@ int init_nvram(void)
 		wl_ifaces[WL_5G_BAND] = "ath1";
 		wl_ifaces[WL_5G_2_BAND] = "ath2";
 #ifdef RTCONFIG_DETWAN
+		if(IPTV_ports_cnt() > 0) {
+			const char *wan = "eth0";
+			const char *wan_mask = "32";
+			const char *lan_mask = "16";
+			nvram_set("detwan_ifname", wan);
+			nvram_set("detwan_phy", wan);
+			nvram_set("wan0_ifname", wan);
+			nvram_set("wan_ifnames", wan);
+			nvram_set("wan0_gw_ifname", wan);
+			nvram_set("wanports_mask", wan_mask);
+			nvram_set("lanports_mask", lan_mask);
+			nvram_set("detwan_wan_mask", wan_mask);
+			nvram_set("detwan_lan_mask", lan_mask);
+		}
+
 		if(nvram_safe_get("wan0_ifname")[0] == '\0' || sw_mode() != SW_MODE_ROUTER)
 		{
 #ifdef RTCONFIG_CFGSYNC
@@ -3981,9 +4093,6 @@ int init_nvram(void)
 			add_rc_support("mssid");
 		nvram_set("wl0_vifnames", "wl0.1 wl0.2");
 		nvram_set("wl1_vifnames", "wl1.1 wl1.2");
-#ifdef RTCONFIG_LYRA_HIDE
-		add_rc_support("lyra_hide");
-#endif
 		break;
 #endif //MAPAC2200
 
@@ -4059,9 +4168,6 @@ int init_nvram(void)
 		nvram_set("wl0_HT_RxStream", "2");
 		nvram_set("wl1_HT_TxStream", "2");
 		nvram_set("wl1_HT_RxStream", "2");
-#ifdef RTCONFIG_LYRA_HIDE
-		add_rc_support("lyra_hide");
-#endif
 		set_default_wifi_rate();
 		break;
 #endif
@@ -4115,11 +4221,12 @@ int init_nvram(void)
 		nvram_set("detwan_mask_1", "8");
 #else
 #ifdef RTCONFIG_DUAL_BACKHAUL
-		set_basic_ifname_vars("vlan2", "vlan1 sta0 sta1", wl_ifaces, "usb", "vlan1 sta0 sta1", NULL, "vlan3", NULL, 0);
+		set_basic_ifname_vars("vlan2", "vlan1 sta0 sta1", wl_ifaces, "usb", "vlan1 vlan2 sta0 sta1", NULL, "vlan3", NULL, 0);
 #else
-		set_basic_ifname_vars("vlan2", "vlan1 sta1", wl_ifaces, "usb", "vlan1 sta1", NULL, "vlan3", NULL, 0);
+		set_basic_ifname_vars("vlan2", "vlan1 sta1", wl_ifaces, "usb", "vlan1 vlan2 sta1", NULL, "vlan3", NULL, 0);
 #endif
 #endif	/* RTCONFIG_DETWAN */
+		nvram_set_int("prelink_pap_status", -1);
 
 		nvram_set_int("btn_rst_gpio", 2|GPIO_ACTIVE_LOW);
 		nvram_set_int("btn_wps_gpio", 5|GPIO_ACTIVE_LOW);
@@ -4133,10 +4240,9 @@ int init_nvram(void)
 
 		/* enable bled */
 		config_netdev_bled("led_blue_gpio", "ath0");
-		config_netdev_bled("led_green_gpio", "ath0");
-		config_netdev_bled("led_red_gpio", "ath0");
-
-		//config_netdev_bled("led_2g_gpio", "ath0");
+		add_gpio_to_bled("led_blue_gpio", "led_green_gpio");
+		add_gpio_to_bled("led_blue_gpio", "led_red_gpio");
+		set_rgbled(RGBLED_BLUE_3ON3OFF);
 
 		/* Etron xhci host:
 		 *	USB2 bus: 1-1
@@ -4231,9 +4337,6 @@ int init_nvram(void)
 			add_rc_support("mssid");
 		nvram_set("wl0_vifnames", "wl0.1 wl0.2");
 		nvram_set("wl1_vifnames", "wl1.1 wl1.2");
-#ifdef RTCONFIG_LYRA_HIDE
-		add_rc_support("lyra_hide");
-#endif
 		// the following values is model dep. so move it from default.c to here
 		nvram_set("wl0_HT_TxStream", "2");
 		nvram_set("wl0_HT_RxStream", "2");
@@ -4693,6 +4796,7 @@ int init_nvram(void)
 
 		nvram_set_int("led_wps_gpio", 0);
 		nvram_set_int("led_pwr_gpio", 0);
+		nvram_set_int("led_pwr_red_gpio", 1);
 		nvram_set_int("led_2g_gpio", 8);
 		nvram_set_int("led_5g_gpio", 9);
 		nvram_set_int("led_lan_gpio", 10);
@@ -6535,16 +6639,16 @@ int init_nvram(void)
 		nvram_set("wl_ifnames", "eth1 eth2");
 		nvram_set("wl0_vifnames", "wl0.1 wl0.2 wl0.3");
 		nvram_set("wl1_vifnames", "wl1.1 wl1.2 wl1.3");	
-#if defined(RTCONFIG_AMAS)	
+#if defined(RTCONFIG_AMAS)
 #ifdef RTCONFIG_DPSTA		
 		if (dpsta_mode()) {
 			nvram_set("sta_phy_ifnames", "dpsta");
 		}
+#endif
 		else if (dpsr_mode()) {
 			nvram_set("sta_phy_ifnames", "eth1 eth2");
 		}
 		else
-#endif
 		{
 			nvram_set("sta_phy_ifnames", "eth1 eth2");		
 		}
@@ -6742,11 +6846,11 @@ int init_nvram(void)
 		if (dpsta_mode()) {
 			nvram_set("sta_phy_ifnames", "dpsta");
 		}
+#endif
 		else if (dpsr_mode()) {
 			nvram_set("sta_phy_ifnames", "eth6 eth7 eth8");
 		}
 		else
-#endif
 		{
 			nvram_set("sta_phy_ifnames", "eth6 eth7 eth8");
 		}
@@ -6894,11 +6998,11 @@ int init_nvram(void)
 		if (dpsta_mode()) {
 			nvram_set("sta_phy_ifnames", "dpsta");
 		}
+#endif
 		else if (dpsr_mode()) {
 			nvram_set("sta_phy_ifnames", "eth5 eth6");
 		}
 		else
-#endif
 		{
 			nvram_set("sta_phy_ifnames", "eth5 eth6");
 		}
@@ -7176,16 +7280,17 @@ int init_nvram(void)
 			if (dpsta_mode()) {
 				nvram_set("sta_phy_ifnames", "dpsta");
 			}
+#endif
 			else if (dpsr_mode()) {
 				nvram_set("sta_phy_ifnames", "eth1 eth2 eth3");
 			}
 			else
-#endif
 			{
 				nvram_set("sta_phy_ifnames", "eth1 eth2 eth3");
 			}
 			if(nvram_get_int("re_mode") == 1) {
-				nvram_set("eth_ifnames", "eth0");
+				nvram_set("lan_ifnames", "vlan1 vlan2 eth1 eth2 eth3");
+				nvram_set("eth_ifnames", "vlan2");
 				nvram_set("sta_priority", "2 0 2 1 5 1 3 0 5 2 1 1");
 				nvram_set("wait_band", "10");
 				nvram_set("wait_wifi", "15");
@@ -7194,21 +7299,22 @@ int init_nvram(void)
 
 		}
 		else {
-	#ifdef RTCONFIG_DPSTA
+#ifdef RTCONFIG_DPSTA
 			if (dpsta_mode()) {
 				nvram_set("sta_phy_ifnames", "dpsta");
 			}
+#endif
 			else if (dpsr_mode()) {
 				nvram_set("sta_phy_ifnames", "eth1 eth2");
 			}
 			else
-	#endif
 			{
 				nvram_set("sta_phy_ifnames", "eth1 eth2");
 			}
 			if(nvram_get_int("re_mode") == 1) {
-				nvram_set("eth_ifnames", "eth0");
-				nvram_set("sta_priority", "2 0 2 1 5 2 1 1");
+				nvram_set("lan_ifnames", "vlan1 vlan2 eth1 eth2");
+				nvram_set("eth_ifnames", "vlan2");
+				nvram_set("sta_priority", "2 0 2 1 5 1 1 1");
 				nvram_set("wait_band", "10");
 				nvram_set("wait_wifi", "15");
 			}
@@ -8007,7 +8113,7 @@ int init_nvram(void)
 		nvram_set("wave_action", "0");
 		nvram_set("lan_ifname", "br0");
 		nvram_set("landevs", "eth0_1 eth0_2 eth0_3 eth0_4");
-		nvram_set("ct_max", "65535");
+		nvram_set("ct_max", "5000");
 
 #if 0
 		set_basic_ifname_vars("eth0", "vlan1", "eth1", "eth2", "usb", NULL, "vlan2", "vlan3", 0);
@@ -8102,6 +8208,9 @@ int init_nvram(void)
 		add_rc_support("movistarTriple");
 		add_rc_support("lantiq");
 		add_rc_support("app");
+#if defined(LANTIQ_BSD)
+		add_rc_support("bandstr");
+#endif
 #ifdef RTCONFIG_LED_BTN
 		nvram_set_int("AllLED", 1);
 #endif
@@ -8126,7 +8235,7 @@ int init_nvram(void)
 		break;
 	}
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 	if (nvram_match("x_Setting", "1") && sw_mode() == SW_MODE_ROUTER)
 	{
 		nvram_set("cfg_master", "1");
@@ -8134,6 +8243,7 @@ int init_nvram(void)
 #endif
 
 #if !defined(RTCONFIG_DUALWAN) && \
+    !(defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300)) && \
     (defined(CONFIG_BCMWL5) || defined(RTCONFIG_QCA) || defined(RTCONFIG_RALINK))
 	/* Broadcom, QCA, MTK (use MT7620/MT7621/MT7628 ESW) platform */
 	if (nvram_get("switch_wantag") && !nvram_match("switch_wantag", "") && !nvram_match("switch_wantag", "none")) {
@@ -8193,6 +8303,15 @@ int init_nvram(void)
 	}
 #endif
 
+#ifdef RTCONFIG_REBOOT_SCHEDULE
+	add_rc_support("reboot_schedule");
+	// tmp to add default nvram
+	if(nvram_match("reboot_schedule_enable", ""))
+		nvram_set("reboot_schedule_enable", "0");
+	if(nvram_match("reboot_schedule", ""))
+		nvram_set("reboot_schedule", "00000000000");
+#endif
+
 #ifdef RTCONFIG_IPV6
 	add_rc_support("ipv6");
 #ifdef RTCONFIG_6RELAYD
@@ -8211,7 +8330,10 @@ int init_nvram(void)
 
 #ifdef RTCONFIG_TCODE
 	config_tcode(0);
+	/* Last action for del rc_support */
+	config_tcode(2);
 #endif
+
 #ifdef RTCONFIG_YANDEXDNS
 #ifdef RTCONFIG_TCODE
 	if (!nvram_contains_word("rc_support", "yadns") &&
@@ -8466,6 +8588,84 @@ int init_nvram(void)
 	add_rc_support("diskutility");
 #endif
 
+#ifdef RTCONFIG_OPENPLUS_TFAT
+#if defined(RTAC58U)
+	if(!strncmp(nvram_safe_get("odmpid"), "RT-ACRH", 7))
+		nvram_set("usb_fatfs_mod", "open");
+	else
+		nvram_set("usb_fatfs_mod", "tuxera");
+#else
+	if(fs_coexist() == 1)
+		nvram_set("usb_fatfs_mod", "open");
+	else
+		nvram_set("usb_fatfs_mod", "tuxera");
+#endif
+#elif defined(RTCONFIG_TFAT)
+	nvram_set("usb_fatfs_mod", "tuxera");
+#else
+	nvram_set("usb_fatfs_mod", "open");
+#endif
+
+#ifdef RTCONFIG_NTFS
+	nvram_set("usb_ntfs_mod", "");
+#if defined(RTCONFIG_OPENPLUSPARAGON_NTFS) || defined(RTCONFIG_OPENPLUSTUXERA_NTFS)
+#if defined(RTAC58U)
+	if(!strncmp(nvram_safe_get("odmpid"), "RT-ACRH", 7))
+		nvram_set("usb_ntfs_mod", "open");
+	else{
+		add_rc_support("sparse");
+		nvram_set("usb_ntfs_mod", "tuxera");
+	}
+#else
+	if(fs_coexist() == 1)
+		nvram_set("usb_ntfs_mod", "open");
+	else
+		nvram_set("usb_ntfs_mod", "tuxera");
+#endif
+#else
+#ifdef RTCONFIG_OPEN_NTFS3G
+	nvram_set("usb_ntfs_mod", "open");
+#elif defined(RTCONFIG_PARAGON_NTFS)
+	add_rc_support("sparse");
+	nvram_set("usb_ntfs_mod", "paragon");
+#elif defined(RTCONFIG_TUXERA_NTFS)
+	nvram_set("usb_ntfs_mod", "tuxera");
+#endif
+#endif
+#endif // RTCONFIG_NTFS
+
+#ifdef RTCONFIG_HFS
+	nvram_set("usb_hfs_mod", "");
+#if defined(RTCONFIG_OPENPLUSPARAGON_HFS) || defined(RTCONFIG_OPENPLUSTUXERA_HFS)
+#if defined(RTAC58U)
+	if(!strncmp(nvram_safe_get("odmpid"), "RT-ACRH", 7))
+		nvram_set("usb_hfs_mod", "open");
+	else
+		nvram_set("usb_hfs_mod", "tuxera");
+#else
+	if(fs_coexist() == 1)
+		nvram_set("usb_hfs_mod", "open");
+	else
+		nvram_set("usb_hfs_mod", "tuxera");
+#endif
+#else
+#ifdef RTCONFIG_KERNEL_HFSPLUS
+	nvram_set("usb_hfs_mod", "open");
+#elif defined(RTCONFIG_PARAGON_HFS)
+	nvram_set("usb_hfs_mod", "paragon");
+#elif defined(RTCONFIG_TUXERA_HFS)
+	nvram_set("usb_hfs_mod", "tuxera");
+#endif
+#endif
+#endif // RTCONFIG_HFS
+
+	if(!nvram_get_int("enable_samba_manual")){
+#ifdef RTCONFIG_TUXERA_SMBD
+		nvram_set("enable_samba_tuxera", "1");
+#else
+		nvram_set("enable_samba_tuxera", "0");
+#endif
+	}
 #endif // RTCONFIG_USB
 
 #ifdef RTCONFIG_HTTPS
@@ -8533,67 +8733,6 @@ int init_nvram(void)
 	add_rc_support("user_low_rssi");
 #endif
 
-#ifdef RTCONFIG_TFAT
-	nvram_set("usb_fatfs_mod", "tuxera");
-#else
-	nvram_set("usb_fatfs_mod", "open");
-#endif
-
-#ifdef RTCONFIG_NTFS
-	nvram_set("usb_ntfs_mod", "");
-#if defined(RTCONFIG_OPENPLUSPARAGON_NTFS) || defined(RTCONFIG_OPENPLUSTUXERA_NTFS)
-#if defined(RTAC58U)
-	if (!strncmp(nvram_safe_get("odmpid"), "RT-ACRH", 7))
-		nvram_set("usb_ntfs_mod", "open");
-	else {
-		add_rc_support("sparse");
-		nvram_set("usb_ntfs_mod", "tuxera");
-	}
-#else
-#error "Please define your model when you enable open+paragon or open+tuxera for NTFS"
-#endif
-#else
-#ifdef RTCONFIG_OPEN_NTFS3G
-	nvram_set("usb_ntfs_mod", "open");
-#elif defined(RTCONFIG_PARAGON_NTFS)
-	add_rc_support("sparse");
-	nvram_set("usb_ntfs_mod", "paragon");
-#elif defined(RTCONFIG_TUXERA_NTFS)
-	nvram_set("usb_ntfs_mod", "tuxera");
-#endif
-#endif
-#endif
-
-#ifdef RTCONFIG_HFS
-	nvram_set("usb_hfs_mod", "");
-#if defined(RTCONFIG_OPENPLUSPARAGON_HFS) || defined(RTCONFIG_OPENPLUSTUXERA_HFS)
-#if defined(RTAC58U)
-	if (!strncmp(nvram_safe_get("odmpid"), "RT-ACRH", 7))
-		nvram_set("usb_hfs_mod", "open");
-	else
-		nvram_set("usb_hfs_mod", "tuxera");
-#else
-#error "Please define your model when you enable open+paragon or open+tuxera for HFS+"
-#endif
-#else
-#ifdef RTCONFIG_KERNEL_HFSPLUS
-	nvram_set("usb_hfs_mod", "open");
-#elif defined(RTCONFIG_PARAGON_HFS)
-	nvram_set("usb_hfs_mod", "paragon");
-#elif defined(RTCONFIG_TUXERA_HFS)
-	nvram_set("usb_hfs_mod", "tuxera");
-#endif
-#endif
-#endif
-
-	if(!nvram_get_int("enable_samba_manual")){
-#ifdef RTCONFIG_TUXERA_SMBD
-		nvram_set("enable_samba_tuxera", "1");
-#else
-		nvram_set("enable_samba_tuxera", "0");
-#endif
-	}
-
 #ifdef RTCONFIG_BCMFA
 	add_rc_support("bcmfa");
 #endif
@@ -8650,14 +8789,6 @@ int init_nvram(void)
 	add_rc_support("noaidisk nodm noftp");
 #endif
 
-#ifdef RTCONFIG_REBOOT_SCHEDULE
-	add_rc_support("reboot_schedule");
-	// tmp to add default nvram
-	if(nvram_match("reboot_schedule_enable", ""))
-		nvram_set("reboot_schedule_enable", "0");
-	if(nvram_match("reboot_schedule", ""))
-		nvram_set("reboot_schedule", "00000000000");
-#endif
 #ifdef RTCONFIG_WTFAST
 	add_rc_support("wtfast");
 #endif
@@ -8754,11 +8885,6 @@ int init_nvram(void)
 	add_rc_support("amas");
 #endif
 
-#ifdef RTCONFIG_TCODE
-	/* Last action for del rc_support */
-	config_tcode(2);
-#endif
-
 #ifdef RTCONFIG_WIFI_PROXY
 	add_rc_support("wifiproxy");
 #endif
@@ -8766,6 +8892,16 @@ int init_nvram(void)
 #ifdef CONFIG_BCMWL5
 	add_rc_support("bcmwifi");
 #endif
+
+#ifdef RTCONFIG_LYRA_HIDE
+	add_rc_support("lyra_hide");
+#endif
+
+#ifdef RTCONFIG_DFS_US
+	add_rc_support("dfs");
+
+#endif
+
 	return 0;
 }
 
@@ -8852,30 +8988,23 @@ int init_nvram2(void)
 #ifdef RTCONFIG_WPS_ALLLED_BTN
 	nvram_set_int("AllLED", 1);
 #endif
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(MAPAC1750)
+#ifdef RTCONFIG_WIFI_SON
 	nvram_set("wsplcd_uptime", "0");
 	nvram_set("hyd_uptime", "0");
 	nvram_set("cap_syncing","0");
 	nvram_set("re_syncing","0");
 	nvram_set("re_asuscmd","0");
+#if defined(RTCONFIG_AUTHSUPP)
 	nvram_set("now_security","0");
 	nvram_set("cap_security_old","0");
 	nvram_set("re_security_new","0");
 	nvram_set("re_security_ext","0");
-#ifdef RTCONFIG_ETHBACKHAUL
-	nvram_set_int("mesh_dist", 255);
-	nvram_set("eth_detect_proc","0");
-	nvram_set("eth_backl","0");
-	nvram_unset("eth_bh_CAPMAC");
-	nvram_unset("eth_bh_resetLAN");
-	nvram_unset("eth_queue_cmd");
-#ifdef RTCONFIG_QCA_ORG_UPDOWN_SEPARATE
-	nvram_set("re_eth_backl","0");
-#endif /* RTCONFIG_QCA_ORG_UPDOWN_SEPARATE */
-	nvram_set("upstream_port","0");
-	nvram_set("downstream_port","0");
 #endif
 	nvram_unset("lyra_re_dist");
+	nvram_set("spcmd","0");
+#ifdef RTCONFIG_ETHBACKHAUL
+	nvram_unset("chaos_eth_daemon");
+#endif
 #ifndef RTCONFIG_DUAL_BACKHAUL
 	nvram_set("wps_band_x","1");
 #endif
@@ -8883,10 +9012,11 @@ int init_nvram2(void)
 	nvram_set("hive_dbg","1");
 	nvram_set("log_size","1024");
 //
-#endif
+#endif /* RTCONFIG_WIFI_SON */
 #ifdef RTCONFIG_CFGSYNC
 	nvram_set("cfg_cost", "0");
 	nvram_unset("cfg_alive");
+	nvram_unset("cfg_masterip");
 	if (!is_router_mode())
 		nvram_unset("cfg_cost");
 #ifdef RTCONFIG_QCA
@@ -8950,7 +9080,12 @@ int init_nvram3(void)
 		break;
 
 	case MODEL_RT4GAC53U:
-		/* TBD */
+		/* enable bled */
+		config_netdev_bled("led_lan_gpio", "eth1");
+		config_netdev_bled("led_2g_gpio", "ath0");
+		config_netdev_bled("led_5g_gpio", "ath1");
+		config_usbbus_bled("led_usb_gpio", "3 4");
+		config_usbbus_bled("led_usb3_gpio", "1 2");
 		break;
 
 	case MODEL_MAPAC2200:
@@ -9207,6 +9342,9 @@ fa_mode_adjust()
 	if (vlan_enable())
 		nvram_set_int("ctf_fa_mode", CTF_FA_DISABLED);
 #endif
+#ifdef RTCONFIG_AMAS
+		nvram_set_int("ctf_fa_mode", CTF_FA_DISABLED);	 //disable fa, if enable AMAS. (It will cause lldpd can't be send.)
+#endif
 }
 
 void
@@ -9328,20 +9466,19 @@ void Ate_on_off_led_fail_loop(void)
 #ifdef RTCONFIG_LP5523
 		lp55xx_leds_proc(LP55XX_RED_LEDS, LP55XX_ACT_NONE);
 		pause();
-#else
-#if defined(RTCONFIG_CONCURRENTREPEATER)
-#if defined(RTCONFIG_QCA) || defined(RTCONFIG_REALTEK)
+#elif defined(MAPAC1750)
+		set_rgbled(RGBLED_RED);
+		pause();
+#elif defined(RTCONFIG_CONCURRENTREPEATER) && (defined(RTCONFIG_QCA) || defined(RTCONFIG_REALTEK))
 		setAllLedOff();
 		sleep(1);
 		setAllLedOn();
 		sleep(1);
-#endif
 #else
 		led_control(LED_POWER, LED_OFF);
 		sleep(1);
 		led_control(LED_POWER, LED_ON);
 		sleep(1);
-#endif
 #endif	/* RTCONFIG_LP5523 */
 	}
 }
@@ -9383,7 +9520,9 @@ void Ate_on_off_led_success(void)
 		asus_ate_StartATEMode();
 #ifdef RTCONFIG_LP5523
 		lp55xx_leds_proc(LP55XX_GREENERY_LEDS, LP55XX_ACT_NONE);
-#else	/* RTCONFIG_LP5523 */
+#elif defined(MAPAC1750)
+		set_rgbled(RGBLED_GREEN);
+#else
 		if (get_model() == MODEL_RTAC53U) {
 			led_control(LED_POWER, LED_ON);
 			led_control(LED_USB, LED_ON);
@@ -9399,6 +9538,8 @@ void Ate_on_off_led_start(void)
 {
 #ifdef RTCONFIG_LP5523
 	lp55xx_leds_proc(LP55XX_PURPLE_LEDS, LP55XX_ACT_3ON1OFF);
+#elif defined(MAPAC1750)
+	set_rgbled(RGBLED_PURPLE_3ON1OFF);
 #endif	/* RTCONFIG_LP5523 */
 }
 
@@ -9415,6 +9556,13 @@ static void sysinit(void)
 	int min_free_kbytes_check= 0;
 #if !defined(RTCONFIG_QCA)
 	int model;
+#endif
+
+#ifdef HND_ROUTER
+        _dprintf("\nLaunch boot...\n");
+
+        system("bcm_boot_launcher start");
+        start_hw_wdt();
 #endif
 
 #define MKNOD(name,mode,dev)		if (mknod(name,mode,dev))		perror("## mknod " name)
@@ -9473,11 +9621,28 @@ static void sysinit(void)
 	MOUNT("debugfs", "/sys/kernel/debug", "debugfs", MS_MGC_VAL, NULL);
 #endif
 #endif
-#ifdef HND_ROUTER
-	printf("\nLaunch boot...\n");
 
-	system("bcm_boot_launcher start");
-	start_hw_wdt();
+#ifdef __CONFIG_HSPOT__
+	if (mkdir(RAMFS_CONFMTD_DIR, 0777) < 0 && errno != EEXIST) {
+		perror("/tmp/confmtd not created.");
+	}
+	if (mkdir(RAMFS_CONFMTD_DIR"/hspot", 0777) < 0 && errno != EEXIST) {
+		perror("/tmp/confmtd/hspot not created.");
+	}
+#endif /* __CONFIG_HSPOT__ */
+
+#if defined(RTCONFIG_BCM_7114) || defined(HND_ROUTER)
+	if (mkdir(RAMFS_CONFMTD_DIR, 0777) < 0 && errno != EEXIST) {
+		perror("/tmp/confmtd not created.");
+	}
+	if (mkdir(RAMFS_CONFMTD_DIR"/crash_logs", 0777) < 0 && errno != EEXIST) {
+		perror("/tmp/confmtd/crash_logs not created.");
+	}
+
+	 confmtd_restore();
+#endif
+
+#ifdef HND_ROUTER
 	system("ethswctl -c wan -o enable -i eth0");
 	system("tmctl porttminit --devtype 0 --if eth0 --flag 1");
 	system("tmctl porttminit --devtype 0 --if eth1 --flag 1");
@@ -9626,6 +9791,10 @@ static void sysinit(void)
 	dbg("firmware version: %s.%s_%s\n", rt_version, rt_serialno, rt_extendno);
 
 	nvram_set("buildno_org", nvram_safe_get("buildno"));
+	if(rt_rcno)
+		nvram_set("rcno_org", nvram_safe_get("rcno"));
+	else
+		nvram_unset("rcno_org");
 	nvram_set("extendno_org", nvram_safe_get("extendno"));
 
 	init_syspara();// for system dependent part (befor first get_model())
@@ -9642,16 +9811,19 @@ static void sysinit(void)
 		f_write_string("/proc/sys/vm/min_free_kbytes", "8192", 0, 0);
 		min_free_kbytes_check = 1;
 	}
-	else if ((model == MODEL_RTN56U) || (model == MODEL_DSLN55U) || (model == MODEL_RTAC52U) || (model == MODEL_RTAC51U)
-	      || (model == MODEL_RTAC51UP) ||(model == MODEL_RTAC53) ||(model == MODEL_RTN14U) ||(model == MODEL_RTN54U) ||(model == MODEL_RTAC54U) ||(model == MODEL_RTAC1200HP) || (model == MODEL_RTN56UB1) || (model == MODEL_RTN56UB2))
-		{
-			f_write_string("/proc/sys/vm/min_free_kbytes", "4096", 0, 0);
-			min_free_kbytes_check = 1;
-		}
-	else	{
-		 	f_write_string("/proc/sys/vm/min_free_kbytes", "2048", 0, 0);
-			min_free_kbytes_check = 0;
-		}
+	else if ((model == MODEL_RTN56U) || (model == MODEL_DSLN55U) || (model == MODEL_RTAC52U) || (model == MODEL_RTAC51U) \
+			 || (model == MODEL_RTAC51UP) ||(model == MODEL_RTAC53) ||(model == MODEL_RTN14U) ||(model == MODEL_RTN54U) \
+			 || (model == MODEL_RTAC54U) ||(model == MODEL_RTAC1200HP) || (model == MODEL_RTN56UB1) || (model == MODEL_RTN56UB2) \
+			 || (model == MODEL_RTN800HP))
+	{
+		f_write_string("/proc/sys/vm/min_free_kbytes", "4096", 0, 0);
+		min_free_kbytes_check = 1;
+	}
+	else
+	{
+		f_write_string("/proc/sys/vm/min_free_kbytes", "2048", 0, 0);
+		min_free_kbytes_check = 0;
+	}
 #elif defined(RTCONFIG_QCA)
 #if defined(RTCONFIG_WIFI_QCA9990_QCA9990) || defined(RTCONFIG_WIFI_QCA9994_QCA9994)
 	f_write_string("/proc/sys/vm/min_free_kbytes", "23916", 0, 0);
@@ -9778,6 +9950,9 @@ static void sysinit(void)
 
 #ifdef RTCONFIG_GMAC3
 #ifdef RTCONFIG_BCM_7114
+#ifdef RTCONFIG_AMAS
+	nvram_set("stop_gmac3", "1"); //disable gmac3, if enable AMAS. (It will cause lldpd can't be send.)
+#endif	
 	if (nvram_match("stop_gmac3", "1")
 #ifdef RTCONFIG_DPSTA
 		|| dpsta_mode()
@@ -10008,6 +10183,9 @@ void config_format_compatibility_handler(void)
 #if defined(RTCONFIG_VPN_FUSION)
 	adjust_vpnc_config();
 #endif
+#if defined(RTCONFIG_NOTIFICATION_CENTER)
+	force_off_push_msg();
+#endif
 }
 
 static void
@@ -10161,7 +10339,9 @@ int init_main(int argc, char *argv[])
 #else
 					stop_usb(0);
 #endif
+#ifndef RTCONFIG_NO_USBPORT
 					stop_usbled();
+#endif
 #endif
 				}
 #endif
@@ -10181,6 +10361,9 @@ int init_main(int argc, char *argv[])
 
 		case SIGUSR2:		/* START */
 			start_logger();
+#if defined(RTCONFIG_QCA)
+			logmessage("INIT", "firmware version: %s_%s_%s\n", nvram_safe_get("firmver"), nvram_safe_get("buildno"), nvram_safe_get("extendno"));
+#endif
 #if defined(RTCONFIG_BT_CONN)
 			system("hciconfig hci0 up");
 #endif
@@ -10296,9 +10479,6 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 			{
 				start_wl();
 				lanaccess_wl();
-#if !defined(RTCONFIG_QCA)
-				nvram_set_int("wlready", 1);
-#endif	/* CONFIG_BCMWL5 */
 			}
 #if defined(HND_ROUTER) || defined(BLUECAVE)
 			start_vlan();
@@ -10322,7 +10502,7 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 				pid_t pid;
 				_eval(dpdt_ant, ">>/dev/null", 0, &pid);
 			}
-#endif	/* MAPAC2200 */
+#endif
 
 #if defined(MAPAC1300) || defined(VZWAC1300)
 			{
@@ -10330,7 +10510,7 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 				pid_t pid;
 				_eval(thermal_txpwr, ">>/dev/null", 0, &pid);
 			}
-#endif	/* MAPAC1300 VZWAC1300*/
+#endif
 
 #if defined(RTCONFIG_DETWAN)
 			if(nvram_safe_get("wan0_ifname")[0] == '\0' && sw_mode() == SW_MODE_ROUTER)
@@ -10463,7 +10643,9 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 #else
 			start_usb(0);
 #endif
+#ifndef RTCONFIG_NO_USBPORT
 			start_usbled();
+#endif
 			file_unlock(fd);	// allow to process usb hotplug events
 #endif	/* RTCONFIG_BT_CONN */
 #endif	/* RTCONFIG_USB */
@@ -10595,7 +10777,9 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 #else
 			start_usb(0);
 #endif
+#ifndef RTCONFIG_NO_USBPORT
 			start_usbled();
+#endif
 			file_unlock(fd);	// allow to process usb hotplug events
 #endif	/* RTCONFIG_BT_CONN */
 
@@ -10622,6 +10806,10 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 #ifndef RTCONFIG_LANTIQ
 			nvram_set("success_start_service", "1");
 			force_free_caches();
+#endif
+
+#ifdef RTCONFIG_AMAS
+			nvram_set("start_service_ready", "1");
 #endif
 
 #ifdef RTCONFIG_REALTEK
@@ -10670,7 +10858,8 @@ dbg("boot/continue fail= %d/%d\n", nvram_get_int("Ate_boot_fail"),nvram_get_int(
 					}
 				}
 			}
-				break;
+
+			break;
 		}
 
 		if (!nvram_get_int("asus_mfg")) {
@@ -10706,7 +10895,7 @@ int reboothalt_main(int argc, char *argv[])
 	_dprintf(reboot ? "Rebooting..." : "Shutting down...");
 	kill(1, reboot ? SIGTERM : SIGQUIT);
 
-#if defined(RTN14U) || defined(RTN65U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTCONFIG_QCA) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC85U)
+#if defined(RTN14U) || defined(RTN65U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTCONFIG_QCA) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC85U) || defined(RTN800HP)
 	def_reset_wait = 50;
 #endif
 

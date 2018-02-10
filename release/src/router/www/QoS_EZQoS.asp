@@ -24,6 +24,7 @@
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script type="text/javascript" src="/form.js"></script>
 <script type="text/javascript" src="client_function.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
 .QISform_wireless{
 	width:600px;
@@ -346,6 +347,9 @@ if(pm_support) {
 
 function initial(){
 	show_menu();
+	// http://www.asus.com/support/FAQ/1008718/
+	httpApi.faqURL("faq", "1008718", "https://www.asus.com", "/support/FAQ/");
+
 	if(downsize_4m_support || downsize_8m_support)
 		document.getElementById("guest_image").parentNode.style.display = "none";
 
@@ -410,7 +414,7 @@ function initial(){
 	}
 
 	/* MODELDEP */
-	if(based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U" || based_modelid == "BLUECAVE"){
+	if(based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U"){
 		if(document.form.qos_type_orig.value == "1"){
 			document.getElementById('bandwidth_setting_tr').style.display = "none";
 			document.form.qos_type_radio[1].checked = true;
@@ -425,8 +429,7 @@ function initial(){
 		collect_info();
 		generate_group_list();
 	}
-	init_changeScale();
-	//addOnlineHelp(document.getElementById("faq"), ["ASUSWRT", "QoS"]);
+	init_changeScale();	
 
 	if((isFirefox || isOpera) && document.getElementById("FormTitle"))
 		document.getElementById("FormTitle").className = "FormTitle";	
@@ -660,7 +663,7 @@ function submitQoS(){
 
 function change_qos_type(value){
 	/* MODELDEP */
-	if(value=="1" && (based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U" || based_modelid == "BLUECAVE")){	//Force change to 0 
+	if(value=="1" && (based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U")){	//Force change to 0 
 		value = 0;
 	}
 	if(value == 0){		//Traditional QoS
@@ -1491,7 +1494,7 @@ function setGroup(name){
 														<#EzQoS_desc_note#>														
 													</div>
 													<div class="formfontdesc">
-														<a id="faq" href="http://www.asus.com/support/FAQ/1008718/" target="_blank" style="text-decoration:underline;">QoS FAQ</a>
+														<a id="faq" href="" target="_blank" style="text-decoration:underline;">QoS FAQ</a>
 													</div>
 												</td>
 											</tr>
