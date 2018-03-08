@@ -35,6 +35,13 @@
 #include <sys/utsname.h>
 #endif
 
+#include <rtconfig.h>
+
+#include <dpsta_linux.h>
+#include <errno.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+
 /* phy types */
 #define	PHY_TYPE_A		0
 #define	PHY_TYPE_B		1
@@ -2135,11 +2142,6 @@ wlconf(char *name)
 	}
 #endif
 
-	/* Set custom-STA oui */
-	str = nvram_safe_get(strcat_r(prefix, "custom_oui", tmp));
-	ether_atoe(str, (unsigned char *)eaddr);
-	WL_IOVAR_SET(name, "custom_oui", eaddr, DOT11_OUI_LEN);
-
 	/* If mode set to PSTA
 	 * unset all the MBSS interfaces
 	 * to create virtual interfaces in sequence
@@ -4127,6 +4129,126 @@ wlconf_security(char *name)
 	return 0;
 }
 
+#ifdef RTCONFIG_DPSTA
+static int
+wlconf_dpsta_enable(int argc, char *argv[])
+{
+	struct ifreq ifr;
+	dpsta_enable_info_t dpinfo = { 0 };
+	int ret = 0;
+	int s;
+
+	printf("%s: if:%s, enable %s, lan_uif %s, policy %s, uif0 %s, uif1 %s\n",
+		__FUNCTION__, argv[1], argv[3], argv[4], argv[5], argv[6], argv[7]);
+
+	/* open socket to kernel */
+	if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+		perror("socket");
+		return -errno;
+	}
+
+	strncpy(ifr.ifr_name, argv[1], IFNAMSIZ);
+
+	dpinfo.enable = strcmp(argv[3], "1") ? FALSE : TRUE;
+	dpinfo.lan_uif = strtoul(argv[4], NULL, 0);
+	dpinfo.policy = strtoul(argv[5], NULL, 0);
+	strncpy((char *)dpinfo.upstream_if[0], argv[6], IFNAMSIZ);
+	strncpy((char *)dpinfo.upstream_if[1], argv[7], IFNAMSIZ);
+
+	ifr.ifr_data = (caddr_t) &dpinfo;
+
+	if (ioctl(s, DPSTA_CMD_ENABLE, &ifr) < 0) {
+		ret = -errno;
+		printf("%s: ioctl fail, ret %d \n", __FUNCTION__, ret);
+	}
+
+	/* cleanup */
+	close(s);
+
+	return ret;
+}
+
+static int
+wlconf_dpsta_iovar(int argc, char *argv[], uint8 cmd)
+{
+	struct ifreq ifr;
+	int ret = 0;
+	int s, i;
+	dpsta_var_t var = { 0 };
+
+	/* open socket to kernel */
+	if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+		perror("socket");
+		return -errno;
+	}
+
+	strncpy(ifr.ifr_name, argv[1], IFNAMSIZ);
+
+	var.cmd = cmd;
+
+	switch (cmd) {
+	case DPSTA_IOV_UIF:
+		var.set = 0;
+		var.len = IFNAMSIZ;
+		break;
+	case DPSTA_IOV_MSGLEVEL:
+		if (argc == 3)
+			var.set = 0;
+		else if (argc == 4) {
+			var.set = 1;
+			var.arg = strtoul(argv[3], NULL, 0);
+		} else {
+			printf("%s: argc wrong when DPSTA_IOV_MSGLEVEL\n", __FUNCTION__);
+			return -1;
+		}
+		var.len = sizeof(int);
+		break;
+	case DPSTA_IOV_DPINFO:
+		if (argc == 3)
+			var.set = 0;
+		else {
+			printf("%s: argc wrong when DPSTA_IOV_DPINFO\n", __FUNCTION__);
+			return -1;
+		}
+		var.len = sizeof(dpsta_enable_info_t);
+		break;
+	default:
+		printf("%s: unknown cmd\n", __FUNCTION__);
+		break;
+	}
+
+	ifr.ifr_data = (caddr_t)&var;
+
+	if ((ret = ioctl(s, DPSTA_CMD_SETGETVAR, (caddr_t)&ifr)) < 0) {
+		ret = -errno;
+		printf("%s: ioctl fail, ret %d \n", __FUNCTION__, ret);
+	}
+
+	/* output if success get */
+	if (!var.set && !ret) {
+		if (cmd == DPSTA_IOV_UIF)
+			printf("%s: %s\n", __FUNCTION__, var.uif);
+		else if (cmd == DPSTA_IOV_MSGLEVEL)
+			printf("%s: %x\n", __FUNCTION__, var.arg);
+		else if (cmd == DPSTA_IOV_DPINFO) {
+			printf("%s: dpinfo %sabled lan_uif %d policy %d ",
+				__FUNCTION__, var.dpinfo.enable ? "en" : "dis",
+				var.dpinfo.lan_uif, var.dpinfo.policy);
+			for(i = 0; i < DPSTA_NUM_UPSTREAM_IF; i++) {
+				if (var.dpinfo.upstream_if[i] && var.dpinfo.upstream_if[i][0] != '\0')
+					printf("uif[%d] %s ", i, var.dpinfo.upstream_if[i]);
+			}
+			printf("\n");
+		}
+	}
+
+	/* cleanup */
+	close(s);
+
+	return ret;
+}
+#endif
+
 int
 main(int argc, char *argv[])
 {
@@ -4139,6 +4261,28 @@ main(int argc, char *argv[])
 	  return wlconf_start(argv[1]);
 	else if (argc == 3 && !strcmp(argv[2], "security"))
 	  return wlconf_security(argv[1]);
+#ifdef RTCONFIG_DPSTA
+	else if (!strcmp(argv[2], "enable")) {
+		if (argc == 8)
+			return wlconf_dpsta_enable(argc, argv);
+		else {
+			fprintf(stderr, "Usage: wlconf dpsta enable <enable: 1|0> <lan_uif> <policy> <uif0: ethX> <uif1: ethX>\n");
+			return -1;
+		}
+	}
+	else if (!strcmp(argv[2], "uif")) {
+		if (argc == 3)
+			return wlconf_dpsta_iovar(argc, argv, DPSTA_IOV_UIF);
+		else {
+			fprintf(stderr, "Only get is allowed!\n");
+			return -1;
+		}
+	}
+	else if (argc >= 3 && !strcmp(argv[2], "msglevel"))
+		return wlconf_dpsta_iovar(argc, argv, DPSTA_IOV_MSGLEVEL);
+	else if (argc == 3 && !strcmp(argv[2], "dpinfo"))
+		return wlconf_dpsta_iovar(argc, argv, DPSTA_IOV_DPINFO);
+#endif
 	else {
 		fprintf(stderr, "Usage: wlconf <ifname> up|down\n");
 		return -1;

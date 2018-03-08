@@ -956,10 +956,23 @@ function show_banner(L3){// L3 = The third Level of Menu
 		//Play Store
 		banner_code +='<div style="padding:20px 10px;">';
 		banner_code +='<div style="display:table-cell;vertical-align:middle;padding-left:10px;">';
-		banner_code +='<div><img src="images/New_ui/asus_router_android_qr.png" style="width:75px;height:75px;"></div>';
+		if(is_CN){
+			banner_code +='<div><img src="images/New_ui/asus_router_android_qr_cn.png" style="width:75px;height:75px;"></div>';
+		}
+		else{
+			banner_code +='<div><img src="images/New_ui/asus_router_android_qr.png" style="width:75px;height:75px;"></div>';
+		}
+
 		banner_code +='</div>';
 		banner_code +='<div style="display:table-cell;vertical-align:middle;width:100%;text-align:center">';
-		banner_code +='<div style="padding-left: 30px;"><a href="'+Android_app_link+'" target="_blank"><div style="width:172px;height:60px;background:url(\'images/cloudsync/googleplay.png\') no-repeat;"></div></a></div>';
+		if(is_CN){
+			Android_app_link = "http://www.wandoujia.com/apps/com.asus.aihome";
+			banner_code +='<div style="padding-left: 30px;"><a href="'+Android_app_link+'" target="_blank"><div style="width:172px;font-size:24px;font-weight:bold;text-decoration:underline"><#WanDouJia#></div></a></div>';
+		}
+		else{
+			banner_code +='<div style="padding-left: 30px;"><a href="'+Android_app_link+'" target="_blank"><div style="width:172px;height:60px;background:url(\'images/cloudsync/googleplay.png\') no-repeat;"></div></a></div>';
+		}
+
 		banner_code +='</div>';	
 		banner_code +='</div>';
 		//AppStore
@@ -2714,7 +2727,7 @@ function refreshStatus(xhr){
 					this.link = "/error_page.htm?flag=1";
 					this.className = "_disconnected";
 				}
-				else if(_link_status == "2"){
+				else if(_link_status == "2" && _link_sbstatus == "0"){
 					this.link = "";
 
 					if(dualwan_enabled && active_wan_unit != unit && (wans_mode == "fo" || wans_mode == "fb")){	
@@ -2910,6 +2923,11 @@ function refreshStatus(xhr){
 			else
 				document.getElementById('single_wan').className = "single_wan_disconnected";
 		}
+
+		if((based_modelid == "GT-AC5300" || based_modelid == "GT-AC9600") && location.pathname == "/GameDashboard.asp"){
+			$("#internet_title").hide();
+			$("#wan_state_field").hide();
+		}
 	}
 
 	// wifi hw sw status
@@ -3097,7 +3115,7 @@ function refreshStatus(xhr){
 		usb_auxstate = usbState[2].firstChild.nodeValue;
 
 		if(roaming == "1"){
-			if(usb_state == 2 && usb_sbstate == 0 && usb_auxstate == 0){
+			if(usb_state == 2 && usb_sbstate == 0 && usb_auxstate != 1){
 				if(roaming_imsi.length > 0 && roaming_imsi != sim_imsi.substr(0, roaming_imsi.length))
 					document.getElementById("simroaming_status").className = "simroamingon";				
 			}
@@ -3131,7 +3149,7 @@ function refreshStatus(xhr){
 					break;
 			}
 
-			if(parseInt(sim_signal) > 0 && (usb_state == 2 && usb_sbstate == 0 && usb_auxstate == 0)){
+			if(parseInt(sim_signal) > 0 && (usb_state == 2 && usb_sbstate == 0 && usb_auxstate != 1)){
 				switch(sim_operation)
 				{
 					case 'Edge':

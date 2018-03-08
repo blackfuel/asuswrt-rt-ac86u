@@ -242,6 +242,7 @@ wlc_sendup_schedule_pktfetch(wlc_info_t *wlc, void *pkt)
 	pctx->ctx[1] = (void *)pinfo;
 
 	/* Fill up pktfetch info */
+	pinfo->osh = wlc->osh;
 	pinfo->host_offset = 0;
 	pinfo->headroom = PKTRXFRAGSZ;
 	pinfo->lfrag = (void*)pkt;

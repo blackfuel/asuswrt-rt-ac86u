@@ -588,6 +588,10 @@ set_wsec(char *ifname, void *credential, int mode)
 	}
 
 	nvram_set("w_Setting", "1");
+#ifdef AMAS
+	if (wps_ui_act_enroll)
+	nvram_set("obd_Setting", "1");
+#endif
 
 	return 1;
 }

@@ -240,6 +240,7 @@ function initial(){
 	$('#divSwitchMenu').html(gen_switch_menu(vpn_server_array, "IPSEC"));
 
 	if(document.general_form.ipsec_server_enable.value == "1") {
+		showhide("tr_general_hw_crypto", 1);
 		showhide("tr_general_ike_isakmp", 1);
 		showhide("tr_general_ike_isakmp_nat", 1);
 		showhide("tr_general_log", 1);
@@ -250,6 +251,7 @@ function initial(){
 		ipsec_server_enable = 1;
 	}
 	else{
+		showhide("tr_general_hw_crypto", 0);
 		showhide("tr_general_ike_isakmp", 0);
 		showhide("tr_general_ike_isakmp_nat", 0);
 		showhide("tr_general_log", 0);
@@ -475,6 +477,26 @@ function showIPSecClients(profileName, e) {
 	$("#connection_ipsec_profile_panel").html(html);
 }
 function show_profilelist() {
+	var get_ipsec_vpn_client_count = function() {
+		var active_count = 0;
+		var get_ipsec_vpn_client_status = function(_profile) {
+			if(_profile == "")
+				return 0;
+			else {
+				if(_profile.slice(-1) == "1")
+					return 1;
+				else
+					return 0;
+			}
+		};
+		active_count += get_ipsec_vpn_client_status(decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_client_1"); %>'));
+		active_count += get_ipsec_vpn_client_status(decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_client_2"); %>'));
+		active_count += get_ipsec_vpn_client_status(decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_client_3"); %>'));
+		active_count += get_ipsec_vpn_client_status(decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_client_4"); %>'));
+		active_count += get_ipsec_vpn_client_status(decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_client_5"); %>'));
+		return active_count;
+	};
+
 	ipsec_type_array = {"type_4" : ["Host-to-Net VPN Server", "4"], "type_1" : ["Net-to-Net VPN Server", "1"]};//untranslated
 	all_profile_subnet_list = "";
 	control_profile_flag = true;
@@ -511,8 +533,20 @@ function show_profilelist() {
 					if(ipsec_profilelist_arraylist[i][1] == "1" || ipsec_profilelist_arraylist[i][1] == "3" || ipsec_profilelist_arraylist[i][1] == "4") {	//Server status
 						if(ipsec_connect_status_array[ipsec_profilelist_arraylist[i][2]]) {
 							var connected_count = (ipsec_connect_status_array[ipsec_profilelist_arraylist[i][2]].split("<").length - 1);
-							code +='<td width="15%"><a class="hintstyle2" href="javascript:void(0);" onClick="showIPSecClients(\''+ipsec_profilelist_arraylist[i][2]+'\', event);">';
-							code +='<#btn_Enabled#>(' + connected_count + ')</a></td>';
+							code +="<td width='15%'>";
+							var ipsec_connect_status_text = "Available";/*untranslated*/
+							var ipsec_connect_status_css = "";
+							if(ipsec_profilelist_arraylist[i][1] == "4") {
+								var ipsec_hw_crypto_enable = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_hw_crypto_enable"); %>');
+								var ipsec_hw_crypto_full_count = (ipsec_hw_crypto_enable == "1") ? 8 : 16;
+								ipsec_hw_crypto_full_count = ipsec_hw_crypto_full_count - get_ipsec_vpn_client_count();
+								if(connected_count >= ipsec_hw_crypto_full_count) {
+									ipsec_connect_status_text = "Full";/*untranslated*/
+									ipsec_connect_status_css = "color:#FF0000;border-bottom-color:#FF0000;";
+								}
+							}
+							code +='<a style="' + ipsec_connect_status_css +'" class="hintstyle2" href="javascript:void(0);" onClick="showIPSecClients(\''+ipsec_profilelist_arraylist[i][2]+'\', event);">';
+							code += "" + ipsec_connect_status_text + "(" + connected_count + ")</a></td>";
 						}
 						else {
 							code +='<td width="15%">-</td>';
@@ -2029,6 +2063,7 @@ function getRadioItemCheck(obj) {
 }
 function applyRule() {
 	document.general_form.force_change.value++;
+	document.general_form.ipsec_hw_crypto_enable.value = getRadioItemCheck(document.form.ipsec_hw_crypto_enable);
 	document.general_form.ipsec_server_enable.value = ipsec_server_enable;
 	document.general_form.submit();
 }
@@ -2081,6 +2116,7 @@ function ipsecShowAndHide(server_enable) {
 		ipsec_server_enable = 0;
 	}
 
+	document.general_form.ipsec_hw_crypto_enable.value = getRadioItemCheck(document.form.ipsec_hw_crypto_enable);
 	document.general_form.ipsec_server_enable.value = ipsec_server_enable;
 	showLoading();
 	document.general_form.submit();
@@ -2090,6 +2126,14 @@ function changeExchangeMode() {
 	$("#exchange_mode_hint").css("display", "none");
 	if(clickItem == "1") {
 		$("#exchange_mode_hint").css("display", "");
+	}
+}
+function changeHardwareCrypto() {
+	var clickItem = getRadioItemCheck(document.form.ipsec_hw_crypto_enable);
+	if(clickItem == "0") {
+		var hintMsg = "Disable hardware crypto offloading will degrade VPN encryption performance, are you sure you want to change the setting?";
+		if(!confirm(hintMsg))
+			settingRadioItemCheck(document.form.ipsec_hw_crypto_enable, "1");
 	}
 }
 </script>
@@ -2108,6 +2152,7 @@ function changeExchangeMode() {
 	<input type="hidden" name="action_wait" value="30">
 	<input type="hidden" name="action_script" value="ipsec_set">
 	<input type="hidden" name="ipsec_server_enable" value="<% nvram_get("ipsec_server_enable"); %>">
+	<input type="hidden" name="ipsec_hw_crypto_enable" value="<% nvram_get("ipsec_hw_crypto_enable"); %>">
 	<input type="hidden" name="force_change" value="<% nvram_get("force_change"); %>">
 </form>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
@@ -2207,6 +2252,22 @@ function changeExchangeMode() {
 													}
 												);
 											</script>
+											</td>
+										</tr>
+										<tr id="tr_general_hw_crypto">
+											<th>Hardware Crypto Offloading<!--untranslated--></th>
+											<td>
+												<label><input type="radio" name="ipsec_hw_crypto_enable" class="input" value="1" <% nvram_match("ipsec_hw_crypto_enable", "1", "checked"); %> onchange="changeHardwareCrypto();"><#btn_Enabled#></label>
+												<label><input type="radio" name="ipsec_hw_crypto_enable" class="input" value="0" <% nvram_match("ipsec_hw_crypto_enable", "0", "checked"); %> onchange="changeHardwareCrypto();"><#btn_Disabled#></label>
+												<div>
+													<span>
+														1. Using Hardware Crypto Engine can much improve the throughput performance over the VPN tunnel. However, the maximum VPN Tunnel client connections will be shrunk to 8.
+													</span>
+													<br>
+													<span>
+														2. Disable Hardware Crypto Engine can much improve VPN Tunnel connection number up to 16. However, the transmission performance over the VPN tunnel will be vary and depended on CPU resource.
+													</span>
+												</div>
 											</td>
 										</tr>
 										<tr id="tr_general_ike_isakmp">
@@ -2654,7 +2715,7 @@ function changeExchangeMode() {
 	<table id="tbAccountList" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin-top:15px;">
 		<thead>
 		<tr>
-			<td colspan="3"><#Username_Pwd#>&nbsp;(<#List_limit#>&nbsp;8)</td>
+			<td colspan="3"><#Username_Pwd#>&nbsp;(<#List_limit#>&nbsp;16)</td>
 		</tr>
 		</thead>
 		<tr>
@@ -2670,7 +2731,7 @@ function changeExchangeMode() {
 				<input type="text" class="input_25_table" maxlength="32" name="ipsec_client_list_password" onKeyPress="return validator.isString(this, event)">
 			</td>
 			<td width="10%">
-				<div><input type="button" class="add_btn" onClick="addRow_Group(8);" value=""></div>
+				<div><input type="button" class="add_btn" onClick="addRow_Group(16);" value=""></div>
 			</td>
 		</tr>
 	</table>

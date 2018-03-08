@@ -15,6 +15,9 @@
 include $(SRCBASE)/router/.config
 
 CFLAGS	+= -I. -I$(TOP)/shared -I$(SRCBASE)/include ${WLAN_StdIncPathA} -I$(SRCBASE)/common/include -Wall
+ifeq ($(RTCONFIG_DPSTA),y)
+CFLAGS += -I$(TOP)/dpsta
+endif
 CFLAGS	+= $(WLAN_ComponentIncPath)
 #CFLAGS	+= -g -DDEBUG
 CFLAGS	+= -s
