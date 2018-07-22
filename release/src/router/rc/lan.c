@@ -229,7 +229,8 @@ start_emf(char *lan_ifname)
 	return;
 #endif
 
-#if (defined(HND_ROUTER) && defined(MCPD_PROXY))
+#ifdef HND_ROUTER
+#ifdef MCPD_PROXY
 	/* Disable EMF.
 	 * Since Runner is involved in Ethernet side when MCPD is enabled
 	 */
@@ -237,14 +238,13 @@ start_emf(char *lan_ifname)
 		nvram_set_int("emf_enable", 0);
 		nvram_commit();
 	}
-
+#endif
 #ifdef RTCONFIG_PROXYSTA
 	eval("bcmmcastctl", "mode", "-i",  "br0",  "-p", "1",  "-m", (psta_exist() || psr_exist()) ? "0" : "2");
 	eval("bcmmcastctl", "mode", "-i",  "br0",  "-p", "2",  "-m", (psta_exist() || psr_exist()) ? "0" : "2");
 #endif
-
 	return;
-#endif /* HND_ROUTER && MCPD_PROXY */
+#endif
 
 	if (!nvram_get_int("emf_enable"))
 		return;
@@ -289,6 +289,11 @@ start_emf(char *lan_ifname)
 
 static void stop_emf(char *lan_ifname)
 {
+#if defined(HND_ROUTER) && defined(RTCONFIG_PROXYSTA)
+	eval("bcmmcastctl", "mode", "-i",  "br0",  "-p", "1",  "-m", "0");
+	eval("bcmmcastctl", "mode", "-i",  "br0",  "-p", "2",  "-m", "0");
+#endif
+
 	/* Stop the EMF for this LAN */
 	eval("emf", "stop", lan_ifname);
 	/* Remove Bridge from igs */
@@ -1391,35 +1396,44 @@ void config_ipv6(int enable, int incl_wan)
 {
 	DIR *dir;
 	struct dirent *dirent;
-	int service;
-	int match;
 	char word[256], *next;
+	int service, match;
+
+	if (enable) {
+		enable_ipv6("default");
+		enable_ipv6("all");
+	} else {
+		disable_ipv6("default");
+		disable_ipv6("all");
+	}
 
 	if ((dir = opendir("/proc/sys/net/ipv6/conf")) != NULL) {
 		while ((dirent = readdir(dir)) != NULL) {
-			if (!strcmp(dirent->d_name, ".") || !strcmp(dirent->d_name, ".."))
+			if (dirent->d_name[0] == '.' ||
+			    strcmp(dirent->d_name, "all") == 0 ||
+			    strcmp(dirent->d_name, "default") == 0)
 				continue;
-			if (incl_wan)
-				goto ALL;
-			match = 0;
-			foreach (word, nvram_safe_get("wan_ifnames"), next) {
-				if (!strcmp(dirent->d_name, word))
-				{
-					match = 1;
-					break;
-				}
-			}
-			if (match) continue;
-ALL:
-			if (enable)
-				enable_ipv6(dirent->d_name);
-			else
-				disable_ipv6(dirent->d_name);
 
-			if (enable && strcmp(dirent->d_name, "all") &&
-				strcmp(dirent->d_name, "default") &&
-				!with_ipv6_linklocal_addr(dirent->d_name))
-				reset_ipv6_linklocal_addr(dirent->d_name, 0);
+			if (!incl_wan) {
+				match = 0;
+				foreach (word, nvram_safe_get("wan_ifnames"), next) {
+					if (strcmp(dirent->d_name, word) == 0) {
+						match = 1;
+						break;
+					}
+				}
+				if (match)
+					continue;
+			}
+
+			if (enable) {
+				enable_ipv6(dirent->d_name);
+				if (!with_ipv6_linklocal_addr(dirent->d_name)) {
+					reset_ipv6_linklocal_addr(dirent->d_name, 0);
+					enable_ipv6(dirent->d_name);
+				}
+			} else
+				disable_ipv6(dirent->d_name);
 		}
 		closedir(dir);
 	}
@@ -1450,8 +1464,10 @@ ALL:
 
 void start_lan_ipv6(void)
 {
-	char *lan_ifname = strdup(nvram_safe_get("lan_ifname"));
+	char lan_ifname[16];
 	int unit, ipv6_service = 0;
+
+	strlcpy(lan_ifname, nvram_safe_get("lan_ifname"), sizeof(lan_ifname));
 
 	for (unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; ++unit)
 		if (get_ipv6_service_by_unit(unit) != IPV6_DISABLED) {
@@ -1468,7 +1484,9 @@ void start_lan_ipv6(void)
 
 void stop_lan_ipv6(void)
 {
-	char *lan_ifname = strdup(nvram_safe_get("lan_ifname"));
+	char lan_ifname[16];
+
+	strlcpy(lan_ifname, nvram_safe_get("lan_ifname"), sizeof(lan_ifname));
 
 	stop_ipv6();
 	set_intf_ipv6_dad(lan_ifname, 0, 0);
@@ -1884,7 +1902,12 @@ void start_lan(void)
 #endif
 	)
 	{
-		nvram_set("wlc_mode", "0");
+#ifdef RTCONFIG_QTN
+		if (mediabridge_mode() && nvram_get_int("wlc_band") == 1)
+			nvram_set_int("wlc_mode", 1);
+		else
+#endif
+		nvram_set_int("wlc_mode", 0);
 		nvram_set("btn_ez_radiotoggle", "0"); // reset to default
 	}
 
@@ -2374,7 +2397,7 @@ void start_lan(void)
 #endif
 
 #if defined(RTCONFIG_AMAS) && defined(RTCONFIG_DPSTA)
-				if (dpsta_mode())
+				if (dpsta_mode() && nvram_get_int("re_mode") == 1)
 				foreach (word, nvram_safe_get("wl_ifnames"), next)
 					if (!strcmp(ifname, word))
 						match = 1;
@@ -2796,8 +2819,6 @@ void stop_lan(void)
 	set_intf_ipv6_dad(lan_ifname, 0, 0);
 	config_ipv6(0, 1);
 #endif
-
-	ifconfig("lo", 0, NULL, NULL);
 
 	ifconfig(lan_ifname, 0, NULL, NULL);
 
@@ -4577,7 +4598,12 @@ void start_lan_wl(void)
 #endif
 	)
 	{
-		nvram_set("wlc_mode", "0");
+#ifdef RTCONFIG_QTN
+		if (mediabridge_mode() && nvram_get_int("wlc_band") == 1)
+			nvram_set_int("wlc_mode", 1);
+		else
+#endif
+		nvram_set_int("wlc_mode", 0);
 		nvram_set("btn_ez_radiotoggle", "0"); // reset to default
 	}
 
@@ -4988,7 +5014,7 @@ void start_lan_wl(void)
 #endif
 
 #if defined(RTCONFIG_AMAS) && defined(RTCONFIG_DPSTA)
-				if (dpsta_mode())
+				if (dpsta_mode() && nvram_get_int("re_mode") == 1)
 				foreach (word, nvram_safe_get("wl_ifnames"), next)
 					if (!strcmp(ifname, word))
 						match = 1;
@@ -5897,7 +5923,7 @@ void start_lan_wlport(void)
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 		&& !psr_mode()
 #ifdef RTCONFIG_DPSTA
-		&& !dpsta_mode()
+		&& !(dpsta_mode() && nvram_get_int("re_mode") == 0)
 #endif
 #endif
 	) return;
@@ -5960,7 +5986,7 @@ void stop_lan_wlport(void)
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 		&& !psr_mode()
 #ifdef RTCONFIG_DPSTA
-		&& !dpsta_mode()
+		&& !(dpsta_mode() && nvram_get_int("re_mode") == 0)
 #endif
 #endif
 	) return;

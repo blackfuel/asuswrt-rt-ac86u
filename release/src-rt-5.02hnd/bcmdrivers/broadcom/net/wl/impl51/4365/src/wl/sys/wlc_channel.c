@@ -2438,8 +2438,9 @@ wlc_channels_init(wlc_cm_info_t *wlc_cmi, clm_country_t country)
 	wlcband_t * band;
 	chanvec_t sup_chan, temp_chan;
 
-	if (wlc->dfs)
-		wlc_dfs_reset_all(wlc->dfs);
+/* Don't reset dfs block channel information */
+//	if (wlc->dfs)
+//		wlc_dfs_reset_all(wlc->dfs);
 
 	bzero(&wlc_cm->restricted_channels, sizeof(chanvec_t));
 	bzero(&wlc_cm->locale_radar_channels, sizeof(chanvec_t));

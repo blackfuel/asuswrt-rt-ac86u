@@ -370,6 +370,7 @@ enum {
 #endif /* WLAUTHRESP_MAC_FILTER */
 	IOV_PROXY_ARP_ADVERTISE,    /* Update beacon, probe response frames for proxy arp bit */
 	IOV_SET_RADAR,		/* Set radar. Convert IOCTL to IOVAR for RSDB/BG DFS Scan. */
+	IOV_MBSS_RMAC,		/* Allow to use real-mac bssid */
 	IOV_LAST		/* In case of a need to check max ID number */
 
 };
@@ -508,6 +509,9 @@ static const bcm_iovar_t wlc_ap_iovars[] = {
 	},
 	{"radar", IOV_SET_RADAR,
 	(IOVF_RSDB_SET), IOVT_BOOL, 0
+	},
+	{"mbss_rmac", IOV_MBSS_RMAC,
+	(IOVF_SET_DOWN), IOVT_UINT8, 0,
 	},
 	{NULL, 0, 0, 0, 0 }
 };
@@ -4957,6 +4961,14 @@ wlc_ap_doiovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *na
 	case IOV_GVAL(IOV_SET_RADAR):
 		ASSERT(ret_int_ptr != NULL);
 		*ret_int_ptr = (int32)wlc_dfs_get_radar(wlc->dfs);
+		break;
+
+	case IOV_GVAL(IOV_MBSS_RMAC):
+		*ret_int_ptr = wlc->pub->_mbss_rmac;
+		break;
+
+	case IOV_SVAL(IOV_MBSS_RMAC):
+		wlc->pub->_mbss_rmac = (uint8)int_val;
 		break;
 
 	default:

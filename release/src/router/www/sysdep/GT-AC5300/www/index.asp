@@ -304,7 +304,7 @@ function initial(){
 			updateAMeshCount();
 			setInterval(updateAMeshCount, 5000);
 		});
-		AiMesh_promoteHint();
+		setTimeout(AiMesh_promoteHint, 1000);
 	}
 	else
 		$("#ameshContainer").remove();
@@ -2080,8 +2080,10 @@ function updateClientsCount() {
 				count = fromNetworkmapd_maclist[0].length;
 				for(var i in fromNetworkmapd_maclist[0]){
 					if (fromNetworkmapd_maclist[0].hasOwnProperty(i)) {
-						if(clientList[fromNetworkmapd_maclist[0][i]].amesh_isRe)
-							count--;
+						if(clientList[fromNetworkmapd_maclist[0][i]] != undefined) {
+							if(clientList[fromNetworkmapd_maclist[0][i]].amesh_isRe)
+								count--;
+						}
 					}
 				}
 				return count;

@@ -4275,7 +4275,8 @@ wlc_validate_mac(wlc_info_t *wlc, wlc_bsscfg_t *cfg, struct ether_addr *addr)
 			 */
 			if (EADDR_TO_UC_IDX(*addr, WLC_MBSS_UCIDX_MASK(wlc->pub->corerev)) ==
 			    EADDR_TO_UC_IDX(wlc->cfg->cur_etheraddr,
-			                    WLC_MBSS_UCIDX_MASK(wlc->pub->corerev)))
+			                    WLC_MBSS_UCIDX_MASK(wlc->pub->corerev)) &&
+			    !wlc->pub->_mbss_rmac)
 				return BCME_BADADDR;
 
 			/* Apply mask and save the base */

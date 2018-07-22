@@ -1118,7 +1118,8 @@ init(int argc, char * * argv, struct runtime_vars * v)
 		return 1;
 	}
 
-	writepidfile(pidfilename, pid);
+	if(writepidfile(pidfilename, pid) < 0)
+		pidfilename = NULL;
 
 #ifdef ENABLE_LEASEFILE
 	/*remove(lease_file);*/
@@ -1664,7 +1665,7 @@ shutdown:
 			close(snotify[i]);
 	}
 
-	if(unlink(pidfilename) < 0)
+	if(pidfilename && (unlink(pidfilename) < 0))
 	{
 		syslog(LOG_ERR, "Failed to remove pidfile %s: %m", pidfilename);
 	}

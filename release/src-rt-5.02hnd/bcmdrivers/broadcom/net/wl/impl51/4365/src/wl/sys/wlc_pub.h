@@ -893,6 +893,7 @@ typedef struct wlc_pub {
 	bool		_dyn160;		/* DYN160 capability - dynamic 160/80p80 <-> 80 */
 	uint32		_dyn160_active;		/* DYN160 active - dynamic 160/80p80 <-> 80 */
 	bool		_fbt_cap;		/* Fast Bss Transition capable */
+	uint8		_mbss_rmac;		/* allow to use real-mac bssid */
 } wlc_pub_t;
 
 /* Shared portion of wlc_pub structure across WLC's in case of RSDB. */

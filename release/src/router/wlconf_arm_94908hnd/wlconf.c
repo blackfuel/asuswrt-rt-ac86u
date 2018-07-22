@@ -1996,6 +1996,10 @@ wlconf(char *name)
 	struct bsscfg_info *bsscfg = NULL;
 	char tmp[100], tmp2[100], prefix[PREFIX_LEN];
 	char var[80], *next, *str, *addr = NULL;
+#ifdef RTCONFIG_PSR_GUEST
+	char *psr_guest;
+	char *mbss_rmac;
+#endif
 	/* Pay attention to buffer length requirements when using this */
 	char buf[WLC_IOCTL_SMLEN*2] __attribute__ ((aligned(4)));
 	char *country;
@@ -2202,6 +2206,10 @@ wlconf(char *name)
 	}
 
 	str = nvram_safe_get(strcat_r(prefix, "mode", tmp));
+#ifdef RTCONFIG_PSR_GUEST
+	psr_guest = nvram_safe_get(strcat_r(prefix, "psr_guest", tmp));
+	mbss_rmac = nvram_safe_get(strcat_r(prefix, "mbss_rmac", tmp));
+#endif
 
 	/* If ure_disable is not present or is 1, ure is not enabled;
 	 * that is, if it is present and 0, ure is enabled.
@@ -2211,12 +2219,23 @@ wlconf(char *name)
 	}
 	if (wl_ap_build) {
 		/* Enable MBSS mode if appropriate. */
-		if (!ure_enab && strcmp(str, "psr")) {
+		if ((!ure_enab && strcmp(str, "psr"))
+#ifdef RTCONFIG_PSR_GUEST
+			|| (!strcmp(str, "psr") && !strcmp(psr_guest, "1"))
+#endif
+		) {
 #ifndef __CONFIG_USBAP__
 			WL_IOVAR_SETINT(name, "mbss", (bclist->count >= 1));
 #else
 			WL_IOVAR_SETINT(name, "mbss", (bclist->count >= 2));
 #endif /* __CONFIG_USBAP__ */
+
+#ifdef RTCONFIG_PSR_GUEST
+			if (!strcmp(mbss_rmac, "1"))
+				WL_IOVAR_SETINT(name, "mbss_rmac", 1);
+			else
+				WL_IOVAR_SETINT(name, "mbss_rmac", 0);
+#endif
 		} else
 			WL_IOVAR_SETINT(name, "mbss", 0);
 
@@ -2239,7 +2258,14 @@ wlconf(char *name)
 	}
 
 	/* Create addresses for VIFs */
-	if (!ure_enab && strcmp(str, "psr")) {
+	if ((!ure_enab && strcmp(str, "psr"))
+#ifdef RTCONFIG_PSR_GUEST
+		|| (!strcmp(str, "psr") && !strcmp(psr_guest, "1"))
+#endif
+	) {
+#ifdef RTCONFIG_PSR_GUEST
+		if (strcmp(mbss_rmac, "1"))
+#endif
 		/* set local bit for our MBSS vif base */
 		ETHER_SET_LOCALADDR(vif_addr);
 
@@ -2248,10 +2274,14 @@ wlconf(char *name)
 			snprintf(tmp, sizeof(tmp), "wl%d.%d_hwaddr", unit, i);
 			addr = nvram_safe_get(tmp);
 			if (!strcmp(addr, "")) {
-				vif_addr[5] = (vif_addr[5] & ~(max_no_vifs-1))
-				        | ((max_no_vifs-1) & (vif_addr[5]+1));
-
-				nvram_set(tmp, ether_etoa((uchar *)vif_addr, eaddr));
+#ifdef RTCONFIG_PSR_GUEST
+				if (!strcmp(mbss_rmac, "1"))
+#endif
+				{
+					vif_addr[5] = (vif_addr[5] & ~(max_no_vifs-1))
+					        | ((max_no_vifs-1) & (vif_addr[5]+1));
+					nvram_set(tmp, ether_etoa((uchar *)vif_addr, eaddr));
+				}
 			}
 		}
 
