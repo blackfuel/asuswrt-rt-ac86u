@@ -198,7 +198,7 @@ function initial(){
 				html += "<th>";
 				html += model_name + " ( " + mac + " )";
 				html += "<br>";
-				html += "Location : " + alias;/* untranslated */
+				html += "<#AiMesh_NodeLocation#> : " + alias;
 				html += "</th>";
 				html += "<td id='amas_" + mac_id + "'>";
 				html += "<div id='current_version'>Current Version : " + fwver + "</div>";/*untranslated*/
@@ -574,7 +574,7 @@ function detect_httpd(){
 		},
 
 		success: function(){
-			location.href = '<% abs_index_page(); %>';
+			location.href = "/";
 		}
 	});
 }
@@ -919,7 +919,7 @@ function show_offline_msg(_checkFlag) {
 
 	var $amesh_hint_text = $('<div>');
 	$amesh_hint_text.addClass("amesh_hint_text");
-	$amesh_hint_text.html("Offline tips :");/*untranslated*/
+	$amesh_hint_text.html("<#AiMesh_OfflineTips#> :");
 	$offlineHtml.append($amesh_hint_text);
 
 	var $amesh_hint_content = $('<div>');
@@ -928,11 +928,11 @@ function show_offline_msg(_checkFlag) {
 	$offlineHtml.append($amesh_hint_content);
 
 	var $msg_item =  $('<ol>');
-	var msg_text = "<li>Make sure your AiMesh node is power on.</li>";/*untranslated*/
-	msg_text += "<li>Reboot this AiMesh node and try again.</li>";/*untranslated*/
-	msg_text += "<li>If you are using Wi-Fi connection, please try to find a place closer to other AiMesh node.</li>";/*untranslated*/
-	msg_text += "<li>If you are using wired connection, please make sure cable are installed properly.</li>";/*untranslated*/
-	msg_text += "<li>If still no help, please try to reset this AiMesh node by \"Reset button\" and try to add again.</li>";/*untranslated*/
+	var msg_text = "<li><#AiMesh_OfflineTips1#></li>";
+	msg_text += "<li><#AiMesh_OfflineTips2#></li>";
+	msg_text += "<li><#AiMesh_OfflineTips3#></li>";
+	msg_text += "<li><#AiMesh_OfflineTips4#></li>";
+	msg_text += "<li><#AiMesh_OfflineTips5#></li>";
 	$msg_item.html(msg_text);
 	$amesh_hint_content.append($msg_item);
 
@@ -1089,7 +1089,7 @@ function gen_AiMesh_fw_status(_manual_status, _node_ip, _online) {
 	if(_manual_status) {
 		html += "Manual Firmware Update : ";/*untranslated*/
 		if(_online == "0") {
-			html += "<span class='aimesh_fw_update_offline' style='margin-left:0px;' onclick='show_offline_msg(false);'>Offline</span>";/*untranslated*/
+			html += "<span class='aimesh_fw_update_offline' style='margin-left:0px;' onclick='show_offline_msg(false);'><#Clientlist_OffLine#></span>";
 			amesh_offline_flag = true;
 		}
 		else {

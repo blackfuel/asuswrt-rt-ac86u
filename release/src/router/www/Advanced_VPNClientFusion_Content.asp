@@ -3032,13 +3032,13 @@ function del_exception_list_confirm(_parArray) {
 							</td>
 						</tr>
 						<tr id="tr_adv_ike_isakmp" style="display:none;">
-							<th>IKE / ISAKMP Port<!--untranslated--></th>
+							<th><#vpn_ipsec_IKE_ISAKMP_Port#></th>
 							<td>
 								<input type="text" class="input_6_table" name="ipsec_ike_isakmp" maxlength="3" value="500">
 							</td>
 						</tr>
 						<tr id="tr_adv_ike_isakmp_nat" style="display:none;"s>
-							<th>IKE / ISAKMP NAT-T Port<!--untranslated--></th>
+							<th><#vpn_ipsec_IKE_ISAKMP_NAT_Port#></th>
 							<td>
 								<input type="text" class="input_6_table" name="ipsec_ike_isakmp_nat" maxlength="4" value="4500">
 							</td>

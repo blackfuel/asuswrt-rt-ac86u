@@ -452,7 +452,7 @@ function updateClientList(e){
 				<td>
 					<div id="tabOnline" class="tabclick_NW" align="center">
 						<span>
-							Online
+							<#Clientlist_Online#>
 						</span>
 					</div>
 					<script>

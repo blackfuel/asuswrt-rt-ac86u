@@ -815,7 +815,7 @@ function ppp_echo_control(flag){
 <script>
 	if(sw_mode == 3){
 		alert("<#page_not_support_mode_hint#>");
-		location.href = '<% abs_index_page(); %>';
+		location.href = "/";
 	}
 </script>
 <div id="TopBanner"></div>

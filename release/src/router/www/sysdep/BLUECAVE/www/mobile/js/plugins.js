@@ -82,6 +82,20 @@ var htmlEnDeCode = (function() {
 	};
 })();
 
+function getAllWlArray(){
+	var wlArrayRet = [{"title":"2.4GHz", "ifname":"0", "suffix": ""}];
+	
+	if(isSupport("TRIBAND")){
+		wlArrayRet.push({"title":"5GHz-1", "ifname":"1", "suffix": "_5G-1"})
+		wlArrayRet.push({"title":"5GHz-2", "ifname":"2", "suffix": "_5G-2"})
+	}
+	else if(isSupport("DUALBAND")){
+		wlArrayRet.push({"title":"5GHz", "ifname":"1", "suffix": "_5G"})
+	}
+
+	return wlArrayRet;
+}
+
 function checkPasswd($obj){
 	var targetObj = $(this);
 	targetObj.toggleClass("icon_eye_close").toggleClass("icon_eye_open");
@@ -304,7 +318,7 @@ function handleModelIcon() {
 					return default_png_path;
 			}
 			else if(odmpid.length > 0 && odmpid != based_modelid) {
-				if(odmpid == "RT-AC66U_B1" || odmpid == "RT-AC1750_B1" || odmpid == "RT-N66U_C1" || odmpid == "RT-AC1900U") {
+				if(odmpid == "RT-AC66U_B1" || odmpid == "RT-AC1750_B1" || odmpid == "RT-N66U_C1" || odmpid == "RT-AC1900U" || odmpid == "RT-AC67U") {
 					MP_png_path = "/images/RT-AC66U_V2/Model_product.png";
 					if(LinkCheck(MP_png_path))
 						return MP_png_path;

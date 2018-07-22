@@ -54,7 +54,7 @@ endif
 CFLAGS += -DDSLCPE -Werror
 
 LDFLAGS += -L. -L$(INSTALL_DIR)/lib  
-
+LDFLAGS += -L$(TOP)/shared -lshared
 
 vpath %.c $(CURR_DIR)/src
 

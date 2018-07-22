@@ -645,7 +645,7 @@ function update_site_info(e) { //Use AJAX to get real-time AP status from aplist
 			setTimeout("update_site_info();",1000);
 		},
 		success: function(response){
-			if(wlc_scan_state != 3 || aplist[0].length != 9){
+			if(wlc_scan_state != 5 || aplist[0].length != 9){
 				setTimeout("update_site_info();", 2000);
 			}else{			
 				if(sw_mode == "3" && document.form.wlc_psta.value == "0")
@@ -1893,7 +1893,7 @@ function submit_language(obj){
 }
 
 function back_to_home(){
-	location.href = "<% abs_index_page(); %>";
+	location.href = "/";
 }
 
 function scrollTop(){

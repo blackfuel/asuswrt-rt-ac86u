@@ -377,6 +377,16 @@ extern char login_url[128];
 extern int login_error_status;
 extern char cloud_file[256];
 
+#ifdef RTCONFIG_LACP
+#if defined(GTAC5300)
+	#define LACP_PORT1		"LACP5"
+	#define LACP_PORT2		"LACP6"
+#else
+	#define LACP_PORT1		"LACP1"
+	#define LACP_PORT2		"LACP2"
+#endif
+#endif
+
 #ifdef RTCONFIG_JFFS2USERICON
 #define JFFS_USERICON		"/jffs/usericon/"
 #endif
@@ -7416,6 +7426,49 @@ static int get_amas_re_client_detail_info(struct json_object *json_object_ptr) {
 
 	return have_data;
 }
+static int is_re_node(char *client_mac) {
+	int i;
+	int ret = 0;
+	int shm_client_tbl_id;
+	int lock;
+	P_CM_CLIENT_TABLE p_client_tbl;
+	void *shared_client_info=(void *) 0;
+	unsigned char mac_buf[6] = {0};
+
+	lock = file_lock(CFG_FILE_LOCK);
+	shm_client_tbl_id = shmget((key_t)KEY_SHM_CFG, sizeof(CM_CLIENT_TABLE), 0666|IPC_CREAT);
+	if (shm_client_tbl_id == -1){
+		fprintf(stderr, "shmget failed\n");
+		file_unlock(lock);
+		return 0;
+	}
+
+	shared_client_info = shmat(shm_client_tbl_id,(void *) 0,0);
+	if (shared_client_info == (void *)-1){
+		fprintf(stderr, "shmat failed\n");
+		file_unlock(lock);
+		return 0;
+	}
+
+	ether_atoe(client_mac, mac_buf);
+
+	p_client_tbl = (P_CM_CLIENT_TABLE)shared_client_info;
+	for(i = 1; i < p_client_tbl->count; i++) {
+		if (memcmp(p_client_tbl->realMacAddr[i], mac_buf, sizeof(mac_buf)) == 0 ||
+			memcmp(p_client_tbl->sta2g[i], mac_buf, sizeof(mac_buf)) == 0 ||
+			memcmp(p_client_tbl->sta5g[i], mac_buf, sizeof(mac_buf)) == 0)
+		{
+			ret = 1;
+			break;
+		}
+	}
+
+	shmdt(shared_client_info);
+
+	file_unlock(lock);
+
+	return ret;
+}
 #endif
 
 //2016.09 Rawny add for new networkmap
@@ -7770,6 +7823,9 @@ static int get_client_detail_info(struct json_object *clients, struct json_objec
 					json_object_object_add(client, "rssi", json_object_new_string(json_object_get_string(amas_re_get_rssi)));
 				}
 				CLIENT_DPRINTF("amasReClientDetailList finish\n");
+			}
+			if (is_re_node(mac_buf)) {
+				json_object_object_add(client, "amesh_isRe", json_object_new_string("1"));
 			}
 #endif
 
@@ -11377,37 +11433,11 @@ do_upgrade_post(char *url, FILE *stream, int len, char *boundary)
 	}
 #endif
 
-#ifdef RTAC68U
-	if (!nvram_match("cpurev", "c0") &&
-	    (nvram_match("bl_version", "2.1.2.2") || nvram_match("bl_version", "2.1.2.6"))) {
-		unlink("/tmp/linux.trx");
-		eval("/usr/sbin/webs_update.sh");
-
-		if (nvram_get_int("webs_state_update") &&
-		    !nvram_get_int("webs_state_error") &&
-		    strlen(nvram_safe_get("webs_state_info"))) {
-			_dprintf("retrieve firmware information\n");
-
-			if (!nvram_get_int("webs_state_flag"))
-			{
-				_dprintf("no need to upgrade firmware\n");
-				goto err;
-			}
-
-			eval("/usr/sbin/webs_upgrade.sh");
-
-			if (nvram_get_int("webs_state_error"))
-			{
-				_dprintf("error execute upgrade script\n");
-				goto err;
-			}
-
-			nvram_set("restore_defaults", "1");
-			system("nvram erase");
-
-		} else _dprintf("could not retrieve firmware information!\n");
-	}
+#ifdef CONFIG_BCMWL5
+	if (fw_check() != 0)
+		goto err;
 #endif
+
 	upgrade_err = check_imagefile(upload_fifo);
 
 	if (upgrade_err) /* 0: legal image, 1: illegal image 2: new trx format validation failure */
@@ -14400,11 +14430,15 @@ do_appGet_image_path_cgi(char *url, FILE *stream)
 
 	websWrite(stream,"{\n" );
 
-	if(nvram_match("odmpid", "RT-AC66U_B1") || nvram_match("odmpid", "RT-AC1750_B1")|| nvram_match("odmpid", "RT-N66U_C1")|| nvram_match("odmpid", "RT-AC1900U")){
+#ifdef RTAC68U
+	if (is_ac66u_v2_series())
+	{
 		snprintf(file_path, sizeof(file_path), "/images/RT-AC66U_V2");
 		snprintf(file_path1, sizeof(file_path), "/images/RT-AC66U_V2");
 	}
-	else{
+	else
+#endif
+	{
 		snprintf(file_path, sizeof(file_path), "/images");
 		snprintf(file_path1, sizeof(file_path), "/images/New_ui");
 	}
@@ -18277,6 +18311,11 @@ static int ej_netdev(int eid, webs_t wp, int argc, char_t **argv)
 #ifdef RTCONFIG_LANTIQ
 	char ifname_buf[10];
 #endif
+#ifdef HND_ROUTER
+	char *lacp_ifs = nvram_safe_get("lacp_ifnames");
+	char *lacp1_ifname = *lacp_ifs?strtok(lacp_ifs, " "):NULL;
+	char *lacp2_ifname = *lacp_ifs?strtok(NULL, " "):NULL;
+#endif
 
 	nv_lan_ifname = nvram_safe_get("lan_ifname");
 	nv_lan_ifnames = nvram_safe_get("lan_ifnames");
@@ -18314,6 +18353,17 @@ static int ej_netdev(int eid, webs_t wp, int argc, char_t **argv)
 					if ((ifname = strrchr(buf, ' ')) == NULL) ifname = buf;
 						else	++ifname;
 					if (sscanf(p + 1, "%llu%*u%*u%*u%*u%*u%*u%*u%llu", &rx, &tx) != 2) continue;
+#if defined(HND_ROUTER) && defined(RTCONFIG_LACP)
+					if(nvram_get_int("lacp_enabled") == 1) {
+						if(lacp1_ifname && strncmp(ifname, lacp1_ifname, strlen(ifname)) == 0) {
+							tx_lacp1 = tx;
+							rx_lacp1 = rx;
+						} else if(lacp2_ifname && strncmp(ifname, lacp2_ifname, strlen(ifname)) == 0) {
+							tx_lacp2 = tx;
+							rx_lacp2 = rx;
+						}
+					}
+#endif
 #ifdef RTCONFIG_LANTIQ
 				}
 				else
@@ -18335,14 +18385,14 @@ static int ej_netdev(int eid, webs_t wp, int argc, char_t **argv)
 					if(nvram_get_int("lacp_enabled") == 1 &&
 							strcmp(ifname, "vlan1") == 0){
 						traffic_trunk(1, (uint32_t *) &rx_lacp1, (uint32_t *) &tx_lacp1);
-						netdev_calc("lacp1", "LACP1",
+						netdev_calc("lacp1", ifname_desc,
 								(long unsigned int *) &rx_lacp1, (long unsigned int *) &tx_lacp1,
 								ifname_desc2_lacp1,
 								(long unsigned int *) &rx2_lacp1, (long unsigned int *) &tx2_lacp1,
 								nv_lan_ifname, nv_lan_ifnames);
 
 						traffic_trunk(2, (uint32_t *) &rx_lacp2, (uint32_t *) &tx_lacp2);
-						netdev_calc("lacp2", "LACP2",
+						netdev_calc("lacp2", ifname_desc,
 								(long unsigned int *) &rx_lacp2, (long unsigned int *) &tx_lacp2,
 								ifname_desc2_lacp2,
 								(long unsigned int *) &rx2_lacp2, (long unsigned int *) &tx2_lacp2,
@@ -18507,8 +18557,12 @@ loopagain:
 #ifdef RTCONFIG_LACP
 	if(nvram_get_int("lacp_enabled") == 1){
 		if(from_app == 0){
-			ret += websWrite(wp, "%c'%s':{rx:0x%llx,tx:0x%llx}\n", comma, "LACP1", rx_lacp1, tx_lacp1);
-			ret += websWrite(wp, "%c'%s':{rx:0x%llx,tx:0x%llx}\n", comma, "LACP2", rx_lacp2, tx_lacp2);
+			ret += websWrite(wp, "%c'%s':{rx:0x%llx,tx:0x%llx}\n", comma, LACP_PORT1, rx_lacp1, tx_lacp1);
+			ret += websWrite(wp, "%c'%s':{rx:0x%llx,tx:0x%llx}\n", comma, LACP_PORT2, rx_lacp2, tx_lacp2);
+		}
+		else{
+			ret += websWrite(wp, "%c\"%s_rx\":\"0x%llx\",\"%s_tx\":\"0x%llx\"", comma, LACP_PORT1, rx_lacp1, LACP_PORT1, tx_lacp1);
+			ret += websWrite(wp, "%c\"%s_rx\":\"0x%llx\",\"%s_tx\":\"0x%llx\"", comma, LACP_PORT2, rx_lacp2, LACP_PORT2, tx_lacp2);
 		}
 	}
 #endif

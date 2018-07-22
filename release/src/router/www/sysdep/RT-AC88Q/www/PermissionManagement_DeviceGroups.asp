@@ -125,7 +125,7 @@ function generate_group_table(){
 	var code = "";	
 	code += '<tr>';
 	//code += '<th style="width:50px;"><input id="" type="checkbox" onclick="" value=""></th>';
-	code += '<th style="width:450px;">Group Name</th>';	
+	code += '<th style="width:450px;"><#PM_Group_Name#></th>';
 	code += '<th style="width:450px;"><#Description#></th>';	
 	code += '<th style="width:60px;"><#CTL_modify#></th>';	
 	code += '<th style="width:60px;"><#CTL_del#></th>';	
@@ -388,7 +388,7 @@ function enable_device_all(obj){
 		<table width="97%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin: 20px 10px;">
 			<thead>
 				<tr>
-					<td colspan="6">Create a new group</td>
+					<td colspan="6"><#PM_UsersGroups_Create#></td>
 				</tr>
 			</thead>		  
 			<tr>
@@ -401,7 +401,7 @@ function enable_device_all(obj){
 				</td>
 			</tr>		
 			<tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;">Group Name</th>			
+				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Group_Name#></th>
 				<td>
 					<input id="group_name" type="text" maxlength="32" class="input_32_table" style="height: 23px;" autocorrect="off" autocapitalize="off">
 				</td>
@@ -455,7 +455,7 @@ function enable_device_all(obj){
 									<div class="formfontdesc"><#PM_DGroups_desc#></div>
 									<div>
 										<div style="display:flex">
-											<div style="font-weight:900;padding-left:10px;line-height:34px;">Group Table</div>
+											<div style="font-weight:900;padding-left:10px;line-height:34px;"><#PM_Group_Table#></div>
 											<div style="margin-left:10px;">
 												<div class="createAccountBtn_add" onclick="show_addTable('new');"></div>
 											</div>										

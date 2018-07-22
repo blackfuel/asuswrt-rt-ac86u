@@ -2269,6 +2269,7 @@ wlc_dfs_chanspec_rand(wlc_dfs_info_t *dfs, uint16 *bw_list, uint16 bw_list_len, 
 #if defined(BCMDBG)
 	char chanbuf[CHANSPEC_STR_LEN];
 #endif /* BCMDBG */
+	bool support_non_radar_chan = FALSE;
 
 	first_valid = rand_chspec = 0;
 	/* get to the first acceptable bw */
@@ -2280,6 +2281,15 @@ wlc_dfs_chanspec_rand(wlc_dfs_info_t *dfs, uint16 *bw_list, uint16 bw_list_len, 
 				(bw_idx < bw_list_len ? bw_list[bw_idx] : -1),
 				def_bw));
 		return 0;
+	}
+
+	for (ch1 = CH_MAX_2G_CHANNEL + 1; ch1 < MAXCHANNEL; ch1++) {
+		chspec = CH20MHZ_CHSPEC(ch1);
+		if (wlc_valid_dfs_chanspec(wlc, chspec) &&
+			!wlc_radar_chanspec(wlc->cmi, chspec)) {
+				support_non_radar_chan = TRUE;
+				break;
+		}
 	}
 
 	while (bw_idx < bw_list_len && rand_chspec == 0) {
@@ -2310,6 +2320,18 @@ wlc_dfs_chanspec_rand(wlc_dfs_info_t *dfs, uint16 *bw_list, uint16 bw_list_len, 
 			setbit(ch_vec.vec, ch1);
 			ch1_count++;
 		}
+
+		if ((ch1_count == 0) && (support_non_radar_chan == FALSE)) {
+			for (ch1 = CH_MAX_2G_CHANNEL + 1; ch1 < MAXCHANNEL; ch1++) {
+				chspec = CHBW_CHSPEC(bw_sub, ch1); // | def_sb;
+				if (!wlc_valid_dfs_chanspec(wlc, chspec)) {
+					continue; /* skip invalid chspec */
+				}
+				setbit(ch_vec.vec, ch1);
+				ch1_count++;
+			}
+		}
+
 		if (ch1_count == 0) {
 			continue; /* no valid channels of given bandwidth found */
 		}

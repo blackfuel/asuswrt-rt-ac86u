@@ -3019,7 +3019,6 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 	char *list, *list2;
 	int list_size;
 	char *nv, *nvp, *b;
-	char word[256], *next;
 #ifndef RTCONFIG_BCMWL6
 	int match;
 #endif
@@ -3027,7 +3026,7 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 	char interface_list[NVRAM_MAX_VALUE_LEN];
 	int interface_list_size = sizeof(interface_list);
 	char nv_interface[NVRAM_MAX_PARAM_LEN];
-	int if_unit, ure;
+	int ure;
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 	int max_no_vifs = wl_max_no_vifs(unit);
 	char lan_ifnames[NVRAM_MAX_PARAM_LEN] = "lan_ifnames";
@@ -3114,12 +3113,10 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 		}
 #endif
 
-		if_unit = 0;
-		foreach (word, nvram_safe_get("wl_ifnames"), next) {
-			ure = is_ure(if_unit);
+			ure = is_ure(unit);
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
-			psta = is_psta(if_unit);
-			psr = is_psr(if_unit);
+			psta = is_psta(unit);
+			psr = is_psr(unit);
 #endif
 
 			if (ure
@@ -3134,12 +3131,7 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 				nvram_set(strcat_r(prefix, "bw", tmp), "1");
 #endif
 				nvram_set(strcat_r(prefix, "chanspec", tmp), "0");
-
-				break;
 			}
-
-			if_unit++;
-		}
 
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 		/* Disable all VIFS wlX.2 onwards */
@@ -3461,7 +3453,11 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 #ifdef RTCONFIG_BCMARM
 		int dwds = 0;
 		if (!nvram_get_int("dwds_ctrl")) {
+#if 0
 			dwds = !is_ure(unit);
+#else
+			dwds = !(is_ure(unit) || is_psta(unit));
+#endif
 			nvram_set(strcat_r(prefix, "dwds", tmp), dwds ? "1" : "0");
 		}
 		dwds = nvram_get_int(strcat_r(prefix, "dwds", tmp));
@@ -3889,7 +3885,11 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 		nvram_set_int(strcat_r(prefix, "wmf_ucast_upnp", tmp), 0);
 		nvram_set_int(strcat_r(prefix, "wmf_igmpq_filter", tmp), 1);
 #endif
+#ifdef HND_ROUTER
+		nvram_set_int(strcat_r(prefix, "acs_fcs_mode", tmp), i && nvram_match(strcat_r(prefix, "nband", tmp2), "1") ? 1 : 0);
+#else
 		nvram_set_int(strcat_r(prefix, "acs_fcs_mode", tmp), i ? 1 : 0);
+#endif
 		nvram_set_int(strcat_r(prefix, "dcs_csa_unicast", tmp), i ? 1 : 0);
 #endif
 #else // RTCONFIG_EMF
@@ -6861,10 +6861,6 @@ ERROR:
 }
 
 #ifdef RTCONFIG_BCMWL6
-#define WL_5G_BAND_2	1 << (2 - 1)
-#define WL_5G_BAND_3	1 << (3 - 1)
-#define WL_5G_BAND_4	1 << (4 - 1)
-
 void set_acs_ifnames()
 {
 	char acs_ifnames[64];

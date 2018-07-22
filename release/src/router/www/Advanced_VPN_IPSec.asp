@@ -853,11 +853,11 @@ function showIPSecClients(profileName, e) {
 												</td>
 											</tr>
 											<tr class="tr_advanced">
-												<th>IKE / ISAKMP Port<!--untranslated--></th>
+												<th><#vpn_ipsec_IKE_ISAKMP_Port#></th>
 												<td>500</td>
 											</tr>
 											<tr class="tr_advanced">
-												<th>IKE / ISAKMP NAT-T Port<!--untranslated--></th>
+												<th><#vpn_ipsec_IKE_ISAKMP_NAT_Port#></th>
 												<td>4500</td>
 											</tr>
 											<tr class="tr_advanced">

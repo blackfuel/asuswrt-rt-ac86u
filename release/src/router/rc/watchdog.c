@@ -5178,7 +5178,7 @@ void qtn_module_check(void)
 	snprintf(src_ip, sizeof(src_ip), "%s", nvram_safe_get("QTN_RPC_CLIENT"));
 	snprintf(dst_ip, sizeof(dst_ip), "%s", nvram_safe_get("QTN_RPC_SERVER"));
 
-	if (nvram_get_int(ATE_BRCM_FACTORY_MODE_STR()) == 1)
+	if (ATE_BRCM_FACTORY_MODE())
 		return;
 
 	if (!nvram_get_int("qtn_ready"))

@@ -461,7 +461,7 @@ a{
 .apListDiv{
 	display: table-row;
 	font-family: HelveticaNeueW10-45Ligh,Helvetica,Arial;
-	font-size: 2.25em;
+	font-size: 2em;
 	color: #DBDBDB
 }
 .ap_icon_container{
@@ -475,8 +475,12 @@ a{
 .ap_ssid{
 	display: table-cell;
 	width: 100%;
-	padding-left: 12px;
+	padding-left: 20px;
 	color: #DBDBDB;
+	cursor: pointer;
+}
+.ap_ssid_hover{
+	color: #007AFF !important;
 }
 .ap_band{
 	display: table-cell;
@@ -505,7 +509,7 @@ a{
 .selectorContainerDiv{
 	display: table-row;
 	font-family: HelveticaNeueW10-45Ligh,Helvetica,Arial;
-	font-size:2.25em;
+	font-size:2em;
 }
 .narrowContainer{
 	display: table-cell;
@@ -826,6 +830,12 @@ a{
 	}
 	.footerPadding{
 		display: none;
+	}
+	.ap_narrow_container{
+		padding-right: 0px;
+	}
+	.narrowContainer{
+		padding-right: 0px;
 	}
 	@media screen and (max-height: 1000px){
 		.tableContainerIndex{ 

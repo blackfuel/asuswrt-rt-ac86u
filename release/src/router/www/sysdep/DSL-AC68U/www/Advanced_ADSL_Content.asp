@@ -60,11 +60,11 @@ function update_current_SNR_margin(){
 				{
 					if(log_xDSLmode == "ADSL"){
 						document.getElementById("id_sta_adj_adsl").style.display = "";
-						document.getElementById("id_sta_adj_adsl").innerHTML = "Current SNR Margin: "+log_SNRMarginDown;
+						document.getElementById("id_sta_adj_adsl").innerHTML = "<#dslsetting_SNR_Margin#>: "+log_SNRMarginDown;
 					}
 					else if(log_xDSLmode == "VDSL"){
 						document.getElementById("id_sta_adj_vdsl").style.display = "";
-						document.getElementById("id_sta_adj_vdsl").innerHTML = "Current SNR Margin: "+log_SNRMarginDown;
+						document.getElementById("id_sta_adj_vdsl").innerHTML = "<#dslsetting_SNR_Margin#>: "+log_SNRMarginDown;
 					}
 				}
 				else{

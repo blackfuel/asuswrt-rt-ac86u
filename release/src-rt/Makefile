@@ -2563,6 +2563,10 @@ define RouterOptions
 		sed -i "/RTCONFIG_LIBASUSLOG\>/d" $(1); \
 		echo "RTCONFIG_LIBASUSLOG=y" >>$(1); \
 	fi; \
+	if [ "$(PORT2_DEVICE)" = "y" ]; then \
+		sed -i "/RTCONFIG_PORT2_DEVICE/d" $(1); \
+		echo "RTCONFIG_PORT2_DEVICE=y" >>$(1); \
+	fi; \
 	)
 	$(call platformRouterOptions, $(1))
 endef

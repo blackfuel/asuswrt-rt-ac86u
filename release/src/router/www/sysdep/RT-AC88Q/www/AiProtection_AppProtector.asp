@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta HTTP-EQUIV="Pragma" CONTENT="no-cache">
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
-<title><#Web_Title#> - App Patrol</title>
+<title><#Web_Title#> - <#Firewall_App_Patrol#></title>
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
@@ -379,13 +379,13 @@ function addRow_main(obj, length){
 }
 					 
 function genMain_table(){
-	var category_name = ["<#AiProtection_filter_message#>", "<#AiProtection_filter_p2p#>", "<#AiProtection_filter_stream#>", "Commercial Applications", "Remote Control and Network Management", "Web Service and Surfing"];
+	var category_name = ["<#AiProtection_filter_message#>", "<#AiProtection_filter_p2p#>", "<#AiProtection_filter_stream#>", "<#Firewall_App_Patrol_Com_App#>", "<#Firewall_App_Patrol_Remote_Net#>", "<#Firewall_App_Patrol_Web_Surfing#>"];
 	var sub_category_name = [["<#AiProtection_filter_Adult5#>", "<#AiProtection_filter_Adult4#>", "<#AiProtection_filter_Adult8#>"],
 							 ["<#AiProtection_filter_p2p2#>", "<#AiProtection_filter_p2p1#>"],
 							 ["<#AiProtection_filter_stream2#>", "<#AiProtection_filter_stream1#>"],
-							 ["E-mail and Collaboration", "Database", "Business"],
-							 ["Network Management", "Remote Access Terminals", "Network Protocols", "Private Protocols"],
-							 ["Bypass Proxies and Tunnels", "Web", "Social Network"]];
+							 ["<#Firewall_App_Patrol_EMail#>", "<#Firewall_App_Patrol_DB#>", "<#Firewall_App_Patrol_Business#>"],
+							 ["<#Firewall_App_Patrol_Net_Manage#>", "<#Firewall_App_Patrol_Remote#>", "<#Firewall_App_Patrol_Net_Protocol#>", "<#Firewall_App_Patrol_Private_Protocol#>"],
+							 ["<#Firewall_App_Patrol_Proxies_Tunnels#>", "<#Firewall_App_Patrol_Web#>", "<#Firewall_App_Patrol_Social_Net#>"]];
 	var category_desc = ["<#AiProtection_filter_Adult_desc#>", 
 						 "<#AiProtection_filter_message_desc#>", 
 						 "<#AiProtection_filter_p2p_desc#>", 
@@ -398,14 +398,14 @@ function genMain_table(){
 	code += '<table width="100%" border="1" cellspacing="0" cellpadding="4" align="center" class="FormTable_table" id="mainTable_table">';
 	code += '<thead><tr>';
 	//code += '<td colspan="5"><#ConnectedClient#>&nbsp;(<#List_limit#>&nbsp;16)</td>';
-	code += '<td colspan="5">Rule List&nbsp;(<#List_limit#>&nbsp;16)</td>';/*untranslated*/
+	code += '<td colspan="5"><#PM_Rule_List#>&nbsp;(<#List_limit#>&nbsp;16)</td>';
 	code += '</tr></thead>';	
 	code += '<tbody>';
 	code += '<tr>';
 	code += '<th width="5%" height="30px" title="<#select_all#>">';
 	code += '<input id="selAll" type="checkbox" onclick="selectAll(this, 0);" value="">';
 	code += '</th>';
-	code += '<th width="40%">Group Name</th>';/*untranslated*/
+	code += '<th width="40%"><#PM_Group_Name#></th>';
 	code += '<th width="40%"><#AiProtection_filter_category#></th>';
 	code += '<th width="10%"><#list_add_delete#></th>';
 	code += '</tr>';
@@ -414,7 +414,7 @@ function genMain_table(){
 	code += '<input type="checkbox" checked="">';
 	code += '</td>';
 	code += '<td style="border-bottom:2px solid #000;">';
-	code += '<input type="text" maxlength="17" style="margin-left:10px;float:left;width:255px;" class="input_20_table" name="PC_devicename" onkeypress="return validator.isHWAddr(this,event)" onclick="hideClients_Block();" placeholder="ex: Group Name" autocorrect="off" autocapitalize="off">';
+	code += '<input type="text" maxlength="17" style="margin-left:10px;float:left;width:255px;" class="input_20_table" name="PC_devicename" onkeypress="return validator.isHWAddr(this,event)" onclick="hideClients_Block();" placeholder="ex: <#PM_Group_Name#>" autocorrect="off" autocapitalize="off">';
 	code += '<img id="pull_arrow" height="14px;" src="/images/arrow-down.gif" onclick="pullLANIPList(this);" title="<#select_client#>">';
 	code += '<div id="ClientList_Block_PC" class="clientlist_dropdown" style="margin-top:25px;margin-left:10px;"></div>';	
 	code += '</td>';
@@ -820,7 +820,7 @@ function setGroup(name){
 									<table width="730px">
 										<tr>
 											<td align="left">
-												<div class="formfonttitle" style="width:400px"><#menu5_5#> - App Patrol</div>
+												<div class="formfonttitle" style="width:400px"><#menu5_5#> - <#Firewall_App_Patrol#></div>
 											</td>
 										</tr>
 									</table>
@@ -834,7 +834,7 @@ function setGroup(name){
 											</td>
 											<td>&nbsp;&nbsp;</td-->
 											<td style="font-style: italic;font-size: 14px;">
-												<span>App Patrol allows you to block access to unwanted apps.</span>
+												<span><#Firewall_App_Patrol_Desc#></span>
 												<!--ol>
 													<li><#AiProtection_filter_desc2#></li>
 													<li><#AiProtection_filter_desc3#></li>
@@ -850,7 +850,7 @@ function setGroup(name){
 			<!--=====Beginning of Main Content=====-->
 								<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
 									<tr>
-										<th>Enable App Patrol</th>
+										<th><#Firewall_App_Patrol_Enable#></th>
 										<td>
 											<div align="center" class="left" style="width:94px; float:left; cursor:pointer;" id="radio_web_restrict_enable"></div>
 											<div class="iphone_switch_container" style="height:32px; width:74px; position: relative; overflow: hidden">

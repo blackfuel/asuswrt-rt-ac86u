@@ -220,7 +220,7 @@ function doLiveUpdate(_do){
 	}
 	else{
 		goto_index();
-		setTimeout("parent.location.href='<% abs_index_page(); %>'", 3000);
+		setTimeout("parent.location.href='/'", 3000);
 	}
 }
 
@@ -1278,7 +1278,7 @@ function redirect_index(){
 			setTimeout("detect_redirect()", 5000);
 		}
 		else
-			parent.location.href = "<% abs_index_page(); %>";
+			parent.location.href = "/";
 	}
 }
 
@@ -1429,7 +1429,7 @@ function detect_redirect(){
     		setTimeout("detect_redirect();", 1000);
     	},
     	success: function(){
-      		top.location.href = "<% abs_index_page(); %>";
+      		top.location.href = "/";
   		}
   	});
 }
@@ -1687,7 +1687,7 @@ function detect_redirect(){
 	<br />
 	
 	<fieldset>
-		<div class="row_end"><a class="iuiA" onclick="parent.location.href='<% abs_index_page(); %>';"><#menu5#></a></div>
+		<div class="row_end"><a class="iuiA" onclick="parent.location.href='/';"><#menu5#></a></div>
 	</fieldset>
 	<br />
 	<fieldset>

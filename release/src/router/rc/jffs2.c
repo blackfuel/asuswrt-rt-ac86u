@@ -342,8 +342,8 @@ void start_jffs2(void)
 #endif
 
 	run_userfile("/jffs", ".asusrouter", "/jffs", 3);
-#ifdef RTAC68U
-	check_jffs2();
+#ifdef CONFIG_BCMWL5
+	check_asus_jffs();
 #endif
 }
 

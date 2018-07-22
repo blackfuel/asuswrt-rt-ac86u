@@ -1105,7 +1105,7 @@ function genMain_table(){
 	code += '<table width="100%" border="1" cellspacing="0" cellpadding="4" align="center" class="FormTable_table" id="mainTable_table">';
 	code += '<thead><tr>';
 	if(pm_support)
-		code += '<td colspan="5">Rule List&nbsp;(<#List_limit#>&nbsp;32)</td>';
+		code += '<td colspan="5"><#PM_Rule_List#>&nbsp;(<#List_limit#>&nbsp;32)</td>';
 	else
 		code += '<td colspan="5"><#ConnectedClient#>&nbsp;(<#List_limit#>&nbsp;32)</td>';
 	code += '</tr></thead>';	

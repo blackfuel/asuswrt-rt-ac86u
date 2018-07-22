@@ -1006,7 +1006,7 @@ function genWANSoption(){
 				  </tr>
 				  </thead>		
 					<tr id="wan_sel_tr" style="display: none;">
-						<th>WAN Selection</th>
+						<th><#IPv6_WAN_Selection#></th>
 		     		<td>
 		     			<select name="wan_selection" class="input_option" onchange="changeWANUnit(this);">
 		     			</select>

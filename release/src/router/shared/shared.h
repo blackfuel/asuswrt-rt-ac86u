@@ -294,7 +294,7 @@ enum {
 #define GIF_PREFIXLEN  0x0002  /* return prefix length */
 #define GIF_PREFIX     0x0004  /* return prefix, not addr */
 
-#define EXTEND_AIHOME_API_LEVEL		13
+#define EXTEND_AIHOME_API_LEVEL		14
 #define EXTEND_HTTPD_AIHOME_VER		0
 
 #define EXTEND_ASSIA_API_LEVEL		1
@@ -329,6 +329,7 @@ enum romaingEvent {
 #define RAST_CANDIDATE_AP "CANDIDATE"
 #define RAST_STA_RSSI	"STA_RSSI"
 #define RAST_CANDIDATE_AP_RSSI	"AP_RSSI"
+#define RAST_CANDIDATE_AP_RSSI_CRITERIA  "AP_RSSI_CRITERIA"
 
 #define RAST_JVALUE_BAND_2G "2"
 #define RAST_JVALUE_BAND_5G "1"
@@ -1544,6 +1545,7 @@ extern uint32_t hnd_get_phy_speed(int port, int offs, unsigned int regv, unsigne
 extern int hnd_ethswctl(ecmd_t act, unsigned int val, int len, int wr, unsigned long long regdata);
 extern uint32_t set_ex53134_ctrl(uint32_t portmask, int ctrl);
 #endif
+extern int fw_check(void);
 #endif
 #ifdef RTCONFIG_AMAS
 //extern char *get_pap_bssid(int unit);
@@ -1552,6 +1554,14 @@ extern void set_wlan_service_status(int bssidx, int vifidx, int enabled);
 #endif
 #ifdef RTCONFIG_LACP
 extern uint32_t traffic_trunk(int port_num, uint32_t *rx, uint32_t *tx);
+#endif
+#ifdef RTCONFIG_JFFS_NVRAM
+extern char * jffs_nvram_get(const char *name);
+extern int jffs_nvram_set(const char *name, const char *value);
+extern int jffs_nvram_unset(const char *name);
+extern int large_nvram(const char *name);
+extern void jffs_nvram_init();
+extern int jffs_nvram_getall(int len_nvram, char *buf, int count);
 #endif
 
 // base64.c
@@ -2237,5 +2247,10 @@ extern int detwan_set_def_vid(const char *ifname, int vid, int needTagged, int a
 
 extern int IPTV_ports_cnt(void);
 
+#ifdef RTCONFIG_BCMWL6
+#define WL_5G_BAND_2	1 << (2 - 1)
+#define WL_5G_BAND_3	1 << (3 - 1)
+#define WL_5G_BAND_4	1 << (4 - 1)
+#endif
 
 #endif	/* !__SHARED_H__ */

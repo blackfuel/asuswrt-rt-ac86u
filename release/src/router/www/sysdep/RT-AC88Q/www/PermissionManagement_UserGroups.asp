@@ -109,7 +109,7 @@ function generate_group_table(){
 	var code = "";
 	code += '<tr>';
 	//code += '<th style="width:35px;"><input id="" type="checkbox" onclick="" value=""></th>';
-	code += '<th style="width:350px;">Group Name</th>';
+	code += '<th style="width:350px;"><#PM_Group_Name#></th>';
 	code += '<th style="width:350px;"><#Description#></th>';
 	code += '<th style="width:60px;"><#CTL_modify#></th>';
 	code += '<th style="width:60px;"><#CTL_del#></th>';
@@ -264,7 +264,7 @@ function show_modifyTable(target){
 
 	code += '<tr>';
 	code += '<th style="width:35px;"><input type="checkbox" onclick="" value=""></th>';
-	code += '<th style="width:94%;">Assign users to this group</th>';
+	code += '<th style="width:94%;"><#PM_UsersGroups_Add#></th>';
 	code += '</tr>';
 
 	var account_array = group_obj.members;
@@ -371,7 +371,7 @@ function enable_account_all(obj){
 		<table width="97%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin: 20px 10px;">
 			<thead>
 				<tr>
-					<td colspan="6">Create a new group</td>
+					<td colspan="6"><#PM_UsersGroups_Create#></td>
 				</tr>
 			</thead>
 			<tr>
@@ -384,7 +384,7 @@ function enable_account_all(obj){
 				</td>
 			</tr>		  
 			<tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;">Group Name</th>			
+				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Group_Name#></th>
 				<td>
 					<input id="group_name" type="text" maxlength="32" class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
 				</td>
@@ -396,7 +396,7 @@ function enable_account_all(obj){
 				</td>
 			</tr>
 			<tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;">Confirm Password</th>			
+				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Confirm_Pwd#></th>
 				<td>
 					<input id="account_password_confirm" type="text" maxlength="32"class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
 				</td>
@@ -410,7 +410,7 @@ function enable_account_all(obj){
 		</table>
 		<div style="display:flex;margin: 0 20px;">
 			<div style="width:100%;">
-				<div>Assign users to this group</div>
+				<div><#PM_UsersGroups_Add#></div>
 				<div id="current_account" style="padding: 10px 0 0 20px;color:#FC0"></div>
 			</div>
 		</div>

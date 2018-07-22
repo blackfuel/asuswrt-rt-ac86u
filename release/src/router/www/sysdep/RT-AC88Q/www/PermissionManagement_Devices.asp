@@ -129,7 +129,7 @@ function generate_device_table(){
 	code += '<th style="width:150px;"><#MAC_Address#></th>';
 	code += '<th style="width:200px;"><#Device_type#></th>';
 	code += '<th style="width:200px;"><#Description#></th>';
-	//code += '<th style="width:350px;">Group Name</th>';
+	//code += '<th style="width:350px;"><#PM_Group_Name#></th>';
 	code += '<th style="width:60px;"><#CTL_modify#></th>';
 	code += '<th style="width:60px;"><#CTL_del#></th>';
 	code += '</tr>';
@@ -183,7 +183,7 @@ function show_addTable(flag){
 	code = "";		//reset
 	code += '<tr>';
 	code += '<th style="width:35px;"><input type="checkbox" onclick="enable_group_all(this);"></th>';
-	code += '<th style="width:94%;">Group Name</th>';
+	code += '<th style="width:94%;"><#PM_Group_Name#></th>';
 	code += '</tr>';
 	for(i=0;i<info.group.length;i++){
 		var group_index = info.group[i];
@@ -248,7 +248,7 @@ function show_modifyTable(target){
 	code = "";		//reset
 	code += '<tr>';
 	code += '<th style="width:35px;"><input type="checkbox" onclick="enable_group_all(this);"></th>';
-	code += '<th style="width:94%;">Group Name</th>';
+	code += '<th style="width:94%;"><#PM_Group_Name#></th>';
 	code += '</tr>';
 
 	for(i=0;i<info.group.length;i++){
@@ -484,7 +484,7 @@ function enable_group_all(obj){
 		<table width="97%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin: 20px 10px;">
 			<thead>
 				<tr>
-					<td colspan="6">Create a new device</td>
+					<td colspan="6"><#PM_Devices_Create#></td>
 				</tr>
 			</thead>		  
 			<tr>
@@ -517,7 +517,7 @@ function enable_group_all(obj){
 		</table>
 		<div style="display:flex;margin: 0 20px;">
 			<div style="width:100%;">
-				<div>Please assign the device to at least one group.</div>
+				<div><#PM_Devices_Add_Device#></div>
 				<div id="current_group" style="padding: 10px 0 0 20px;color:#FC0"></div>
 			</div>
 		</div>		
@@ -554,7 +554,7 @@ function enable_group_all(obj){
 									<div style="margin-top:20px;" class="formfontdesc"><#PM_Devices_desc#></div>								
 									<div>
 										<div style="display:flex">
-											<div style="font-weight:900;padding-left:10px;line-height:34px;">Device Table</div>
+											<div style="font-weight:900;padding-left:10px;line-height:34px;"><#PM_Devices_Table#></div>
 											<div style="margin-left:10px;">
 												<div class="createAccountBtn_add" onclick="show_addTable('new');"></div>
 											</div>										

@@ -363,7 +363,7 @@ function edit_guest_unit(_unit, _subunit) {
 	};
 	var unit_subunit = _unit + "." + _subunit;
 	document.getElementById("gn_interfce").innerHTML = "<#Guest_Network#> " + _subunit + " - " +   wl_nband_title[_unit];
-	document.getElementById("gn_interfce").innerHTML += "<br>SET UP";
+	document.getElementById("gn_interfce").innerHTML += "<br><#GuestNetwork_Create_New#>";
 
 	var guest_group_num = gn_array_2g.length;
 	var edit_gn_html = "";
@@ -1463,7 +1463,7 @@ function bandwidth_code(o,event){
 		<div id="gn_copyOtherSetting" style="width:30%;float:right;" >
 			<div id="copyOtherSettingIcon" class='gnset_copySettingContent_icon'></div>
 			<div class="gnset_copySettingContent_txt">
-				COPY OTHER<!--untranslated-->
+				<#GuestNetwork_Copy_Other#>
 				<br>
 				<#Settings#>
 			</div>
@@ -1471,7 +1471,7 @@ function bandwidth_code(o,event){
 		</div>
 	</div>
 	<div id="edited_list" class="gnset_copySettingContent_bg">
-		<div class="gnset_copySettingContent_title">Using the Same Settings With...<!--untranslated--></div>
+		<div class="gnset_copySettingContent_title"><#GuestNetwork_Using_Same#></div>
 		
 		<div id="edited_guestnetwork_list" class="gnset_copySettingContent_list_bg"></div>
 	</div>
@@ -1571,12 +1571,12 @@ function bandwidth_code(o,event){
 		</div>
 		<div id="gnset_wl_guest_num" class="gnset_setting_item_bg">
 			<div class='gnset_setting_item_titleName'>
-				Total Guest<!--untranslated-->
+				<#GuestNetwork_Total_Guest#>
 			</div>
 			<div class='gnset_setting_item_content'>
 				<div style="float:left;width:50%">
 					<select name="wl_guest_num" class="gnset_setting_input_text_autoWidth"></select>
-					<span class="gnset_des">guests</span><!--untranslated-->
+					<span class="gnset_des"><#GuestNetwork_Guests#></span>
 				</div>
 				<!--div class="gnset_setting_note">UP TO 50 GUESTS</div-->
 			</div>
@@ -1644,7 +1644,7 @@ function bandwidth_code(o,event){
 		</div>
 		<div id="gnset_wl_lanaccess" class="gnset_setting_item_bg">
 			<div class='gnset_setting_item_titleName'>
-				Access limit<!-- Untranslated -->
+				<#GuestNetwork_Access_Limit#>
 			</div>
 			<div class='gnset_setting_item_content'>
 				<div class="gnset_setting_content_bg">
@@ -1653,7 +1653,7 @@ function bandwidth_code(o,event){
 				</div>
 				<div class="gnset_setting_content_bg">
 					<input type="radio" name="wl_lanaccess" id="lanaccess_off" value="off" onchange="updateLanaccess()">
-					<label for="lanaccess_off" class="gnset_setting_content">Only access internet<!-- Untranslated --></label>
+					<label for="lanaccess_off" class="gnset_setting_content"><#GuestNetwork_Internet_Only#></label>
 				</div>
 				<!--div class="gnset_setting_content_bg">
 					<input type="radio" name="wl_lanaccess" id="lanaccess_vlan" value="vlan" onchange="updateLanaccess()">

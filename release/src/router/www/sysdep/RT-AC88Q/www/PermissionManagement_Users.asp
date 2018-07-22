@@ -149,7 +149,7 @@ function show_addTable(type, flag){
 	//generate group table
 	code += '<tr>';
 	code += '<th style="width:35px;"><input type="checkbox" onclick="enable_group_all(this)" value=""></th>';
-	code += '<th style="width:94%;">Group Name</th>';
+	code += '<th style="width:94%;"><#PM_Group_Name#></th>';
 	code += '</tr>';
 	for(i=0;i<info.group.length;i++){
 		var group_index = info.group[i];
@@ -310,7 +310,7 @@ function show_modifyTable(type, target){
 		
 	code += '<tr>';
 	code += '<th style="width:35px;"><input type="checkbox" onclick="enable_group_all(this)" value=""></th>';
-	code += '<th style="width:94%;">Group Name</th>';
+	code += '<th style="width:94%;"><#PM_Group_Name#></th>';
 	code += '</tr>';
 	var group_array = account_obj.group;
 	for(i=0;i<info.group.length;i++){
@@ -426,7 +426,7 @@ function enable_group_all(obj){
 		<table width="97%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin: 20px 10px;">
 			<thead>
 				<tr>
-					<td colspan="6">Create a new user</td>
+					<td colspan="6"><#PM_Users_Create#></td>
 				</tr>
 			</thead>
 			<tr>
@@ -451,7 +451,7 @@ function enable_group_all(obj){
 				</td>
 			</tr>
 			<tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;">Confirm Password</th>			
+				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Confirm_Pwd#></th>
 				<td>
 					<input id="account_password_confirm" type="password" maxlength="32"class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
 				</td>
@@ -465,7 +465,7 @@ function enable_group_all(obj){
 		</table>
 		<div style="display:flex;margin: 0 20px;">
 			<div style="width:100%;">
-				<div>Please assign the user to at least one group.</div>
+				<div><#PM_Users_Add_User#></div>
 				<div id="current_group" style="padding: 10px 0 0 20px;color:#FC0"></div>
 			</div>
 		</div>

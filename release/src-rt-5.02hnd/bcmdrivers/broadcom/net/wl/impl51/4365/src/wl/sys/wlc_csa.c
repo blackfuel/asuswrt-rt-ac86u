@@ -1709,6 +1709,8 @@ wlc_recv_csa_action(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 	bcm_tlv_t *wide_bw_ie;
 	uint8 channel_width = VHT_OP_CHAN_WIDTH_20_40;
 	uint bw = WL_CHANSPEC_BW_20;
+	chanspec_t def_chspec = wlc->default_bss->chanspec;
+	uint16 def_bw = CHSPEC_BW(def_chspec);
 #endif /* WL11AC */
 #endif /* BCMDBG && AP */
 
@@ -1787,9 +1789,22 @@ wlc_recv_csa_action(wlc_csa_info_t *csam, wlc_bsscfg_t *cfg,
 		if (extch == DOT11_EXT_CH_NONE) {
 			chspec = CH20MHZ_CHSPEC(csa_ie->channel);
 		} else if (extch == DOT11_EXT_CH_UPPER) {
-			chspec = CH40MHZ_CHSPEC(csa_ie->channel, WL_CHANSPEC_CTL_SB_UPPER);
+			chspec = CH40MHZ_CHSPEC(UPPER_20_SB(csa_ie->channel), WL_CHANSPEC_CTL_SB_LOWER);
 		} else {
-			chspec = CH40MHZ_CHSPEC(csa_ie->channel, WL_CHANSPEC_CTL_SB_LOWER);
+			chspec = CH40MHZ_CHSPEC(LOWER_20_SB(csa_ie->channel), WL_CHANSPEC_CTL_SB_UPPER);
+		}
+
+		chspec = wf_channel2chspec(wf_chspec_ctlchan(chspec), def_bw);
+
+		if (!wlc_valid_chanspec(wlc->cmi, chspec) || (WL11H_ENAB(wlc) &&
+			wlc_radar_chanspec(wlc->cmi, chspec) &&
+			!wlc_valid_dfs_chanspec(wlc, chspec))) {
+			chspec = wlc_next_chanspec(wlc->cmi, WLC_BAND_PI_RADIO_CHANSPEC,
+					CHAN_TYPE_CHATTY, 0);
+
+			if (chspec == INVCHANSPEC)
+				chspec = phy_utils_chanspec_band_firstch((phy_info_t *)WLC_PI(wlc),
+					wlc->band->bandtype);
 		}
 
 		wlc_csa_do_channel_switch(csam, cfg, chspec, csa_ie->mode, csa_ie->count, 0,

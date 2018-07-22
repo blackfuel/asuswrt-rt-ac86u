@@ -344,9 +344,9 @@ function gen_mainTable(){
 	var clientListEventData = [];
 	code +='<table width="100%" border="1" cellspacing="0" cellpadding="4" align="center" class="FormTable_table" id="mainTable_table">';
 	//code +='<thead><tr><td colspan="4"><#ConnectedClient#>&nbsp;(<#List_limit#>&nbsp;16)</td></tr></thead>';
-	code +='<thead><tr><td colspan="4">Rule List&nbsp;(<#List_limit#>&nbsp;16)</td></tr></thead>';
+	code +='<thead><tr><td colspan="4"><#PM_Rule_List#>&nbsp;(<#List_limit#>&nbsp;16)</td></tr></thead>';
 	code +='<tr><th width="10%" height="30px" title="<#select_all#>"><input id="selAll" type=\"checkbox\" onclick=\"selectAll(this, 0);\" value=\"\"/></th>';
-	code +='<th width="50%">Device Group Name</th>';/*untranslated*/
+	code +='<th width="50%"><#ParentalCtrl_Device_Group_Name#></th>';
 	code +='<th width="20%"><#ParentalCtrl_time#></th>';
 	code +='<th width="20%"><#list_add_delete#></th></tr>';
 
@@ -554,7 +554,7 @@ function gen_lantowanTable(client){
 	code +='<div style="margin-bottom:10px;color: #003399;font-family: Verdana;" align="left">';
 	code +='<table width="100%" border="1" cellspacing="0" cellpadding="4" align="center" class="FormTable">';
 	code +='<thead><tr><td colspan="6" id="LWFilterList"><#ParentalCtrl_Act_schedule#></td></tr></thead>';
-	code +='<tr><th style="width:40%;height:20px;" align="right">Group Name</th>';	
+	code +='<tr><th style="width:40%;height:20px;" align="right"><#PM_Group_Name#></th>';
 	if(MULTIFILTER_DEVICENAME_row[client] != "") {
 		var clientName = "";
 		/*if(clientList[MULTIFILTER_MAC_row[client]]) {

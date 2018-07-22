@@ -290,7 +290,7 @@ function check_active(obj){
 		<table width="97%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable" style="margin: 20px 10px;">
 			<thead>
 				<tr>
-					<td colspan="6">Create a new RADIUS client</td>
+					<td colspan="6"><#PM_RADIUS_Create#></td>
 				</tr>
 			</thead>		  
 			<tr>
@@ -315,7 +315,7 @@ function check_active(obj){
 				</td>
 			</tr>
 			<tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;">Confirm Password</th>			
+				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Confirm_Pwd#></th>
 				<td>
 					<input id="confirm_password" type="text" maxlength="32"class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
 				</td>
@@ -359,7 +359,7 @@ function check_active(obj){
 										<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
 											<tr>
 												<th style="width:200px;">
-													<div>Enable RADIUS Server</div>
+													<div><#PM_Enable_RADIUS#></div>
 												</th>								
 												<td>
 													<div align="center" class="left" style="width:94px; float:left; cursor:pointer;" id="radius_server_enable"></div>
@@ -391,7 +391,7 @@ function check_active(obj){
 									
 									<div style="margin-top:20px;">
 										<div style="display:flex">
-											<div style="font-weight:900;padding-left:10px;line-height:34px;">RADIUS Clients (<#List_limit#>&nbsp;16)</div>
+											<div style="font-weight:900;padding-left:10px;line-height:34px;"><#PM_RADIUS_Clients#> (<#List_limit#>&nbsp;16)</div>
 											<div style="margin-left:10px;">
 												<div class="createAccountBtn_add" onclick="show_addTable('group', 'new');"></div>
 											</div>										
