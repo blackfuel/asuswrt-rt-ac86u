@@ -689,7 +689,7 @@ var sorter = {
 	},
 
 	"doSorter" : function(_flag, _Method){
-		if(aplist[0].length != 9)
+		if(aplist[0].length != 9 && aplist[0].length != 10)
 			return 0;
 	
 		// update variables
@@ -736,7 +736,7 @@ function update_site_info(){
 				return false;
 			}
 	
-			if(wlc_scan_state != 5 || aplist[0].length != 9){
+			if(wlc_scan_state != 5 || (aplist[0].length != 9 && aplist[0].length != 10)){
 				showSiteTable();
 				setTimeout("update_site_info();", 2000);
 			}

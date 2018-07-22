@@ -451,6 +451,11 @@ wlc_eventq_handle_ind(wlc_eventq_t *eq, wlc_event_t *e)
 	cfg = wlc_bsscfg_find_by_wlcif(eq->wlc, e->wlcif);
 	ASSERT(cfg != NULL);
 
+	if (!cfg) {
+		WL_ERROR(("wl%d: wlc_eventq_handle_ind: cfg is null\n", eq->wlc->pub->unit));
+		return BCME_ERROR;
+	}
+
 	da = &cfg->cur_etheraddr;
 	sa = &cfg->cur_etheraddr;
 

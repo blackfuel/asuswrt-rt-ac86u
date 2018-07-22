@@ -642,6 +642,7 @@ var vpn_fusion_support = isSupport("vpn_fusion");
 var cfg_sync_support = isSupport("cfg_sync");
 var meoVoda_support = isSupport("meoVoda");
 var movistarTriple_support = isSupport("movistarTriple");
+var utf8_ssid_support = isSupport("utf8_ssid");
 
 var QISWIZARD = "QIS_wizard.htm";
 
@@ -3358,7 +3359,7 @@ function set_variable(_variable, _val){
 }
 
 function isPortConflict(_val){
-	if(_val == '80')
+	if(_val == '<% nvram_get("http_lanport"); %>')
 		return "<#portConflictHint#> HTTP LAN port.";
 	else if(_val == '<% nvram_get("dm_http_port"); %>')
 		return "<#portConflictHint#> Download Master.";

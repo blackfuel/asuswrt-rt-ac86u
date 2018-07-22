@@ -12,7 +12,6 @@
 <link rel="stylesheet" type="text/css" href="index_style.css">
 <link rel="stylesheet" type="text/css" href="form_style.css">
 <link rel="stylesheet" type="text/css" href="css/confirm_block.css"></script>
-<link rel="stylesheet" type="text/css" href="/device-map/amesh.css" />
 <style>
 .FormTable{
  	margin-top:10px;	
@@ -78,6 +77,11 @@
 <script language="JavaScript" type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script language="JavaScript" type="text/javascript" src="/form.js"></script>
 <script>
+$(function () {
+	if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+		addNewCSS('/device-map/amesh.css');
+	}
+});
 var webs_state_update = '<% nvram_get("webs_state_update"); %>';
 var webs_state_upgrade = '<% nvram_get("webs_state_upgrade"); %>';
 var webs_state_error = '<% nvram_get("webs_state_error"); %>';
@@ -1276,8 +1280,8 @@ function check_AiMesh_fw_version(_fw) {
 				</td>
 			</tr>			
 		</table>
-		<div class="aimesh_manual_fw_update_hint">
-			Note : Manual firmware update will update this AiMesh router / node only, if you are using AiMesh system, please make sure you are uploading proper firmware version.<!-- untranslated -->
+		<div class="aimesh_manual_fw_update_hint" style="display:none;">
+			Note : A manual firmware update will only update the selected AiMesh router / node. If you are using the AiMesh system, please make sure you are uploading the correct AiMesh firmware version for the each applicable router / node.<!-- Untranslated -->
 		</div>
 		
 </form>
@@ -1286,7 +1290,7 @@ function check_AiMesh_fw_version(_fw) {
 <input type="hidden" name="productid" value="<% nvram_get("productid"); %>">
 <input type="hidden" name="current_page" value="Advanced_FirmwareUpgrade_Content.asp">
 <input type="hidden" name="next_page" value="Advanced_FirmwareUpgrade_Content.asp">
-<input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
+<input type="hidden" name="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
 <input type="hidden" name="modified" value="0">
 <input type="hidden" name="flag" value="">

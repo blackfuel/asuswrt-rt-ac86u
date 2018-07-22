@@ -2400,7 +2400,6 @@ padding-top:1px;
 .eula_panel_container{
 	display: none;
 	position: absolute;
-	margin-top: -250px;
 	width: 500px;
 	height: 558px;
 	z-index: 2000;

@@ -21,7 +21,7 @@
 #include <bcm_mpool_pub.h>
 
 
-#if defined(BCMDBG)
+#if defined(BCMDBG) || defined(BCMDBG_ERR)
 #define NOTIF_ERROR(args)	printf args
 #else
 #define NOTIF_ERROR(args)

@@ -74,7 +74,7 @@ static uint32 rpc_msg_level = RPC_ERROR_VAL;
 #define	RPC_TRACE(args)		do {if (rpc_msg_level & RPC_TRACE_VAL) printf args;} while (0)
 #define RPC_PKTTRACE_ON()	(rpc_msg_level & RPC_PKTTRACE_VAL)
 #else
-#ifdef	BCMDBG
+#ifdef	BCMDBG_ERR
 #define	RPC_TRACE(args)		do {if (rpc_msg_level & RPC_TRACE_VAL) printf args;} while (0)
 #define RPC_PKTTRACE_ON()	(FALSE)
 #define prhex(a, b, c)		do { } while (0)  /* prhex is not defined under */
@@ -84,7 +84,7 @@ static uint32 rpc_msg_level = RPC_ERROR_VAL;
 #define RPC_PKTTRACE_ON()	(FALSE)
 #define RPC_PKTLOG_ON()		(FALSE)
 #define prhex(a, b, c) 	do { } while (0)  /* prhex is not defined under */
-#endif /* BCMDBG */
+#endif /* BCMDBG_ERR */
 #endif /* BCMDBG_RPC */
 
 #ifdef BCMDBG_RPC

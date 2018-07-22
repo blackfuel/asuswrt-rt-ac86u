@@ -219,15 +219,15 @@ function get_client_used_apps_info(client_index, used_data_array, top5_info, typ
 			}			
 		}
 		else{
-			document.getElementById('top_client_name').innerHTML = top5_info[client_index].name;
+			document.getElementById('top_client_name').innerHTML = total_clients_array[client_index].name;
 			if(document.getElementById('traffic_option').value == "both"){
-				total_traffic = top5_info[client_index].rx + top5_info[client_index].tx;
+				total_traffic = total_clients_array[client_index].rx + total_clients_array[client_index].tx;
 			}
 			else if(document.getElementById('traffic_option').value == "down"){
-				total_traffic = top5_info[client_index].rx;
+				total_traffic = total_clients_array[client_index].rx;
 			}
 			else{
-				total_traffic = top5_info[client_index].tx;
+				total_traffic = total_clients_array[client_index].tx;
 			}
 		}
 

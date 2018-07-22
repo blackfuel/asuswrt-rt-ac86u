@@ -2749,7 +2749,7 @@ void tweak_smp_affinity(int enable_samba)
 		return;
 #endif
 
-#ifdef RTCONFIG_BCM7114
+#ifdef RTCONFIG_BCM_7114
 	if (enable_samba) {
 		f_write_string("/proc/irq/163/smp_affinity", SMP_AFFINITY_WL, 0, 0);
 		f_write_string("/proc/irq/169/smp_affinity", SMP_AFFINITY_WL, 0, 0);
@@ -3021,6 +3021,7 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 	char *nv, *nvp, *b;
 #ifndef RTCONFIG_BCMWL6
 	int match;
+	char word[256], *next;
 #endif
 	int i, mcast_rate;
 	char interface_list[NVRAM_MAX_VALUE_LEN];
@@ -3885,8 +3886,8 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 		nvram_set_int(strcat_r(prefix, "wmf_ucast_upnp", tmp), 0);
 		nvram_set_int(strcat_r(prefix, "wmf_igmpq_filter", tmp), 1);
 #endif
-#ifdef HND_ROUTER
-		nvram_set_int(strcat_r(prefix, "acs_fcs_mode", tmp), i && nvram_match(strcat_r(prefix, "nband", tmp2), "1") ? 1 : 0);
+#ifdef RTCONFIG_BCM7
+		nvram_set_int(strcat_r(prefix, "acs_fcs_mode", tmp), i && (unit < 2) ? 1 : 0);
 #else
 		nvram_set_int(strcat_r(prefix, "acs_fcs_mode", tmp), i ? 1 : 0);
 #endif

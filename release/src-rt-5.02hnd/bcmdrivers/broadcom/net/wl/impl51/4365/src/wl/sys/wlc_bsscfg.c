@@ -2425,6 +2425,29 @@ fail:
 	return err;
 }
 
+static bool
+wlc_wlcif_valid(wlc_info_t *wlc, wlc_if_t *wlcif)
+{
+	wlc_if_t *p;
+	bool valid = FALSE;
+
+	if ((wlc == NULL) || (wlcif == NULL)) {
+		WL_ERROR(("%s: wlc %p or wlcif %p is NULL\n", __FUNCTION__, wlc, wlcif));
+		return FALSE;
+	}
+
+	p = wlc->wlcif_list;
+	while (p != NULL) {
+		if (p == wlcif) {
+			valid = TRUE;
+			break;
+		}
+		p = p->next;
+	}
+
+	return valid;
+}
+
 /*
  * Find a bsscfg from matching cur_etheraddr, BSSID, SSID, or something unique.
  */
@@ -2436,6 +2459,11 @@ wlc_bsscfg_find_by_wlcif(wlc_info_t *wlc, wlc_if_t *wlcif)
 	/* wlcif being NULL implies primary interface hence primary bsscfg */
 	if (wlcif == NULL)
 		return wlc_bsscfg_primary(wlc);
+
+	if (!wlc_wlcif_valid(wlc, wlcif)) {
+		WL_ERROR(("wl%d: invalid wlcif %p\n", wlc->pub->unit, wlcif));
+		return NULL;
+	}
 
 	switch (wlcif->type) {
 	case WLC_IFTYPE_BSS:

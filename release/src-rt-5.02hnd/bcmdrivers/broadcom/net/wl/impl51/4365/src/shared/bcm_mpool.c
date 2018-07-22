@@ -22,7 +22,7 @@
 #include <bcm_mpool_pub.h>
 #include "bcm_mpool_pri.h"
 
-#if defined(BCMDBG)
+#if defined(BCMDBG) || defined(BCMDBG_ERR)
 #define MPOOL_ERROR(args)	printf args
 #else
 #define MPOOL_ERROR(args)

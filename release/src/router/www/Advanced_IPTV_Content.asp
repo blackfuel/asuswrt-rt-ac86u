@@ -144,8 +144,8 @@ function initial(){
 	}
 
 	var portName = {
-		"voip": "LAN4",
-		"iptv": "LAN3"
+		"voip": "LAN3",
+		"iptv": "LAN4"
 	}
 
 	if(based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "MAP-AC1750"){
@@ -244,10 +244,10 @@ function load_ISP_profile(){
 		setting_value = [["10", "0"], ["", "0"], ["", "0"], "0"];
     }
 	else if(document.form.switch_wantag.value == "spark" || document.form.switch_wantag.value == "2degrees" ||
-	document.form.switch_wantag.value == "slingshot" || document.form.switch_wantag.value == "orcon" || document.form.switch_wantag.value == "voda_nz"){
+	document.form.switch_wantag.value == "slingshot" || document.form.switch_wantag.value == "orcon" || document.form.switch_wantag.value == "voda_nz" || document.form.switch_wantag.value == "iinet"){
 		setting_value = [["10", "0"], ["", "0"], ["", "0"], "0"];
 	}
-	else if(document.form.switch_wantag.value == "tpg" || document.form.switch_wantag.value == "iinet" || document.form.switch_wantag.value == "aapt" || document.form.switch_wantag.value == "intronode"){
+	else if(document.form.switch_wantag.value == "tpg" || document.form.switch_wantag.value == "aapt" || document.form.switch_wantag.value == "intronode"){
 		setting_value = [["2", "0"], ["", "0"], ["", "0"], "0"];
 	}
 	else if(document.form.switch_wantag.value == "amaysim" || document.form.switch_wantag.value == "dodo" || document.form.switch_wantag.value == "iprimus"){

@@ -45,7 +45,7 @@ htol32_ua_store_1(uint32 val, uint8 *bytes)
 }
 #endif
 
-#if defined(BCMDBG)
+#if defined(BCMDBG) || defined(BCMDBG_ERR)
 const char *olevent_str[] =  {
 	"BCM_OL_UNUSED",
 	"BCM_OL_BEACON_ENABLE",
@@ -135,11 +135,11 @@ static uint32 olmsg_debug_level = DEFAULT_OLMSG_DEBUG_LEVEL;
 #define EXIT()  OLMSG_TRACE(("%s: line (%d) Exit\n", __FUNCTION__, __LINE__));
 #else
 static uint32 olmsg_debug_level = DEFAULT_OLMSG_DEBUG_LEVEL;
-//#ifdef BCMDBG_ERR
-//#define OLMSG_ERROR(args) do { if (olmsg_debug_level & OLMSG_ERROR_VAL) printf args; } while (0)
-//#else
+#ifdef BCMDBG_ERR
+#define OLMSG_ERROR(args) do { if (olmsg_debug_level & OLMSG_ERROR_VAL) printf args; } while (0)
+#else
 #define OLMSG_ERROR(args)
-//#endif
+#endif
 #define OLMSG_TRACE(args)
 #define OLMSG_WARN(args)
 #define OLMSG_DBG(args)
@@ -155,9 +155,9 @@ bcm_olmsg_create(uchar *buf, uint32 len)
 	olmsg_buf_info  *host_msg;
 	olmsg_buf_info  *dngl_msg;
 
-#if defined(BCMDBG)
+#if defined(BCMDBG) || defined(BCMDBG_ERR)
 	STATIC_ASSERT(ARRAYSIZE(olevent_str) == (BCM_OL_MSG_MAX+1));
-#endif /* defined (BCMDBG) */
+#endif /* defined (BCMDBG) || defined (BCMDBG_ERR) */
 
 	if (buf == NULL || len == 0 || (len < OLMSG_RW_MAX_ENTRIES*sizeof(olmsg_info))) {
 		OLMSG_ERROR(("%s: Invalid arguments\n", __FUNCTION__));

@@ -346,7 +346,7 @@ function gen_mainTable(){
 	//code +='<thead><tr><td colspan="4"><#ConnectedClient#>&nbsp;(<#List_limit#>&nbsp;16)</td></tr></thead>';
 	code +='<thead><tr><td colspan="4"><#PM_Rule_List#>&nbsp;(<#List_limit#>&nbsp;16)</td></tr></thead>';
 	code +='<tr><th width="10%" height="30px" title="<#select_all#>"><input id="selAll" type=\"checkbox\" onclick=\"selectAll(this, 0);\" value=\"\"/></th>';
-	code +='<th width="50%"><#ParentalCtrl_Device_Group_Name#></th>';
+	code +="<th width='50%'><#ParentalCtrl_Device_Group_Name#></th>";
 	code +='<th width="20%"><#ParentalCtrl_time#></th>';
 	code +='<th width="20%"><#list_add_delete#></th></tr>';
 

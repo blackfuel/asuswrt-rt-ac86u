@@ -910,7 +910,7 @@ wlc_psta_create(wlc_psta_info_t *psta, wlc_info_t *wlc, struct ether_addr *ea,
 	chanspec_t chanspec;
 	psta_bsscfg_cubby_t *psta_cfg;
 	wl_psta_primary_intf_event_t psta_prim_e;
-#if defined(BCMDBG) || defined(WLMSG_ASSOC)
+#ifdef BCMDBG
 	char eabuf[ETHER_ADDR_STR_LEN];
 #endif /* BCMDBG */
 

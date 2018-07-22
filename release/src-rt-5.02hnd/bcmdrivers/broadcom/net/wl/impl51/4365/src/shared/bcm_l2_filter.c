@@ -27,11 +27,11 @@
 #include <proto/802.11.h>
 #include <bcm_l2_filter.h>
 
-#ifdef BCMDBG
+#ifdef BCMDBG_ERR
 #define	L2_FILTER_ERROR(args)	printf args
 #else
 #define	L2_FILTER_ERROR(args)
-#endif	/* BCMDBG */
+#endif	/* BCMDBG_ERR */
 
 
 #ifdef BCMDBG_MSG

@@ -752,7 +752,11 @@ extern void wan6_down(const char *wan_ifname);
 extern void start_wan6(void);
 extern void stop_wan6(void);
 #endif
+extern int do_ping_detect(int wan_unit, const char *target);
 extern int do_dns_detect(int wan_unit);
+#ifdef DSL_AC68U
+extern int check_wan_if(int unit);
+#endif
 
 // lan.c
 extern void update_lan_state(int state, int reason);
@@ -1519,6 +1523,7 @@ extern char *pwdec_dsl(char *input);
 #endif
 extern int service_main(int argc, char *argv[]);
 #ifdef RTCONFIG_DSL
+extern void stop_spectrum(void);
 extern int check_tc_upgrade(void);
 extern int start_tc_upgrade(void);
 #ifdef RTCONFIG_DSL_TCLINUX

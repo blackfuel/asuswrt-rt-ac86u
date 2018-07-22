@@ -4004,16 +4004,16 @@ void
 start_httpd(void)
 {
 	char *httpd_argv[] = { "httpd",
-	/*	"-p", nvram_safe_get("http_lanport"),*/
 		NULL, NULL,	/* -i ifname */
+		NULL, NULL,	/* -p port */
 		NULL };
 	int httpd_index = 1;
 #ifdef RTCONFIG_HTTPS
 	char *https_argv[] = { "httpds", "-s",
-		"-p", nvram_safe_get("https_lanport"),
 		NULL, NULL,	/* -i ifname */
+		NULL, NULL,	/* -p port */
 		NULL };
-	int https_index = 4;
+	int https_index = 2;
 	int enable;
 #endif
 	char *cur_dir;
@@ -4062,7 +4062,12 @@ start_httpd(void)
 
 	enable = nvram_get_int("http_enable");
 	if (enable != 0) {
-		logmessage(LOGNAME, "start httpd - SSL");
+		pid = nvram_get_int("https_lanport") ? : 443;
+		if (pid != 443) {
+			https_argv[https_index++] = "-p";
+			https_argv[https_index++] = nvram_safe_get("https_lanport");
+		}
+		logmessage(LOGNAME, "start https:%d", pid);
 		_eval(https_argv, NULL, 0, &pid);
 #if defined(RTCONFIG_ALPINE) || defined(RTCONFIG_LANTIQ)
 		sleep(1);
@@ -4073,7 +4078,12 @@ start_httpd(void)
 #endif
 #endif
 	{
-		logmessage(LOGNAME, "start httpd");
+		pid = nvram_get_int("http_lanport") ? : 80;
+		if (pid != 80) {
+			httpd_argv[httpd_index++] = "-p";
+			httpd_argv[httpd_index++] = nvram_safe_get("http_lanport");
+		}
+		logmessage(LOGNAME, "start httpd:%d", pid);
 		_eval(httpd_argv, NULL, 0, &pid);
 #if defined(RTCONFIG_ALPINE) || defined(RTCONFIG_LANTIQ)
 		sleep(1);
@@ -4267,7 +4277,7 @@ void start_upnp(void)
 				} else
 #endif
 				{
-					fprintf(f, "%s://%s:%d/\n", "http", lanip, /*nvram_get_int("http_lanport") ? :*/ 80);
+					fprintf(f, "%s://%s:%d/\n", "http", lanip, nvram_get_int("http_lanport") ? : 80);
 				}
 
 				char uuid[45];
@@ -4722,6 +4732,11 @@ int start_mdns(void)
 	char afpd_service_config[80];
 	char adisk_service_config[80];
 	char itune_service_config[80];
+
+#ifdef RTAC68U
+	if (!hw_usb_cap())
+		return 0;
+#endif
 
 	sprintf(afpd_service_config, "%s/%s", AVAHI_SERVICES_PATH, AVAHI_AFPD_SERVICE_FN);
 	sprintf(adisk_service_config, "%s/%s", AVAHI_SERVICES_PATH, AVAHI_ADISK_SERVICE_FN);
@@ -8375,6 +8390,11 @@ start_usbled(void)
 	return 0;
 #endif
 
+#ifdef RTAC68U
+	if (!hw_usb_cap())
+		return 0;
+#endif
+
 	stop_usbled();
 	return _eval(usbled_argv, NULL, 0, &whpid);
 }
@@ -11943,6 +11963,11 @@ _dprintf("test 2. turn off the USB power during %d seconds.\n", reset_seconds[re
 		int ohcienable = nvram_get_int("usb_ohci");
 		int i;
 
+#ifdef RTAC68U
+		if (!hw_usb_cap())
+			return;
+#endif
+
 		_dprintf("xhcimode: stop_usb_program...\n");
 		stop_usb_program(1);
 
@@ -14946,7 +14971,7 @@ int start_cfgsync(void)
 	int ret = 0;
 
 #ifdef RTCONFIG_MASTER_DET
-	if (nvram_match("cfg_master", "1") && (!repeater_mode() && !mediabridge_mode()))
+	if (nvram_match("cfg_master", "1") && (is_router_mode() || access_point_mode()))
 #else
 	if (is_router_mode())
 #endif	/* RTCONFIG_MASTER_DET */
@@ -14966,15 +14991,15 @@ int start_cfgsync(void)
 	}
 #endif
 	else if (
-#ifdef RTCONFIG_MASTER_DET
-		is_router_mode() ||
+#ifdef RTCONFIG_AMAS
+		(nvram_get_int("re_mode") == 1) &&
 #endif
-		((dpsr_mode()
+		(((dpsr_mode()
 #ifdef RTCONFIG_DPSTA
 		|| dpsta_mode()
 #endif
 		) && nvram_get_int("lan_state_t") == LAN_STATE_CONNECTED) ||
-		((repeater_mode() || mediabridge_mode()) && nvram_get_int("wlc_state") == WLC_STATE_CONNECTED))
+		((repeater_mode() || mediabridge_mode()) && nvram_get_int("wlc_state") == WLC_STATE_CONNECTED)))
 	{
 		stop_cfgsync();
 		ret = _eval(cfg_client_argv, NULL, 0, &pid);
