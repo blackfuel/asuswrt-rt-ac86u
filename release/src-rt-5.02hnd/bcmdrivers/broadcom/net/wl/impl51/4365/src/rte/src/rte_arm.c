@@ -917,33 +917,94 @@ static void armca7_gic_init(si_t *sih)
 #define dsb() __asm__ __volatile__ ("dsb")
 #define nop() __asm__ __volatile__("mov\tr0,r0\t@ nop\n\t")
 
+/* defines for L1 MMU 'section' (describing the properties of a 1MB block of memory) */
+#define L1_PXN_SHIFT		0 /**< privileged execute-not bit */
+#define L1_B_SHIFT		2 /**< bufferable */
+#define L1_C_SHIFT		3 /**< cachable */
+#define L1_XN_SHIFT		4 /**< execute-not bit */
+#define L1_DOMAIN_SHIFT		5
+#define L1_P_SHIFT		9
+#define L1_AP_SHIFT		10
+#define L1_TEX_SHIFT		12
+#define L1_APX_SHIFT		15
+#define L1_S_SHIFT		16 /**< sharable */
+#define L1_NG_SHIFT		17 /**< non global */
+#define L1_SBZ_SHIFT		19
+#define L1_BASE_ADDR_SHIFT	20 /**< section base address */
+#define L1_PAGE_TABLE_PXN	2  /** privileged execute-not bit for a L1 'page table' entry */
+
+#define L1_ENTRY_PAGE_TABLE(page_table_address, pxn) (\
+	(1 << 0) | ((pxn) << L1_PAGE_TABLE_PXN) | (page_table_address))
+
+#define L1_ENTRY_NORMAL_MEM(i_1mb_section) (\
+	(i_1mb_section << 20) | \
+	(1 << 1) | (1 << L1_B_SHIFT) | (1 << L1_C_SHIFT) | (3 << L1_AP_SHIFT) | \
+	(4 << L1_TEX_SHIFT) | (1 << L1_S_SHIFT))
+
+#define L1_ENTRY_DEVICE_MEM(i_1mb_section) (\
+	(i_1mb_section << 20) | \
+	(1 << 1) | (1 << L1_B_SHIFT) | (3 << L1_AP_SHIFT) | (1 << L1_XN_SHIFT) | (1<< L1_PXN_SHIFT))
+
+#define L1_ENTRY_NOTHING(i_1mb_section) 0 /**< exception when ARM tries to access this location */
+
+
+/* defines for L2 MMU large page (4KB) entries */
+#define L2_SMALL_PAGE_SHIFT	1  /**< set to 1 to indicate small page format */
+#define L2_B_SHIFT		2  /**< bufferable */
+#define L2_C_SHIFT		3  /**< cachable */
+#define L2_AP_SHIFT		4
+#define L2_SBZ_SHIFT		6
+#define L2_APX_SHIFT		9
+#define L2_S_SHIFT		10 /**< sharable */
+#define L2_NG_SHIFT		11 /**< non global */
+#define L2_TEX_SHIFT		12
+#define L2_XN_SHIFT		15 /**< execute-not bit */
+#define L2_ADDR_SHIFT		16 /**< large page base address */
+
+/** defines a L2 MMU entry for 'normal memory', to be used for ROM and RAM */
+#define L2_ENTRY_NORMAL_MEM(i_4k_page) (\
+	(((i_4k_page) << 12) & 0xffff0000) | \
+	(1 << 0) | (1 << L2_B_SHIFT) | (1 << L2_C_SHIFT) | \
+	(3 << L2_AP_SHIFT) | (4 << L2_TEX_SHIFT) | (1 << L2_S_SHIFT))
+
+#define L2_ENTRY_DEVICE_MEM(i_4k_page) (\
+	(((i_4k_page) << 12) & 0xffff0000) | \
+	(1 << 0) | (1 << L2_B_SHIFT) | (3 << L2_AP_SHIFT) | (1 << L2_XN_SHIFT))
+
+#define L2_ENTRY_NOTHING(i_4k_page) 0 /**< exception when ARM tries to access this location */
+
+#define MB (1024 * 1024)
+
 static uint8 loader_pagetable_array[0x4000*2];
 static uint8 l2_pagetable_array[0x400*3];
 extern void cpu_inv_cache_all(void);
 
 #define PSR_A_BIT	0x00000100
 
-static void ca7_caches_on(si_t *sih)
+static void
+ca7_caches_on(si_t *sih)
 {
 	uint32 ptbaddr, *ptb;
 	uint32 l2_ptbaddr, *l2_ptb;
-	uint32 i, j, val;
+	uint32 val;
+	uint32 mb;		/**< megabyte counter */
+	uint32 page; 		/**< one 4KB page */
 	uint32 page_4ks = 32;
 
 	cpu_inv_cache_all();
 
 	/* Invalidate TLB */
-	asm volatile("mcr p15, 0, %0, c8, c7, 0" : : "r" (0));
+	asm volatile("mcr p15, 0, %0, c8, c7, 0" : : "r" (0)); // TLBIALL
 
 	/* Enable I$ and prefetch */
-	asm("mrc p15, 0, %0, c1, c0, 0	@ get CR" : "=r" (val) : : "cc");
+	asm("mrc p15, 0, %0, c1, c0, 0	@ get CR" : "=r" (val) : : "cc"); // SCTLR
 	val |= (CR_I|CR_Z);
 	asm volatile("mcr p15, 0, %0, c1, c0, 0	@ set CR" : : "r" (val) : "cc");
 	isb();
 
 	/* page table */
 	ptbaddr = (uint32)loader_pagetable_array;
-	ptbaddr += (0x4000-1);
+	ptbaddr += (0x4000-1); // 14 bits alignment
 	ptbaddr &= ~(0x4000-1);
 
 	printf("Enabling D-cache\n");
@@ -955,65 +1016,95 @@ static void ca7_caches_on(si_t *sih)
 	l2_ptbaddr += (0x400-1);
 	l2_ptbaddr &= ~(0x400-1);
 
-	/* The first MB is pointed to the 2nd level table */
-	ptb[0] = l2_ptbaddr | 0x001;
+	/* cur_addr is now 0x0000_0000. ROM/boot-flops start here. */
+	ptb[0] = L1_ENTRY_PAGE_TABLE(l2_ptbaddr, 0); /* The first MB uses a 2nd level table */
 	l2_ptb = (uint32 *)l2_ptbaddr;
-	for (j = 0; j < 192; j++) {
-		/* First 12x64KB pages (768KB) are cacheable memory */
-		l2_ptb[j] = ((j << 12) & 0xffff0000) | 0x443d;
-	}
-	for (; j < 256; j++) {
-		/* Other 64KB pages are device memory */
-		l2_ptb[j] = ((j << 12) & 0xffff0000) | 0x0035;
+	/* 4365c0 has 819.2KB ROM. However, only addresses 0x0000_0000 .. 0x000b_37ee are used */
+	for (page = 0; page < 192; page++) {
+		// Each 32-bit entry in a table provides translation information for 4KB of memory.
+		l2_ptb[page] = L2_ENTRY_NORMAL_MEM(page);
 	}
 
-	/* The gap 1MB between ROM and RAM is configured as device memory */
-	for (i = 1; i < 2; i++) {
-		ptb[i] = i << 20 | 0x00000c06;
+	/* cur_addr is now 0x00CD_0000. Gap between ROM and RAM starts here. */
+	for (; page < 256; page++) {
+		l2_ptb[page] = L2_ENTRY_NOTHING(page);
 	}
+
+	/* cur_addr is now 0x0010_0000 */
+	for (mb = 1; mb < 2; mb++) {
+		ptb[mb] = L1_ENTRY_NOTHING(mb);
+	}
+
+	/* cur_addr is now 0x0020_0000 */
 	/* First 2MB of sysmem is configured as sharable/cacheable/bufferable normal memory */
-	for (i = 2; i < 4; i++) {
-		ptb[i] = i << 20 | 0x00014c0e;
+	for (mb = 2; mb < 4; mb++) {
+		ptb[mb] = L1_ENTRY_NORMAL_MEM(mb);
 	}
 
+	/* cur_addr is now 0x0040_0000 */
 	/* The boundary MB is pointed to the 2nd level table */
 	l2_ptbaddr += 0x400;
-	ptb[4] = l2_ptbaddr | 0x001;
+	ptb[4] = L1_ENTRY_PAGE_TABLE(l2_ptbaddr, 0);
 	l2_ptb = (uint32 *)l2_ptbaddr;
 	/* Special sysmem configuration between 2M ~ 3M region */
 #ifdef RAMSIZE
-	if (RAMSIZE > (2 * 1024 * 1024))
-		page_4ks = (RAMSIZE - (2 * 1024 * 1024)) >> 12;
-	ASSERT(RAMSIZE <= 3 * 1024 * 1024);
+	if (RAMSIZE > (2 * MB))
+		page_4ks = (RAMSIZE - (2 * MB)) >> 12;
+	ASSERT(RAMSIZE <= 3 * MB);
 #endif
-	for (j = 0; j < page_4ks; j++) {
-		/* First page_4ks pages are cacheable memory */
-		l2_ptb[j] = 0x400000 | ((j << 12) & 0xffff0000) | 0x443d;
-	}
-	for (; j < 256; j++) {
-		/* Other 64KB pages are device memory */
-		l2_ptb[j] = 0x400000 | ((j << 12) & 0xffff0000) | 0x0035;
+	for (page = 0; page < page_4ks; page++) {
+		l2_ptb[page] = (0x400000 | L2_ENTRY_NORMAL_MEM(page));
 	}
 
-	/* Others are configured as device memory */
-	for (i = 5; i < 4096; i++) {
-		ptb[i] = i << 20 | 0x00000c06;
+	/* gap between RAM and io space starts here */
+	for (; page < 256; page++) {
+		l2_ptb[page] = L2_ENTRY_NOTHING(page);
 	}
 
-	asm volatile("mcr p15, 0, %0, c2, c0, 2" : : "r" (0));
+	/* cur_addr is now 0x0030_0000 */
+	for (mb = 5; mb < 0x18000000 / MB; mb++) {
+		ptb[mb] = L1_ENTRY_NOTHING(mb);
+	}
+
+	/* cur_addr is now 0x1800_0000 */
+	for (; mb < 0x19400000 / MB; mb++) {
+		ptb[mb] = L1_ENTRY_DEVICE_MEM(mb);
+	}
+
+	/* cur_addr is now 0x1940_0000 */
+	for (; mb < 0x20000000 / MB; mb++) {
+		ptb[mb] = L1_ENTRY_NOTHING(mb);
+	}
+
+	/* cur_addr is now 0x2000_0000. Start of the 128MB PCIe small address window, used by the
+	 * dongle to access host memory.
+	 */
+	for (; mb < 0x28000000 / MB; mb++) {
+		ptb[mb] = L1_ENTRY_DEVICE_MEM(mb);
+	}
+
+	/* cur_addr is now 0x2800_0000 */
+	for (; mb < 4096; mb++) {
+		ptb[mb] = L1_ENTRY_NOTHING(mb);
+	}
+
+	/* cur_addr is now 1_0000_0000 */
+	dsb(); // flushes mmu tables from write buffer to main memory
+
+	asm volatile("mcr p15, 0, %0, c2, c0, 2" : : "r" (0)); // TTBCR
 
 	/* Apply page table address to CP15 */
-	asm volatile("mcr p15, 0, %0, c2, c0, 0" : : "r" (ptb) : "memory");
+	asm volatile("mcr p15, 0, %0, c2, c0, 0" : : "r" (ptb) : "memory"); //TTBR0
 
-	/* Set the access control to all-supervisor */
-	asm volatile("mcr p15, 0, %0, c3, c0, 0" : : "r" (~0));
+	/* Set the access control to 'client' so MMU imposed restrictions apply */
+	asm volatile("mcr p15, 0, %0, c3, c0, 0" : : "r" (0x55555555)); // DACR
 
 	/* Enabling MMU and D$ */
-	asm("mrc p15, 0, %0, c1, c0, 0	@ get CR" : "=r" (val) : : "cc");
+	asm("mrc p15, 0, %0, c1, c0, 0	@ get CR" : "=r" (val) : : "cc"); // SCTLR
 	val |= (CR_C|CR_M);
 	asm volatile("mcr p15, 0, %0, c1, c0, 0	@ set CR" : : "r" (val) : "cc");
 	isb();
-}
+} /* ca7_caches_on */
 
 #ifdef BCM_DMA_TRANSCOHERENT
 static void ca7_coherent_on(si_t *sih)
@@ -1027,9 +1118,9 @@ static void ca7_coherent_on(si_t *sih)
 
 #endif
 	/* Enabling SMP bit */
-	asm("mrc p15, 0, %0, c1, c0, 1  @ get CR" : "=r" (val) : : "cc");
+	asm("mrc p15, 0, %0, c1, c0, 1  @ get CR" : "=r" (val) : : "cc"); // ACTLR
 	val |= CR_SMP;
-	asm volatile("mcr p15, 0, %0, c1, c0, 1 @ set CR" : : "r" (val) : "cc");
+	asm volatile("mcr p15, 0, %0, c1, c0, 1 @ set CR" : : "r" (val) : "cc"); // ACTLR
 	isb();
 }
 #endif /* BCM_DMA_TRANSCOHERENT */

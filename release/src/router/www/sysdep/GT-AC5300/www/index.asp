@@ -88,25 +88,31 @@
 }
 .wl_icon{
 	display:inline-block;width:36px;height:36px;background:url('images/New_ui/icon_signal.png') ;
-	background-size: 70px;
+	background-size: 80px;
 }
 .wl0_icon_on{
 	background-position: 0px 0px;
 }
 .wl1_icon_on{
-	background-position: 0px 69px;
+	background-position: 0px 120px;
+}
+.wl1_1_icon_on{
+	background-position: 0px 80px;
 }
 .wl2_icon_on{
-	background-position: 0px 36px;
+	background-position: 0px 40px;
 }
 .wl0_icon_off{
-	background-position: 36px 0px;
+	background-position: 40px 0px;
 }
 .wl1_icon_off{
-	background-position: 36px 70px;
+	background-position: 40px 80px;
+}
+.wl1_1_icon_off{
+	background-position: 40px 120px;
 }
 .wl2_icon_off{
-	background-position: 36px 36px;
+	background-position: 40px 40px;
 }
 .AiMesh_promoteHint_bg {
 	position: absolute;
@@ -170,6 +176,7 @@
 <script type="text/javascript" src="/validator.js"></script>
 <script language="JavaScript" type="text/javascript" src="/client_function.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
+<script language="JavaScript" type="text/javascript" src="/js/httpApi.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script language="JavaScript" type="text/javascript" src="/form.js"></script>
 <script>
@@ -2110,23 +2117,33 @@ function closeClientDetailView() {
 function check_wireless(){
 	var temp = "";
 	//check 2.4 GHz
-	temp = (wl0_radio == "1") ? "wl0_icon_on" : "wl0_icon_off"
+	temp = (wl0_radio == "1") ? "wl0_icon_on" : "wl0_icon_off";
 	$("#wl0_icon").addClass(temp);
 
 	//check 5 GHz-1
-	temp = (wl1_radio == "1") ? "wl1_icon_on" : "wl1_icon_off"
-	$("#wl1_icon").addClass(temp);
+	if(band5g_support){
+		temp = (wl1_radio == "1") ? "wl1_icon_on" : "wl1_icon_off";
+		if(band5g2_support){
+			temp = (wl1_radio == "1") ? "wl1_1_icon_on" : "wl1_1_icon_off";
+		}
 
+		$("#wl1_icon").show();
+		$("#wl1_icon").addClass(temp);
+	}
+	
 	//check 5 GHz-2
-	temp = (wl2_radio == "1") ? "wl2_icon_on" : "wl2_icon_off"
-	$("#wl2_icon").addClass(temp);
+	if(band5g2_support){
+		temp = (wl2_radio == "1") ? "wl2_icon_on" : "wl2_icon_off";
+		$("#wl2_icon").show();
+		$("#wl2_icon").addClass(temp);
+	}
 }
 function AiMesh_promoteHint() {
-	var AiMesh_promoteHint_flag = (cookie.get("AiMesh_promoteHint") == "1") ? true : false;
+	var AiMesh_promoteHint_flag = (httpApi.uiFlag.get("AiMeshHint") == "1") ? true : false;
 	var get_cfg_clientlist = [<% get_cfg_clientlist(); %>][0];
 	var AiMesh_node_count_flag = (get_cfg_clientlist.length < 2) ? true : false;
 	if(!AiMesh_promoteHint_flag && AiMesh_node_count_flag) {
-		cookie.set("AiMesh_promoteHint", "1", 365);
+		httpApi.uiFlag.set("AiMeshHint", "1")
 		var $AiMesh_promoteHint = $('<div>');
 		$AiMesh_promoteHint.attr({"id" : "AiMesh_promoteHint"});
 		$AiMesh_promoteHint.addClass("AiMesh_promoteHint_bg");
@@ -2144,12 +2161,12 @@ function AiMesh_promoteHint() {
 
 		var $AiMesh_promoteHint_title = $('<div>');
 		$AiMesh_promoteHint_title.addClass("AiMesh_promoteHint_title");
-		var title = "New feature available";/* untranslated */
+		var title = "<#NewFeatureAvailable#>";
 		$AiMesh_promoteHint_title.html(title);
 		$AiMesh_promoteHint_content_left_bg.append($AiMesh_promoteHint_title);
 
 		var $AiMesh_promoteHint_description = $('<div>');
-		var description = "Advanced ASUS AiMesh is an innovative new router feature that connects multiple ASUS routers together, creating a whole-home Wi-Fi network.";/* untranslated */
+		var description = "<#AiMesh_Feature_Desc#>";
 		$AiMesh_promoteHint_description.html(description);
 		$AiMesh_promoteHint_content_left_bg.append($AiMesh_promoteHint_description);
 
@@ -2176,7 +2193,7 @@ function AiMesh_promoteHint() {
 
 		var $AiMesh_promoteHint_link = $('<div>');
 		$AiMesh_promoteHint_link.addClass("AiMesh_promoteHint_redirect_text");
-		var redirect_text = "<a id='AiMesh_promoteHint_faq' href='https://www.asus.com/AiMesh/' target='_blank'>Know more about ASUS AiMesh</a>";/* untranslated */
+		var redirect_text = "<a id='AiMesh_promoteHint_faq' href='https://www.asus.com/AiMesh/' target='_blank'><#AiMesh_FAQ#></a>";
 		$AiMesh_promoteHint_link.html(redirect_text);
 		$AiMesh_promoteHint_content_link_bg.append($AiMesh_promoteHint_link);
 
@@ -2230,6 +2247,7 @@ function AiMesh_promoteHint() {
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
 <input type="hidden" name="wl_auth_mode_x" value="<% nvram_get("wl0_auth_mode_x"); %>">
 <input type="hidden" name="wl_wep_x" value="<% nvram_get("wl0_wep_x"); %>">
+<input type="hidden" name="wl_key_type" value="<% nvram_get("wl_key_type"); %>"><!-- for ralink platform-->
 <input type="hidden" name="action_mode" value="">
 <input type="hidden" name="action_script" value="">
 <input type="hidden" name="action_wait" value="">
@@ -2641,8 +2659,8 @@ function AiMesh_promoteHint() {
 								<div style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;margin: 15px 0"><#menu5_1#>: </div>
 								<div style="margin-top:10px;">
 								<div id="wl0_icon" class="wl_icon wl0_icon_on"></div>
-								<div id="wl1_icon" class="wl_icon wl1_icon_on"></div>
-								<div id="wl2_icon" class="wl_icon wl2_icon_on"></div>
+								<div id="wl1_icon" class="wl_icon wl1_icon_on" style="display:none"></div>
+								<div id="wl2_icon" class="wl_icon wl2_icon_on" style="display:none"></div>
 								</div>
 							</div>
 						</div>

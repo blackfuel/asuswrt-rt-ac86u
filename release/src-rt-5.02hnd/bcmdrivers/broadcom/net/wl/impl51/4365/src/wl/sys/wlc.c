@@ -29222,6 +29222,9 @@ wlc_sendup_chain(wlc_info_t *wlc, void *head)
 				amsdu_frag = PKTNEXT(wlc->osh, amsdu_frag);
 				wrxh = (wlc_d11rxhdr_t*) PKTDATA(wlc->osh, amsdu_frag);
 			}
+			/* if long rx status is not found toss the packet */
+			if (wrxh->rxhdr.dma_flags & RXS_SHORT_MASK)
+				goto toss;
 		}
 #ifdef PKTC_DONGLE
 		wrxh->tsf_l = htol32(tsf_l);

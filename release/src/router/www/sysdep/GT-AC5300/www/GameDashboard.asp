@@ -45,6 +45,9 @@
 	background-position: 0px 0px;
 }
 .wl1_icon_on{
+	background-position: 0px 144px;
+}
+.wl1_1_icon_on{
 	background-position: 0px 96px;
 }
 .wl2_icon_on{
@@ -54,6 +57,9 @@
 	background-position: 48px 0px;
 }
 .wl1_icon_off{
+	background-position: 48px 144px;
+}
+.wl1_1_icon_off{
 	background-position: 48px 96px;
 }
 .wl2_icon_off{
@@ -154,12 +160,23 @@ function check_wireless(){
 	$("#wl0_icon").addClass(temp);
 
 	//check 5 GHz-1
-	temp = (wl1_radio == "1") ? "wl1_icon_on" : "wl1_icon_off"
-	$("#wl1_icon").addClass(temp);
+	if(band5g_support){
+		temp = (wl1_radio == "1") ? "wl1_icon_on" : "wl1_icon_off"
+		if(band5g2_support){
+			temp = (wl1_radio == "1") ? "wl1_1_icon_on" : "wl1_1_icon_off"
+		}
+
+		$("#wl1_icon").show();
+		$("#wl1_icon").addClass(temp);
+	}
 
 	//check 5 GHz-2
-	temp = (wl2_radio == "1") ? "wl2_icon_on" : "wl2_icon_off"
-	$("#wl2_icon").addClass(temp);
+	if(band5g2_support){
+		temp = (wl2_radio == "1") ? "wl2_icon_on" : "wl2_icon_off"
+
+		$("#wl2_icon").show();
+		$("#wl2_icon").addClass(temp);
+	}
 }
 
 function drawChart(data){
@@ -541,8 +558,8 @@ var netoolApi = {
 												<div style="font-size: 18px;color:#BFBFBF"><#ROG_WIRELESS_STATE#></div>
 												<div style="text-align: right;margin-right:20px;">
 													<div id="wl0_icon" class="wl_icon"></div>
-													<div id="wl1_icon" class="wl_icon"></div>
-													<div id="wl2_icon" class="wl_icon"></div>
+													<div id="wl1_icon" class="wl_icon" style="display:none"></div>
+													<div id="wl2_icon" class="wl_icon" style="display:none"></div>
 												</div>
 
 											</div>

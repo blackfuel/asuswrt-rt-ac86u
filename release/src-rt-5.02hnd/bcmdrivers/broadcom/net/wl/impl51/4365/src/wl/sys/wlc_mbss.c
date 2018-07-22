@@ -950,10 +950,12 @@ wlc_mbss_update_beacon(wlc_info_t *wlc, wlc_bsscfg_t *cfg)
 		tso_hdr = (d11ac_tso_t *) PKTDATA(wlc->osh, pkt);
 		tso_hdr_size = (uint16) (wlc->toe_bypass ? 0 : wlc_tso_hdr_length(tso_hdr));
 		PKTPULL(wlc->osh, pkt, tso_hdr_size);
+		len -= tso_hdr_size;
 	}
 #endif /* WLTOEHW */
 
 	PKTPULL(wlc->osh, pkt, D11_TXH_LEN_EX(wlc));
+	len -= D11_TXH_LEN_EX(wlc);
 	/* Use the lowest basic rate for beacons if no user specified bcn rate */
 	bcn_rspec =
 #ifdef AP
@@ -1718,6 +1720,7 @@ wlc_mbss_update_probe_resp(wlc_info_t *wlc, wlc_bsscfg_t *cfg, bool suspend)
 
 	/* At this point, PKTDATA is at start of D11 hdr; pbody past D11 hdr */
 
+	len -= D11_TXH_LEN_EX(wlc);
 	/* Generate probe body */
 	wlc_bcn_prb_body(wlc, FC_PROBE_RESP, cfg, pbody, &len, FALSE);
 

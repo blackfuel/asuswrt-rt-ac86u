@@ -743,7 +743,18 @@ wlc_amsdu_up(void *hdl)
 	/* limit max size pkt ucode lets through to what we use for dma rx descriptors */
 	/* else rx of amsdu can cause dma rx errors and potentially impact performance */
 	wlc_info_t *wlc = ((amsdu_info_t *)hdl)->wlc;
-	int rxbufsz = wlc->pub->tunables->rxbufsz - wlc->hwrxoff;
+	hnddma_t *di;
+	uint16 rxbufsz;
+	uint16 rxoffset;
+
+	if (!PIO_ENAB(wlc->pub)) {
+		di = WLC_HW_DI(wlc, 0);
+		dma_rxparam_get(di, &rxoffset, &rxbufsz);
+		rxbufsz =  rxbufsz - rxoffset;
+	}
+	else {
+		rxbufsz = wlc->pub->tunables->rxbufsz - wlc->hwrxoff;
+	}
 
 	/* ensure tunable is a valid value which fits in a uint16 */
 	ASSERT(rxbufsz > 0 && rxbufsz <= 0xffff);
@@ -3107,6 +3118,8 @@ toss:
 	if (head != tail) {
 		while ((tmp_next = PKTCLINK(head)) != NULL) {
 			PKTSETCLINK(head, PKTCLINK(tmp_next));
+			PKTSETCLINK(tmp_next, NULL);
+			PKTCLRCHAINED(wlc->osh, tmp_next);
 			PKTFREE(osh, tmp_next, FALSE);
 			if (tmp_next == tail) {
 				/* assign *pp to head so that wlc_sendup_chain

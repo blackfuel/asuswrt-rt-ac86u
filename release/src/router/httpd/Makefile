@@ -271,7 +271,12 @@ ifeq ($(RTCONFIG_LANTIQ),y)
 LIBS += -L$(TOP)/fapi_wlan_common-1.0.0.1 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi -L$(TOP)/wireless_tools/ -liw
 endif
 
-all: httpd #test_apps
+ifeq ($(wildcard $(SRCBASE)/router/httpd/*.c),)
+all:
+	-cp -f prebuilt/httpd httpd
+else
+all: httpd
+endif
 
 #test_apps: apps.c
 #	$(CC) -DAPPS $(CFLAGS) $(LIBS) $^ -o $@
