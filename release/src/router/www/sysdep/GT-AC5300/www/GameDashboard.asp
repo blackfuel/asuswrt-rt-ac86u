@@ -487,7 +487,7 @@ var netoolApi = {
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();" onselectstart="return false;">
+<body onload="initial();" onunload="unload_body();">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="agreement_panel" class="panel_folder" style="margin-top: -100px;"></div>

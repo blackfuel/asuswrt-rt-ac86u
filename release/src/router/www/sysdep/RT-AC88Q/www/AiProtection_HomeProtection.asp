@@ -720,6 +720,10 @@ function show_tm_eula(){
 		document.getElementById('agreement_panel').innerHTML= data;
 		var url = "https://www.asus.com/Microsite/networks/Trend_Micro_EULA/";
 		$("#eula_url").attr("href",url);
+		url = "https://www.trendmicro.com/en_us/about/legal/privacy-policy-product.html"
+		$("#tm_eula_url").attr("href",url);
+		url = "https://success.trendmicro.com/data-collection-disclosure";
+		$("#tm_disclosure_url").attr("href",url);
 		adjust_TM_eula_height("agreement_panel");
 	});
 
@@ -848,7 +852,7 @@ function shadeHandle(flag){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();" onselectstart="return false;">
+<body onload="initial();" onunload="unload_body();">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="agreement_panel" class="eula_panel_container"></div>

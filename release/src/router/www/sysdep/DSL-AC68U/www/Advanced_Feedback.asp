@@ -20,6 +20,7 @@
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
 <script language="JavaScript" type="text/javascript" src="merlin.js"></script>
 <script language="JavaScript" type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="js/httpApi.js"></script>
 <style>
 .noUSBHint, .storeUSBHint {
 	color: #FC0;
@@ -82,6 +83,34 @@ function initial(){
 	else {
 		$(".dblog_support_class").remove();
 	}
+
+	httpApi.nvramGetAsync({
+		data: ["preferred_lang"],
+		success: function(resp){
+			var preferredLang = resp.preferred_lang;
+			lang_str = (preferredLang == "EN" || preferredLang == "SL") ? "" : (preferredLang.toLowerCase() + '/');
+
+			if(preferredLang == "CN")
+				url = "https://www.asus.com.cn/Terms_of_Use_Notice_Privacy_Policy/Privacy_Policy";
+			else{
+				if(preferredLang == "SV")
+					lang_str = "se/";
+				else if(preferredLang == "UK")
+					lang_str = "ua-ua/";
+				else if(preferredLang == "MS")
+					lang_str = "my/";
+				else if(preferredLang == "DA")
+					lang_str = "dk/";
+
+				url = "https://www.asus.com/" + lang_str +"Terms_of_Use_Notice_Privacy_Policy/Privacy_Policy";
+			}
+
+			$("#eula_content").find($("a")).attr({
+				"href": url
+			})
+		}
+	})
+
 }
 
 function check_wan_state(){
@@ -313,6 +342,11 @@ function redirect(){
 }
 
 function applyRule(){
+	if(!document.form.eula_checkbox.checked){
+		alert('<#feedback_eula_notice#>');
+		return false;
+	}
+
 	//WAN connected check
 	if(sw_mode != 3 && document.getElementById("connect_status").className == "connectstatusoff"){
                 alert("<#USB_Application_No_Internet#>");
@@ -883,8 +917,11 @@ function dblog_stop() {
 
 <tr>
 	<td colspan="2">
-		<div><#feedback_optional#></div>
-		<input class="button_gen" style="margin-left: 305px;" name="btn_send" onclick="applyRule()" type="button" value="Send"/>
+		<div>
+			<div style="float: left;"><input type="checkbox" name="eula_checkbox"/></div>
+			<div id="eula_content" style="margin-left: 20px;"><#feedback_eula#></div>
+		</div>
+		<input class="button_gen" style="margin-left: 305px; margin-top:5px;" name="btn_send" onclick="applyRule()" type="button" value="<#btn_send#>"/>
 	</td>
 </tr>
 
@@ -893,8 +930,6 @@ function dblog_stop() {
 		<strong><#FW_note#></strong>
 		<ul>
 			<li><#feedback_note1#></li>
-			<li><#feedback_note2#></li>
-			<li><#feedback_note3#></li>
 		</ul>
 	</td>
 </tr>	

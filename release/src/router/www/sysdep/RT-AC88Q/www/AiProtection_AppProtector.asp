@@ -727,6 +727,10 @@ function show_tm_eula(){
 	$.get("tm_eula.htm", function(data){
 		document.getElementById('agreement_panel').innerHTML= data;
 		var url = "https://www.asus.com/Microsite/networks/Trend_Micro_EULA/";
+		url = "https://www.trendmicro.com/en_us/about/legal/privacy-policy-product.html"
+		$("#tm_eula_url").attr("href",url);
+		url = "https://success.trendmicro.com/data-collection-disclosure";
+		$("#tm_disclosure_url").attr("href",url);
 		$("#eula_url").attr("href",url);
 	});
 
@@ -769,7 +773,7 @@ function setGroup(name){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();" onselectstart="return false;">
+<body onload="initial();" onunload="unload_body();">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="agreement_panel" class="panel_folder" style="margin-top: -100px;"></div>

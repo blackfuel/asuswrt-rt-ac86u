@@ -23,6 +23,8 @@ LIBS = -ldl -lnvram
 endif
 LIBS += -L$(TOP)/shared -lshared
 
+CFLAGS += -I$(SRCBASE)/shared/bcmwifi/include -DTYPEDEF_FLOAT_T
+
 ifneq ($(strip $(BUILD_BRCM_HNDROUTER)),)
 CFLAGS += -DBCA_HNDROUTER
 endif
