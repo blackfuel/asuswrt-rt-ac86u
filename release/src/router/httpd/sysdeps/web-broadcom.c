@@ -140,7 +140,7 @@ ej_wl_sta_status(int eid, webs_t wp, char *name)
 #include <bcmparams.h>		/* for DEV_NUMIFS */
 
 /* The below macros handle endian mis-matches between wl utility and wl driver. */
-#if defined(RTCONFIG_BCM_7114) || !defined(RTCONFIG_BCMWL6)
+#ifndef RTCONFIG_BCMWL6
 static bool g_swap = FALSE;
 #ifndef htod16
 #define htod16(i) (g_swap?bcmswap16(i):(uint16)(i))
@@ -2579,8 +2579,10 @@ int wl_wps_info(int eid, webs_t wp, int argc, char_t **argv, int unit)
 #ifdef RTCONFIG_QTN
 	int ret;
 	qcsapi_SSID ssid;
+#if 0
 	string_64 key_passphrase;
-//	char wps_pin[16];
+	char wps_pin[16];
+#endif
 #endif
 
 

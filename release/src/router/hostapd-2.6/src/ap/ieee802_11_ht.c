@@ -289,6 +289,20 @@ static int is_40_allowed(struct hostapd_iface *iface, int channel)
 }
 
 
+#ifdef CONFIG_ACS
+void hostapd_restart_ap_ht2040_timer(struct hostapd_iface *iface)
+{
+  if (!iface->num_sta_ht40_intolerant) {
+    unsigned int delay_time;
+    delay_time = OVERLAPPING_BSS_TRANS_DELAY_FACTOR *
+      iface->conf->obss_interval;
+    eloop_cancel_timeout(ap_ht2040_timeout, iface, NULL);
+    eloop_register_timeout(delay_time, 0, ap_ht2040_timeout, iface, NULL);
+  }
+}
+#endif
+
+
 void hostapd_2040_coex_action(struct hostapd_data *hapd,
 			      const struct ieee80211_mgmt *mgmt, size_t len)
 {
@@ -386,6 +400,9 @@ void hostapd_2040_coex_action(struct hostapd_data *hapd,
     if ((iface->conf->acs_algo == ACS_ALGO_SMART) && iface->conf->acs_init_done) {
       acs_update_intolerant_channels(iface, iface->conf->channel);
       acs_switch_intolerant(iface);
+      if (iface->conf->obss_interval && !iface->conf->secondary_channel)
+        /* If switched to 20 MHz channel, restart timer */
+        hostapd_restart_ap_ht2040_timer(iface);
       return;
     }
 #endif
@@ -505,7 +522,12 @@ void hostapd_obss_beacon(struct hostapd_data *hapd,
 #ifdef CONFIG_ACS
       if ((iface->conf->acs_algo == ACS_ALGO_SMART) && iface->conf->acs_init_done) {
         acs_update_intolerant_channels(iface, iface->conf->channel);
-        acs_switch_intolerant(iface);
+        if (iface->conf->secondary_channel) {
+          acs_switch_intolerant(iface);
+          if (!iface->conf->secondary_channel)
+            /* If switched to 20 MHz channel, restart timer */
+            hostapd_restart_ap_ht2040_timer(iface);
+        }
       }
 			else
 #endif
@@ -714,10 +736,17 @@ void ap_ht2040_timeout(void *eloop_data, void *user_data)
 {
 	struct hostapd_iface *iface = eloop_data;
 
-	wpa_printf(MSG_INFO, "Switching to 40 MHz operation");
+#ifdef CONFIG_ACS
+  if ((iface->conf->acs_algo == ACS_ALGO_SMART) && iface->conf->acs_init_done) {
+    acs_switch_intolerant_expired(iface);
+  } else
+#endif
+  {
+    wpa_printf(MSG_INFO, "Switching to 40 MHz operation");
 
-	iface->conf->secondary_channel = iface->secondary_ch;
+    iface->conf->secondary_channel = iface->secondary_ch;
 
-	iface->chan_switch_reason = HAPD_CHAN_SWITCH_20_40_COEX;
-	ieee802_11_set_beacons(iface);
+    iface->chan_switch_reason = HAPD_CHAN_SWITCH_20_40_COEX;
+    ieee802_11_set_beacons(iface);
+  }
 }

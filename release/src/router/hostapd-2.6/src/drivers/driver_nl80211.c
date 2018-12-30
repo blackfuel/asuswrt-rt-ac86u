@@ -934,6 +934,7 @@ nl80211_find_drv(struct nl80211_global *global, int idx, u8 *buf, size_t len)
 	return NULL;
 }
 
+#define PROCESS_EVENTS_PER_BSS
 
 static void wpa_driver_nl80211_event_rtm_newlink(void *ctx,
 						 struct ifinfomsg *ifi,
@@ -947,6 +948,7 @@ static void wpa_driver_nl80211_event_rtm_newlink(void *ctx,
 	char namebuf[IFNAMSIZ];
 	char ifname[IFNAMSIZ + 1];
 	char extra[100], *pos, *end;
+	struct i802_bss *cur_bss;
 
 	extra[0] = '\0';
 	pos = extra;
@@ -995,6 +997,71 @@ static void wpa_driver_nl80211_event_rtm_newlink(void *ctx,
 	if (!drv)
 		goto event_newlink;
 
+#ifdef PROCESS_EVENTS_PER_BSS
+	cur_bss = get_bss_ifindex(drv, ifi->ifi_index);
+
+	if (cur_bss) {
+		if (cur_bss->if_enabled && !(ifi->ifi_flags & IFF_UP)) {
+			namebuf[0] = '\0';
+			if (if_indextoname(ifi->ifi_index, namebuf) &&
+			    linux_iface_up(drv->global->ioctl_sock, namebuf) > 0) {
+				wpa_printf(MSG_DEBUG, "nl80211: Ignore interface down "
+					   "event since interface %s is up", namebuf);
+				return;
+			}
+			wpa_printf(MSG_DEBUG, "nl80211: Interface down (%s/%s)",
+				   namebuf, ifname);
+
+			cur_bss->if_enabled = 0;
+			wpa_supplicant_event(cur_bss->ctx,
+					     EVENT_INTERFACE_DISABLED, NULL);
+
+			/*
+			 * Try to get drv again, since it may be removed as
+			 * part of the EVENT_INTERFACE_DISABLED handling for
+			 * dynamic interfaces
+			 */
+			drv = nl80211_find_drv(global, ifi->ifi_index,
+					       buf, len);
+			if (!drv)
+				return;
+		}
+
+		if (!cur_bss->if_enabled && (ifi->ifi_flags & IFF_UP)) {
+			u8 addr[ETH_ALEN];
+
+			if (if_indextoname(ifi->ifi_index, namebuf) &&
+			    linux_iface_up(drv->global->ioctl_sock, namebuf) == 0) {
+				wpa_printf(MSG_DEBUG, "nl80211: Ignore interface up "
+					   "event since interface %s is down",
+					   namebuf);
+				return;
+			}
+
+			if (cur_bss &&
+			    linux_get_ifhwaddr(drv->global->ioctl_sock,
+					       cur_bss->ifname, addr) < 0) {
+				wpa_printf(MSG_DEBUG,
+					   "nl80211: %s: failed to re-read MAC address",
+					   cur_bss->ifname);
+			} else if (cur_bss &&
+				   os_memcmp(addr, cur_bss->addr, ETH_ALEN) != 0) {
+				wpa_printf(MSG_DEBUG,
+					   "nl80211: Own MAC address on ifindex %d (%s) changed from "
+					   MACSTR " to " MACSTR,
+					   ifi->ifi_index, cur_bss->ifname,
+					   MAC2STR(cur_bss->addr),
+					   MAC2STR(addr));
+				os_memcpy(cur_bss->addr, addr, ETH_ALEN);
+			}
+
+			wpa_printf(MSG_DEBUG, "nl80211: Interface up (%s)", ifname);
+			cur_bss->if_enabled = 1;
+			wpa_supplicant_event(cur_bss->ctx, EVENT_INTERFACE_ENABLED,
+					     NULL);
+		}
+	}
+#else
 	if (!drv->if_disabled && !(ifi->ifi_flags & IFF_UP)) {
 		namebuf[0] = '\0';
 		if (if_indextoname(ifi->ifi_index, namebuf) &&
@@ -1074,6 +1141,7 @@ static void wpa_driver_nl80211_event_rtm_newlink(void *ctx,
 					     NULL);
 		}
 	}
+#endif /* IF_EVENT_PER_BSS */
 
 	/*
 	 * Some drivers send the association event before the operup event--in
@@ -2313,6 +2381,8 @@ wpa_driver_nl80211_finish_drv_init(struct wpa_driver_nl80211_data *drv,
 				   "interface '%s' UP", bss->ifname);
 			return ret;
 		}
+
+		bss->if_enabled = 1;
 
 		if (is_p2p_net_interface(nlmode))
 			nl80211_disable_11b_rates(bss->drv,
@@ -5347,6 +5417,7 @@ static int wpa_driver_nl80211_set_operstate(void *priv, int state)
 	wpa_printf(MSG_DEBUG, "nl80211: Set %s operstate %d->%d (%s)",
 		   bss->ifname, drv->operstate, state,
 		   state ? "UP" : "DORMANT");
+	bss->if_enabled = state;
 	drv->operstate = state;
 	return netlink_send_oper_ifla(drv->global->netlink, drv->ifindex, -1,
 				      state ? IF_OPER_UP : IF_OPER_DORMANT);
@@ -5741,6 +5812,19 @@ int nl80211_sta_allow(void *priv, const u8 *stations, int count)
             sizeof(blacklist), NULL);
 
   return final_ret;
+}
+
+
+int nl80211_set_bss_load(void *priv, const u8 is_enable)
+{
+  int ret = nl80211_vendor_cmd(priv, OUI_LTQ, LTQ_NL80211_VENDOR_SUBCMD_SET_BSS_LOAD,
+    &is_enable, 1, NULL);
+
+  if (ret < 0)
+    wpa_printf(MSG_ERROR, "nl80211: sending SET_BSS_LOAD failed: %i (%s)",
+      ret, strerror(-ret));
+
+  return ret;
 }
 
 
@@ -9715,6 +9799,26 @@ static int nl80211_block_tx(void *priv)
   return ret;
 }
 
+int nl80211_set_disable_dgaf(void *priv, int disable_dgaf)
+{
+  int ret;
+  uint32_t disable_dgaf_u32;
+
+  disable_dgaf_u32 = disable_dgaf;
+  ret = nl80211_vendor_cmd(priv, OUI_LTQ,
+    LTQ_NL80211_VENDOR_SUBCMD_SET_DGAF_DISABLED, (u8*) &disable_dgaf_u32,
+    sizeof(disable_dgaf_u32), NULL);
+
+  if (ret < 0)
+    wpa_printf(MSG_ERROR, "nl80211: sending SET_DGAF_DISABLED failed: %i (%s)",
+         ret, strerror(-ret));
+  else
+    wpa_printf(MSG_DEBUG, "nl80211: disable_dgaf set to %u", disable_dgaf_u32);
+
+  return ret;
+}
+
+
 const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.name = "nl80211",
 	.desc = "Linux nl80211/cfg80211",
@@ -9816,6 +9920,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.set_deny_mac_addr = nl80211_set_deny_mac_addr,
 	.sta_steer = nl80211_sta_steer,
 	.sta_allow = nl80211_sta_allow,
+	.set_bss_load = nl80211_set_bss_load,
 	.get_sta_measurements = nl80211_get_sta_measurements,
 	.get_vap_measurements = nl80211_get_vap_measurements,
 	.get_radio_info = nl80211_get_radio_info,
@@ -9848,6 +9953,7 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.get_ext_capab = nl80211_get_ext_capab,
 #ifdef CONFIG_WDS_WPA
 	.set_wds_wpa_sta = nl80211_set_wds_wpa_sta,
+	.set_disable_dgaf = nl80211_set_disable_dgaf,
 #endif
 	.block_tx = nl80211_block_tx,
 };

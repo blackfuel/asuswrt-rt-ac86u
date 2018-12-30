@@ -1,7 +1,9 @@
 #ifndef ATF_H
 #define ATF_H
 
-#define ATF_GRANT_SCALE 10000 /* Grant equal to this number corresponds to 100% of air time */
+#define ATF_GRANT_SCALE 10000 /* Grant equal to this number corresponds
+                               * to 100% of air time */
+#define ATF_MIN_VAP_GRANT 100 /* Min VAP grant in the per-VAP cfg mode */
 
 struct hostapd_data;
 struct mtlk_atf_quota;
@@ -37,6 +39,9 @@ struct atf_config /* Air Time Fairness configuration */
 
 /* Free allocated memory and reset contents */
 void hostapd_atf_clean_config(struct atf_config* atf_cfg);
+
+/* Flush ATF data for all stations */
+void hostapd_atf_clean_stations(struct hostapd_data *hapd);
 
 /* Read ATF configuration from file */
 int hostapd_atf_read_config(struct atf_config* atf_cfg, const char* pathname);

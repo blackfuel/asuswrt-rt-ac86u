@@ -47,6 +47,8 @@ enum ltq_nl80211_vendor_subcmds {
 	LTQ_NL80211_VENDOR_SUBCMD_SET_ATF_QUOTAS       = 14,  /* Air time fairness data */
 	LTQ_NL80211_VENDOR_SUBCMD_SET_WDS_WPA_STA      = 15,
   LTQ_NL80211_VENDOR_SUBCMD_BLOCK_TX             = 16, /* Block TX after next channel switch */
+	LTQ_NL80211_VENDOR_SUBCMD_SET_DGAF_DISABLED    = 17,
+	LTQ_NL80211_VENDOR_SUBCMD_SET_BSS_LOAD         = 18,
 };
 
 enum ltq_nl80211_vendor_events {

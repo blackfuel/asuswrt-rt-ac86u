@@ -354,7 +354,7 @@ void cfe_command_restart(uint64_t status)
 static void cfe_say_hello(void)
 {
     xprintf("\n\n");
-    xprintf("Base: %d.%d_%s\n", BRCM_VERSION, BRCM_RELEASE, BRCM_EXTRAVERSION );
+//    xprintf("Base: %d.%d_%s\n", BRCM_VERSION, BRCM_RELEASE, BRCM_EXTRAVERSION );
     xprintf("CFE version %d.%d.%d-%d.%d"
 #ifdef CFE_VER_RELEASE
         ".%d"

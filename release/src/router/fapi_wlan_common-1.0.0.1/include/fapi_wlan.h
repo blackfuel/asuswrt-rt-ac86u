@@ -30,6 +30,31 @@
 
 #include "help_structs.h"
 
+#define DEFINE_FAPI_WLAN_STANDARD_FUNC(fUNCnAME)                                                                                    \
+int fUNCnAME(const char *ifname, ObjList *wlObj, unsigned int flags) {                                                              \
+	int ret;                                                                                                                        \
+	fapi_wlan_vendors_t vendor = fapi_wlan_get_vendor(ifname);                                                                      \
+	fapi_wlan_trace_in(__FUNCTION__, ifname, wlObj);                                                                                \
+	if ( (int)vendor > 0 ) {                                                                                                        \
+		FAPI_WLAN_ASSERT(vendor < FAPI_WLAN_MAX_VENDORS && fapi_wlan_vendor_ops[vendor] && fapi_wlan_vendor_ops[vendor]->fUNCnAME); \
+		ret = fapi_wlan_vendor_ops[vendor]->fUNCnAME(ifname, wlObj, flags);                                                         \
+	}                                                                                                                               \
+	else {                                                                                                                          \
+		ret = UGW_FAILURE;                                                                                                          \
+	}                                                                                                                               \
+	fapi_wlan_trace_out(__FUNCTION__, ifname, wlObj, ret);                                                                          \
+	return ret;                                                                                                                     \
+}
+
+#define DEFINE_FAPI_WLAN_EMPTY_FUNC(fUNCnAME)                          \
+int fUNCnAME(const char *ifname, ObjList *wlObj, unsigned int flags) { \
+	(void)ifname;                                                      \
+	(void)wlObj;                                                       \
+	(void)flags;                                                       \
+	return UGW_SUCCESS;                                                \
+}
+
+
 /** \defgroup FAPI_WLAN_COMMON FAPI core
 *   @ingroup FAPI_WLAN
 	\brief It provides a set of API to perform common operations on WLAN configuration.
@@ -349,6 +374,14 @@ int fapi_wlan_endpoint_wps_set(const char *ifname, ObjList *wlObj, unsigned int 
 		\return FAPI_SUCCESS / FAPI_FAILURE
 */
 int fapi_wlan_endpoint_stats_query(const char *ifname, ObjList *wlObj, unsigned int flags);
+
+/*! \brief  This function is used to delete a profile from EndPoint.
+		\param[in] ifname - WLAN VAP (EndPoint) Interface name.
+		\param[in,out] wlObj - Device.Wifi.EndPoint.Profile object of the profile to remove.
+		\param[in] flags - Flags for any future use.
+		\return FAPI_SUCCESS / FAPI_FAILURE
+*/
+int fapi_wlan_profile_delete(const char *ifname, ObjList *wlObj, unsigned int flags);
 
 /*! \brief  This function is used to get endpoint scan results information.
 		\param[in] ifname - WLAN VAP (EndPoint) Interface name.

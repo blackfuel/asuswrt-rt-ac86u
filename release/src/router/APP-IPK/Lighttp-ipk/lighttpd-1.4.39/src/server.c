@@ -254,7 +254,6 @@ char *get_usb_xhci_port(int port)
     strcpy(xhci_string, "xxxxxxxx");
 #ifdef DM_MIPSBIG
 if (access("/userfs/bin/tcapi",0) == 0){
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=tcapi_get_by_popen("USB_Entry","xhci_ports");
     if(strcmp(dm_mount_hci,"no attribute information") == 0){
         free(dm_mount_hci);
@@ -272,7 +271,6 @@ if (access("/userfs/bin/tcapi",0) == 0){
         }
     }
     else{
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=nvram_get_by_popen("xhci_ports");
     if(dm_mount_hci == NULL){
         free(dm_mount_hci);
@@ -290,7 +288,6 @@ if (access("/userfs/bin/tcapi",0) == 0){
         }
     }
 #else
-dm_mount_hci=(char *)malloc(28);
 dm_mount_hci=nvram_get_by_popen("xhci_ports");
 if(dm_mount_hci == NULL){
     free(dm_mount_hci);
@@ -318,7 +315,6 @@ char *get_usb_ehci_port(int port)
 
 #ifdef DM_MIPSBIG
     if(access("/userfs/bin/tcapi",0) == 0){
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=tcapi_get_by_popen("USB_Entry","ehci_ports");
         if(strcmp(dm_mount_hci,"no attribute information") == 0){
             free(dm_mount_hci);
@@ -336,7 +332,6 @@ char *get_usb_ehci_port(int port)
         }
     }
     else{
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=nvram_get_by_popen("ehci_ports");
         if(dm_mount_hci == NULL){
             free(dm_mount_hci);
@@ -354,7 +349,6 @@ char *get_usb_ehci_port(int port)
         }
     }
 #else
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=nvram_get_by_popen("ehci_ports");
     if(dm_mount_hci == NULL){
         free(dm_mount_hci);
@@ -381,7 +375,6 @@ char *get_usb_ohci_port(int port)
     strcpy(ohci_string, "xxxxxxxx");
 #ifdef DM_MIPSBIG
     if(access("/userfs/bin/tcapi",0) == 0){
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=tcapi_get_by_popen("USB_Entry","ohci_ports");
         if(strcmp(dm_mount_hci,"no attribute information") == 0){
             free(dm_mount_hci);
@@ -399,7 +392,6 @@ char *get_usb_ohci_port(int port)
         }
     }
     else{
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=nvram_get_by_popen("ohci_ports");
         if(dm_mount_hci == NULL){
             free(dm_mount_hci);
@@ -417,7 +409,6 @@ char *get_usb_ohci_port(int port)
         }
     }
 #else
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=nvram_get_by_popen("ohci_ports");
     if(dm_mount_hci == NULL){
         free(dm_mount_hci);
@@ -701,7 +692,6 @@ int get_usb_port_number(const char *usb_port)
     i = 0;
 #ifdef DM_MIPSBIG
     if(access("/userfs/bin/tcapi",0) == 0){
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=tcapi_get_by_popen("USB_Entry","xhci_ports");
         if(strcmp(dm_mount_hci,"no attribute information") == 0){
             free(dm_mount_hci);
@@ -719,11 +709,9 @@ int get_usb_port_number(const char *usb_port)
         }
     }
     else{
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=nvram_get_by_popen("xhci_ports");
         if(dm_mount_hci == NULL){
-            free(dm_mount_hci);
-            dm_mount_hci=NULL;
+          ;
         }
         else{
             free(dm_mount_hci);
@@ -737,11 +725,9 @@ int get_usb_port_number(const char *usb_port)
         }
     }
 #else
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=nvram_get_by_popen("xhci_ports");
     if(dm_mount_hci == NULL){
-        free(dm_mount_hci);
-        dm_mount_hci=NULL;
+    ;
     }
     else{
         free(dm_mount_hci);
@@ -759,7 +745,6 @@ int get_usb_port_number(const char *usb_port)
     i = 0;
 #ifdef DM_MIPSBIG
     if(access("/userfs/bin/tcapi",0) == 0){
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=tcapi_get_by_popen("USB_Entry","ehci_ports");
         if(strcmp(dm_mount_hci,"no attribute information") == 0){
             free(dm_mount_hci);
@@ -777,11 +762,9 @@ int get_usb_port_number(const char *usb_port)
         }
     }
     else{
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=nvram_get_by_popen("ehci_ports");
         if(dm_mount_hci == NULL){
-            free(dm_mount_hci);
-            dm_mount_hci=NULL;
+         ;
         }
         else{
             free(dm_mount_hci);
@@ -795,11 +778,9 @@ int get_usb_port_number(const char *usb_port)
         }
     }
 #else
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=nvram_get_by_popen("ehci_ports");
     if(dm_mount_hci == NULL){
-        free(dm_mount_hci);
-        dm_mount_hci=NULL;
+         ;
     }
     else{
         free(dm_mount_hci);
@@ -817,7 +798,6 @@ int get_usb_port_number(const char *usb_port)
     i = 0;
 #ifdef DM_MIPSBIG
     if(access("/userfs/bin/tcapi",0) == 0){
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=tcapi_get_by_popen("USB_Entry","ohci_ports");
         if(strcmp(dm_mount_hci,"no attribute information") == 0){
             free(dm_mount_hci);
@@ -835,11 +815,9 @@ int get_usb_port_number(const char *usb_port)
         }
     }
     else{
-        dm_mount_hci=(char *)malloc(28);
         dm_mount_hci=nvram_get_by_popen("ohci_ports");
         if(dm_mount_hci == NULL){
-            free(dm_mount_hci);
-            dm_mount_hci=NULL;
+         ;
         }
         else{
             free(dm_mount_hci);
@@ -853,11 +831,9 @@ int get_usb_port_number(const char *usb_port)
         }
     }
 #else
-    dm_mount_hci=(char *)malloc(28);
     dm_mount_hci=nvram_get_by_popen("ohci_ports");
     if(dm_mount_hci == NULL){
-        free(dm_mount_hci);
-        dm_mount_hci=NULL;
+         ;
     }
     else{
         free(dm_mount_hci);
@@ -1741,15 +1717,12 @@ int main (int argc, char **argv) {
         system("echo \"\`mount \|grep \"/dev/sd\" \| awk \'{print $1}\'\| awk \'BEGIN{FS=\"/\"}{print $3}\'\`\" >/tmp/usb_hd_num");
 #ifdef DM_MIPSBIG
         if(access("/userfs/bin/tcapi",0) == 0){
-            dm_mount=(char *)malloc(10);
             dm_mount=tcapi_get_by_popen("Apps_Entry","apps_dev");
         }
         else {
-            dm_mount=(char *)malloc(10);
             dm_mount=nvram_get_by_popen("apps_dev");
         }
 #else
-        dm_mount=(char *)malloc(10);
         dm_mount=nvram_get_by_popen("apps_dev");
 #endif
         memset(dm_mount_path,0,sizeof(dm_mount_path));

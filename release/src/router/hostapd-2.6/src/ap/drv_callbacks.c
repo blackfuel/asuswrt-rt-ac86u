@@ -582,6 +582,8 @@ void hostapd_event_ch_switch(struct hostapd_data *hapd, int freq, int ht,
 	hapd->iconf->ieee80211n = ht;
 	if (!ht)
 		hapd->iconf->ieee80211ac = 0;
+	else if (ht && hapd->iface->conf->orig_ieee80211ac)
+		hapd->iconf->ieee80211ac = 1;
 	hapd->iconf->secondary_channel = offset;
 	hapd->iconf->vht_oper_chwidth = chwidth;
 	hapd->iconf->vht_oper_centr_freq_seg0_idx = seg0_idx;
@@ -1062,6 +1064,14 @@ static void hostapd_event_ltq_flush_stations_rx(struct hostapd_data *hapd,
   struct hostapd_iface *iface = hapd->iface;
   s32 flush;
 
+  /* Discard event if interface didn't finished initialization.
+   * This may happen when driver sends irrelevant events due to station mode actions
+   */
+  if (iface->state != HAPD_IFACE_ENABLED) {
+    wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
+    return;
+  }
+
   if (data_len != sizeof(s32))
     flush = LTQ_FLUSH_RADIO;
   else
@@ -1117,6 +1127,16 @@ static void hostapd_event_ltq_chan_data(struct hostapd_data *hapd,
 {
   struct hostapd_iface *iface = hapd->iface;
 
+  /* Discard event if interface didn't finished initialization.
+   * This may happen when driver sends irrelevant events due to station mode actions
+   */
+  if (iface->state == HAPD_IFACE_UNINITIALIZED ||
+      iface->state == HAPD_IFACE_DISABLED ||
+      iface->state == HAPD_IFACE_COUNTRY_UPDATE ) {
+    wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not ready yet", __FUNCTION__);
+    return;
+  }
+
   hostapd_ltq_update_channel_data(iface, data, data_len);
 }
 
@@ -1124,6 +1144,14 @@ static void hostapd_event_ltq_unconnected_sta_rx(struct hostapd_data *hapd,
   struct ltq_unconnected_sta *unc_sta)
 {
   char buf[30];
+
+  /* Discard event if interface didn't finished initialization.
+   * This may happen when driver sends irrelevant events due to station mode actions
+   */
+  if (hapd->iface->state != HAPD_IFACE_ENABLED) {
+    wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
+    return;
+  }
 
   os_snprintf(buf, sizeof(buf), MACSTR, MAC2STR(unc_sta->addr));
   wpa_msg(hapd->msg_ctx, MSG_INFO,
@@ -1227,6 +1255,14 @@ static void hostapd_event_ltq_wds_connect_rx(struct hostapd_data *hapd,
 	struct ieee80211_vht_capabilities vht_cap;
 	u16 resp, i, capab_info = 0;
 	int new_assoc = 1;
+
+	/* Discard event if interface didn't finished initialization.
+	 * This may happen when driver sends irrelevant events due to station mode actions
+	 */
+	if (hapd->iface->state != HAPD_IFACE_ENABLED) {
+	  wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
+	  return;
+	}
 
 	if (data_len != sizeof(*wds_sta) + wds_sta->assoc_req_ies_len) {
 		wpa_printf(MSG_ERROR, "Wrong hostapd_wds_sta_connect data length");
@@ -1372,6 +1408,15 @@ static void hostapd_event_ltq_wds_disconnect_rx(struct hostapd_data *hapd,
 				     const u8 *data, size_t data_len)
 {
 	struct wv_wds_sta_info *wds_sta = (struct wv_wds_sta_info *)data;
+
+	/* Discard event if interface didn't finished initialization.
+	 * This may happen when driver sends irrelevant events due to station mode actions
+	 */
+	if (hapd->iface->state != HAPD_IFACE_ENABLED) {
+	  wpa_printf(MSG_DEBUG, "discard driver event (%s) - interface not initialized yet", __FUNCTION__);
+	  return;
+	}
+
 
 	if (data_len != sizeof(*wds_sta) + wds_sta->assoc_req_ies_len) {
 		wpa_printf(MSG_ERROR, "Wrong hostapd_wds_sta_disconnect data length");
@@ -1773,6 +1818,9 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			wpa_auth_reconfig_group_keys(hapd->wpa_auth);
 			hapd->reenable_beacon = 1;
 			ieee802_11_set_beacon(hapd);
+
+			/* Required for FW add VAP bringup sequence */
+			hostapd_tx_queue_params(hapd);
 		}
 		break;
 	case EVENT_INTERFACE_DISABLED:

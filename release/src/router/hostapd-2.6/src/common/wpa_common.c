@@ -69,6 +69,12 @@ int wpa_eapol_key_mic(const u8 *key, size_t key_len, int akmp, int ver,
 {
 	u8 hash[SHA384_MAC_LEN];
 
+	if (key_len == 0) {
+		wpa_printf(MSG_DEBUG,
+			   "WPA: KCK not set - cannot calculate MIC");
+		return -1;
+	}
+
 	switch (ver) {
 #ifndef CONFIG_FIPS
 	case WPA_KEY_INFO_TYPE_HMAC_MD5_RC4:
@@ -146,6 +152,11 @@ int wpa_pmk_to_ptk(const u8 *pmk, size_t pmk_len, const char *label,
 	u8 data[2 * ETH_ALEN + 2 * WPA_NONCE_LEN];
 	u8 tmp[WPA_KCK_MAX_LEN + WPA_KEK_MAX_LEN + WPA_TK_MAX_LEN];
 	size_t ptk_len;
+
+	if (pmk_len == 0) {
+		wpa_printf(MSG_ERROR, "WPA: No PMK set for PT derivation");
+		return -1;
+	}
 
 	if (os_memcmp(addr1, addr2, ETH_ALEN) < 0) {
 		os_memcpy(data, addr1, ETH_ALEN);
@@ -1388,6 +1399,14 @@ int wpa_compare_rsn_ie(int ft_initial_assoc,
 	}
 #endif /* CONFIG_IEEE80211R */
 
+#ifdef CONFIG_WDS_WPA_SUPPLICANT
+	/* fix for WDS STA that some vendor system set unsupported RSN IE in 3/4 EAPOL
+	 * handshake */
+	if (ie1len == ie2len + 2 && ie2len > 8 &&
+	  RSN_SELECTOR_GET(&ie2[4]) == RSN_SELECTOR(0x00, 0x10, 0x18, 0) &&
+	  os_memcmp(&ie1[8], &ie2[8], ie2len - 8) == 0)
+	  return 0;
+#endif
 	return -1;
 }
 

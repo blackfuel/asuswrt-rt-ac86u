@@ -306,18 +306,23 @@ static void
     buffer_append_string(field, ":");
 	buffer_append_string_buffer(field, authinfo);
     //DEBUG("sb", "pd->user:", field);
+    if(con->request.http_method==HTTP_METHOD_POST){
+               if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserverui"))
+                   array_set_key_value(pd->users, CONST_BUF_LEN(token), CONST_BUF_LEN(field));
+               else
+                   array_set_key_value(pd->users2, CONST_BUF_LEN(token), CONST_BUF_LEN(field));
 
-    if(strstr(con->request.uri->ptr,"mediaserverui"))
-        array_set_key_value(pd->users, CONST_BUF_LEN(token), CONST_BUF_LEN(field));
-    else
-		array_set_key_value(pd->users2, CONST_BUF_LEN(token), CONST_BUF_LEN(field));
-
+    }else{
+                if(strstr(con->request.uri->ptr,"mediaserverui"))
+                    array_set_key_value(pd->users, CONST_BUF_LEN(token), CONST_BUF_LEN(field));
+                else
+                    array_set_key_value(pd->users2, CONST_BUF_LEN(token), CONST_BUF_LEN(field));
+    }
     // insert opaque auth token
     buffer_copy_buffer(field, pc->name);
     buffer_append_string(field, "=asus_app_token:");
     buffer_append_string_buffer(field, token);
     buffer_append_string(field, "; ");
-
 	if(strncmp(direct_url_string->ptr,"/mediaserverui/", 15)==0)
     {
 		buffer_append_string(field, "path=/mediaserverui/; httponly;");
@@ -486,38 +491,11 @@ static handler_t
 
     char *authinfo = strchr(entry->value->ptr, ':');
     if (! authinfo) return endauth(srv, con, pc);
-  /*  char buf_username[128];
-    char buf_password[128];
 
-    FILE *fp;
-    fp=fopen("/tmp/web_info","r+");
-    memset(buf_username,0,sizeof(buf_username));
-    memset(buf_password,0,sizeof(buf_password));
-    if(fp != NULL)
-    {
-        fgets(buf_username, 128, fp);
-        fgets(buf_password, 128, fp);
-
-        if(buf_username[strlen(buf_username)-1]=='\n')
-        {
-            buf_username[strlen(buf_username)-1]='\0';
-        }
-        if(buf_password[strlen(buf_password)-1]=='\n')
-        {
-            buf_password[strlen(buf_password)-1]='\0';
-        }
-
-    }
-    fclose(fp);
-    */
     char *dut_username=NULL;
     char *dut_password=NULL;
     ////////////////{{{
 #ifdef DM_MIPSBIG
-      dut_username=(char *)malloc(32);
-      dut_password=(char *)malloc(128);
-      memset(dut_username,0,32);
-      memset(dut_password,0,128);
       if(access("/userfs/bin/tcapi",0) == 0){
       dut_username=tcapi_get_by_popen("Account_Entry0","username");
       dut_password=tcapi_get_by_popen("Account_Entry0","web_passwd");
@@ -526,10 +504,6 @@ static handler_t
           dut_password=nvram_get_by_popen("http_passwd");
       }
 #else
-      dut_username=(char *)malloc(32);
-      dut_password=(char *)malloc(128);
-      memset(dut_username,0,32);
-      memset(dut_password,0,128);
       dut_username=nvram_get_by_popen("http_username");
       dut_password=nvram_get_by_popen("http_passwd");
 #endif
@@ -541,176 +515,100 @@ static handler_t
 						CONST_STR_LEN("Authorization"), CONST_BUF_LEN(field));
 
 	char *pw = strchr(field->ptr, ':');
-	*pw = '\0';
+    char *usern=NULL;
+    usern=(char*)malloc(strlen(field->ptr)-strlen(pw)+3);
+    memset(usern,0,sizeof(usern));
+    snprintf(usern,strlen(field->ptr)-strlen(pw)+1,"%s",field->ptr);
     //username and password show in different style between mipsbig and other
-    /*char passwd_tmp[128];
-    char username_tmp[128];
-    memset(passwd_tmp,   0, sizeof(passwd_tmp));
-    memset(username_tmp, 0, sizeof(username_tmp));
-	char_to_ascii_safe(passwd_tmp,   pw+1,      128);
-
-    char_to_ascii_safe(username_tmp, field->ptr, 128);
-    */
     nvramver=nvram_encrypt_support();
     //20170622 changed for shadow {
     if(access("/etc/shadow",0)==0){
-    int value_u=compare_passwd_in_shadow(field->ptr,pw+1);
+        if(dut_username != NULL){
+             free(dut_username);
+             dut_username=NULL;
+        }
+        if(dut_password != NULL){
+             free(dut_password);
+             dut_password=NULL;
+        }
+        int value_u=compare_passwd_in_shadow(usern,pw+1);
+        if(usern != NULL){
+            free(usern);
+            usern=NULL;
+        }
     if(!value_u){
         buffer_free(field);
-        /*if(pids("dm2_transmission-daemon")!=0)  //dm2_transmission_daemon is running
-        {
-            PW_new_socket();
-        }
-        else if(pids("dm2_transmission-daemon")==0) //dm2_transmission_daemon not running
-        {
-            FILE *fp_tr;
-            char changname[256];
-            char changpasswd[256];
-            char buf_un[32];
-            char buf_pd[32];
-            system("/opt/etc/asus_script/dm2_transmission_user_changed");
-            while(access("/tmp/dm2_check_user",0)== 0)
-            {
-                sleep(1);
-            }
-            if(access("/tmp/dm2_check_user",0)!= 0){
-                fp_tr=fopen("/tmp/transmission_get_up","r+");
-                memset(buf_un,0,sizeof(buf_un));
-                memset(buf_pd,0,sizeof(buf_pd));
-                if(fp_tr != NULL)
-                {
-                    fgets(buf_un,32,fp_tr);
-                    if(buf_un[strlen(buf_un)-1]=='\n')
-                    {
-                        buf_un[strlen(buf_un)-1]='\0';
-                    }
-                    fgets(buf_pd,32,fp_tr);
-                    if(buf_pd[strlen(buf_pd)-1]=='\n')
-                    {
-                        buf_pd[strlen(buf_pd)-1]='\0';
-                    }
-                }
-                fclose(fp_tr);
-            }
-            memset(changname,0,sizeof(changname));
-            sprintf(changname,"sed -i '49s/^.*$/    \"rpc-username\": \"%s\",/' %s/Download2/config/settings.json",buf_un,Base_dir);
-            system(changname);
-            memset(changpasswd,0,sizeof(changpasswd));
-            sprintf(changpasswd,"sed -i '46s/^.*$/    \"rpc-password\": \"%s\",/' %s/Download2/config/settings.json",buf_pd,Base_dir);
-            system(changpasswd);
-        }*/
         return endauth(srv, con, pc);
       }
     }else{
        if(nvramver==0){
-           if((strcmp(field->ptr, dut_username) )|| (strcmp(pw+1,dut_password)))
+           if((strcmp(usern, dut_username) )|| (strcmp(pw+1,dut_password)))
            {
-               buffer_free(field);
-               /*if(pids("dm2_transmission-daemon")!=0)  //dm2_transmission_daemon is running
-               {
-                   PW_new_socket();
+               if(usern != NULL){
+                   free(usern);
+                   usern=NULL;
                }
-               else if(pids("dm2_transmission-daemon")==0) //dm2_transmission_daemon not running
-               {
-                   FILE *fp_tr;
-                   char changname[256];
-                   char changpasswd[256];
-                   char buf_un[32];
-                   char buf_pd[32];
-                   system("/opt/etc/asus_script/dm2_transmission_user_changed");
-                   while(access("/tmp/dm2_check_user",0)== 0)
-                   {
-                       sleep(1);
-                   }
-                   if(access("/tmp/dm2_check_user",0)!= 0){
-                       fp_tr=fopen("/tmp/transmission_get_up","r+");
-                       memset(buf_un,0,sizeof(buf_un));
-                       memset(buf_pd,0,sizeof(buf_pd));
-                       if(fp_tr != NULL)
-                       {
-                           fgets(buf_un,32,fp_tr);
-                           if(buf_un[strlen(buf_un)-1]=='\n')
-                           {
-                               buf_un[strlen(buf_un)-1]='\0';
-                           }
-                           fgets(buf_pd,32,fp_tr);
-                           if(buf_pd[strlen(buf_pd)-1]=='\n')
-                           {
-                               buf_pd[strlen(buf_pd)-1]='\0';
-                           }
-
-
-                       }
-                       fclose(fp_tr);
-                   }
-                   memset(changname,0,sizeof(changname));
-                   sprintf(changname,"sed -i '49s/^.*$/    \"rpc-username\": \"%s\",/' %s/Download2/config/settings.json",buf_un,Base_dir);
-                   system(changname);
-                   memset(changpasswd,0,sizeof(changpasswd));
-                   sprintf(changpasswd,"sed -i '46s/^.*$/    \"rpc-password\": \"%s\",/' %s/Download2/config/settings.json",buf_pd,Base_dir);
-                   system(changpasswd);
-               }*/
-               return endauth(srv, con, pc);
+               if(dut_username != NULL){
+                    free(dut_username);
+                    dut_username=NULL;
+               }
+               if(dut_password != NULL){
+                    free(dut_password);
+                    dut_password=NULL;
+               }
+               buffer_free(field);
+                return endauth(srv, con, pc);
+           }
+           if(usern != NULL){
+               free(usern);
+               usern=NULL;
+           }
+           if(dut_username != NULL){
+                free(dut_username);
+                dut_username=NULL;
+           }
+           if(dut_password != NULL){
+                free(dut_password);
+                dut_password=NULL;
            }
        }
        else if(nvramver==1) {
            char dec_password[256];
            memset(dec_password,0,sizeof(dec_password));
            pw_dec(dut_password,dec_password);
-           if((strcmp(field->ptr, dut_username)) ||(strcmp(pw+1, dec_password)))
+           if((strcmp(usern, dut_username)) ||(strcmp(pw+1, dec_password)))
            {
-               buffer_free(field);
-              /* if(pids("dm2_transmission-daemon")!=0)  //dm2_transmission_daemon is running
-               {
-                   PW_new_socket();
+               if(usern != NULL){
+                   free(usern);
+                   usern=NULL;
                }
-               else if(pids("dm2_transmission-daemon")==0) //dm2_transmission_daemon not running
-               {
-                   FILE *fp_tr;
-                   char changname[256];
-                   char changpasswd[256];
-                   char buf_un[32];
-                   char buf_pd[32];
-                   system("/opt/etc/asus_script/dm2_transmission_user_changed");
-                   while(access("/tmp/dm2_check_user",0)== 0)
-                   {
-                       sleep(1);
-                   }
-                   if(access("/tmp/dm2_check_user",0)!= 0){
-                       fp_tr=fopen("/tmp/transmission_get_up","r+");
-                       memset(buf_un,0,sizeof(buf_un));
-                       memset(buf_pd,0,sizeof(buf_pd));
-                       if(fp_tr != NULL)
-                       {
-                           fgets(buf_un,32,fp_tr);
-                           if(buf_un[strlen(buf_un)-1]=='\n')
-                           {
-                               buf_un[strlen(buf_un)-1]='\0';
-                           }
-                           fgets(buf_pd,32,fp_tr);
-                           if(buf_pd[strlen(buf_pd)-1]=='\n')
-                           {
-                               buf_pd[strlen(buf_pd)-1]='\0';
-                           }
-
-
-                       }
-                       fclose(fp_tr);
-                   }
-                   memset(changname,0,sizeof(changname));
-                   sprintf(changname,"sed -i '49s/^.*$/    \"rpc-username\": \"%s\",/' %s/Download2/config/settings.json",buf_un,Base_dir);
-                   system(changname);
-                   memset(changpasswd,0,sizeof(changpasswd));
-                   sprintf(changpasswd,"sed -i '46s/^.*$/    \"rpc-password\": \"%s\",/' %s/Download2/config/settings.json",buf_pd,Base_dir);
-                   system(changpasswd);
-               }*/
+               if(dut_username != NULL){
+                    free(dut_username);
+                    dut_username=NULL;
+               }
+               if(dut_password != NULL){
+                    free(dut_password);
+                    dut_password=NULL;
+               }
+               buffer_free(field);
                return endauth(srv, con, pc);
+           }
+           if(usern != NULL){
+               free(usern);
+               usern=NULL;
+           }
+           if(dut_username != NULL){
+                free(dut_username);
+                dut_username=NULL;
+           }
+           if(dut_password != NULL){
+                free(dut_password);
+                dut_password=NULL;
            }
        }
     }
     //20170622 changed for shadow }
     buffer_free(field);
-
 	//update time for each access
 	if(strstr(con->request.uri->ptr,"mediaserverui")){
 		last_access_time_MS = uptime();
@@ -1082,32 +980,18 @@ b64_decode( const char* str, unsigned char* space, int size )
     }
     return space_idx;
 }
-//
-// authorization handler
-//
-URIHANDLER_FUNC(module_uri_handler) {
-    char *post_data;
-    if((con->request.http_method == HTTP_METHOD_POST)&&(strstr(con->request.uri->ptr, "dm_uploadbt.cgi")==NULL)){
-    if( parse_postdata_from_chunkqueue(srv, con, con->request_content_queue, &post_data) == 0 ){
-        strcat(con->request.uri->ptr,"?");
-        strcat(con->request.uri->ptr,post_data);
-     }
-    else{
-        //fprintf(stderr,"\n------ Get post_data error ------ \n");
-    }
-    }
-    if(con->request.uri->ptr == NULL){
-        return HANDLER_ERROR;
-    }
-    if( strstr(con->request.uri->ptr,"mediasever_path=%3C%2Fmnt") || strstr(con->request.uri->ptr,"%3CAPV") ){
-        return HANDLER_GO_ON;
-    }
-    else if(strstr(con->request.uri->ptr,">")||strstr(con->request.uri->ptr,"<")||strstr(con->request.uri->ptr,"%3E")||strstr(con->request.uri->ptr,"%3C")||strstr(con->request.uri->ptr,"%0A")||strstr(con->request.uri->ptr,"%0D")){
-            con->http_status = 404;
-        return HANDLER_FINISHED;
-    }
-    //leo added for lock username {
-    if(strstr(con->request.uri->ptr,"mediaserver"))
+
+/**
+ *when input wrong username or password more than 5 times, the DM or MS web UI will be locked.
+ * The program first judge whether is already locked before handle request.
+ * @brief Lock_UI
+ * @param srv
+ * @param con
+ * @param uri_str
+ * @return
+ */
+static handler_t Lock_UI(server *srv, connection *con, char *uri_str){
+    if(strstr(uri_str,"mediaserver"))
     {
         memset(appname,0,sizeof(appname));
         snprintf(appname,12,"%s","mediaserver");
@@ -1116,7 +1000,6 @@ URIHANDLER_FUNC(module_uri_handler) {
             time_t t_p=time(NULL);
             if((t_p-time_MS)>60)
             {
-
                 Username_Pw_MS=0;
                 flag_up_MS=0;
                 time_MS=0;
@@ -1124,19 +1007,19 @@ URIHANDLER_FUNC(module_uri_handler) {
                 {
                     system("rm -rf /tmp/username_pw_MS.txt");
                 }
+                 return 7;
             }
             else
             {
-                if(strstr(con->request.uri->ptr,"images") || strstr(con->request.uri->ptr,".js"))
+                if(strstr(uri_str,"images") || strstr(uri_str,".js"))
                 {
-
                     return HANDLER_GO_ON;
                 }
                 char dirceturl_k[128];
                 memset(dirceturl_k,0,sizeof(dirceturl_k));
                 if(strstr(direct_url_string->ptr,"mediaserverui"))
                     sprintf(dirceturl_k,"%s%s%s","/Main_Login.asp?flag=7&productname=",productname,"&url=/mediaserverui/mediaserver.asp");
-				else
+                else
                     sprintf(dirceturl_k,"%s%s%s","/Main_Login.asp?flag=7&productname=",productname,"&url=/");
                 response_header_insert(srv, con,
                                        CONST_STR_LEN("Location"),dirceturl_k,strlen(dirceturl_k));
@@ -1146,6 +1029,7 @@ URIHANDLER_FUNC(module_uri_handler) {
                 return HANDLER_FINISHED;
             }
         }
+         return 7;
     }
     else  if (flag_up_DM==1)
     {
@@ -1161,21 +1045,19 @@ URIHANDLER_FUNC(module_uri_handler) {
             {
                 system("rm -rf /tmp/username_pw_DM.txt");
             }
+             return 7;
         }
         else
         {
-
-            if(strstr(con->request.uri->ptr,"images") || strstr(con->request.uri->ptr,".js") || strstr(con->request.uri->ptr,".ico"))
+            if(strstr(uri_str,"images") || strstr(uri_str,".js") || strstr(uri_str,".ico"))
             {
                 return HANDLER_GO_ON;
             }
-
-
             char dirceturl_k[128];
             memset(dirceturl_k,0,sizeof(dirceturl_k));
             if(strstr(direct_url_string->ptr,"mediaserverui"))
                 sprintf(dirceturl_k,"%s%s%s","/Main_Login.asp?flag=7&productname=",productname,"&url=/mediaserverui/mediaserver.asp");
-			else
+            else
                 sprintf(dirceturl_k,"%s%s%s","/Main_Login.asp?flag=7&productname=",productname,"&url=/");
             response_header_insert(srv, con,
                                    CONST_STR_LEN("Location"),dirceturl_k,strlen(dirceturl_k));
@@ -1189,9 +1071,31 @@ URIHANDLER_FUNC(module_uri_handler) {
     {
         memset(appname,0,sizeof(appname));
         snprintf(appname,15,"%s","downloadmaster");
+        return 7;
     }
+}
+//
+// authorization handler
+//
 
-    //leo added for lock username }
+URIHANDLER_FUNC(module_uri_handler) {
+    if(con->request.uri->ptr == NULL){
+        return HANDLER_ERROR;
+    }
+    if( strstr(con->request.uri->ptr,"mediasever_path=%3C%2Fmnt") || strstr(con->request.uri->ptr,"%3CAPV") ){
+        return HANDLER_GO_ON;
+    }
+    else if(strstr(con->request.uri->ptr,">")||strstr(con->request.uri->ptr,"<")||strstr(con->request.uri->ptr,"%3E")||strstr(con->request.uri->ptr,"%3C")||strstr(con->request.uri->ptr,"%0A")||strstr(con->request.uri->ptr,"%0D")){
+            con->http_status = 404;
+        return HANDLER_FINISHED;
+    }
+      if((con->request.http_method == HTTP_METHOD_POST)&&(strstr(con->request.uri->ptr, "dm_uploadbt.cgi")==NULL)){
+      int value_re =   Lock_UI(srv,con,con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset);
+      if(value_re!=7) return value_re;
+      }else{
+        int value_re =  Lock_UI(srv,con,con->request.uri->ptr);
+        if(value_re!=7) return value_re;
+      }
     plugin_data   *pd = p_d;
     plugin_config *pc = merge_config(srv, con, pd);
     data_string *ds;
@@ -1215,7 +1119,6 @@ URIHANDLER_FUNC(module_uri_handler) {
         char dirceturl_tmp[128];
         memset(dirceturl_tmp,0,sizeof(dirceturl_tmp));
         //neal modify begin {
-
         if(access("/tmp/have_dm2",0) == 0) {
             sprintf(dirceturl_tmp,"%s%s%s","/Main_Login.asp?flag=1&productname=",productname,"&url=/downloadmaster/task.asp");
         } else if(access("/tmp/have_ms",0) == 0) {
@@ -1224,8 +1127,6 @@ URIHANDLER_FUNC(module_uri_handler) {
             con->http_status = 404;
             return HANDLER_FINISHED;
         }
-
-
         response_header_insert(srv, con,
                                CONST_STR_LEN("Location"),dirceturl_tmp,strlen(dirceturl_tmp));
         con->http_status = 307;
@@ -1286,7 +1187,6 @@ URIHANDLER_FUNC(module_uri_handler) {
         response_header_append(srv, con,
                                CONST_STR_LEN("Set-Cookie"), CONST_BUF_LEN(field));
         buffer_free(field);
-
         // prepare redirection header
         buffer *url = buffer_init_buffer(pc->authurl);
         buffer_append_string(url, "?flag=8");
@@ -1319,26 +1219,21 @@ URIHANDLER_FUNC(module_uri_handler) {
         response_header_insert(srv, con,
                                CONST_STR_LEN("Location"), CONST_BUF_LEN(url));
         buffer_free(url);
-
         // prepare response
         con->http_status = 307;
         con->mode = DIRECT;
         con->file_finished = 1;
-
         return HANDLER_FINISHED;
     }
-
     if(strstr(con->request.uri->ptr,"check.asp")){
-		int ret = check_can_login(srv, con, pd);
+        int ret = check_can_login(srv, con, pd);
 		if( ret != HANDLER_GO_ON)
 			return ret;
-        char *auth_login_u;
-        char *auth_login_p;
         int l;
-        char login_authinfo[256];
-        char login_authpasw[256];
-        char check_user_tmp[256];
-        char check_passwd_tmp[256];
+        char login_authinfo[60];
+        char login_authpasw[60];
+        char check_user_tmp[60];
+        char check_passwd_tmp[60];
         char enc_passwd[256];
         char *dut_username=NULL;
         char *dut_password=NULL;
@@ -1350,9 +1245,11 @@ URIHANDLER_FUNC(module_uri_handler) {
         memset(login_authpasw, 0, sizeof(login_authpasw));
         direct_url_string = buffer_init();
         char *nv,*nvp,*b;
-        //nv = nvp = strdup(con->uri.query->ptr);
-        nv = nvp = strdup(con->request.uri->ptr);
-
+        if(con->request.http_method==HTTP_METHOD_POST){
+            nv = nvp = strdup(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset);
+        }else{
+            nv = nvp = strdup(con->request.uri->ptr);
+        }
         if(nv){
             while((b=strsep(&nvp,"&")) != NULL){
                 if(!strncmp(b,"login_username=",15)){
@@ -1370,25 +1267,16 @@ URIHANDLER_FUNC(module_uri_handler) {
             free(nv);
         }
         /* Decode it. */
-       if(strstr(con->request.request->ptr,"ASUSDMUtility")||(con->request.http_method == HTTP_METHOD_POST)){
-        auth_login_u=strdup(login_authinfo);
-        auth_login_p=strdup(login_authpasw);
-        l = b64_decode( &(auth_login_u[0]), (unsigned char*) check_user_tmp, sizeof(check_user_tmp) );
+       if(strstr(con->request.request->ptr,"ASUSDMUtility/2.3")||(con->request.http_method == HTTP_METHOD_POST)){
+        l = b64_decode( login_authinfo, (unsigned char*) check_user_tmp, sizeof(check_user_tmp) );
         check_user_tmp[l] = '\0';
-        l = b64_decode( &(auth_login_p[0]), (unsigned char*) check_passwd_tmp, sizeof(check_passwd_tmp) );
+        l = b64_decode( login_authpasw, (unsigned char*) check_passwd_tmp, sizeof(check_passwd_tmp) );
         check_passwd_tmp[l] = '\0';
-        free(auth_login_u);
-        free(auth_login_p);
        }else{
           snprintf(check_user_tmp,sizeof(check_user_tmp),"%s",login_authinfo);
           snprintf(check_passwd_tmp,sizeof(check_passwd_tmp),"%s",login_authpasw);
            }
-
 #ifdef DM_MIPSBIG
-          dut_username=(char *)malloc(32);
-          dut_password=(char *)malloc(128);
-          memset(dut_username,0,32);
-          memset(dut_password,0,128);
           if(access("/userfs/bin/tcapi",0) == 0){
           dut_username=tcapi_get_by_popen("Account_Entry0","username");
           dut_password=tcapi_get_by_popen("Account_Entry0","web_passwd");
@@ -1397,19 +1285,33 @@ URIHANDLER_FUNC(module_uri_handler) {
               dut_password=nvram_get_by_popen("http_passwd");
           }
 #else
-          dut_username=(char *)malloc(32);
-          dut_password=(char *)malloc(128);
-          memset(dut_username,0,32);
-          memset(dut_password,0,128);
           dut_username=nvram_get_by_popen("http_username");
           dut_password=nvram_get_by_popen("http_passwd");
 #endif
         /////////////////}}}
         ///20160622 libpasswd for shadow{
         if(access("/etc/shadow",0)==0){
+            if(dut_username != NULL){
+                 free(dut_username);
+                 dut_username=NULL;
+            }
+            if(dut_password != NULL){
+                 free(dut_password);
+                 dut_password=NULL;
+            }
         // etc/shadow is exist
             int value_u=compare_passwd_in_shadow(check_user_tmp,check_passwd_tmp);
             if(value_u){
+            if(con->request.http_method==HTTP_METHOD_POST){
+                if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"downloadmaster"))
+                {
+                    Username_Pw_DM=0;
+                }
+                if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserver"))
+                {
+                    Username_Pw_MS=0;
+                }
+            }else{
                 if(strstr(con->request.uri->ptr,"downloadmaster"))
                 {
                     Username_Pw_DM=0;
@@ -1418,6 +1320,7 @@ URIHANDLER_FUNC(module_uri_handler) {
                 {
                     Username_Pw_MS=0;
                 }
+            }
     // Add for check the direct url weather exit on the server
                 if(direct_url_string->used>1)
                 {
@@ -1443,19 +1346,29 @@ URIHANDLER_FUNC(module_uri_handler) {
                 snprintf(cookie_string, sizeof(cookie_string), "%s:%s",check_user_tmp,check_passwd_tmp);
                 return handle_crypt(srv, con, pd, pc, cookie_string);
             }else{
-                if(strstr(con->request.uri->ptr,"downloadmaster"))
-                {
-                    Username_Pw_DM++;
-                }
-                if(strstr(con->request.uri->ptr,"mediaserver"))
-                {
-                    Username_Pw_MS++;
+                if(con->request.http_method==HTTP_METHOD_POST){
+                    if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"downloadmaster"))
+                    {
+                        Username_Pw_DM++;
+                    }
+                    if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserver"))
+                    {
+                        Username_Pw_MS++;
+                    }
+                }else{
+                    if(strstr(con->request.uri->ptr,"downloadmaster"))
+                    {
+                        Username_Pw_DM++;
+                    }
+                    if(strstr(con->request.uri->ptr,"mediaserver"))
+                    {
+                        Username_Pw_MS++;
+                    }
                 }
                 char dirceturl[128];
                 char tr[128];
                 memset(dirceturl,0,sizeof(dirceturl));
                 memset(tr,0,sizeof(tr));
-
                 if(Username_Pw_DM>=5)
                 {
                     Username_Pw_DM=0;
@@ -1520,91 +1433,33 @@ URIHANDLER_FUNC(module_uri_handler) {
            memset(dec_passwd,0,128);
            pw_dec(dut_password,dec_passwd);
            decode_url(check_user_tmp,1);
-            /*   char command_name[128];
-               memset(command_name,'\0',sizeof(command_name));
-               sprintf(command_name,"%s","/tmp/APPS/Lighttpd/Script/asus_http_usercheck user-renew-nvram-en");
-               system(command_name);
-
-               char http_username[1][512];
-               char username_check[256];
-               if(access("/tmp/APPS/Lighttpd/Config/asus_lighttpdpassword",0)== 0){
-
-                   memset(http_username, '\0', sizeof(http_username));
-                   memset(username_check, '\0', sizeof(username_check));
-                   FILE *fp;
-                   if((fp=fopen("/tmp/APPS/Lighttpd/Config/asus_lighttpdpassword","r"))!=NULL){
-                       if(fscanf(fp,"%[^:]%*s",username_check)>0){
-                           sprintf(username_check,"%s",username_check);
-                       }
-                       fclose(fp);
-                   }
-               }
-
-               char buf_passwd[256];// max password is 15
-            */
-           /* buf_passwd is ascii
-            * check_passwd_tmp is char
-            */
-             /*  char_to_ascii_safe(buf_passwd, check_passwd_tmp, 256);
-               char command[512];
-               memset(command,'\0',sizeof(command));
-               sprintf(command,"%s \"%s\"","/tmp/APPS/Lighttpd/Script/asus_http_check passwd-renew-nvram-en",buf_passwd);
-               system(command);
-
-               if(access("/tmp/http_info_changed",0)== 0){
-                   memset(http_pw, '\0', sizeof(http_pw));
-                   memset(passwd_check, '\0', sizeof(passwd_check));
-                   FILE *fp;
-                   if((fp=fopen("/tmp/http_info","r"))!=NULL){
-                       if(fscanf(fp,"%[^\n]%*s",passwd_check)>0){
-                           sprintf(passwd_check,"%s",passwd_check);
-                       }
-                       fclose(fp);
-                   }
-
-                   memset(http_pw_check,'\0',sizeof(http_pw_check));
-                   sprintf(http_pw_check,"%s",passwd_check);
-                   decode_url(http_pw_check,0); //2014.02.18 magic modify
-                   system("rm -f /tmp/http_info_changed");
-               }
-               char dec_passwd[64];
-               char http_pw_check_en[512];
-               memset(dec_passwd,0,sizeof(dec_passwd));
-               memset(http_pw_check_en,0,sizeof(http_pw_check_en));
-               pw_dec(http_pw_check,dec_passwd);
-               li_MD5_CTX Md5Ctx,Md5Ctx1,Md5Ctx2;
-               HASH HA1,HA2,HA3;
-               char passwd1[256];
-               char passwd2[256];
-
-               memset(passwd1,'\0',sizeof(passwd1));
-               memset(passwd2,'\0',sizeof(passwd2));
-               li_MD5_Init(&Md5Ctx);
-               li_MD5_Update(&Md5Ctx, (unsigned char *)check_passwd_tmp, strlen(check_passwd_tmp));
-               li_MD5_Final(HA1, &Md5Ctx);
-               CvtHex(HA1, passwd1);
-
-               li_MD5_Init(&Md5Ctx1);
-               li_MD5_Update(&Md5Ctx1, (unsigned char *)buf_passwd, strlen(buf_passwd));
-               li_MD5_Final(HA2, &Md5Ctx1);
-               CvtHex(HA2, passwd2);
-
-               li_MD5_Init(&Md5Ctx2);
-               li_MD5_Update(&Md5Ctx2, (unsigned char *)dec_passwd, strlen(dec_passwd));
-               li_MD5_Final(HA3, &Md5Ctx2);
-               CvtHex(HA3, http_pw_check_en);
-               char buf_username[256];
-               char_to_ascii_safe(buf_username, check_user_tmp, 256);
-               // mipsbig don't need to change to ascii
-               */
                if ((!strcmp(dut_username, check_user_tmp) ) && ( !strcmp(dec_passwd,check_passwd_tmp))) {
-                   if(strstr(con->request.uri->ptr,"downloadmaster"))
-                   {
-                       Username_Pw_DM=0;
+                   if(dut_username != NULL){
+                        free(dut_username);
+                        dut_username=NULL;
                    }
-                   if(strstr(con->request.uri->ptr,"mediaserver"))
-                   {
-                       Username_Pw_MS=0;
+                   if(dut_password != NULL){
+                        free(dut_password);
+                        dut_password=NULL;
+                   }
+                   if(con->request.http_method==HTTP_METHOD_POST){
+                       if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"downloadmaster"))
+                       {
+                           Username_Pw_DM=0;
+                       }
+                       if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserver"))
+                       {
+                           Username_Pw_MS=0;
+                       }
+                   }else{
+                       if(strstr(con->request.uri->ptr,"downloadmaster"))
+                       {
+                           Username_Pw_DM=0;
+                       }
+                       if(strstr(con->request.uri->ptr,"mediaserver"))
+                       {
+                           Username_Pw_MS=0;
+                       }
                    }
        // Add for check the direct url weather exit on the server
                    if(direct_url_string->used>1)
@@ -1632,17 +1487,33 @@ URIHANDLER_FUNC(module_uri_handler) {
                    return handle_crypt(srv, con, pd, pc, cookie_string);
                }
                else{
-
-                   // 20160608 leo addd for lock username and password {
-                   if(strstr(con->request.uri->ptr,"downloadmaster"))
-                   {
-
-                       Username_Pw_DM++;
+                   if(dut_username != NULL){
+                        free(dut_username);
+                        dut_username=NULL;
                    }
-                   if(strstr(con->request.uri->ptr,"mediaserver"))
-                   {
-                       Username_Pw_MS++;
-
+                   if(dut_password != NULL){
+                        free(dut_password);
+                        dut_password=NULL;
+                   }
+                   // 20160608 leo addd for lock username and password {
+                   if(con->request.http_method==HTTP_METHOD_POST){
+                       if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"downloadmaster"))
+                       {
+                           Username_Pw_DM++;
+                       }
+                       if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserver"))
+                       {
+                           Username_Pw_MS++;
+                       }
+                   }else{
+                       if(strstr(con->request.uri->ptr,"downloadmaster"))
+                       {
+                           Username_Pw_DM++;
+                       }
+                       if(strstr(con->request.uri->ptr,"mediaserver"))
+                       {
+                           Username_Pw_MS++;
+                       }
                    }
                    char dirceturl[128];
                    char tr[128];
@@ -1712,87 +1583,34 @@ URIHANDLER_FUNC(module_uri_handler) {
            else {
              //nvram not encrypted
               decode_url(check_user_tmp,1);
-               /*char command_name[128];
-               memset(command_name,'\0',sizeof(command_name));
-               sprintf(command_name,"%s","/tmp/APPS/Lighttpd/Script/asus_http_usercheck user-renew");
-               system(command_name);
-
-               char http_username[1][512];
-               char username_check[256];
-               if(access("/tmp/APPS/Lighttpd/Config/asus_lighttpdpassword",0)== 0){
-
-                   memset(http_username, '\0', sizeof(http_username));
-                   memset(username_check, '\0', sizeof(username_check));
-                   FILE *fp;
-                   if((fp=fopen("/tmp/APPS/Lighttpd/Config/asus_lighttpdpassword","r"))!=NULL){
-                       if(fscanf(fp,"%[^:]%*s",username_check)>0){
-                           sprintf(username_check,"%s",username_check);
+                   if ((!strcmp(dut_username, check_user_tmp)) && ( !strcmp(dut_password,check_passwd_tmp))) {
+                       if(dut_username != NULL){
+                            free(dut_username);
+                            dut_username=NULL;
                        }
-                       fclose(fp);
-                   }
-               }
-
-               char buf_passwd[256];// max password is 15
-*/
-           /* buf_passwd is ascii
-            * check_passwd_tmp is char
-            */
-              /*
-               char_to_ascii_safe(buf_passwd, check_passwd_tmp, 256);
-
-               char command[512];
-               memset(command,'\0',sizeof(command));
-               sprintf(command,"%s \"%s\"","/tmp/APPS/Lighttpd/Script/asus_http_check passwd-renew",buf_passwd);
-               system(command);
-
-               if(access("/tmp/http_info_changed",0)== 0){
-                   memset(http_pw, '\0', sizeof(http_pw));
-                   memset(passwd_check, '\0', sizeof(passwd_check));
-                   FILE *fp;
-                   if((fp=fopen("/tmp/http_info","r"))!=NULL){
-                       if(fscanf(fp,"%[^\n]%*s",passwd_check)>0){
-                           sprintf(passwd_check,"%s",passwd_check);
+                       if(dut_password != NULL){
+                            free(dut_password);
+                            dut_password=NULL;
                        }
-                       fclose(fp);
-                   }
-
-                   memset(http_pw_check,'\0',sizeof(http_pw_check));
-                   sprintf(http_pw_check,"%s",passwd_check);
-                   decode_url(http_pw_check,0); //2014.02.18 magic modify
-                   system("rm -f /tmp/http_info_changed");
-               }
-               li_MD5_CTX Md5Ctx,Md5Ctx1;
-               HASH HA1,HA2;
-               char passwd1[256];
-               char passwd2[256];
-
-               memset(passwd1,'\0',sizeof(passwd1));
-               memset(passwd2,'\0',sizeof(passwd2));
-               li_MD5_Init(&Md5Ctx);
-               li_MD5_Update(&Md5Ctx, (unsigned char *)check_passwd_tmp, strlen(check_passwd_tmp));
-               li_MD5_Final(HA1, &Md5Ctx);
-
-               CvtHex(HA1, passwd1);
-
-               li_MD5_Init(&Md5Ctx1);
-               li_MD5_Update(&Md5Ctx1, (unsigned char *)buf_passwd, strlen(buf_passwd));
-               li_MD5_Final(HA2, &Md5Ctx1);
-
-               CvtHex(HA2, passwd2);
-
-               char buf_username[256];
-               char_to_ascii_safe(buf_username, check_user_tmp, 256);
-               // mipsbig don't need to change to ascii
-               */
-               if ((!strcmp(dut_username, check_user_tmp)) && ( !strcmp(dut_password,check_passwd_tmp))) {
-                   if(strstr(con->request.uri->ptr,"downloadmaster"))
-                   {
-                       Username_Pw_DM=0;
-                   }
-                   if(strstr(con->request.uri->ptr,"mediaserver"))
-                   {
-                       Username_Pw_MS=0;
-                   }
+                       if(con->request.http_method==HTTP_METHOD_POST){
+                           if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"downloadmaster"))
+                           {
+                               Username_Pw_DM=0;
+                           }
+                           if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserver"))
+                           {
+                               Username_Pw_MS=0;
+                           }
+                       }else{
+                           if(strstr(con->request.uri->ptr,"downloadmaster"))
+                           {
+                               Username_Pw_DM=0;
+                           }
+                           if(strstr(con->request.uri->ptr,"mediaserver"))
+                           {
+                               Username_Pw_MS=0;
+                           }
+                       }
        // Add for check the direct url weather exit on the server
                    if(direct_url_string->used>1)
                    {
@@ -1819,18 +1637,34 @@ URIHANDLER_FUNC(module_uri_handler) {
                    return handle_crypt(srv, con, pd, pc, cookie_string);
                }
                else{
-
+                       if(dut_username != NULL){
+                            free(dut_username);
+                            dut_username=NULL;
+                       }
+                       if(dut_password != NULL){
+                            free(dut_password);
+                            dut_password=NULL;
+                       }
                    // 20160608 leo addd for lock username and password {
-                   if(strstr(con->request.uri->ptr,"downloadmaster"))
-                   {
-
-                       Username_Pw_DM++;
-                   }
-                   if(strstr(con->request.uri->ptr,"mediaserver"))
-                   {
-                       Username_Pw_MS++;
-
-                   }
+                       if(con->request.http_method==HTTP_METHOD_POST){
+                           if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"downloadmaster"))
+                           {
+                               Username_Pw_DM++;
+                           }
+                           if(strstr(con->request_content_queue->first->mem->ptr+con->request_content_queue->first->offset,"mediaserver"))
+                           {
+                               Username_Pw_MS++;
+                           }
+                       }else{
+                           if(strstr(con->request.uri->ptr,"downloadmaster"))
+                           {
+                               Username_Pw_DM++;
+                           }
+                           if(strstr(con->request.uri->ptr,"mediaserver"))
+                           {
+                               Username_Pw_MS++;
+                           }
+                       }
                    char dirceturl[128];
                    char tr[128];
                    memset(dirceturl,0,sizeof(dirceturl));

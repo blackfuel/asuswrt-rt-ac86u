@@ -1053,6 +1053,8 @@ wlc_psta_create(wlc_psta_info_t *psta, wlc_info_t *wlc, struct ether_addr *ea,
 	if (!PSTA_JOIN_ALLOWED(psta_cfg->psa)) {
 		WL_PSTA(("wl%d: Hold the join for %s until config is done\n",
 		         psta->pub->unit, bcm_ether_ntoa(ea, eabuf)));
+		/* Speed up the watchdog if the blocking reason is from configuration layer */
+		psta_cfg->psa->inactivity += 100;
 		return BCME_NOTASSOCIATED;
 	}
 

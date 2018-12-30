@@ -1506,7 +1506,7 @@ int ap_sta_flags_txt(u32 flags, char *buf, size_t buflen)
 			  (flags & WLAN_STA_WPS2 ? "[WPS2]" : ""),
 			  (flags & WLAN_STA_GAS ? "[GAS]" : ""),
 			  (flags & WLAN_STA_VHT ? "[VHT]" : ""),
-			  (flags & WLAN_STA_VENDOR_VHT ? "[VENDOR_VHT]" : ""),
+			  (((flags & WLAN_STA_VENDOR_VHT) || (flags & WLAN_STA_VENDOR2_VHT)) ? "[VENDOR_VHT]" : ""),
 			  (flags & WLAN_STA_WNM_SLEEP_MODE ?
 			   "[WNM_SLEEP_MODE]" : ""));
 	if (os_snprintf_error(buflen, res))

@@ -670,7 +670,7 @@ void parse_openvpn_status(int unit){
 				break;
 			}
 		}
-		fclose(fpi);
-		fclose(fpo);
+		if(fpi) fclose(fpi);
+		if(fpo) fclose(fpo);
 	}
 }

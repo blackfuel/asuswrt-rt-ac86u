@@ -69,6 +69,15 @@ void hostapd_atf_clean_config(struct atf_config* atf_cfg)
 	memset (atf_cfg, 0, sizeof(struct atf_config));
 }
 
+/* Flush ATF data for all stations, e.g. after recovery when stations have not
+ * been removed from Driver cleanly. */
+void hostapd_atf_clean_stations(struct hostapd_data *hapd)
+{
+	struct hostapd_iface *iface = hapd->iface;
+	memset(iface->atf_sta_in_driver, 0, sizeof(iface->atf_sta_in_driver));
+	memset(iface->atf_sta_has_quota, 0, sizeof(iface->atf_sta_has_quota));
+}
+
 /* Find a token in the given character string. Besides the characters recognized as
  * spaces by isspace (including '\t' and '\n'), additional delimiters are passed
  * by 'delimiters' argument.
@@ -281,6 +290,34 @@ int hostapd_atf_read_config(struct atf_config* atf_cfg, const char* fname)
 	fclose (f);
 	if (atf_cfg->debug)
 		hostapd_atf_dbg_print_config(atf_cfg, fname);
+
+	/* Validate ATF configuration */
+	if (atf_cfg->per_vap)
+	{
+		int total_vap_grant = 0;
+		int n_vap;
+
+		for (n_vap = 0; n_vap < atf_cfg->n_vaps; n_vap++) {
+			struct atf_vap_config *vap_cfg = atf_cfg->vap_cfg + n_vap;
+			if (vap_cfg->vap_grant < ATF_MIN_VAP_GRANT) {
+				wpa_printf(MSG_ERROR, "ATF: Invalid data in %s, VAP %s got grant "
+						"below %d (min=%d)", fname, vap_cfg->vap_name,
+						vap_cfg->vap_grant, ATF_MIN_VAP_GRANT);
+				hostapd_atf_clean_config(atf_cfg);
+				return -1;
+			}
+
+			total_vap_grant += vap_cfg->vap_grant;
+		}
+
+		if (total_vap_grant > ATF_GRANT_SCALE) {
+			wpa_printf(MSG_ERROR, "ATF: Invalid data in %s, total VAP grant "
+					"%d exceeds %d", fname, total_vap_grant, ATF_GRANT_SCALE);
+			hostapd_atf_clean_config(atf_cfg);
+			return -1;
+		}
+	}
+
 	wpa_printf(MSG_DEBUG, "ATF: Reading config file %s successful (%d lines)", fname, line);
 	return 0; /* success */
 
@@ -424,7 +461,7 @@ static void distribute_sta_quotas_per_vap(
 		if (sta && is_sta_active(sta, sta_has_quota)) {
 			uint16_t station_grant = ((uint32_t)(vap_cfg->vap_grant) * sta_cfg->sta_grant
 					+ ATF_GRANT_SCALE / 2) / ATF_GRANT_SCALE;
-			if (station_grant <= 0)
+			if (station_grant == 0)
 				station_grant = 1; /* Ensure a positive value */
 
 			wpa_printf(MSG_DEBUG, "ATF: STA %s/" MACSTR " (id = %d) gets grant %d",
@@ -464,7 +501,7 @@ mtlk_atf_quotas_t* hostapd_atf_calc_quotas(struct atf_config* atf_cfg,
 	/* Check if quotas need to be recalculated. */
 	if (changed_sta != NULL) { /* STA state changed */
 		struct sta_info *sta = ap_get_sta(hapd, changed_sta);
-		if (sta == NULL || sta->aid >= max_stations)
+		if (sta == NULL || sta->aid > max_stations)
 			return NULL; /* The STA isn't (yet) under ATF control */
 
 		if (!update_atf_active_status_for_station(sta, in_driver, not_in_driver,

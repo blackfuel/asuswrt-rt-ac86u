@@ -412,6 +412,15 @@ static inline int hostapd_drv_sta_allow(struct hostapd_data *hapd,
   return hapd->driver->sta_allow(hapd->drv_priv, stations, count);
 }
 
+static inline int hostapd_drv_set_bss_load(struct hostapd_data *hapd,
+  const u8 is_enable)
+{
+  if (hapd->driver == NULL || hapd->driver->set_bss_load == NULL)
+    return -ENOTSUP;
+
+  return hapd->driver->set_bss_load(hapd->drv_priv, is_enable);
+}
+
 static inline int hostapd_drv_get_sta_measurements(struct hostapd_data *hapd,
   const u8 *addr, mtlk_sta_info_t *sta_info)
 {
@@ -476,4 +485,13 @@ static inline int hostapd_drv_set_wds_wpa_sta(struct hostapd_data *hapd,
   return hapd->driver->set_wds_wpa_sta(hapd->drv_priv, addr, remove);
 }
 #endif
+
+static inline int hostapd_drv_set_disable_dgaf(struct hostapd_data *hapd,
+  int disable_dgaf)
+{
+  if (hapd->driver == NULL || hapd->driver->set_disable_dgaf == NULL)
+    return -ENOTSUP;
+
+  return hapd->driver->set_disable_dgaf(hapd->drv_priv, disable_dgaf);
+}
 #endif /* AP_DRV_OPS */

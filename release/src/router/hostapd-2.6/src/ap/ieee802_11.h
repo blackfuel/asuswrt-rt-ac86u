@@ -78,6 +78,8 @@ u16 copy_sta_ht_capab(struct hostapd_data *hapd, struct sta_info *sta,
 		      const u8 *ht_capab);
 u16 copy_sta_vendor_vht(struct hostapd_data *hapd, struct sta_info *sta,
 			const u8 *ie, size_t len);
+u16 copy_sta_vendor2_vht(struct hostapd_data *hapd, struct sta_info *sta,
+			const u8 *vht_capab);
 u16 copy_supp_rates(struct hostapd_data *hapd, struct sta_info *sta,
 			   struct ieee802_11_elems *elems);
 
@@ -144,5 +146,8 @@ static inline u8 hostapd_mbo_ie_len(struct hostapd_data *hapd)
 void ap_copy_sta_supp_op_classes(struct sta_info *sta,
 				 const u8 *supp_op_classes,
 				 size_t supp_op_classes_len);
+#ifdef CONFIG_ACS
+void hostapd_restart_ap_ht2040_timer(struct hostapd_iface *iface);
+#endif
 
 #endif /* IEEE802_11_H */

@@ -130,6 +130,7 @@ struct hostent *rep_gethostbyname(const char *name);
 #include <ifaddrs.h>
 #endif
 
+#if !defined(BCMARM) || defined(HND_ROUTER)
 #ifndef HAVE_STRUCT_IFADDRS
 struct ifaddrs {
 	struct ifaddrs   *ifa_next;         /* Pointer to next struct */
@@ -141,6 +142,7 @@ struct ifaddrs {
 	struct sockaddr  *ifa_dstaddr;      /* P2P interface destination */
 	void             *ifa_data;         /* Address specific data */
 };
+#endif
 #endif
 
 #ifndef HAVE_GETIFADDRS

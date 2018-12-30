@@ -22,6 +22,8 @@
 <script type="text/javascript" src="/calendar/jquery-ui.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script type="text/javascript" src="/form.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
+<script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <style type="text/css">
 .appIcons{
 	width:36px;
@@ -33,14 +35,6 @@
 	border: 2px solid #282E30;
 	border-radius:7px;
 	margin-left:45px;
-}
-.splitLine{
-	background-image: url('/images/New_ui/export/line_export.png');
-	background-repeat: no-repeat;
-	height: 3px;
-	width: 100%;
-	margin-bottom: 2px;
-	margin-top: 2px;
 }
 #sortable div table tr:hover{
 	cursor: pointer;
@@ -127,11 +121,6 @@
 // disable auto log out
 AUTOLOGOUT_MAX_MINUTE = 0;
 var detect_interval = 2;	// get information per second
-window.onresize = function() {
-	if(document.getElementById("agreement_panel").style.display == "block") {
-		cal_panel_block("agreement_panel", 0.25);
-	}
-}
 var qos_rulelist = "<% nvram_get("qos_rulelist"); %>".replace(/&#62/g, ">").replace(/&#60/g, "<");
 var curState = '<% nvram_get("apps_analysis"); %>';
 var ctf_disable = '<% nvram_get("ctf_disable"); %>';
@@ -1225,26 +1214,7 @@ function cancel(){
 	else{
 		curState = 0;
 		$('#iphone_switch').animate({backgroundPosition: -37}, "slow", function() {});
-		$("#agreement_panel").fadeOut(100);
-		document.getElementById("hiddenMask").style.visibility = "hidden";
 	}
-}
-
-function show_tm_eula(){
-	$.get("tm_eula.htm", function(data){
-		document.getElementById('agreement_panel').innerHTML= data;
-		var url = "https://www.asus.com/Microsite/networks/Trend_Micro_EULA/";
-		$("#eula_url").attr("href",url);
-		url = "https://www.trendmicro.com/en_us/about/legal/privacy-policy-product.html"
-		$("#tm_eula_url").attr("href",url);
-		url = "https://success.trendmicro.com/data-collection-disclosure";
-		$("#tm_disclosure_url").attr("href",url);
-		adjust_TM_eula_height("agreement_panel");
-	});
-
-	dr_advise();
-	cal_panel_block("agreement_panel", 0.25);
-	$("#agreement_panel").fadeIn(300);
 }
 </script>
 </head>
@@ -1252,7 +1222,6 @@ function show_tm_eula(){
 <body onload="initial();" onunload="unload_body();">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
-<div id="agreement_panel" class="eula_panel_container"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
 	<table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center">
 	</table>
@@ -1313,14 +1282,12 @@ function show_tm_eula(){
 															<script type="text/javascript">
 																$('#apps_analysis_enable').iphoneSwitch('<% nvram_get("apps_analysis"); %>',
 																	function(){
-																		if(document.form.TM_EULA.value == 0){
-																			show_tm_eula();
-																			document.form._flag.value = "apps_analysis";
-																			return;
-																		}
+																		ASUS_EULA.config(eula_confirm, cancel);
+																		document.form._flag.value = "apps_analysis";
 
-																			document.form.apps_analysis.value = 1;
-																			applyRule();
+																		if(ASUS_EULA.check("tm")){
+																			eula_confirm()
+																		}
 																	},
 																	function(){
 																		document.form.apps_analysis.value = 0;
@@ -1338,7 +1305,7 @@ function show_tm_eula(){
 							</td>
 						</tr>
 						<tr>
-							<td height="5" bgcolor="#4D595D" valign="top"><img src="images/New_ui/export/line_export.png" /></td>
+							<td height="5" bgcolor="#4D595D" valign="top"><div class="splitLine"></div></td>
 						</tr>
 						<tr>
 							<td>
@@ -1384,33 +1351,12 @@ function show_tm_eula(){
 													<script type="text/javascript">
 														$('#radio_gameBoost_enable').iphoneSwitch(enable_GameBoost,
 															function(){
-																if(document.form.TM_EULA.value == 0){
-																	show_tm_eula("game");
-																	document.form._flag.value = "game";
-																	return;
-																}
+																ASUS_EULA.config(eula_confirm, cancel);
+																document.form._flag.value = "game";
 
-																document.form.qos_enable.value = '1';
-																document.form.qos_type.value = '1';
-																document.form.bwdpi_app_rulelist.disabled = false;
-																document.form.bwdpi_app_rulelist.value = "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<game";
-																if(ctf_disable == 1){
-																	document.form.action_script.value = "restart_qos;restart_firewall";
+																if(ASUS_EULA.check("tm")){
+																	eula_confirm();
 																}
-																else{
-																	if(ctf_fa_mode == "2"){
-																		FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
-																	}
-																	else{
-																		if(document.form.qos_type.value == 0)
-																			FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
-																		else{
-																			document.form.action_script.value = "restart_qos;restart_firewall";
-																		}
-																	}
-																}
-
-																document.form.submit();
 															},
 															function(){
 																document.form.qos_enable.value = '0';

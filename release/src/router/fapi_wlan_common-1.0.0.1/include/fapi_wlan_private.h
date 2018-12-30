@@ -157,6 +157,7 @@ typedef struct {
 	int (*fapi_wlan_endpoint_set)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_endpoint_wps_set)						(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_endpoint_stats_query)					(const char *ifname, ObjList *wlObj, unsigned int flags);
+	int (*fapi_wlan_profile_delete)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_profile_query)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_wmm_endpoint_stats_query)				(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_add_to_bridge)							(const char *ifname, ObjList *wlObj, unsigned int flags);
@@ -170,9 +171,9 @@ typedef struct {
 	int (*fapi_wlan_interface_info_get)						(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_hostapd_socket_get)						(const char *ifname, void **ctrlInterface);
 	int (*fapi_wlan_hostapd_report_process)					(const char *ifname, ObjList *wlObj, char *opCode);
-	int (*fapi_wlan_is_master_state_get)					(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_radio_state_get)						(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_mac_address_get)						(const char *ifname, ObjList *wlObj, unsigned int flags);
+	int (*fapi_wlan_channel_get)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_radio_ctrl_a_filter_bank_set)			(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_radio_ctrl_a_filter_bank_get)			(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_general_command_set)					(const char *ifname, char *command, char *report);
@@ -188,7 +189,6 @@ typedef struct {
 	int (*fapi_wlan_unassociated_devices_info_req)			(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_restricted_channels_set)				(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_failsafe_channel_set)					(const char *ifname, ObjList *wlObj, unsigned int flags);
-	int (*fapi_wlan_turn_radio_on)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_mbo_sta_allow)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_mbo_sta_deny)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_neighbor_set)							(const char *ifname, ObjList *wlObj, unsigned int flags);
@@ -209,7 +209,6 @@ typedef struct {
 	int (*fapi_wlan_noise_histogram_response)				(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_oce_wan_metrics_set)					(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_oce_assoc_reject_set)					(const char *ifname, ObjList *wlObj, unsigned int flags);
-	int (*fapi_wlan_antennas_set)							(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_sta_measurement_get)					(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_vap_measurement_get)					(const char *ifname, ObjList *wlObj, unsigned int flags);
 	int (*fapi_wlan_radio_info_get)							(const char *ifname, ObjList *wlObj, unsigned int flags);
@@ -266,6 +265,18 @@ fapi_wlan_vendor_ops_t* get_vendor_ops(void* vendor_handle);
 		\return vendor index
 */
 fapi_wlan_vendors_t  fapi_wlan_get_vendor(const char *ifname);
+
+
+
+int fapi_wlan_object_printf(ObjList *wlObj, FILE *pFile);
+
+
+
+void fapi_wlan_trace_in(const char *funcName, const char *ifname, ObjList *wlObj);
+
+
+
+void fapi_wlan_trace_out(const char *funcName, const char *ifname, ObjList *wlObj, int ret);
 
 
 

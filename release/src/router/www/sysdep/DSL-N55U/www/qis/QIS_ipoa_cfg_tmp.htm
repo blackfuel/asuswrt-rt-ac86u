@@ -311,7 +311,7 @@ function gotoHome() {
 			</td>
 		</tr>
 	</table>		
-	<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img style="width: 700px; height: 2px;" src="/images/New_ui/export/line_export.png"></div>
+	<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><div style="width: 700px;height: 2px;" class="splitLine"></div></div>
 	<br/>
 
 <table id="tblsetting_1" class="QISform" width="400" border=0 align="center" cellpadding="5" cellspacing="0">
@@ -397,11 +397,8 @@ function gotoHome() {
 <div class="test_css" style="margin-top:20px;margin-left:20px;">Note:  If you are not sure about the IP/DNS address setting, then please contact with your ISP.</div>
 
 	<div class="apply_gen" style="margin-top:30px">
-		<input type="button" id="prevButton" value="<#Manual_Setting_btn#>" tabindex="7" onclick="gotoprev(document.form);" class="button_gen_long" >
-<!--
-		<input type="button" id="nextButton" value="Ethernet WAN" onclick="redirect_page('internet_type');" class="button_gen" >
--->
-		<input type="button" id="nextButton" value="<#CTL_next#>" tabindex="6" onclick="submitForm();" class="button_gen_long">
+		<input type="button" id="prevButton" value="<#Manual_Setting_btn#>" tabindex="7" onclick="gotoprev(document.form);" class="button_gen" >
+		<input type="button" id="nextButton" value="<#CTL_next#>" tabindex="6" onclick="submitForm();" class="button_gen">
 	</div>
 
 </div>

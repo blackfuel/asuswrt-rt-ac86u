@@ -151,6 +151,7 @@
 <script language="JavaScript" type="text/javascript" src="/js/httpApi.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script language="JavaScript" type="text/javascript" src="/form.js"></script>
+<script language="JavaScript" type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <script>
 if(usb_support) addNewScript("/disk_functions.js");
@@ -330,8 +331,8 @@ function initial(){
 	set_default_choice();
 
 	if(!parent.usb_support || usbPortMax == 0){
-		document.getElementById("line3_td").height = '40px';
-		document.getElementById("line3_img").src = '/images/New_ui/networkmap/line_dualwan.png';
+		$("#line3_img").hide();
+		$("#line3_single").show();
 		document.getElementById("clients_td").colSpan = "3";
 		document.getElementById("clients_td").width = '350';
 		document.getElementById("clientspace_td").style.display = "none";
@@ -440,21 +441,6 @@ function initial(){
 			document.getElementById("wanIP_div").style.display = "none";
 	}
 
-	var NM_table_img = cookie.get("NM_table_img");
-	if(NM_table_img != "" && NM_table_img != null){
-		customize_NM_table(NM_table_img);
-		document.getElementById("bgimg").options[NM_table_img[4]].selected = 1;
-	}
-
-	/*
-	if(smart_connect_support){
-		if(localAP_support && (isSwMode("rt") || isSwMode("ap"))){
-			if((based_modelid == "RT-AC5300") && '<% nvram_get("smart_connect_x"); %>' !=0)
-			show_smart_connect_status();
-		}
-	}
-	*/
-
 	document.list_form.dhcp_staticlist.value = dhcp_staticlist_orig;
 	document.list_form.MULTIFILTER_ENABLE.value = MULTIFILTER_ENABLE_orig;
 	document.list_form.MULTIFILTER_MAC.value = MULTIFILTER_MAC_orig;
@@ -508,15 +494,20 @@ function initial(){
 }
 
 function check_eula(){
+	ASUS_EULA.config(check_eula, check_eula);
+
 	var asus_status = httpApi.nvramGet(["ASUS_EULA", "ASUS_EULA_time", "ddns_enable_x", "ddns_server_x"], true);
-	var tm_status = httpApi.nvramGet(["TM_EULA", "TM_EULA_time"], true);
-
 	if( (asus_status.ASUS_EULA == "1" && asus_status.ASUS_EULA_time == "") ||
-		(asus_status.ASUS_EULA == "0" && asus_status.ddns_enable_x == "1" && asus_status.ddns_server_x == "WWW.ASUS.COM") )
+		(asus_status.ASUS_EULA == "0" && asus_status.ddns_enable_x == "1" && asus_status.ddns_server_x == "WWW.ASUS.COM") ){
 		ASUS_EULA.check("asus");
+		return false;
+	}
 
-	if(tm_status.TM_EULA == "1" &&  tm_status.TM_EULA_time == "")
+	var tm_status = httpApi.nvramGet(["TM_EULA", "TM_EULA_time"], true);
+	if(tm_status.TM_EULA == "1" &&  tm_status.TM_EULA_time == ""){
 		ASUS_EULA.check("tm");
+		return false;
+	}
 }
 
 /*
@@ -581,16 +572,6 @@ function show_ddns_status(){
 var isMD5DDNSName = function(){
 	var macAddr = '<% nvram_get("lan_hwaddr"); %>'.toUpperCase().replace(/:/g, "");
 	return "A"+hexMD5(macAddr).toUpperCase()+".asuscomm.com";
-}
-
-function customize_NM_table(img){
-	$("#NM_table").css({
-		"background": "url('/images/" + img +"')",
-		"background-repeat": "no-repeat",
-		"background-size": "cover"
-	});
-
-	cookie.set("NM_table_img", img, 365);
 }
 
 function set_default_choice(){
@@ -756,9 +737,8 @@ function showDiskInfo(device){
 		percentbar = simpleNum2((device.totalSize - device.totalUsed)/device.totalSize*100);
 		percentbar = Math.round(100 - percentbar);		
 
-		//dec_html_code += '<p id="diskDesc'+ device.usbPath +'" style="margin-top:5px;"><#Availablespace#>:</p><div id="diskquota" align="left" style="margin-top:5px;margin-bottom:10px;">\n';
 		dec_html_code += '<div id="diskquota" align="left" style="margin-top:5px;margin-bottom:10px;">\n';
-		dec_html_code += '<img src="images/quotabar.gif" width="' + percentbar + '" height="13">';
+		dec_html_code += '<div class="quotabar" style="width:'+ percentbar +'%;height:13px;"></div>';
 		dec_html_code += '</div>\n';
 	}
 	else{
@@ -1949,7 +1929,7 @@ function check_usb3(){
 	else if(based_modelid == "BRT-AC828") {
 		document.getElementById('usb_text_1').innerHTML = "USB 3.0";
 		document.getElementById('usb_text_2').innerHTML = "USB 3.0";
-		document.getElementById('usb_text_3').innerHTML = "M.2 SSD";
+		if(document.getElementById('usb_text_3')) document.getElementById('usb_text_3').innerHTML = "M.2 SSD";
 	}
 }
 
@@ -2730,37 +2710,11 @@ function AiMesh_promoteHint() {
 						<div id="routerWirelessState"></div>
 						<div id="routerWirelessStateInfo"></div>
 					</td>
-					<!--td height="115" align="right" bgcolor="#444f53" class="NM_radius_left" onclick="showstausframe('Router');">
-						<a href="device-map/router.asp" target="statusframe"><div id="iconRouter" onclick="clickEvent(this);"></div></a>
-					</td>
-					<td colspan="2" valign="middle" bgcolor="#444f53" class="NM_radius_right" onclick="showstausframe('Router');">
-						<div>
-						<span id="SmartConnectName" style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif; display:none">Smart Connect Status: </span>
-						</div>
-						<div>
-						<strong id="SmartConnectStatus" class="index_status" style="font-size:14px; display:none"><a style="color:#FFF;text-decoration:underline;" href="/
-						Advanced_Wireless_Content.asp">On</a></strong>
-						</div>
-
-						<div id="wlSecurityContext">
-							<span style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#Security_Level#>: </span>
-							<br/>  
-							<strong id="wl_securitylevel_span" class="index_status"></strong>
-							<img id="iflock">
-						</div>
-
-						<div id="mbModeContext" style="display:none">
-							<span style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#menu5_6_1#>: </span>
-							<br/>
-							<br/>
-							<strong class="index_status"><#OP_MB_item#></strong>
-						</div>
-					</td-->
-
 				</tr>			
 				<tr>
 					<td id="line3_td" colspan="3" align="center" height="35px">
 						<img id="line3_img" src="/images/New_ui/networkmap/line_two.png" style="margin-top:-5px;">
+						<div id="line3_single" class="single_wan_connected" style="display:none"></div>
 					</td>
 				</tr>
 				<tr>
@@ -2793,14 +2747,6 @@ function AiMesh_promoteHint() {
 						</div>
 
 						<div id="ameshContainer" onclick="showstausframe('AMesh');"></div>
-
-						<!--div id="" onclick="">
-							<img style="margin-top:15px;width:150px;height:2px" src="/images/New_ui/networkmap/linetwo2.png">
-							<a id="" href="device-map/clients.asp" target="statusframe">
-							<div id="iconClient" style="margin-top:20px;" onclick=""></div>
-							</a>
-							<div class="clients" id="" style="cursor:pointer;">Wireless Clients:</div>
-						</div-->
 					</td>
 
 					<td width="36" rowspan="6" id="clientspace_td"></td>
@@ -2849,11 +2795,6 @@ function AiMesh_promoteHint() {
 </table>
 <div id="navtxt" class="navtext" style="position:absolute; top:50px; left:-100px; visibility:hidden; font-family:Arial, Verdana"></div>
 <div id="footer"></div>
-<select id="bgimg" onChange="customize_NM_table(this.value);" class="input_option_left" style="display:none;">
-	<option value="wall0.gif">dark</option>
-	<option value="wall1.gif">light</option>
-</select>		
-
 <script>
 	if(flag == "Internet" || flag == "Client")
 		document.getElementById("statusframe").src = "";

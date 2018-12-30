@@ -245,6 +245,7 @@ struct hostapd_bss_config {
 
 	int dtim_period;
 	int bss_load_update_period;
+	int enable_bss_load_ie;
 
 	int ieee802_1x; /* use IEEE 802.1X */
 	int eapol_version;
@@ -326,6 +327,7 @@ struct hostapd_bss_config {
 	int wpa_strict_rekey;
 	int wpa_gmk_rekey;
 	int wpa_ptk_rekey;
+	int wpa_disable_eapol_key_retries;
 	int rsn_pairwise;
 	int rsn_preauth;
 	char *rsn_preauth_interfaces;
@@ -624,9 +626,6 @@ typedef struct acs_chan {
 #define ACS_MAX_CHANNELS           197
 #define ACS_MAX_FACTOR             100
 
-#define ACS_INITIAL                  0
-#define ACS_INIT_CTRL                1
-
 /**
  * struct hostapd_config - Per-radio interface configuration
  */
@@ -714,8 +713,10 @@ struct hostapd_config {
 	u16 scan_activity_threshold;
 	int obss_beacon_rssi_threshold;
 	int ignore_40_mhz_intolerant;
+	int acs_scan_mode;
 	u32 vht_capab;
 	int ieee80211ac;
+	int orig_ieee80211ac;
 	int require_vht;
 	u8 vht_oper_chwidth;
 	u8 vht_oper_centr_freq_seg0_idx;

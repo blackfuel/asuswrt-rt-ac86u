@@ -58,6 +58,7 @@ static const u32 dot11RSNAConfigPairwiseUpdateCount = 4;
 static const u32 eapol_key_timeout_first = 100; /* ms */
 static const u32 eapol_key_timeout_subseq = 1000; /* ms */
 static const u32 eapol_key_timeout_first_group = 500; /* ms */
+static const u32 eapol_key_timeout_no_retrans = 4000; /* ms */
 
 /* TODO: make these configurable */
 static const int dot11RSNAConfigPMKLifetime = 43200;
@@ -1629,6 +1630,9 @@ static void wpa_send_eapol(struct wpa_authenticator *wpa_auth,
 			eapol_key_timeout_first_group;
 	else
 		timeout_ms = eapol_key_timeout_subseq;
+	if (wpa_auth->conf.wpa_disable_eapol_key_retries &&
+	    (!pairwise || (key_info & WPA_KEY_INFO_MIC)))
+		timeout_ms = eapol_key_timeout_no_retrans;
 	if (pairwise && ctr == 1 && !(key_info & WPA_KEY_INFO_MIC))
 		sm->pending_1_of_4_timeout = 1;
 	wpa_printf(MSG_DEBUG, "WPA: Use EAPOL-Key timeout of %u ms (retry "
@@ -1747,6 +1751,9 @@ int wpa_auth_sm_event(struct wpa_state_machine *sm, enum wpa_event event)
 #else /* CONFIG_IEEE80211R */
 		break;
 #endif /* CONFIG_IEEE80211R */
+	case WPA_DRV_STA_REMOVED:
+		sm->tk_already_set = FALSE;
+		return 0;
 	}
 
 #ifdef CONFIG_IEEE80211R
@@ -1897,6 +1904,21 @@ SM_STATE(WPA_PTK, AUTHENTICATION2)
 	 * re-entered on ReAuthenticationRequest without going through
 	 * INITIALIZE. */
 	sm->TimeoutCtr = 0;
+}
+
+
+static int wpa_auth_sm_ptk_update(struct wpa_state_machine *sm)
+{
+	if (random_get_bytes(sm->ANonce, WPA_NONCE_LEN)) {
+		wpa_printf(MSG_ERROR,
+			   "WPA: Failed to get random data for ANonce");
+		sm->Disconnect = TRUE;
+		return -1;
+	}
+	wpa_hexdump(MSG_DEBUG, "WPA: Assign new ANonce", sm->ANonce,
+		    WPA_NONCE_LEN);
+	sm->TimeoutCtr = 0;
+	return 0;
 }
 
 
@@ -2213,6 +2235,12 @@ SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
 	sm->TimeoutEvt = FALSE;
 
 	sm->TimeoutCtr++;
+	if (sm->wpa_auth->conf.wpa_disable_eapol_key_retries &&
+		sm->TimeoutCtr > 1) {
+		/* Do not allow retransmission of EAPOL-Key msg 3/4 */
+		return;
+	}
+
 	if (sm->TimeoutCtr > (int) dot11RSNAConfigPairwiseUpdateCount) {
 		/* No point in sending the EAPOL-Key - we will disconnect
 		 * immediately following this. */
@@ -2457,9 +2485,12 @@ SM_STEP(WPA_PTK)
 		SM_ENTER(WPA_PTK, AUTHENTICATION);
 	else if (sm->ReAuthenticationRequest)
 		SM_ENTER(WPA_PTK, AUTHENTICATION2);
-	else if (sm->PTKRequest)
-		SM_ENTER(WPA_PTK, PTKSTART);
-	else switch (sm->wpa_ptk_state) {
+	else if (sm->PTKRequest) {
+		if (wpa_auth_sm_ptk_update(sm) < 0)
+			SM_ENTER(WPA_PTK, DISCONNECTED);
+		else
+			SM_ENTER(WPA_PTK, PTKSTART);
+	} else switch (sm->wpa_ptk_state) {
 	case WPA_PTK_INITIALIZE:
 		break;
 	case WPA_PTK_DISCONNECT:
@@ -2535,7 +2566,9 @@ SM_STEP(WPA_PTK)
 			 sm->EAPOLKeyPairwise && sm->MICVerified)
 			SM_ENTER(WPA_PTK, PTKINITDONE);
 		else if (sm->TimeoutCtr >
-			 (int) dot11RSNAConfigPairwiseUpdateCount) {
+			 (int) dot11RSNAConfigPairwiseUpdateCount ||
+			 (sm->wpa_auth->conf.wpa_disable_eapol_key_retries &&
+			  sm->TimeoutCtr > 1)) {
 			wpa_auth->dot11RSNA4WayHandshakeFailures++;
 			wpa_auth_vlogger(sm->wpa_auth, sm->addr, LOGGER_DEBUG,
 					 "PTKINITNEGOTIATING: Retry limit %d "
@@ -2575,6 +2608,12 @@ SM_STATE(WPA_PTK_GROUP, REKEYNEGOTIATING)
 	SM_ENTRY_MA(WPA_PTK_GROUP, REKEYNEGOTIATING, wpa_ptk_group);
 
 	sm->GTimeoutCtr++;
+	if (sm->wpa_auth->conf.wpa_disable_eapol_key_retries &&
+		sm->GTimeoutCtr > 1) {
+		/* Do not allow retransmission of EAPOL-Key group msg 1/2 */
+		return;
+	}
+
 	if (sm->GTimeoutCtr > (int) dot11RSNAConfigGroupUpdateCount) {
 		/* No point in sending the EAPOL-Key - we will disconnect
 		 * immediately following this. */
@@ -2672,7 +2711,9 @@ SM_STEP(WPA_PTK_GROUP)
 		    !sm->EAPOLKeyPairwise && sm->MICVerified)
 			SM_ENTER(WPA_PTK_GROUP, REKEYESTABLISHED);
 		else if (sm->GTimeoutCtr >
-			 (int) dot11RSNAConfigGroupUpdateCount)
+			 (int) dot11RSNAConfigGroupUpdateCount ||
+			 (sm->wpa_auth->conf.wpa_disable_eapol_key_retries &&
+			  sm->GTimeoutCtr > 1))
 			SM_ENTER(WPA_PTK_GROUP, KEYERROR);
 		else if (sm->TimeoutEvt)
 			SM_ENTER(WPA_PTK_GROUP, REKEYNEGOTIATING);
@@ -3249,6 +3290,14 @@ int wpa_auth_sta_wpa_version(struct wpa_state_machine *sm)
 	if (sm == NULL)
 		return 0;
 	return sm->wpa;
+}
+
+
+int wpa_auth_sta_ft_tk_already_set(struct wpa_state_machine *sm)
+{
+	if (!sm || !wpa_key_mgmt_ft(sm->wpa_key_mgmt))
+		return 0;
+	return sm->tk_already_set;
 }
 
 

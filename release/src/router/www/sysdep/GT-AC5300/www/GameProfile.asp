@@ -469,7 +469,7 @@ function update_game_profile() {
 		<td bgcolor="#4D595D" valign="top"  >
 		<div>&nbsp;</div>
 		<div class="formfonttitle"><#Game_Profile#></div>
-		<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
+		<div style="margin: 10px 0 10px 5px;" class="splitLine"></div>
 		<div>
 			<table width="700px" style="margin-left:25px;">
 				<tr>

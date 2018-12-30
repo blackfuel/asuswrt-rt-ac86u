@@ -50,6 +50,7 @@
 #include "ap/wnm_ap.h"
 #include "ap/wpa_auth.h"
 #include "ap/acs.h"
+#include "ap/bss_load.h"
 #include "ap/hw_features.h"
 #include "ap/beacon.h"
 #include "ap/neighbor_db.h"
@@ -636,6 +637,17 @@ static int hostapd_ctrl_iface_hs20_wnm_notif(struct hostapd_data *hapd,
 	u8 addr[ETH_ALEN];
 	const char *url;
 
+	hapd = get_bss_index(cmd, hapd->iface);
+	if (NULL == hapd) {
+		return -1;
+	}
+
+	cmd = os_strchr(cmd, ' ');
+	if (NULL == cmd) {
+		return -1;
+	}
+	cmd++;
+
 	if (hwaddr_aton(cmd, addr))
 		return -1;
 	url = cmd + 17;
@@ -661,6 +673,17 @@ static int hostapd_ctrl_iface_hs20_deauth_req(struct hostapd_data *hapd,
 	const char *pos;
 	size_t url_len;
 	struct wpabuf *req;
+
+	hapd = get_bss_index(cmd, hapd->iface);
+	if (NULL == hapd) {
+		return -1;
+	}
+
+	cmd = os_strchr(cmd, ' ');
+	if (NULL == cmd) {
+		return -1;
+	}
+	cmd++;
 
 	/* <STA MAC Addr> <Code(0/1)> <Re-auth-Delay(sec)> [URL] */
 	if (hwaddr_aton(cmd, addr))
@@ -738,6 +761,17 @@ static int hostapd_ctrl_iface_set_qos_map_set(struct hostapd_data *hapd,
 	const char *pos = cmd;
 	int val, ret;
 
+	hapd = get_bss_index(pos, hapd->iface);
+	if (NULL == hapd) {
+		return -1;
+	}
+
+	pos = os_strchr(pos, ' ');
+	if (NULL == pos) {
+		return -1;
+	}
+	pos++;
+
 	for (;;) {
 		if (count == sizeof(qos_map_set)) {
 			wpa_printf(MSG_ERROR, "Too many qos_map_set parameters");
@@ -784,6 +818,17 @@ static int hostapd_ctrl_iface_send_qos_map_conf(struct hostapd_data *hapd,
 	u8 *qos_map_set = hapd->conf->qos_map_set;
 	u8 qos_map_set_len = hapd->conf->qos_map_set_len;
 	int ret;
+
+	hapd = get_bss_index(cmd, hapd->iface);
+	if (NULL == hapd) {
+		return -1;
+	}
+
+	cmd = os_strchr(cmd, ' ');
+	if (NULL == cmd) {
+		return -1;
+	}
+	cmd++;
 
 	if (!qos_map_set_len) {
 		wpa_printf(MSG_INFO, "QoS Map Set is not set");
@@ -1594,6 +1639,39 @@ static int hostapd_ctrl_iface_reload(struct hostapd_iface *iface)
 }
 
 
+static int hostapd_ctrl_iface_reconf(struct hostapd_iface *iface,
+		char *param)
+{
+	int i, bss_idx = -1;
+
+	while (param[0] == ' ')
+		param++;
+
+	if (os_strlen(param) > 0) {
+		for (i = 0; i < iface->num_bss; i++) {
+			struct hostapd_data *bss = iface->bss[i];
+
+			if (!strncmp(bss->conf->iface, param, IFNAMSIZ)) {
+				bss_idx = i;
+				break;
+			}
+		}
+
+		if (bss_idx == 0) {
+			wpa_printf(MSG_ERROR, "Reconfig of master BSS is illegal");
+			return -1;
+		}
+	}
+
+	if (hostapd_reconf_iface(iface, bss_idx) < 0) {
+		wpa_printf(MSG_ERROR, "Reconfig of interface failed");
+		return -1;
+	}
+
+	return 0;
+}
+
+
 static int hostapd_ctrl_iface_disable(struct hostapd_iface *iface)
 {
 	if (hostapd_disable_iface(iface) < 0) {
@@ -2113,7 +2191,7 @@ static int hostapd_ctrl_iface_chan_switch(struct hostapd_iface *iface,
 
 	/* ACS */
 	if (settings.freq_params.freq == 0) {
-	  if (acs_init(iface, ACS_INIT_CTRL) == HOSTAPD_CHAN_ACS)
+	  if (acs_init(iface) == HOSTAPD_CHAN_ACS)
 	    return 0;
 	  else
 	    return -1;
@@ -2126,12 +2204,14 @@ static int hostapd_ctrl_iface_chan_switch(struct hostapd_iface *iface,
   if (channel->flag & HOSTAPD_CHAN_DISABLED)
     return -1;
 
+  iface->block_tx = FALSE;
   /* check CAC required */
   if ((channel->flag & HOSTAPD_CHAN_RADAR) &&
       ((channel->flag & HOSTAPD_CHAN_DFS_MASK) != HOSTAPD_CHAN_DFS_AVAILABLE))
   {
     if (switch_type_scan && iface->bss[0]->driver && iface->bss[0]->driver->block_tx) {
       iface->bss[0]->driver->block_tx(iface->bss[0]->drv_priv);
+      iface->block_tx = TRUE;
     }
     settings.freq_params.channel = channel->chan;
     set_iface_conf(iface, &settings.freq_params);
@@ -5024,6 +5104,46 @@ int hostapd_ctrl_iface_sta_allow(struct hostapd_data *hapd, const char *cmd)
   return ret;
 }
 
+int hostapd_ctrl_iface_set_bss_load(struct hostapd_data *hapd,
+  const char *cmd, char *buf, size_t buflen)
+{
+  int ret;
+  u8 is_enable;
+
+  hapd = get_bss_index(cmd, hapd->iface);
+  if (hapd == NULL) {
+    ret = os_snprintf(buf, buflen, "FAIL\n");
+    if (ret < 0 || (size_t)ret >= buflen)
+      return 0;
+    return ret;
+  }
+
+  cmd = os_strchr(cmd, ' ');
+  if (cmd) {
+    cmd++;
+    is_enable = atoi(cmd);
+    if (is_enable > 1) {
+      wpa_printf(MSG_ERROR, "set_bss_load: invalid value");
+      return -1;
+    }
+  }
+  else {
+    ret = os_snprintf(buf, buflen, "FAIL\n");
+    if (ret < 0 || (size_t)ret >= buflen)
+      return 0;
+    return ret;
+  }
+
+  ret = bss_load_enable(hapd, is_enable);
+  if (ret) {
+    ret = os_snprintf(buf, buflen, "FAIL\n");
+    if (ret < 0 || (size_t)ret >= buflen)
+      return 0;
+    return ret;
+  }
+
+  return 0;
+}
 
 int hostapd_ctrl_iface_get_sta_measurements(struct hostapd_data *hapd,
   const char *cmd, char *buf, size_t buflen)
@@ -5361,6 +5481,17 @@ int hostapd_ctrl_iface_get_vap_measurements(struct hostapd_data *hapd,
   return len;
 }
 
+int hostapd_ctrl_iface_get_radio_state (enum hostapd_iface_state state)
+{
+	switch (state) {
+	case HAPD_IFACE_ENABLED:
+		return 1;
+	case HAPD_IFACE_ACS_DONE:
+		return 2;
+	default:
+		return 0;
+	}
+}
 
 int hostapd_ctrl_iface_get_radio_info(struct hostapd_data *hapd,
   const char *cmd, char *buf, size_t buflen)
@@ -5383,7 +5514,7 @@ int hostapd_ctrl_iface_get_radio_info(struct hostapd_data *hapd,
     return len;
   len += ret;
   ret = os_snprintf(buf + len, buflen - len, "HostapdEnabled=%d\n",
-      (state == HAPD_IFACE_ENABLED) ? 1 : 0);
+      hostapd_ctrl_iface_get_radio_state(state));
   if (ret >= buflen - len || ret < 0)
     return len;
   len += ret;
@@ -6397,6 +6528,9 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
 	} else if (os_strncmp(buf, "RELOAD", 6) == 0) {
 		if (hostapd_ctrl_iface_reload(hapd->iface))
 			reply_len = -1;
+	} else if (os_strncmp(buf, "RECONF", 6) == 0) {
+		if (hostapd_ctrl_iface_reconf(hapd->iface, buf + 6))
+			reply_len = -1;
 	} else if (os_strncmp(buf, "DISABLE", 7) == 0) {
 		if (hostapd_ctrl_iface_disable(hapd->iface))
 			reply_len = -1;
@@ -6454,6 +6588,10 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
 		printf("%s; *** Received from FAPI: 'STA_ALLOW' (buf= '%s') ***\n", __FUNCTION__, buf);
 		if (hostapd_ctrl_iface_sta_allow(hapd, buf + 9))
 			reply_len = -1;
+    } else if (os_strncmp(buf, "SET_BSS_LOAD ", 13) == 0) {
+        printf("%s; *** Received: 'SET_BSS_LOAD' (buf= '%s') ***\n", __FUNCTION__, buf);
+        reply_len = hostapd_ctrl_iface_set_bss_load(hapd, buf + 13, reply,
+                    reply_size);
 	} else if (os_strncmp(buf, "GET_STA_MEASUREMENTS ", 21) == 0) {
 		printf("%s; *** Received from FAPI: 'GET_STA_MEASUREMENTS' (buf= '%s') ***\n", __FUNCTION__, buf);
 		reply_len = hostapd_ctrl_iface_get_sta_measurements(hapd, buf + 21, reply,

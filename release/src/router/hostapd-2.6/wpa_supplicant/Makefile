@@ -1659,6 +1659,10 @@ OBJS_t2 += $(FST_OBJS)
 OBJS_nfc += $(FST_OBJS)
 endif
 
+ifdef CONFIG_WDS_WPA_SUPPLICANT
+CFLAGS += -DCONFIG_WDS_WPA_SUPPLICANT
+endif
+
 ifndef LDO
 LDO=$(CC)
 endif

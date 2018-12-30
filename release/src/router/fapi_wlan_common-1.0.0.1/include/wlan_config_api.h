@@ -462,6 +462,17 @@ int wlan_setAutoChannelEnable(int index, bool enable);
 
 
 /**************************************************************************/
+/*! \fn int wlan_getIndexFromInterface(char *inputIfName, int *nIndex)
+ **************************************************************************
+ *  \brief get index from interface.
+ *  \param[in] char *inputIfName - The interface name
+ *  \param[out] int *nIndex - The index of the interface name
+ *  \return 0 if success, negative if error / timeout
+ ***************************************************************************/
+int wlan_getIndexFromInterface(char *inputIfName, int *nIndex);
+
+
+/**************************************************************************/
 /*! \fn int wlan_getSSID(int index, char *ssid)
  **************************************************************************
  *  \brief get SSID.
@@ -2626,14 +2637,14 @@ int wlan_setAtfAlgoType(int index, char *atfAlgoType);
 int wlan_getAtfAlgoType(int index, char *atfAlgoType);
 
 /**************************************************************************/
-/*! \fn int wlan_setAtfInterval(int index, int* atfInterval)
+/*! \fn int wlan_setAtfInterval(int index, int atfInterval)
 **************************************************************************
 *  \brief set Distribution Type
 *  \param[in] int index - AP Index
-*  \param[in] int* atfInterval - in msec
+*  \param[in] int atfInterval - in msec
 *  \return 0 if success, negative if error / timeout
 ***************************************************************************/
-int wlan_setAtfInterval(int index, int *atfInterval);
+int wlan_setAtfInterval(int index, int atfInterval);
 
 /**************************************************************************/
 /*! \fn int wlan_getAtfInterval(int index, int* atfInterval)
@@ -2646,14 +2657,14 @@ int wlan_setAtfInterval(int index, int *atfInterval);
 int wlan_getAtfInterval(int index, int *atfInterval);
 
 /**************************************************************************/
-/*! \fn int wlan_setAtfFreeTime(int index, int* atfFreeTime)
+/*! \fn int wlan_setAtfFreeTime(int index, int atfFreeTime)
 **************************************************************************
 *  \brief set Distribution Type
 *  \param[in] int index - AP Index
-*  \param[in] int* atfFreeTime - in msec
+*  \param[in] int atfFreeTime - in msec
 *  \return 0 if success, negative if error / timeout
 ***************************************************************************/
-int wlan_setAtfFreeTime(int index, int *atfFreeTime);
+int wlan_setAtfFreeTime(int index, int atfFreeTime);
 
 /**************************************************************************/
 /*! \fn int wlan_getAtfFreeTime(int index, int* atfFreeTime)
@@ -2726,14 +2737,14 @@ int wlan_setAtfRadioStationsAndWeights(int index, char *atfRadioStationsAndWeigh
 int wlan_getAtfRadioStationsAndWeights(int index, char *atfRadioStationsAndWeights);
 
 /**************************************************************************/
-/*! \fn int wlan_setAtfVapWeight(int index, int* atfVapWeight)
+/*! \fn int wlan_setAtfVapWeight(int index, int atfVapWeight)
 **************************************************************************
 *  \brief set main Vap Weight
 *  \param[in] int index - Radio Index
-*  \param[in] int* atfVapWeight - 1-100
+*  \param[in] int atfVapWeight - 1-100
 *  \return 0 if success, negative if error / timeout
 ***************************************************************************/
-int wlan_setAtfVapWeight(int index, int *atfVapWeight);
+int wlan_setAtfVapWeight(int index, int atfVapWeight);
 
 /**************************************************************************/
 /*! \fn int wlan_getAtfVapWeight(int index, int* atfVapWeight)
@@ -2868,7 +2879,7 @@ int fapi_wlan_hotspot_set_native(int index, ObjList *wlObj, unsigned int flags);
 /**************************************************************************/
 /*! \fn int fapi_wlan_endpoint_set_native(int index, ObjList *wlObj, unsigned int flags);
 **************************************************************************
-/*! \brief This function is used to set Device.WiFi.EndPoint configuration.
+ *! \brief This function is used to set Device.WiFi.EndPoint configuration.
 \param[in] index - vap index
 \param[in] wlObj - in:  list of objects Device.WiFi.EndPoint
 \param[in] flags - Flags are placeholder for any future usage.
@@ -2958,6 +2969,46 @@ int wlan_getWdsPeers(int index, char* strValue);
  *  \return 0 if success, negative if error / timeout
  ***************************************************************************/
 int wlan_setWdsPeers(int index, char* strValue);
+
+/**************************************************************************/
+/*! \fn int wlan_getWdsMode (int index, char* strValue)
+**************************************************************************
+*  \brief get WdsMode WDS mode
+*  \param[in] int index - AP index
+*  \param[out] int *strValue
+*  \return 0 if success, negative if error / timeout
+***************************************************************************/
+int wlan_getWdsMode(int index, char* strValue);
+
+/**************************************************************************/
+/*! \fn int wlan_setWdsPeers(int index, char* strValue)
+ **************************************************************************
+ *  \brief set WdsPeers WDS peers
+ *  \param[in] int index - AP index
+ *  \param[in] char* strValue
+ *  \return 0 if success, negative if error / timeout
+ ***************************************************************************/
+int wlan_setWdsMode(int index, char* strValue);
+
+/**************************************************************************/
+/*! \fn int wlan_getBfMode (int index, char* strValue)
+**************************************************************************
+*  \brief get Beamforming mode
+*  \param[in] int index - AP index
+*  \param[out] int *strValue
+*  \return 0 if success, negative if error / timeout
+***************************************************************************/
+int wlan_getBfMode(int index, char* strValue);
+
+/**************************************************************************/
+/*! \fn int wlan_setBfMode(int index, char* strValue)
+ **************************************************************************
+ *  \brief set Beamforming mode
+ *  \param[in] int index - AP index
+ *  \param[in] char* strValue
+ *  \return 0 if success, negative if error / timeout
+ ***************************************************************************/
+int wlan_setBfMode(int index, char* strValue);
 
 /* End of Native FAPI - END */
 /* @} */

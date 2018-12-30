@@ -57,6 +57,7 @@ static int hostapd_setup_encryption(char *iface, struct hostapd_data *hapd);
 static int hostapd_broadcast_wep_clear(struct hostapd_data *hapd);
 static int setup_interface2(struct hostapd_iface *iface);
 static void channel_list_update_timeout(void *eloop_ctx, void *timeout_ctx);
+static int hostapd_remove_bss(struct hostapd_iface *iface, unsigned int idx);
 
 
 int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
@@ -542,6 +543,7 @@ static int hostapd_flush_old_stations(struct hostapd_data *hapd, u16 reason)
 #endif
 
 	wpa_dbg(hapd->msg_ctx, MSG_DEBUG, "Deauthenticate all stations");
+	hostapd_atf_clean_stations(hapd);
 	os_memset(addr, 0xff, ETH_ALEN);
 	hostapd_drv_sta_deauth(hapd, addr, reason);
 	hostapd_free_stas(hapd);
@@ -1207,9 +1209,9 @@ static int hostapd_setup_bss(struct hostapd_data *hapd, int first)
 }
 
 
-static void hostapd_tx_queue_params(struct hostapd_iface *iface)
+void hostapd_tx_queue_params(struct hostapd_data *hapd)
 {
-	struct hostapd_data *hapd = iface->bss[0];
+	struct hostapd_iface *iface = hapd->iface;
 	int i;
 	struct hostapd_tx_queue_params *p;
 
@@ -1931,7 +1933,7 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
 	}
 	hapd = iface->bss[0];
 
-	hostapd_tx_queue_params(iface);
+	hostapd_tx_queue_params(hapd);
 
 	ap_list_init(iface);
 
@@ -2519,6 +2521,159 @@ int hostapd_enable_iface(struct hostapd_iface *hapd_iface)
 }
 
 
+static int hostapd_config_get_missing_bss(struct hostapd_config *conf,
+		struct hostapd_config *new_conf)
+{
+	size_t i, j;
+	Boolean found;
+
+	for (i = 0; i < conf->num_bss; i++) {
+		found = FALSE;
+		for (j = 0; j < new_conf->num_bss; j++) {
+			if (os_strcmp(conf->bss[i]->iface, new_conf->bss[j]->iface) == 0) {
+				found = TRUE;
+				break;
+			}
+		}
+
+		if (!found)
+			return i;
+	}
+
+	return -1;
+}
+
+
+static int hostapd_add_bss(struct hostapd_iface *iface,
+		struct hostapd_config *new_conf, int new_bss_idx)
+{
+	struct hostapd_bss_config **tmp_conf_arr;
+	struct hostapd_data **tmp_bss_arr;
+	struct hostapd_data *hapd;
+	int i, res;
+	const char *ifname;
+
+	ifname = new_conf->bss[new_bss_idx]->iface;
+	wpa_printf(MSG_INFO, "%s, ifname=%s", __func__, ifname);
+
+	/* Reallocate conf & bss arrays for new BSS */
+	tmp_conf_arr = os_realloc_array(
+			iface->conf->bss, iface->conf->num_bss + 1,
+			sizeof(struct hostapd_bss_config *));
+	if (tmp_conf_arr == NULL) {
+		res = -ENOMEM;
+		goto fail_conf_arr_realloc;
+	}
+	iface->conf->bss = tmp_conf_arr;
+	iface->conf->num_bss++;
+
+	tmp_bss_arr = os_realloc_array(iface->bss, iface->num_bss + 1,
+			sizeof(struct hostapd_data *));
+
+	if (tmp_bss_arr == NULL) {
+		res = -ENOMEM;
+		goto fail_bss_arr_realloc;
+	}
+	iface->bss = tmp_bss_arr;
+	iface->num_bss++;
+
+	/* Move bss_config from new conf to current conf */
+	iface->conf->bss[iface->conf->num_bss - 1] = new_conf->bss[new_bss_idx];
+
+	iface->conf->last_bss = new_conf->bss[new_bss_idx];
+	new_conf->num_bss--;
+	for (i = new_bss_idx; i < new_conf->num_bss; i++)
+		new_conf->bss[i] = new_conf->bss[i + 1];
+
+	/* allocating new bss data */
+	hapd = hostapd_alloc_bss_data(iface, iface->conf,
+			iface->conf->last_bss);
+	if (hapd == NULL){
+		res = -ENOMEM;
+		goto fail_bss_data_alloc;
+	}
+
+	hapd->msg_ctx = hapd;
+	iface->bss[iface->num_bss - 1] = hapd;
+
+	if (hostapd_setup_bss(hapd, FALSE)) {
+		res = -EINVAL;
+		goto fail_setup_bss;
+	}
+
+	/* send set WMM to driver for new BSS */
+	hostapd_tx_queue_params(iface->bss[iface->num_bss - 1]);
+
+	return 0;
+
+fail_setup_bss:
+	os_free(hapd);
+fail_bss_data_alloc:
+	iface->bss[iface->num_bss - 1] = NULL;
+	iface->num_bss--;
+fail_bss_arr_realloc:
+	iface->conf->bss[iface->conf->num_bss - 1] = NULL;
+	iface->conf->num_bss--;
+fail_conf_arr_realloc:
+	return res;
+}
+
+
+int hostapd_reconf_iface(struct hostapd_iface *hapd_iface, int changed_idx)
+{
+	struct hostapd_config *new_conf = NULL;
+	int idx, res;
+	Boolean found_missing_bss;
+
+	wpa_printf(MSG_DEBUG, "Reconf interface %s",
+			   hapd_iface->conf->bss[0]->iface);
+	if (hapd_iface->interfaces == NULL ||
+		hapd_iface->interfaces->config_read_cb == NULL)
+		return -1;
+	new_conf = hapd_iface->interfaces->config_read_cb(hapd_iface->config_fname);
+	if (new_conf == NULL)
+		return -EINVAL;
+
+	if (changed_idx > 0)
+		/* changed_idx is a BSS index that needs to be modified.
+		 * Instead of really modifying, we will just remove and add the BSS.
+		 * This is better because some BSS configurations must be set
+		 * to firmware before add VAP is made.
+		 */
+		hostapd_remove_bss(hapd_iface, changed_idx);
+
+	/* Find BSS needed to be removed */
+	do {
+		idx = hostapd_config_get_missing_bss(hapd_iface->conf, new_conf);
+		/* zero isn't a valid index because we don't support
+		 * removing master BSS */
+		found_missing_bss = idx > 0;
+		if (found_missing_bss)
+			hostapd_remove_bss(hapd_iface, idx);
+	} while (found_missing_bss);
+
+	/* Find BSS needed to be added */
+	do {
+		idx = hostapd_config_get_missing_bss(new_conf, hapd_iface->conf);
+		/* zero isn't a valid index because there must be at least 1 BSS */
+		found_missing_bss = idx > 0;
+		if (found_missing_bss) {
+			res = hostapd_add_bss(hapd_iface, new_conf, idx);
+			if (res) {
+				wpa_printf(MSG_ERROR, "Failed adding new BSS (%s), res=%d",
+						new_conf->bss[idx]->iface, res);
+				hostapd_config_free(new_conf);
+				return -1;
+			}
+		}
+	} while (found_missing_bss);
+
+	hostapd_config_free(new_conf);
+
+	return 0;
+}
+
+
 int hostapd_reload_iface(struct hostapd_iface *hapd_iface)
 {
 	size_t j;
@@ -3018,6 +3173,8 @@ const char * hostapd_state_text(enum hostapd_iface_state s)
 		return "COUNTRY_UPDATE";
 	case HAPD_IFACE_ACS:
 		return "ACS";
+	case HAPD_IFACE_ACS_DONE:
+		return "ACS_DONE";
 	case HAPD_IFACE_HT_SCAN:
 		return "HT_SCAN";
 	case HAPD_IFACE_DFS:

@@ -122,6 +122,7 @@
 }
 </style>
 <script>
+var ipsec_hw_crypto_enable_ori = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_hw_crypto_enable"); %>');
 var subnetIP_support_IPv6 = false;
 <% wanlink(); %>
 <% secondary_wanlink(); %>
@@ -604,6 +605,7 @@ function gen_subnet_input(_type, _idx, _value) {
 	if(subnetIP_support_IPv6)
 		subnet_input_obj.maxLength = "39";
 	else {
+		subnet_input_obj.placeholder = "(ex.10.10.10.0/24)";
 		subnet_input_obj.maxLength = "18";
 		subnet_input_obj.onkeypress = function() {
 			return validator.isIPAddrPlusNetmask(this,event);
@@ -653,13 +655,11 @@ function initialIPSecProfile() {
 	clear_subnet_input("local");
 	document.getElementById("td_net_local_private_subnet").appendChild(gen_subnet_input("local", 1, ""));
 	document.getElementById("td_net_local_private_subnet").appendChild(gen_subnet_add("local"));
-	document.getElementById("td_net_local_private_subnet").appendChild(gen_subnet_hint());
 	document.form.ipsec_local_port.value = "0";
 
 	clear_subnet_input("remote");
 	document.getElementById("td_net_remote_private_subnet").appendChild(gen_subnet_input("remote", 1, ""));
 	document.getElementById("td_net_remote_private_subnet").appendChild(gen_subnet_add("remote"));
-	document.getElementById("td_net_remote_private_subnet").appendChild(gen_subnet_hint());
 
 	document.form.ipsec_remote_port.value = "0";
 	settingRadioItemCheck(document.form.ipsec_virtual_ip, "1");
@@ -750,7 +750,6 @@ function UpdateIPSecProfile(array, array_ext) {
 				document.getElementById("td_net_local_private_subnet").appendChild(gen_subnet_input("local", local_subnet_idx, local_subnet[i]));
 				if(local_subnet_idx == 1) {
 					document.getElementById("td_net_local_private_subnet").appendChild(gen_subnet_add("local"));
-					document.getElementById("td_net_local_private_subnet").appendChild(gen_subnet_hint());
 				}
 				local_subnet_idx++;
 			}
@@ -770,7 +769,6 @@ function UpdateIPSecProfile(array, array_ext) {
 				document.getElementById("td_net_remote_private_subnet").appendChild(gen_subnet_input("remote", remote_subnet_idx, remote_subnet[i]));
 				if(remote_subnet_idx == 1) {
 					document.getElementById("td_net_remote_private_subnet").appendChild(gen_subnet_add("remote"));
-					document.getElementById("td_net_remote_private_subnet").appendChild(gen_subnet_hint());
 				}
 				remote_subnet_idx++;
 			}
@@ -1102,7 +1100,10 @@ function validForm() {
 
 	if(document.form.ipsec_vpn_type.value != "4") {
 		var valid_subnet = function(_type) {
-			var existSubnetItem = document.getElementById("tr_net_" + _type + "_private_subnet").getElementsByClassName("input_25_table").length;
+			var existSubnetItem = 1;//ike v1 only single subnet
+			var ike_version = getRadioItemCheck(document.form.ipsec_ike);
+			if(ike_version == "2")
+				existSubnetItem = document.getElementById("tr_net_" + _type + "_private_subnet").getElementsByClassName("input_25_table").length;
 			var existSubnetItemList = "";
 			var existSubnetObj = "";
 			var is_ipv4 = false;
@@ -1319,7 +1320,10 @@ function save_ipsec_profile_panel() {
 		var accessible_networks = "null";
 		var get_subnet_list = function(_type) {
 			var subnet_list = "";
-			var existSubnetItem = document.getElementById("tr_net_" + _type + "_private_subnet").getElementsByClassName("input_25_table").length;
+			var existSubnetItem = 1;//ike v1 only single subnet
+			var ike_version = getRadioItemCheck(document.form.ipsec_ike);
+			if(ike_version == "2")
+				existSubnetItem = document.getElementById("tr_net_" + _type + "_private_subnet").getElementsByClassName("input_25_table").length;
 			for(var i = 1 ; i <= existSubnetItem; i += 1) {
 				subnet_list += "<" + document.getElementById("ipsec_" + _type + "_subnet_" + i).value;
 			}
@@ -1758,6 +1762,8 @@ function changeIKEVersion() {
 			}
 			break;
 	}
+	controlSubnetStatus(ike_version, "local");
+	controlSubnetStatus(ike_version, "remote");
 }
 function changeXAUTH() {
 	var clickItem = getRadioItemCheck(document.form.ipsec_xauth);
@@ -1811,6 +1817,7 @@ function add_subnet_item(obj, _type) {
 		if(subnetIP_support_IPv6)
 			divObj.maxLength = "39";
 		else {
+			divObj.placeholder = "(ex.10.10.10.0/24)";
 			divObj.maxLength = "18";
 			divObj.onkeypress = function() {
 				return validator.isIPAddrPlusNetmask(this,event);
@@ -2065,6 +2072,11 @@ function applyRule() {
 	document.general_form.force_change.value++;
 	document.general_form.ipsec_hw_crypto_enable.value = getRadioItemCheck(document.form.ipsec_hw_crypto_enable);
 	document.general_form.ipsec_server_enable.value = ipsec_server_enable;
+	if(ipsec_hw_crypto_enable_ori != document.general_form.ipsec_hw_crypto_enable.value) {
+		var reboot_needed_time = eval("<% get_default_reboot_time(); %>");
+		document.general_form.action_wait.value = reboot_needed_time;
+		document.general_form.action_script.value = "reboot";
+	}
 	document.general_form.submit();
 }
 function viewLog() {
@@ -2118,6 +2130,11 @@ function ipsecShowAndHide(server_enable) {
 
 	document.general_form.ipsec_hw_crypto_enable.value = getRadioItemCheck(document.form.ipsec_hw_crypto_enable);
 	document.general_form.ipsec_server_enable.value = ipsec_server_enable;
+	if(ipsec_hw_crypto_enable_ori != document.general_form.ipsec_hw_crypto_enable.value) {
+		var reboot_needed_time = eval("<% get_default_reboot_time(); %>");
+		document.general_form.action_wait.value = reboot_needed_time;
+		document.general_form.action_script.value = "reboot";
+	}
 	showLoading();
 	document.general_form.submit();
 }
@@ -2134,6 +2151,21 @@ function changeHardwareCrypto() {
 		var hintMsg = "Disable hardware crypto offloading will degrade VPN encryption performance, are you sure you want to change the setting?";
 		if(!confirm(hintMsg))
 			settingRadioItemCheck(document.form.ipsec_hw_crypto_enable, "1");
+	}
+}
+function controlSubnetStatus(_ikeVersion, _type) {
+	switch(_ikeVersion) {
+		case "1" :
+			$("#td_net_" + _type +"_private_subnet").children(".add_btn").css("display", "none");
+			$("#td_net_" + _type +"_private_subnet").children(".input_25_table").css("display", "none");
+			$("#td_net_" + _type +"_private_subnet").children(".input_25_table").eq(0).css("display", "");
+			$("#td_net_" + _type +"_private_subnet").children(".remove_btn").css("display", "none");
+			break;
+		case "2" :
+			$("#td_net_" + _type +"_private_subnet").children(".add_btn").css("display", "");
+			$("#td_net_" + _type +"_private_subnet").children(".input_25_table").css("display", "");
+			$("#td_net_" + _type +"_private_subnet").children(".remove_btn").css("display", "");
+			break;
 	}
 }
 </script>
@@ -2224,7 +2256,7 @@ function changeHardwareCrypto() {
 									<div>&nbsp;</div>
 									<div class="formfonttitle"><#BOP_isp_heart_item#> - IPSec VPN<!--untranslated--></div>
 									<div id="divSwitchMenu" style="margin-top:-40px;float:right;"></div>
-									<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
+									<div style="margin: 10px 0 10px 5px" class="splitLine"></div>
 									<div class="formfontdesc"></div>
 
 									<table id="ipsec_general_setting" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
@@ -2412,14 +2444,14 @@ function changeHardwareCrypto() {
 		<tr id="tr_adv_local_id">
 			<th><#vpn_ipsec_Local_ID#></th>
 			<td>
-				<input type="text" class="input_25_table" name="ipsec_local_id">
+				<input type="text" class="input_25_table" name="ipsec_local_id" placeholder="<#IPConnection_ExternalIPAddress_itemname#>、FQDN、<#AiProtection_WebProtector_EMail#> or DN">
 				<span style="color:#FC0"><#feedback_optional#></span>
 			</td>
 		</tr>
 		<tr id="tr_adv_remote_id">
 			<th><#vpn_ipsec_Remote_ID#></th>
 			<td>
-				<input type="text" class="input_25_table" name="ipsec_remote_id">
+				<input type="text" class="input_25_table" name="ipsec_remote_id" placeholder="<#IPConnection_ExternalIPAddress_itemname#>、FQDN、<#AiProtection_WebProtector_EMail#> or DN">
 				<span style="color:#FC0"><#feedback_optional#></span>
 			</td>
 		</tr>
@@ -2715,7 +2747,7 @@ function changeHardwareCrypto() {
 		</tr>
 		</thead>
 		<tr>
-			<th><#HSDPAConfig_Username_itemname#></th>
+			<th><#Username#></th>
 			<th><#HSDPAConfig_Password_itemname#></th>
 			<th><#list_add_delete#></th>
 		</tr>

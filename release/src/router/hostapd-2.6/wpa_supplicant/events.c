@@ -3869,7 +3869,26 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 							&data->dfs_event);
 		break;
 #endif /* NEED_AP_MLME */
-#endif /* CONFIG_AP */
+#else /* not CONFIG_AP */
+  case EVENT_CH_SWITCH:
+    if (!data || !wpa_s->current_ssid)
+      break;
+
+    wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_CHANNEL_SWITCH
+      "freq=%d ht_enabled=%d ch_offset=%d ch_width=%s cf1=%d cf2=%d dfs_chan=%d",
+      data->ch_switch.freq,
+      data->ch_switch.ht_enabled,
+      data->ch_switch.ch_offset,
+      channel_width_to_string2(data->ch_switch.ch_width),
+      data->ch_switch.cf1,
+      data->ch_switch.cf2,
+      ieee80211_is_dfs(data->ch_switch.freq));
+
+    wpa_s->assoc_freq = data->ch_switch.freq;
+    wpa_s->current_ssid->frequency = data->ch_switch.freq;
+
+    break;
+#endif /* not CONFIG_AP */
 	case EVENT_RX_MGMT: {
 		u16 fc, stype;
 		const struct ieee80211_mgmt *mgmt;

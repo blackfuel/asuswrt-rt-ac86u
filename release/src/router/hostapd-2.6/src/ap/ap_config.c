@@ -37,6 +37,10 @@ static void hostapd_config_free_vlan(struct hostapd_bss_config *bss)
 }
 
 
+#ifndef DEFAULT_WPA_DISABLE_EAPOL_KEY_RETRIES
+#define DEFAULT_WPA_DISABLE_EAPOL_KEY_RETRIES 0
+#endif /* DEFAULT_WPA_DISABLE_EAPOL_KEY_RETRIES */
+
 void hostapd_config_defaults_bss(struct hostapd_bss_config *bss)
 {
 	dl_list_init(&bss->anqp_elem);
@@ -56,6 +60,7 @@ void hostapd_config_defaults_bss(struct hostapd_bss_config *bss)
 
 	bss->wpa_group_rekey = 600;
 	bss->wpa_gmk_rekey = 86400;
+	bss->wpa_disable_eapol_key_retries = DEFAULT_WPA_DISABLE_EAPOL_KEY_RETRIES;
 	bss->wpa_key_mgmt = WPA_KEY_MGMT_PSK;
 	bss->wpa_pairwise = WPA_CIPHER_TKIP;
 	bss->wpa_group = WPA_CIPHER_TKIP;
@@ -247,7 +252,7 @@ struct hostapd_config * hostapd_config_defaults(void)
     conf->acs_to_degradation = os_malloc(sizeof(int) * (ACS_NUM_DEGRADATION_FACTORS + 1));
     conf->acs_to_degradation[ACS_NUM_DEGRADATION_FACTORS] = 0;
     for (i = 0; i < ACS_NUM_DEGRADATION_FACTORS; i++) conf->acs_to_degradation[i] = 1;
-    conf->acs_to_degradation[T_40INTO] = 360;
+    conf->acs_to_degradation[T_40INTO] = conf->acs_to_degradation[T_LNTO] = 360;
     conf->acs_to_degradation[D_CWI] = 60;
 
     conf->acs_grp_priorities_throughput = os_malloc(sizeof(int) * (ACS_NUM_GRP_PRIORITIES + 1));

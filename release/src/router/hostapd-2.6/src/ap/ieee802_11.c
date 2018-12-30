@@ -1667,6 +1667,11 @@ u16 check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
 		if (resp != WLAN_STATUS_SUCCESS)
 			return resp;
 	}
+	if (hapd->conf->vendor_vht && elems.vht_capabilities && !hapd->iconf->ieee80211ac) {
+		resp = copy_sta_vendor2_vht(hapd, sta, elems.vht_capabilities);
+		if (resp != WLAN_STATUS_SUCCESS)
+			return resp;
+	}
 #endif /* CONFIG_IEEE80211AC */
 
 #ifdef CONFIG_P2P
@@ -2041,6 +2046,12 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
 #ifdef CONFIG_IEEE80211AC
 	if (hapd->conf->vendor_vht && (sta->flags & WLAN_STA_VENDOR_VHT))
 		p = hostapd_eid_vendor_vht(hapd, p);
+
+	/* IOP with STAs transmitting direct VHT-IEs */
+	if (hapd->conf->vendor_vht && (sta->flags & WLAN_STA_VENDOR2_VHT)) {
+		p = hostapd_eid_vht_capabilities(hapd, p, 0);
+		p = hostapd_eid_vht_operation(hapd, p);
+	}
 #endif /* CONFIG_IEEE80211AC */
 
 	if (sta->flags & WLAN_STA_WMM)
@@ -2475,16 +2486,6 @@ static void handle_beacon(struct hostapd_data *hapd,
 				      len - (IEEE80211_HDRLEN +
 					     sizeof(mgmt->u.beacon)), &elems,
 				      0);
-#if 0
-	if (elems.vsie_len && elems.vsie)
-		printf("handle_beacon() " MACSTR " cb=%p num_cb=%d, vsie_len=%d, OUI=%02X:%02X:%02X\n", 
-			MAC2STR(mgmt->sa), 
-			hapd->probereq_cb, hapd->num_probereq_cb, 
-			elems.vsie_len, 
-			elems.vsie[0], 
-			elems.vsie[1], 
-			elems.vsie[2]);
-#endif
 
 	hostapd_obss_beacon(hapd, mgmt, &elems, fi->ssi_signal);
 	ap_list_process_beacon(hapd->iface, mgmt, &elems, fi);
@@ -2871,6 +2872,7 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 	int new_assoc = 1;
 	struct ieee80211_ht_capabilities ht_cap;
 	struct ieee80211_vht_capabilities vht_cap;
+	int set = 1;
 
 	sta = ap_get_sta(hapd, mgmt->da);
 	if (!sta) {
@@ -2954,9 +2956,18 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 	 * reassociates back to the same AP but skips the authentication flow
 	 * and if working with a driver that doesn't support full AP client
 	 * state.
+	 * Skip this if the STA has already completed FT reassociation and the
+	 * TK has been configured since the TX/RX PN must not be reset to 0 for
+	 * the same key.
 	 */
-	if (!sta->added_unassoc)
+	if (!sta->added_unassoc &&
+		(!(sta->flags & WLAN_STA_AUTHORIZED) ||
+		 !wpa_auth_sta_ft_tk_already_set(sta->wpa_sm))) {
 		hostapd_drv_sta_remove(hapd, sta->addr);
+		wpa_auth_sm_event(sta->wpa_sm, WPA_DRV_STA_REMOVED);
+		set = 0;
+	}
+
 
 #ifdef CONFIG_IEEE80211N
 	if (sta->flags & WLAN_STA_HT)
@@ -2974,12 +2985,12 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 			sta->flags & WLAN_STA_VHT ? &vht_cap : NULL,
 			sta->flags | WLAN_STA_ASSOC, sta->qosinfo,
 			sta->vht_opmode, sta->p2p_ie ? 1 : 0,
-			sta->added_unassoc, sta->last_assoc_req,
+			set, sta->last_assoc_req,
 			sta->last_assoc_req_len, sta->ssi_signal)) {
 		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
 		HOSTAPD_LEVEL_NOTICE,
 		"Could not %s STA to kernel driver",
-		sta->added_unassoc ? "set" : "add");
+		set ? "set" : "add");
 		ap_sta_disconnect(hapd, sta, sta->addr,
 		WLAN_REASON_DISASSOC_AP_BUSY);
 		if (sta->added_unassoc)

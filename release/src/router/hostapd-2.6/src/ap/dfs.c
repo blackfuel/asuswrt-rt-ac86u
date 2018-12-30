@@ -893,9 +893,11 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 			  freq_params.bandwidth == chan_width_enum_to_freq(chan_width) &&
 			  freq_params.center_freq1 == cf1 &&
 			  freq_params.center_freq2 == cf2) {
-			    printf("CAC hostapd_setup_interface_complete\n");
 			    iface->cac_started = 0;
-			    hostapd_setup_interface_complete(iface, 0);
+			    if (!iface->block_tx) {
+			      printf("CAC hostapd_setup_interface_complete\n");
+			      hostapd_setup_interface_complete(iface, 0);
+			    }
 			}
 		}
 	}

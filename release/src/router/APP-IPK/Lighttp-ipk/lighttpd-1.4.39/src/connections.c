@@ -979,8 +979,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
             sprintf(flag,"\'%s\';\n","7");
             FILE *fp=fopen("/tmp/username_pw_MS.txt","r+");
             fscanf(fp,"%ld",&lock_time);
-            last_remain_time=60-(t_r-lock_time);
-            //last_remain_time=60;
+            last_remain_time=300-(t_r-lock_time);
+         //last_remain_time=60;
             sprintf(remain_time,"\'%ld\';\n",last_remain_time);
             fclose(fp);
         }
@@ -999,8 +999,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
                 sprintf(flag,"\'%s\';\n","7");
                 FILE *fp=fopen("/tmp/username_pw_DM.txt","r+");
                 fscanf(fp,"%ld",&lock_time);
-                last_remain_time=60-(t_r-lock_time);
-                //last_remain_time=60;
+                last_remain_time=300-(t_r-lock_time);
+           // last_remain_time=60;
                 sprintf(remain_time,"\'%ld\';\n",last_remain_time);
                 fclose(fp);
             }
@@ -1183,7 +1183,7 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
                 "var remaining_time="
                 ));
 
-        buffer_append_string_len(b, remain_time,strlen(remain_time));
+       buffer_append_string_len(b, remain_time,strlen(remain_time));
         buffer_append_string_len(b, CONST_STR_LEN(
                 "var appname="
                 ));
@@ -1193,6 +1193,10 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
                 ));
         buffer_append_string_len(b, multi_lang,strlen(multi_lang));
         buffer_append_string_len(b, CONST_STR_LEN(
+
+                "var remaining_time_min;\n"
+                "var remaining_time_sec;\n"
+                "var remaining_time_show;\n"
                 "var countdownid, rtime_obj;\n"
                 "var dir_url=decodeURIComponent(location.search)\n"
                 "if( dir_url == \"\"){\n"
@@ -1240,7 +1244,8 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
                 "document.getElementsByClassName('form_input')[1].style.display = \"none\";\n"
                 "disable_button(1);\n"
                 "rtime_obj=document.getElementById(\"rtime\");\n"
-                "rtime_obj.innerHTML=remaining_time;\n"
+
+                "countdownfunc();\n"
                 "countdownid = window.setInterval(countdownfunc,1000);\n"
     "}\n"
     "else if(flag == 8){\n"
@@ -1257,12 +1262,22 @@ static int connection_handle_write_prepare(server *srv, connection *con) {
                 "return val.substring(startIndex,endIndex+1);\n"
                 "}\n"
                 "function countdownfunc(){\n"
-                "rtime_obj.innerHTML=remaining_time;\n"
+                "remaining_time_min = checkTime(Math.floor(remaining_time/60));\n"
+                "remaining_time_sec = checkTime(Math.floor(remaining_time%60));\n"
+                "remaining_time_show = remaining_time_min +\":\"+ remaining_time_sec;\n"
+                "rtime_obj.innerHTML = remaining_time_show;\n"
+
                 "if (remaining_time==0){\n"
                 "clearInterval(countdownid);\n"
                 "setTimeout(\"top.location.href='/Main_Login.asp'+'?flag=1'+'&productname='+product_name+'&url='+directurl_l;\", 2000);\n"
                 "}\n"
                 "remaining_time--;\n"
+                "}\n"
+                "function checkTime(i)\n"
+                "{\n"
+                "if (i<10)\n"
+                "{i=\"0\" + i}\n"
+                "return i\n"
                 "}\n"
                 "function disable_input(val){\n"
                 "var disable_input_x = document.getElementsByClassName('form_input');\n"

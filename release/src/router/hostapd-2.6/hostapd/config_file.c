@@ -2635,6 +2635,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		bss->wpa_gmk_rekey = atoi(pos);
 	} else if (os_strcmp(buf, "wpa_ptk_rekey") == 0) {
 		bss->wpa_ptk_rekey = atoi(pos);
+	} else if (os_strcmp(buf, "wpa_disable_eapol_key_retries") == 0) {
+		bss->wpa_disable_eapol_key_retries = atoi(pos);
 	} else if (os_strcmp(buf, "wpa_passphrase") == 0) {
 		int len = os_strlen(pos);
 		if (len < 8 || len > 63) {
@@ -3097,7 +3099,18 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 				   line, bss->bss_load_update_period);
 			return 1;
 		}
-	} else if (os_strcmp(buf, "rts_threshold") == 0) {
+	}
+	else if (os_strcmp(buf, "enable_bss_load_ie") == 0) {
+		bss->enable_bss_load_ie = atoi(pos);
+		if (bss->enable_bss_load_ie < 0 ||
+			bss->enable_bss_load_ie > 1) {
+			wpa_printf(MSG_ERROR,
+				"Line %d: invalid enable_bss_load_ie %d",
+				line, bss->enable_bss_load_ie);
+			return 1;
+		}
+	}
+	else if (os_strcmp(buf, "rts_threshold") == 0) {
 		conf->rts_threshold = atoi(pos);
 		if (conf->rts_threshold < -1 || conf->rts_threshold > 65535) {
 			wpa_printf(MSG_ERROR,
@@ -3302,10 +3315,13 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		}
 	} else if (os_strcmp(buf, "ignore_40_mhz_intolerant") == 0) {
 		conf->ignore_40_mhz_intolerant = atoi(pos);
+	} else if (os_strcmp(buf, "acs_scan_mode") == 0) {
+		conf->acs_scan_mode = atoi(pos);
 #endif /* CONFIG_IEEE80211N */
 #ifdef CONFIG_IEEE80211AC
 	} else if (os_strcmp(buf, "ieee80211ac") == 0) {
 		conf->ieee80211ac = atoi(pos);
+		conf->orig_ieee80211ac = conf->ieee80211ac;
 	} else if (os_strcmp(buf, "vht_capab") == 0) {
 		if (hostapd_config_vht_capab(conf, pos) < 0) {
 			wpa_printf(MSG_ERROR, "Line %d: invalid vht_capab",
@@ -3814,13 +3830,12 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 	} else if (os_strcmp(buf, "vendor_elements") == 0) {
 		if (parse_wpabuf_hex(line, buf, &bss->vendor_elements, pos))
 			return 1;
-  }
-  else if (os_strcmp(buf, "assocresp_elements") == 0) {
-    if (parse_wpabuf_hex(line, buf, &bss->assocresp_elements, pos))
-      return 1;
-  } else if (os_strcmp(buf, "proberesp_elements") == 0) {
+	} else if (os_strcmp(buf, "assocresp_elements") == 0) {
+		if (parse_wpabuf_hex(line, buf, &bss->assocresp_elements, pos))
+			return 1;
+	} else if (os_strcmp(buf, "proberesp_elements") == 0) {
 		if (parse_wpabuf_hex(line, buf, &bss->proberesp_elements, pos))
-		return 1;
+			return 1;
 	} else if (os_strcmp(buf, "sae_anti_clogging_threshold") == 0) {
 		bss->sae_anti_clogging_threshold = atoi(pos);
 	} else if (os_strcmp(buf, "sae_groups") == 0) {
@@ -4065,6 +4080,22 @@ struct hostapd_config * hostapd_config_read(const char *fname)
 	}
 #endif /* WPA_IGNORE_CONFIG_ERRORS */
 
+    for (i = 0; i < ACS_MAX_CHANNELS; i++){
+		if(i == 155 /* 80MHz*/ || i == 106 ||
+			i == 151 /* 40MHz */ || i == 159 || i == 102 || i == 110 || i == 118 ||
+			i == 149 /* 20MHz */ || i == 153 || i == 157 || i == 161 || i == 165 || i == 100 || i == 104 || i == 108 || i == 112 || i == 116 || i == 120 ){
+			// wpa_printf(MSG_INFO, "channel:[%d], penalty:[20]", i);
+	      conf->acs_chan_cust_penalty[i] = 20;
+		}else if ( i == 1 || i == 11 ){
+			if( (conf->country[0] == 'U' && conf->country[1] == 'S') ||
+				 (conf->country[0] == 'C' && conf->country[1] == 'A'))
+				conf->acs_chan_cust_penalty[i] = 90;
+			else
+				conf->acs_chan_cust_penalty[i] = 20;
+		}else{
+			conf->acs_chan_cust_penalty[i] = 90;
+		}
+	}
 	return conf;
 }
 

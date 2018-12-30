@@ -144,6 +144,7 @@ int hostapd_handle_self_beacon_report_scan_results(struct hostapd_data *hapd)
 					" measurement_rep_mode=%d op_class=%d channel=%d start_time=%d duration=%d frame_info=%d rcpi=%d rsni=%d bssid=" MACSTR " antenna_id=%d parent_tsf=%d",
 					MAC2STR(hapd->own_addr), 0, op_class, channel,
 					0, 0, phy_type, 0, 0, MAC2STR(bssid), 0, 0);
+		wpa_scan_results_free(scan_res);
 		return 0;
 	}
 
@@ -166,6 +167,7 @@ int hostapd_handle_self_beacon_report_scan_results(struct hostapd_data *hapd)
 					MAC2STR(hapd->own_addr), 0, op_class, channel,
 					0, 0, phy_type, 0, 0, MAC2STR(bssid), 0, 0);
 
+	wpa_scan_results_free(scan_res);
 	return 0;
 }
 
@@ -240,6 +242,7 @@ void hostapd_handle_sta_beacon_report_scan_results(struct hostapd_iface *iface)
 				0, 0, MAC2STR(bssid), 0, 0);
 	}
 
+	wpa_scan_results_free(scan_res);
 	wpabuf_free(buf);
 }
 

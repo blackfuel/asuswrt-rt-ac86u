@@ -313,8 +313,8 @@ function initial(){
 	set_default_choice();
 
 	if(!parent.usb_support || usbPortMax == 0){
-		document.getElementById("line3_td").height = '40px';
-		document.getElementById("line3_img").src = '/images/New_ui/networkmap/line_dualwan.png';
+		$("#line3_img").hide();
+		$("#line3_single").show();
 		document.getElementById("clients_td").colSpan = "3";
 		document.getElementById("clients_td").width = '350';
 		document.getElementById("clientspace_td").style.display = "none";
@@ -421,12 +421,6 @@ function initial(){
 		
 		if(wanlink_ipaddr == '0.0.0.0' || wanlink_ipaddr == '')
 			document.getElementById("wanIP_div").style.display = "none";
-	}
-
-	var NM_table_img = cookie.get("NM_table_img");
-	if(NM_table_img != "" && NM_table_img != null){
-		customize_NM_table(NM_table_img);
-		document.getElementById("bgimg").options[NM_table_img[4]].selected = 1;
 	}
 
 	if(smart_connect_support){
@@ -548,16 +542,6 @@ function show_ddns_status(){
 var isMD5DDNSName = function(){
 	var macAddr = '<% nvram_get("lan_hwaddr"); %>'.toUpperCase().replace(/:/g, "");
 	return "A"+hexMD5(macAddr).toUpperCase()+".asuscomm.com";
-}
-
-function customize_NM_table(img){
-	$("#NM_table").css({
-		"background": "url('/images/" + img +"')",
-		"background-repeat": "no-repeat",
-		"background-size": "cover"
-	});
-
-	cookie.set("NM_table_img", img, 365);
 }
 
 function set_default_choice(){
@@ -718,9 +702,8 @@ function showDiskInfo(device){
 		percentbar = simpleNum2((device.totalSize - device.totalUsed)/device.totalSize*100);
 		percentbar = Math.round(100 - percentbar);		
 
-		//dec_html_code += '<p id="diskDesc'+ device.usbPath +'" style="margin-top:5px;"><#Availablespace#>:</p><div id="diskquota" align="left" style="margin-top:5px;margin-bottom:10px;">\n';
 		dec_html_code += '<div id="diskquota" align="left" style="margin-top:5px;margin-bottom:10px;">\n';
-		dec_html_code += '<img src="images/quotabar.gif" width="' + percentbar + '" height="13">';
+		dec_html_code += '<div class="quotabar" style="width:'+ percentbar +'%;height:13px;"></div>';
 		dec_html_code += '</div>\n';
 	}
 	else{
@@ -1868,7 +1851,7 @@ function check_usb3(){
 	if(based_modelid == "DSL-AC68U" || based_modelid == "RT-AC3200" || based_modelid == "RT-AC87U" || based_modelid == "RT-AC68U" || based_modelid == "RT-AC68A" || based_modelid == "RT-AC56S" || based_modelid == "RT-AC56U" || based_modelid == "RT-AC55U" || based_modelid == "RT-AC55UHP" || based_modelid == "RT-N18U" || based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" || based_modelid == "RT-AC5300" || based_modelid == "RP-AC68U" || based_modelid == "RT-AC58U"  || based_modelid == "RT-AC82U" || based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U"|| based_modelid == "4G-AC68U"){
 		document.getElementById('usb_text_1').innerHTML = "USB 3.0";
 	}
-	else if(based_modelid == "RT-AC88Q" || based_modelid == "RT-N65U" || based_modelid == "GT-AC5300" || based_modelid == "GT-AC9600"){
+	else if(based_modelid == "RT-AC88Q" || based_modelid == "RT-N65U" || based_modelid == "GT-AC5300"){
 		document.getElementById('usb_text_1').innerHTML = "USB 3.0";
 		document.getElementById('usb_text_2').innerHTML = "USB 3.0";
 	}
@@ -1876,6 +1859,10 @@ function check_usb3(){
 		document.getElementById('usb_text_1').innerHTML = "USB 3.0";
 		document.getElementById('usb_text_2').innerHTML = "USB 3.0";
 		document.getElementById('usb_text_3').innerHTML = "M.2 SSD";
+	}
+	else if(based_modelid == "GT-AX96U" || based_modelid == "GT-AC9600"){
+		document.getElementById('usb_text_1').innerHTML = "USB 3.1";
+		document.getElementById('usb_text_2').innerHTML = "USB 3.1";
 	}
 }
 
@@ -2710,6 +2697,7 @@ function AiMesh_promoteHint() {
 				<tr>
 					<td id="line3_td" colspan="3" align="center" height="35px" style="visibility: hidden">
 						<img id="line3_img" src="/images/New_ui/networkmap/line_two.png" style="margin-top:-5px;">
+						<div id="line3_single" class="single_wan_connected" style="display:none"></div>
 					</td>
 				</tr>
 				<tr>
@@ -2788,26 +2776,11 @@ function AiMesh_promoteHint() {
 </table>
 <div id="navtxt" class="navtext" style="position:absolute; top:50px; left:-100px; visibility:hidden; font-family:Arial, Verdana"></div>
 <div id="footer"></div>
-<select id="bgimg" onChange="customize_NM_table(this.value);" class="input_option_left" style="display:none;">
-	<option value="wall0.gif">dark</option>
-	<option value="wall1.gif">light</option>
-</select>		
-
 <script>
 	if(flag == "Internet" || flag == "Client")
 		document.getElementById("statusframe").src = "";
 
 	initial();
-
-	/* Disable networkmapd update for RP-AC66
-	var manualUpdate = false;
-	if(parseInt((JS_timeObj.getTime()-cookie.get("nwmapRefreshTime"))/60000) > 1){
-		setTimeout(function(){
-			document.networkmapdRefresh.submit();
-		}, 3500);
-	}
-	cookie.set("nwmapRefreshTime", JS_timeObj.getTime(), 1);
-	*/
 </script>
 </body>
 </html>

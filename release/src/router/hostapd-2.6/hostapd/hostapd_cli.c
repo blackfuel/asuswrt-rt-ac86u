@@ -875,14 +875,14 @@ static int hostapd_cli_cmd_set_qos_map_set(struct wpa_ctrl *ctrl,
 	char buf[200];
 	int res;
 
-	if (argc != 1) {
+	if (argc != 2) {
 		printf("Invalid 'set_qos_map_set' command - "
-		       "one argument (comma delimited QoS map set) "
-		       "is needed\n");
+		       "two arguments (BSS name and comma delimited QoS map set) "
+		       "are needed\n");
 		return -1;
 	}
 
-	res = os_snprintf(buf, sizeof(buf), "SET_QOS_MAP_SET %s", argv[0]);
+	res = os_snprintf(buf, sizeof(buf), "SET_QOS_MAP_SET %s %s", argv[0], argv[1]);
 	if (os_snprintf_error(sizeof(buf), res))
 		return -1;
 	return wpa_ctrl_command(ctrl, buf);
@@ -895,13 +895,13 @@ static int hostapd_cli_cmd_send_qos_map_conf(struct wpa_ctrl *ctrl,
 	char buf[50];
 	int res;
 
-	if (argc != 1) {
+	if (argc != 2) {
 		printf("Invalid 'send_qos_map_conf' command - "
-		       "one argument (STA addr) is needed\n");
+		       "two arguments (BSS name and STA addr) are needed\n");
 		return -1;
 	}
 
-	res = os_snprintf(buf, sizeof(buf), "SEND_QOS_MAP_CONF %s", argv[0]);
+	res = os_snprintf(buf, sizeof(buf), "SEND_QOS_MAP_CONF %s %s", argv[0], argv[1]);
 	if (os_snprintf_error(sizeof(buf), res))
 		return -1;
 	return wpa_ctrl_command(ctrl, buf);
@@ -914,14 +914,14 @@ static int hostapd_cli_cmd_hs20_wnm_notif(struct wpa_ctrl *ctrl, int argc,
 	char buf[300];
 	int res;
 
-	if (argc < 2) {
-		printf("Invalid 'hs20_wnm_notif' command - two arguments (STA "
-		       "addr and URL) are needed\n");
+	if (argc < 3) {
+		printf("Invalid 'hs20_wnm_notif' command - three arguments ("
+		       "BSS name, STA addr and URL) are needed\n");
 		return -1;
 	}
 
-	res = os_snprintf(buf, sizeof(buf), "HS20_WNM_NOTIF %s %s",
-			  argv[0], argv[1]);
+	res = os_snprintf(buf, sizeof(buf), "HS20_WNM_NOTIF %s %s %s",
+			  argv[0], argv[1], argv[2]);
 	if (os_snprintf_error(sizeof(buf), res))
 		return -1;
 	return wpa_ctrl_command(ctrl, buf);
@@ -934,19 +934,20 @@ static int hostapd_cli_cmd_hs20_deauth_req(struct wpa_ctrl *ctrl, int argc,
 	char buf[300];
 	int res;
 
-	if (argc < 3) {
-		printf("Invalid 'hs20_deauth_req' command - at least three arguments (STA addr, Code, Re-auth Delay) are needed\n");
+	if (argc < 4) {
+		printf("Invalid 'hs20_deauth_req' command - at least four arguments ("
+		       "BSS name STA addr, Code, Re-auth Delay) are needed\n");
 		return -1;
 	}
 
-	if (argc > 3)
+	if (argc > 4)
+		res = os_snprintf(buf, sizeof(buf),
+				  "HS20_DEAUTH_REQ %s %s %s %s %s",
+				  argv[0], argv[1], argv[2], argv[3], argv[4]);
+	else
 		res = os_snprintf(buf, sizeof(buf),
 				  "HS20_DEAUTH_REQ %s %s %s %s",
 				  argv[0], argv[1], argv[2], argv[3]);
-	else
-		res = os_snprintf(buf, sizeof(buf),
-				  "HS20_DEAUTH_REQ %s %s %s",
-				  argv[0], argv[1], argv[2]);
 	if (os_snprintf_error(sizeof(buf), res))
 		return -1;
 	return wpa_ctrl_command(ctrl, buf);
@@ -1189,6 +1190,30 @@ static int hostapd_cli_cmd_reload(struct wpa_ctrl *ctrl, int argc,
 				      char *argv[])
 {
 	return wpa_ctrl_command(ctrl, "RELOAD");
+}
+
+
+static int hostapd_cli_cmd_reconf(struct wpa_ctrl *ctrl, int argc,
+				      char *argv[])
+{
+	char cmd[256];
+	int res;
+
+	if (argc == 0) {
+		os_snprintf(cmd, sizeof(cmd), "RECONF");
+	} else if (argc == 1) {
+		res = os_snprintf(cmd, sizeof(cmd), "RECONF %s",
+				  argv[0]);
+		if (os_snprintf_error(sizeof(cmd), res)) {
+			printf("Too long RECONF command.\n");
+			return -1;
+		}
+	} else {
+		printf("Invalid reconf command: needs 0-1 arguments\n");
+		return -1;
+	}
+
+	return wpa_ctrl_command(ctrl, cmd);
 }
 
 
@@ -1654,6 +1679,42 @@ static int hostapd_cli_cmd_unconnected_sta(struct wpa_ctrl *ctrl,
 }
 
 
+static int hostapd_cli_cmd_set_bss_load(struct wpa_ctrl *ctrl, int argc,
+    char *argv[])
+{
+  char cmd[256];
+  int res;
+  char *tmp;
+  int total, i;
+
+  if (argc != 2) {
+    printf("Invalid SET_BSS_LOAD command\n"
+           "usage: <BSS_name> <0/1>\n");
+    return -1;
+  }
+
+  res = os_snprintf(cmd, sizeof(cmd), "SET_BSS_LOAD");
+  if (res < 0 || (size_t)res >= sizeof(cmd) - 1) {
+    printf("Too long SET_BSS_LOAD command.\n");
+    return -1;
+  }
+
+  total = res;
+  tmp = cmd + total;
+  for (i = 0; i < argc; i++) {
+    res = os_snprintf(tmp, sizeof(cmd) - total, " %s", argv[i]);
+    if (res < 0 || (size_t)res >= sizeof(cmd) - total - 1) {
+      printf("Too long SET_BSS_LOAD command.\n");
+      return -1;
+    }
+    total += res;
+    tmp = cmd + total;
+  }
+
+  return wpa_ctrl_command(ctrl, cmd);
+}
+
+
 static int hostapd_cli_cmd_sta_measurements(struct wpa_ctrl *ctrl, int argc,
   char *argv[])
 {
@@ -2075,16 +2136,27 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
 	  "= exit hostapd_cli" },
 	{ "set", hostapd_cli_cmd_set, NULL, NULL },
 	{ "get", hostapd_cli_cmd_get, NULL, NULL },
-	{ "set_qos_map_set", hostapd_cli_cmd_set_qos_map_set, NULL, NULL },
+	{ "set_qos_map_set", hostapd_cli_cmd_set_qos_map_set, NULL,
+	  "<BSS name> <arg,arg,...> = set QoS Map set element" },
 	{ "update_wan_metrics", hostapd_cli_cmd_update_wan_metrics, NULL, NULL },
-	{ "send_qos_map_conf", hostapd_cli_cmd_send_qos_map_conf, NULL, NULL },
+	{ "send_qos_map_conf", hostapd_cli_cmd_send_qos_map_conf, NULL,
+	  "<BSS name> <addr> = send QoS Map Configure frame" },
 	{ "chan_switch", hostapd_cli_cmd_chan_switch, NULL, NULL },
-	{ "hs20_wnm_notif", hostapd_cli_cmd_hs20_wnm_notif, NULL, NULL },
-	{ "hs20_deauth_req", hostapd_cli_cmd_hs20_deauth_req, NULL, NULL },
+	{ "hs20_wnm_notif", hostapd_cli_cmd_hs20_wnm_notif, NULL,
+	  "<BSS name> <addr> <url>\n"
+	  "  = send WNM-Notification Subscription Remediation Request" },
+	{ "hs20_deauth_req", hostapd_cli_cmd_hs20_deauth_req, NULL,
+	  "<BSS name> <addr> <code (0/1)> <Re-auth-Delay(sec)> [url]\n"
+	  "  = send WNM-Notification imminent deauthentication indication" },
 	{ "vendor", hostapd_cli_cmd_vendor, NULL, NULL },
 	{ "acs_recalc", hostapd_cli_cmd_acs_recalc, NULL, NULL },
 	{ "enable", hostapd_cli_cmd_enable, NULL, NULL },
 	{ "reload", hostapd_cli_cmd_reload, NULL, NULL },
+	{ "reconf", hostapd_cli_cmd_reconf, NULL,
+	  "[BSS name] = reconfigure interface (add/remove BSS's while other BSS "
+	  "are unaffected)\n"
+	  "  if BSS name is given, that BSS will be reloaded (main BSS isn't "
+	  "supported)" },
 	{ "disable", hostapd_cli_cmd_disable, NULL, NULL },
 	{ "erp_flush", hostapd_cli_cmd_erp_flush, NULL, NULL },
 	{ "log_level", hostapd_cli_cmd_log_level, NULL, NULL },
@@ -2126,6 +2198,8 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
 	{ "unconnected_sta", hostapd_cli_cmd_unconnected_sta, NULL,
 	  "<addr> <freq> <center_freq1=> [center_freq2=] <bandwidth=>\n"
 	  "get unconnected station statistics" },
+	{ "set_bss_load", hostapd_cli_cmd_set_bss_load, NULL,
+	  "<BSS name> <1/0> = set BSS Load IE in beacon and probe resp" },
 	{ "sta_measurements", hostapd_cli_cmd_sta_measurements, NULL,
 	  "<BSS_name> <addr> get station measurements" },
 	{ "vap_measurements", hostapd_cli_cmd_vap_measurements, NULL,

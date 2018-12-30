@@ -626,7 +626,7 @@ void start_vpnserver(int serverNum)
 	snprintf(&iface[0], IF_SIZE, "%s%d", nvram_safe_get(&buffer[0]), serverNum+SERVER_IF_START);
 
 	//
-	if(is_intf_up(&iface[0]) && ifType == TAP) {
+	if(is_intf_up(&iface[0]) > 0 && ifType == TAP) {
 		eval("brctl", "delif", nvram_safe_get("lan_ifname"), &iface[0]);
 	}
 

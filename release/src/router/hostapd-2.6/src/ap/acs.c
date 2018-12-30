@@ -25,6 +25,7 @@
 #include <assert.h>
 #include "acs.h"
 #include "rrm.h"
+#include "ieee802_11.h"
 
 /*
  * Automatic Channel Selection
@@ -246,9 +247,67 @@
  */
 
 
-static int acs_request_scan(struct hostapd_iface *iface, int acs_mode);
+static int acs_request_scan(struct hostapd_iface *iface);
 static int acs_survey_is_sufficient(struct freq_survey *survey);
 static u32 acs_get_center_chan_index(struct hostapd_iface *iface);
+
+
+/* Open file for writing/appending. If opened for appending and it is bigger
+ * than 10K, file is saved with filename .0 at the end and a new empty file is
+ * created. */
+static FILE * acs_write_file(char *name, Boolean append)
+{
+#define ACS_MAX_LOG_SIZE	10240 /* 10K */
+
+	FILE *fp;
+	long int sz;
+	int res;
+	char *bak_file;
+	size_t new_size;
+
+	if (!append)
+		return fopen(name, "w");
+	fp = fopen(name, "a+");
+	if (!fp) {
+		wpa_printf(MSG_ERROR, "ACS: cannot open file [%s]. %s", name,
+			strerror(errno));
+		return fp;
+	}
+	res = fseek(fp, 0L, SEEK_END);
+	if (res == -1) {
+		wpa_printf(MSG_ERROR, "ACS: cannot set file position indicator of file [%s]. %s",
+			name, strerror(errno));
+		fclose(fp);
+		return NULL;
+	}
+	sz = ftell(fp);
+	if (sz == -1) {
+		wpa_printf(MSG_ERROR, "ACS: cannot tell size of file [%s]. %s", name,
+			strerror(errno));
+		fclose(fp);
+		return NULL;
+	}
+	if (sz > ACS_MAX_LOG_SIZE) {
+		fclose(fp);
+		new_size = strlen(name) + 3;
+		bak_file = os_malloc(new_size);
+		if (bak_file == NULL)
+			return NULL;
+		os_snprintf(bak_file, new_size, "%s.0", name);
+		remove(bak_file);
+		res = rename(name, bak_file);
+		os_free(bak_file);
+		if (res == -1)
+			wpa_printf(MSG_WARNING, "ACS: making backup of file [%s] failed. %s", name,
+				strerror(errno));
+		fp = fopen(name, "w");
+		if (!fp) {
+			wpa_printf(MSG_ERROR, "ACS: cannot open file [%s]. %s", name,
+				strerror(errno));
+		}
+	}
+	return fp;
+}
 
 
 static void acs_clean_chan_surveys(struct hostapd_channel_data *chan)
@@ -1601,22 +1660,26 @@ void acs_smart_record_bsses(struct hostapd_iface *iface, struct wpa_scan_results
           os_get_reltime(&candidates[j].ts_legacy);
         }
 
-        if (candidates[j].width == 40) { /* 20/40 rules */
-          if (((bss_width == VHT_OPER_CHWIDTH_20_40) && bss_sec_freq && /* pri and sec must be equal */
-            ((acs_chan_to_freq(candidates[j].primary) != bss->freq) ||
-              (acs_chan_to_freq(candidates[j].secondary) != bss_sec_freq))) ||
-            (!bss_sec_freq && acs_chan_to_freq(candidates[j].primary) != bss->freq))
-          { /* primary channel must be the same as the operating channel of all 20MHz BSSs */
-            candidates[j].overlap40++;
-            os_get_reltime(&candidates[j].ts_overlap40);
+        if (iface->conf->obss_interval) { /* Check if 20/40 CoEx enabled */
+          if (candidates[j].width == 40) { /* 20/40 rules */
+            if (((bss_width == VHT_OPER_CHWIDTH_20_40) && bss_sec_freq && /* pri and sec must be equal */
+              ((acs_chan_to_freq(candidates[j].primary) != bss->freq) ||
+                (acs_chan_to_freq(candidates[j].secondary) != bss_sec_freq))) ||
+              (!bss_sec_freq && acs_chan_to_freq(candidates[j].primary) != bss->freq))
+            { /* primary channel must be the same as the operating channel of all 20MHz BSSs */
+              if (iface->conf->obss_beacon_rssi_threshold < bss->level) {
+                candidates[j].overlap40++;
+                os_get_reltime(&candidates[j].ts_overlap40);
+              }
+            }
           }
-        }
 
-        if (ht_cap &&
-            (le_to_host16(ht_cap->ht_capabilities_info) & HT_CAP_INFO_40MHZ_INTOLERANT) &&
-            candidates[j].secondary) {
-          candidates[j].intolerant40++;
-          os_get_reltime(&candidates[j].ts_intolerant40);
+          if (ht_cap &&
+              (le_to_host16(ht_cap->ht_capabilities_info) & HT_CAP_INFO_40MHZ_INTOLERANT) &&
+              candidates[j].secondary) {
+            candidates[j].intolerant40++;
+            os_get_reltime(&candidates[j].ts_intolerant40);
+          }
         }
 
         if (channels_overlap(acs_chan_to_freq(candidates[j].primary), 20, bss_base_freq, num_width)) {
@@ -1638,7 +1701,8 @@ void acs_smart_record_bsses(struct hostapd_iface *iface, struct wpa_scan_results
 
 static void acs_smart_process_bsses(struct hostapd_iface *iface, struct wpa_scan_results *scan_res)
 {
-  FILE *fp = fopen(iface->conf->acs_history_file, iface->conf->acs_init_done ? "a" : "w");
+  FILE *fp = acs_write_file(iface->conf->acs_history_file,
+    iface->conf->acs_init_done ? TRUE : FALSE);
 
   if (!fp) {
     wpa_printf(MSG_ERROR, "Error opening the ACS history file '%s': %s",
@@ -1687,7 +1751,7 @@ static void acs_bg_scan_complete(struct hostapd_iface *iface)
   }
 
   wpa_printf(MSG_INFO, "BSS data from BG scan received");
-  fp = fopen(iface->conf->acs_history_file, "a");
+  fp = acs_write_file(iface->conf->acs_history_file, TRUE);
 
   if (!fp) {
     wpa_printf(MSG_ERROR, "Error opening the ACS history file '%s': %s",
@@ -1696,6 +1760,7 @@ static void acs_bg_scan_complete(struct hostapd_iface *iface)
   }
 
   acs_smart_record_bsses(iface, scan_res, fp);
+  wpa_scan_results_free(scan_res);
 
   if (fp != stderr && fclose(fp))
     wpa_printf(MSG_ERROR, "Error closing the ACS history file: %s", strerror(errno));
@@ -1738,12 +1803,13 @@ static void acs_scan_complete(struct hostapd_iface *iface)
 	}
 
 	if (++iface->acs_num_completed_scans < iface->conf->acs_num_scans) {
-		err = acs_request_scan(iface, ACS_INIT_CTRL);
+		err = acs_request_scan(iface);
 		if (err) {
 			wpa_printf(MSG_ERROR, "ACS: Failed to request scan");
 			goto fail;
 		}
 
+		wpa_scan_results_free(scan_res);
 		return;
 	}
 
@@ -1765,8 +1831,10 @@ static void acs_scan_complete(struct hostapd_iface *iface)
       wpa_printf(MSG_ERROR, "ACS: unknown algo");
 	}
 
+	wpa_scan_results_free(scan_res);
 	return;
 fail:
+	wpa_scan_results_free(scan_res);
 	hostapd_acs_completed(iface, 1);
 	acs_fail(iface);
 }
@@ -2084,7 +2152,7 @@ static void acs_init_candidate_table(struct hostapd_iface *iface)
 }
 
 
-static int acs_request_scan(struct hostapd_iface *iface, int acs_mode)
+static int acs_request_scan(struct hostapd_iface *iface)
 {
 	struct wpa_driver_scan_params params;
 	struct hostapd_channel_data *chan;
@@ -2109,10 +2177,7 @@ static int acs_request_scan(struct hostapd_iface *iface, int acs_mode)
 	}
 	*freq = 0;
 
-	if (ACS_INITIAL == acs_mode)
-		iface->scan_cb = acs_scan_complete;
-	else
-		iface->scan_cb = acs_bg_scan_complete;
+	iface->scan_cb = acs_scan_complete;
 
 	wpa_printf(MSG_DEBUG, "ACS: Scanning %d / %d",
 		   iface->acs_num_completed_scans + 1,
@@ -2131,7 +2196,7 @@ static int acs_request_scan(struct hostapd_iface *iface, int acs_mode)
 }
 
 
-enum hostapd_chan_status acs_init(struct hostapd_iface *iface, int acs_mode)
+enum hostapd_chan_status acs_init(struct hostapd_iface *iface)
 {
 	int err;
 
@@ -2155,7 +2220,7 @@ enum hostapd_chan_status acs_init(struct hostapd_iface *iface, int acs_mode)
     acs_init_candidate_table(iface);
 #endif
 
-	err = acs_request_scan(iface, acs_mode);
+	err = acs_request_scan(iface);
 	if (err < 0)
 		return HOSTAPD_CHAN_INVALID;
 
@@ -2186,13 +2251,14 @@ char acs_to_exclude_candidate(struct hostapd_iface *iface, u32 i, struct os_relt
     return ACS_EXCLUDE_INTOLERANT;
   }
 
-  if (mode->candidates[i].overlap40) {
+  if (mode->candidates[i].overlap40 &&
+    !os_reltime_expired(now, &mode->candidates[i].ts_overlap40, iface->conf->acs_to_degradation[T_LNTO])) {
     wpa_printf(MSG_DEBUG, "ACS: skip candidate %d, overlap40", i);
     return ACS_EXCLUDE_OVERLAP40;
   }
 
   if (mode->candidates[i].cwi_noise + 128 > iface->conf->acs_to_degradation[D_CWI]) {
-    wpa_printf(MSG_DEBUG, "ACS: skip candidate %d, CWI noise %i > %i", i, mode->candidates[i].cwi_noise, iface->conf->acs_to_degradation[D_CWI]);
+    wpa_printf(MSG_DEBUG, "ACS: skip candidate %d, CWI noise %i > %i", i, mode->candidates[i].cwi_noise, iface->conf->acs_to_degradation[D_CWI] - 128);
     return ACS_EXCLUDE_CWI;
   }
 
@@ -2419,7 +2485,8 @@ const char *sw_reasons[] = {
   "intolerant",
   "radar",
   "background scan",
-  "periodic update"
+  "periodic update",
+  "intolerant expired"
 };
 
 
@@ -2449,6 +2516,7 @@ int acs_set_new_chan_if_ok(struct hostapd_iface *iface, int min_rank_cand_idx, i
 
   /* got previous, now check threshold */
   if ((mode->selected_candidate < 0) || /* if previously selected candidate is not known - switch */
+      (mode->candidates[min_rank_cand_idx].width > actual_width) || /* If previously selected candidates width is less */
       (switch_reason == SWR_INTOLERANT) || (switch_reason == SWR_RADAR) || (switch_reason == SWR_INITIAL) || /* in these cases, switch regardless of threshold */
       (mode->candidates[mode->selected_candidate].rank == -1) || /* If previously selected candidates rank is now invalid, switch regardless of threshold*/
       ((mode->selected_candidate != min_rank_cand_idx) &&
@@ -2493,7 +2561,7 @@ int acs_recalc_ranks_and_set_chan (struct hostapd_iface *iface, int switch_reaso
   int *grp_map;
   struct hostapd_hw_modes *mode = iface->current_mode;
   FILE *fp      = fopen(iface->conf->acs_smart_info_file, "w");
-  FILE *fp_hist = fopen(iface->conf->acs_history_file, "a");
+  FILE *fp_hist = acs_write_file(iface->conf->acs_history_file, TRUE);
   int i, prio;
   int res = FALSE;
 
@@ -3058,6 +3126,20 @@ void acs_switch_intolerant(struct hostapd_iface *iface)
     acs_do_switch_channel(iface, 1);
   else
     wpa_printf(MSG_ERROR, "Must switch, intolerant !");
+}
+
+void acs_switch_intolerant_expired(struct hostapd_iface *iface)
+{
+  int res;
+
+  res = acs_recalc_ranks_and_set_chan(iface, SWR_INTOLERANT_EXPIRED);
+  if (res == TRUE) {
+    if (acs_do_switch_channel(iface, 0) == TRUE && !iface->conf->secondary_channel)
+      /* reschedule timer if we didn't switch to 40 MHz bandwidth */
+      hostapd_restart_ap_ht2040_timer(iface);
+  } else
+    /* reschedule timer if we didn't switch at all */
+    hostapd_restart_ap_ht2040_timer(iface);
 }
 
 void acs_set_radar(struct hostapd_iface *iface, int freq, int chan_width, int cf1)

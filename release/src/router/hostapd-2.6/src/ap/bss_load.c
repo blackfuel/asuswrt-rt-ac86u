@@ -63,3 +63,19 @@ void bss_load_update_deinit(struct hostapd_data *hapd)
 {
 	eloop_cancel_timeout(update_channel_utilization, hapd, NULL);
 }
+
+
+int bss_load_enable(struct hostapd_data *hapd, int is_enable)
+{
+	struct hostapd_bss_config *conf = hapd->conf;
+
+	if (!hapd || !conf)
+		return -1;
+
+	/* set internal hostapd configuration of the probe resp frame */
+	conf->enable_bss_load_ie = is_enable;
+
+	/* update the beacon frame */
+	ieee802_11_set_beacon(hapd);
+	return 0;
+}

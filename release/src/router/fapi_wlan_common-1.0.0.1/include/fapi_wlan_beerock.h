@@ -102,28 +102,6 @@ int fapi_wlan_hostapd_socket_get(const char *ifname, void **ctrlInterface);
 int fapi_wlan_hostapd_report_process(const char *ifname, ObjList *wlObj, char *opCode);
 
 /**************************************************************************/
-/*! \fn fapi_wlan_set_radio_enable(const char *ifname, ObjList *wlObj, unsigned int flags)
-**************************************************************************
-*  \brief Provides the AP Manager the ability to turn radio on during init
-*  \param[in] ifname - radio interface name
-*  \param[in] wlObj - NULL
-*  \param[in] flags - reserved
-*  \return 0 if success, negative if error / timeout
-***************************************************************************/
-int fapi_wlan_set_radio_enable(const char *ifname, ObjList *wlObj, unsigned int flags);
-
-/**************************************************************************/
-/*! \fn fapi_wlan_is_master_state_get(const char *ifname, ObjList *wlObj, unsigned int flags)
-**************************************************************************
-*  \brief function to get the AP/IRE state
-*  \param[in] ifname - radio interface name
-*  \param[out] wlObj - the radio AP/IRE state
-*  \param[in] flags - reserved
-*  \return 0 if success, negative if error / timeout
-***************************************************************************/
-int fapi_wlan_is_master_state_get(const char *ifname, ObjList *wlObj, unsigned int flags);
-
-/**************************************************************************/
 /*! \fn fapi_wlan_radio_state_get(const char *ifname, ObjList *wlObj, unsigned int flags)
 **************************************************************************
 *  \brief function to get radio enable/disable state
@@ -144,6 +122,17 @@ int fapi_wlan_radio_state_get(const char *ifname, ObjList *wlObj, unsigned int f
 *  \return 0 if success, negative if error / timeout
 ***************************************************************************/
 int fapi_wlan_mac_address_get(const char *ifname, ObjList *wlObj, unsigned int flags);
+
+/**************************************************************************/
+/*! \fn fapi_wlan_channel_get(const char *ifname, ObjList *wlObj, unsigned int flags)
+**************************************************************************
+*  \brief function to get the channel
+*  \param[in] ifname - radio interface name
+*  \param[out] wlObj - the radio state
+*  \param[in] flags - reserved
+*  \return 0 if success, negative if error / timeout
+***************************************************************************/
+int fapi_wlan_channel_get(const char *ifname, ObjList *wlObj, unsigned int flags);
 
 /**************************************************************************/
 /*! \fn fapi_wlan_radio_ctrl_a_filter_bank_set(const char *ifname, ObjList *wlObj, unsigned int flags)
@@ -311,17 +300,6 @@ int fapi_wlan_restricted_channels_set(const char *ifname, ObjList *wlObj, unsign
 *  \return 0 if success, negative if error / timeout
 ***************************************************************************/
 int fapi_wlan_failsafe_channel_set(const char *ifname, ObjList *wlObj, unsigned int flags);
-
-/**************************************************************************/
-/*! \fn fapi_wlan_turn_radio_on(const char *ifname, ObjList *wlObj, unsigned int flags)
-**************************************************************************
-*  \brief Provides the AP Manager the ability to turn 0n/off the radio
-*  \param[in] ifname - radio interface name
-*  \param[in] wlObj - Object list with one Device.WiFi.Radio with parameter Enable (true / false)
-*  \param[in] flags - reserved
-*  \return 0 if success, negative if error / timeout
-***************************************************************************/
-int fapi_wlan_turn_radio_on(const char *ifname, ObjList *wlObj, unsigned int flags);
 
 /**************************************************************************/
 /*! \fn fapi_wlan_mbo_sta_allow(const char *ifname, ObjList *wlObj, unsigned int flags)
@@ -542,17 +520,6 @@ int fapi_wlan_oce_wan_metrics_set(const char *ifname, ObjList *wlObj, unsigned i
 *  \return 0 if success, negative if error / timeout
 ***************************************************************************/
 int fapi_wlan_oce_assoc_reject_set(const char *ifname, ObjList *wlObj, unsigned int flags);
-
-/**************************************************************************/
-/*! \fn fapi_wlan_antennas_set(const char *ifname, ObjList *wlObj, unsigned int flags)
-**************************************************************************
-*  \brief Set the active antennas.
-*  \param[in] ifname - interface name
-*  \param[in] wlObj - Object list with one object: Device.WiFi.Radio.X_LANTIQ_COM_Vendor with parameter antenna_mask
-*  \param[in] flags - reserved
-*  \return 0 if success, negative if error / timeout
-***************************************************************************/
-int fapi_wlan_antennas_set(const char *ifname, ObjList *wlObj, unsigned int flags);
 
 
 // Measurements (ifname stands for VAP name)

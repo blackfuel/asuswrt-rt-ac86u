@@ -288,6 +288,7 @@ enum {
   SWR_RADAR,
   SWR_BG_SCAN,
   SWR_UPDATE,
+  SWR_INTOLERANT_EXPIRED,
   SWR_LAST
 };
 
@@ -3757,6 +3758,14 @@ struct wpa_driver_ops {
   int (*sta_allow)(void *priv, const u8 *stations, int count);
 
   /**
+   * set_bss_load - Set BSS Load IE in Beacon
+   * @priv: Private driver interface data
+   * @enable: 0 disable, 1 enable, of the BSS load IE
+   * Returns: 0 on success, -1 on failure
+   */
+  int(*set_bss_load)(void *priv, const u8 enable);
+
+  /**
    * get_sta_measurements - Get station measurements
    * @priv: Private driver interface data
    * @sta_addr: Station MAC address
@@ -4161,6 +4170,14 @@ struct wpa_driver_ops {
    * to DFS USABLE channel.
    */
   int (*block_tx)(void *priv);
+
+  /**
+   * set_disable_dgaf - configure disable_dgaf
+   * @priv: Private driver interface data
+   * @disable_dgaf: disable_dgaf value
+   * Returns: 0 on success, -1 on failure
+   */
+  int (*set_disable_dgaf)(void *priv, int set_disable_dgaf);
 };
 
 /**
@@ -4170,6 +4187,7 @@ struct wpa_driver_ops {
  * Returns: 0 on success, -1 on failure
  */
 int (*get_radio_info)(void *priv, mtlk_radio_info_t *radio_info);
+
 
 /**
  * enum wpa_event_type - Event type for wpa_supplicant_event() calls
@@ -5557,6 +5575,7 @@ const char * event_to_string(enum wpa_event_type event);
 
 /* Convert chan_width to a string for logging and control interfaces */
 const char * channel_width_to_string(enum chan_width width);
+const char * channel_width_to_string2(enum chan_width width);
 
 int ht_supported(const struct hostapd_hw_modes *mode);
 int vht_supported(const struct hostapd_hw_modes *mode);

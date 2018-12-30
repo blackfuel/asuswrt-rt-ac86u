@@ -77,13 +77,13 @@ dir_control_file=$APPS_INSTALL_PATH/etc/dm2_general.conf
 	DM_PORT_TMP=`cat "$dir_control_file" |grep "DM_PORT="`
 	DM_PORT=${DM_PORT_TMP:8}
 	fi
-
+	CONFIG_SIZE=`ls -al $APPS_INSTALL_PATH/etc/asus_lighttpd.conf |awk '{print $5}'`
+	CONFIG_PORT=`cat "$APPS_INSTALL_PATH/etc/asus_lighttpd.conf" | grep "server.port"`
+	CONFIG_PORT=${CONFIG_PORT:14}
 	if [ ! -f "$APPS_INSTALL_PATH/etc/asus_lighttpd.conf" ]; then
 		sh /tmp/APPS/Lighttpd/Script/asus_lighttpd_backup recover
 	else
-		CONFIG_PORT=`cat "$APPS_INSTALL_PATH/etc/asus_lighttpd.conf" | grep "server.port"`
-		CONFIG_PORT=${CONFIG_PORT:14}
-		CONFIG_HTTPS_PORT=`cat "$APPS_INSTALL_PATH/etc/asus_lighttpd.conf" | grep "\$SERVER"`
+		CONFIG_HTTPS_PORT=`cat "$APPS_INSTALL_PATH/etc/asus_lighttpd.conf" | grep '$SERVER'`
 		CONFIG_HTTPS_PORT=${CONFIG_HTTPS_PORT:23:4}
 
 		if [ -n "$DM_HTTP_PORT" ]&&[ "$DM_HTTP_PORT" != "$CONFIG_PORT" ]; then

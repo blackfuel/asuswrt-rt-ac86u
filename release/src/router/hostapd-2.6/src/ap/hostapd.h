@@ -342,6 +342,7 @@ struct hostapd_iface {
 		HAPD_IFACE_DISABLED,
 		HAPD_IFACE_COUNTRY_UPDATE,
 		HAPD_IFACE_ACS,
+		HAPD_IFACE_ACS_DONE,
 		HAPD_IFACE_HT_SCAN,
 		HAPD_IFACE_DFS,
 		HAPD_IFACE_ENABLED
@@ -487,6 +488,8 @@ struct hostapd_iface {
 	int atf_enabled; /* If ATF is currently enabled in FW */
 	u32 atf_sta_in_driver[2048/32]; // One bit per aid
 	u32 atf_sta_has_quota[2048/32]; // One bit per aid
+
+	int block_tx; /* Is TX block on or off */
 };
 
 /* hostapd.c */
@@ -512,6 +515,7 @@ void hostapd_new_assoc_sta(struct hostapd_data *hapd, struct sta_info *sta,
 			   int reassoc);
 void hostapd_interface_deinit_free(struct hostapd_iface *iface);
 int hostapd_enable_iface(struct hostapd_iface *hapd_iface);
+int hostapd_reconf_iface(struct hostapd_iface *hapd_iface, int changed_idx);
 int hostapd_reload_iface(struct hostapd_iface *hapd_iface);
 int hostapd_disable_iface(struct hostapd_iface *hapd_iface);
 int hostapd_add_iface(struct hapd_interfaces *ifaces, char *buf);
@@ -578,5 +582,7 @@ void hostapd_ltq_clear_old(struct hostapd_iface *iface, s32 flush);
 #ifdef CONFIG_ACS
 void hostapd_ltq_update_channel_data(struct hostapd_iface *iface, const u8 *data, size_t data_len);
 #endif
+
+void hostapd_tx_queue_params(struct hostapd_data *hapd);
 
 #endif /* HOSTAPD_H */

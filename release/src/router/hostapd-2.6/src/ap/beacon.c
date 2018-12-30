@@ -50,10 +50,11 @@ static u8 * hostapd_eid_bss_load(struct hostapd_data *hapd, u8 *eid, size_t len)
 	}
 #endif /* CONFIG_TESTING_OPTIONS */
 
-    if (!hapd->conf->hs20)
-        return eid;
+	if ((!hapd->conf->hs20) &&
+		(!hapd->conf->enable_bss_load_ie))
+		return eid;
 
-    /* generated BSS Load IE, will be updated by driver */
+	/* generated BSS Load IE, will be updated by driver */
 	*eid++ = WLAN_EID_BSS_LOAD;
 	*eid++ = 5;
 	eid += 5;
@@ -491,8 +492,13 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
 		pos = hostapd_eid_txpower_envelope(hapd, pos);
 		pos = hostapd_eid_wb_chsw_wrapper(hapd, pos);
 	}
-	if (hapd->conf->vendor_vht)
+	if (hapd->conf->vendor_vht) {
+		/* IOP with STAs transmitting VHT inside VSIE */
 		pos = hostapd_eid_vendor_vht(hapd, pos);
+		/* IOP with STA transmitting directly VHT IE */
+		pos = hostapd_eid_vht_capabilities(hapd, pos, 0);
+		pos = hostapd_eid_vht_operation(hapd, pos);
+	}
 #endif /* CONFIG_IEEE80211AC */
 
 	/* Wi-Fi Alliance WMM */
@@ -701,6 +707,7 @@ void handle_probe_req(struct hostapd_data *hapd,
 		      const struct ieee80211_mgmt *mgmt, size_t len,
 		      int ssi_signal)
 {
+#define MAX_VSIE_LEN 1024
 	u8 *resp;
 	struct ieee802_11_elems elems;
 	const u8 *ie;
@@ -711,6 +718,7 @@ void handle_probe_req(struct hostapd_data *hapd,
 	int ret;
 	u16 csa_offs[2];
 	size_t csa_offs_len;
+	char vsie_str[MAX_VSIE_LEN];
 
 	wpa_printf(MSG_DEBUG, "STA " MACSTR " handle_probe_req",
 		MAC2STR(mgmt->sa));
@@ -737,10 +745,12 @@ void handle_probe_req(struct hostapd_data *hapd,
 		return;
 	}
 
-	wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_PROBE_REQ "%s", wpa_ssid_txt(elems.vsie, elems.vsie_len));
+	wpa_snprintf_hex(vsie_str, MAX_VSIE_LEN, elems.vsie, elems.vsie_len);
+	wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_PROBE_REQ "%s", vsie_str);
 	if (hapd->msg_ctx_parent &&
-		hapd->msg_ctx_parent != hapd->msg_ctx)
-		wpa_msg_no_global(hapd->msg_ctx_parent, MSG_INFO, AP_STA_PROBE_REQ "%s", wpa_ssid_txt(elems.vsie, elems.vsie_len));
+		hapd->msg_ctx_parent != hapd->msg_ctx) {
+		wpa_msg_no_global(hapd->msg_ctx_parent, MSG_INFO, AP_STA_PROBE_REQ "%s", vsie_str);
+	}
 
 	if (elems.vsie_len && elems.vsie)
 		printf("handle_probe_req() " MACSTR " cb=%p num_cb=%d, vsie_len=%d, OUI=%02X:%02X:%02X\n", 
@@ -1180,8 +1190,14 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
 		tailpos = hostapd_eid_txpower_envelope(hapd, tailpos);
 		tailpos = hostapd_eid_wb_chsw_wrapper(hapd, tailpos);
 	}
-	if (hapd->conf->vendor_vht)
+
+	if (hapd->conf->vendor_vht) {
+		/* IOP with STAs transmitting VHT-IEs inside VSIE */
 		tailpos = hostapd_eid_vendor_vht(hapd, tailpos);
+		/* IOP with STAs transmitting direct VHT-IEs */
+		tailpos = hostapd_eid_vht_capabilities(hapd, tailpos, 0);
+		tailpos = hostapd_eid_vht_operation(hapd, tailpos);
+	}
 #endif /* CONFIG_IEEE80211AC */
 
 	/* Wi-Fi Alliance WMM */
@@ -1337,6 +1353,12 @@ int ieee802_11_set_beacon(struct hostapd_data *hapd)
 
 	hapd->beacon_set_done = 1;
 
+	/* notify the driver to affect the BSS Load in the beacon frame */
+	if (hostapd_drv_set_bss_load(hapd, hapd->conf->enable_bss_load_ie) < 0) {
+		wpa_printf(MSG_ERROR, "Failed to set bss load in driver");
+		return -1;
+	}
+
 	if (ieee802_11_build_ap_params(hapd, &params) < 0)
 		return -1;
 
@@ -1363,10 +1385,15 @@ int ieee802_11_set_beacon(struct hostapd_data *hapd)
 
 	res = hostapd_drv_set_ap(hapd, &params);
 	hostapd_free_ap_extra_ies(hapd, beacon, proberesp, assocresp);
-	if (res)
+	if (res) {
 		wpa_printf(MSG_ERROR, "Failed to set beacon parameters");
+		goto fail;
+	}
 	else
 		ret = 0;
+  ret = hostapd_drv_set_disable_dgaf(hapd, params.disable_dgaf);
+  if (ret)
+    wpa_printf(MSG_ERROR, "Failed to set disable_dgaf");
 fail:
 	ieee802_11_free_ap_params(&params);
 	return ret;

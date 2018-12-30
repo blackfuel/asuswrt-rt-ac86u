@@ -516,8 +516,6 @@ function initial(){
 		if(wlc_auth_mode == "") wlc_auth_mode = 'unknown';
 	}
 
-	flash_button();	
-
 	if(history.pushState != undefined) history.pushState("", document.title, window.location.pathname);
 
 	if(!parent.lyra_hide_support)
@@ -1230,7 +1228,7 @@ function limit_auth_method(){
 <input type="hidden" name="wl_bss_enabled" value="<% nvram_get("wl_bss_enabled"); %>">
 <input type="hidden" name="wl_mbss" value="1">
 
-<table border="0" cellpadding="0" cellspacing="0" id="rt_table">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" id="rt_table">
 <tr>
 	<td>		
 		<table width="100px" border="0" align="left" style="margin-left:8px;" cellpadding="0" cellspacing="0">
@@ -1271,8 +1269,6 @@ function limit_auth_method(){
 		    	<p class="formfonttitle_nwm" style="float:left;"><#APSurvey_action_search_again_hint2#></p>
 					<br />
 			  	<input type="button" class="button_gen" onclick="gotoSiteSurvey();" value="<#QIS_rescan#>" style="float:right;">
-			  	<!--input type="button" class="button_gen" onclick="manualSetup();" value="<#Manual_Setting_btn#>" style="float:right;"-->
-     			<img style="margin-top:5px; *margin-top:-10px; visibility:hidden;" src="/images/New_ui/networkmap/linetwo2.png">
 		    </td>
 		  </tr>
 		</table>
@@ -1282,7 +1278,7 @@ function limit_auth_method(){
                        <td style="padding:5px 10px 0px 10px; *padding:1px 10px 0px 10px;">
                                <p class="formfonttitle_nwm" >Smart Connect</p>
                                <select style="*margin-top:-7px;" name="smart_connect_t" class="input_option" onchange="change_smart_connect(this.value);"></select>                               
-                               <img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+                               <div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
                        </td>
                </tr>
 		<tr id="smartcon_enable_field" style="display:none">
@@ -1303,7 +1299,7 @@ function limit_auth_method(){
 				</tr></table></div>
 			</td>
 		</tr>
-  		<tr id="smartcon_enable_line" style="display:none"><td><img style="margin-top:-2px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png"></td></tr>
+  		<tr id="smartcon_enable_line" style="display:none"><td><div style="*margin-top:-10px;" class="line_horizontal"></div></td></tr>
   		<tr id="tr_guestnetwork_control">
   			<td>
   				<table>
@@ -1317,7 +1313,7 @@ function limit_auth_method(){
   					</tr>
   					<tr>
   						<td colspan="2">
-  							<img style="margin-left:2px;" src="/images/New_ui/networkmap/linetwo2.png">
+  							<div class="line_horizontal"></div>
   						</td>
   					</tr>
   				</table>
@@ -1328,7 +1324,7 @@ function limit_auth_method(){
     			<div id="lantiq_ready" style="display:none;color:#FC0;margin-left:3px;font-size:13px;">Wireless is setting...</div>
   	  			<p class="formfonttitle_nwm" ><#QIS_finish_wireless_item1#></p>
       			<input style="*margin-top:-7px; width:260px;" id="wl_ssid" type="text" name="wl_ssid" value="<% nvram_get("wl_ssid"); %>" maxlength="32" size="22" class="input_25_table" autocomplete="off" autocorrect="off" autocapitalize="off">
-      			<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+      			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>  
   		<tr>
@@ -1346,7 +1342,7 @@ function limit_auth_method(){
 							<option value="radius"  <% nvram_match("wl_auth_mode_x", "radius", "selected"); %>>Radius with 802.1x</option>
 				  		</select>
 							<img style="display:none;margin-top:-30px;margin-left:185px;cursor:pointer;" id="wl_nmode_x_hint" src="/images/alertImg.png" width="30px" onClick="parent.overlib(parent.helpcontent[0][24], parent.FIXX, 870, parent.FIXY, 350);" onMouseOut="parent.nd();">
-	  					<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+	  					<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>
   		<tr id='all_related_wep' style='display:none;'>
@@ -1357,7 +1353,7 @@ function limit_auth_method(){
 						<option value="1" <% nvram_match("wl_wep_x", "1", "selected"); %>>WEP-64bits</option>
 						<option value="2" <% nvram_match("wl_wep_x", "2", "selected"); %>>WEP-128bits</option>
 	  			</select>	  			
-	  			<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+	  			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
 			</td>
   		</tr>
   		<tr id='all_wep_key' style='display:none;'>
@@ -1369,7 +1365,7 @@ function limit_auth_method(){
 					<option value="3" <% nvram_match("wl_key", "3", "selected"); %>>3</option>
 					<option value="4" <% nvram_match("wl_key", "4", "selected"); %>>4</option>
       			</select>      			
-	  			<img style="margin-top:5px; *margin-top:-10px;" src="/images/New_ui/networkmap/linetwo2.png">
+	  			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>
   		<tr id='asus_wep_key'>
@@ -1377,7 +1373,7 @@ function limit_auth_method(){
 	    			<p class="formfonttitle_nwm" ><#WLANConfig11b_WEPKey_itemname#>
 						</p>
 							<input id="wl_asuskey1" name="wl_asuskey1" style="width:260px;*margin-top:-7px;" type="password" onBlur="switchType(this, false);" onFocus="switchType(this, true);" onKeyUp="return change_wlkey(this, 'WLANConfig11b');" value="" maxlength="27" class="input_25_table" autocorrect="off" autocapitalize="off">
-      			<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+      			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>
   		<tr id='wl_crypto' style='display:none;'>
@@ -1388,7 +1384,7 @@ function limit_auth_method(){
 					<option value="aes" <% nvram_match("wl_crypto", "aes", "selected"); %>>AES</option>
 					<option value="tkip+aes" <% nvram_match("wl_crypto", "tkip+aes", "selected"); %>>TKIP+AES</option>
 	  			</select>	  			
-	  			<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+	  			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
 			</td>
   		</tr>
   		<tr id='wl_wpa_psk_tr' style='display:none'>
@@ -1397,7 +1393,7 @@ function limit_auth_method(){
 							<input id="wl_wpa_psk" name="wl_wpa_psk" style="width:260px;*margin-top:-7px;" type="password" onBlur="switchType(this, false);" onFocus="switchType(this, true);" value="" maxlength="64" class="input_25_table" autocomplete="off" autocorrect="off" autocapitalize="off"/>
       						<!-- fake fields are a workaround for chrome autofill getting the wrong fields -->
       						<input style="display:none" type="password" name="fakepasswordremembered"/>
-      			<img style="margin-top:5px; *margin-top:-10px;"src="/images/New_ui/networkmap/linetwo2.png">
+      			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
 		</tr>
  		</table>		
@@ -1438,21 +1434,21 @@ function limit_auth_method(){
 			<td style="padding:10px 10px 0px 10px;">
 				<p class="formfonttitle_nwm" >VLAN ID</p>
 				<p style="padding-left:10px; margin-top:3px; *margin-top:-5px; margin-right:10px; background-color:#444f53; line-height:20px;" id="vlanid"></p>
-				<img style="margin-top:5px; *margin-top:-10px;" src="/images/New_ui/networkmap/linetwo2.png">
+				<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
 			</td>
 		</tr>
   		<tr>
     			<td style="padding:10px 10px 0px 10px;">
     				<p class="formfonttitle_nwm" ><#LAN_IP#></p>
     				<p class="tab_info_bg" style="padding-left:10px; margin-top:3px; *margin-top:-5px; margin-right:10px; line-height:20px;" id="LANIP"></p>
-      			<img style="margin-top:5px; *margin-top:-10px;" src="/images/New_ui/networkmap/linetwo2.png">
+      			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>  
 		<tr id="pincode">
     			<td style="padding:5px 10px 0px 10px;">
     				<p class="formfonttitle_nwm" ><#PIN_code#></p>
     				<p class="tab_info_bg" style="padding-left:10px; margin-top:3px; *margin-top:-5px; margin-right:10px;line-height:20px;" id="PINCode"></p>
-      			<img style="margin-top:5px; *margin-top:-10px;" src="/images/New_ui/networkmap/linetwo2.png">
+      			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>
   		<tr id="yadns_status" style="display:none;">
@@ -1464,14 +1460,14 @@ function limit_auth_method(){
     				<p class="tab_info_bg" style="padding-left:10px; margin-top:3px; *margin-top:-5px; margin-right:10px;line-height:20px;" id="yadns_mode1"></p>
     				<p class="tab_info_bg" style="padding-left:10px; margin-top:3px; *margin-top:-5px; margin-right:10px;line-height:20px;" id="yadns_mode2"></p>
     				</a>
-      			<img style="margin-top:5px; *margin-top:-10px;" src="/images/New_ui/networkmap/linetwo2.png">
+      			<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>
   		<tr>
     			<td style="padding:5px 10px 0px 10px;">
     				<p class="formfonttitle_nwm" >LAN <#MAC_Address#></p>
     				<p class="tab_info_bg" style="padding-left:10px; margin-top:3px; *margin-top:-5px; padding-bottom:3px; margin-right:10px;line-height:20px;" id="MAC"></p>
-    				<img style="margin-top:5px; *margin-top:-10px;" src="/images/New_ui/networkmap/linetwo2.png">
+    				<div style="margin-top:5px; *margin-top:-10px;" class="line_horizontal"></div>
     			</td>
   		</tr>     
   		<tr id="macaddr_wl2">

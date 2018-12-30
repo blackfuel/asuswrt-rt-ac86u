@@ -166,6 +166,8 @@
 			var forceChangePW = ('<% check_pw(); %>' == '1') ? true : false;
 			var wanType = "";
 			var based_modelid = '<% nvram_get("productid"); %>';
+			var lyraGoodimage = new Image(); //Add for preload image
+			lyraGoodimage.src = '../images/qis/asus_hive_good.png';
 
 			var portName = {
 				"voip": "Primary Node LAN Port",
@@ -291,7 +293,7 @@
 					$("#iptvDescTitle").text("Please connect your ISP modem LAN port to the port label \"LAN/WAN\".");
 				}
 
-				if(!isWLclient()) goTo.wiredHint();
+				if(!isWLclient() && based_modelid != "MAP-AC1750") goTo.wiredHint();
 			});
 			
 			function patchUntranslatedString(){	
@@ -546,6 +548,12 @@
 				"login": function(){
 					if(hasBlank([$("#http_username"), $("#http_passwd"), $("#http_passwd_confirm")])) return false;
 
+					if(based_modelid == "MAP-AC1750"){
+						qisPostData.wrs_protect_enable = qisOriginData.wrs_protect_enable;
+						qisPostData.bwdpi_db_enable = qisOriginData.bwdpi_db_enable;
+						qisPostData.apps_analysis = qisOriginData.apps_analysis;
+					}
+
 					var validForm = function(){
 						if($("#http_username").val() == 0){
 							$("#http_username").showTextHint("<#File_Pop_content_alert_desc1#>");
@@ -642,7 +650,7 @@
 					qisPostData.wan_dnsenable_x = "1";
 
 					if($("#iptv_checkbox").is(":checked")){
-						goTo.iptv();
+						$.mobile.changePage("#iptv_desc", {transition: "slide", changeHash: false, reverse: false});
 					}
 					else
 						$.mobile.changePage("#wireless_setting", {transition: "slide", changeHash: false, reverse: false});
@@ -690,7 +698,7 @@
 					qisPostData.wan_dns2_x = $("#pap_ip_advance_setting_dns2").val();
 
 					if($("#iptv_checkbox").is(":checked")){
-						goTo.iptv();
+						$.mobile.changePage("#iptv_desc", {transition: "slide", changeHash: false, reverse: false});
 					}
 					else
 						$.mobile.changePage("#wireless_setting", {transition: "slide", changeHash: false, reverse: false});
@@ -890,13 +898,25 @@
 							$.mobile.changePage("#login_name", {transition: "slide", changeHash: false, reverse: true});
 					}
 					else if(qisPostData.wan_proto == "pppoe"){
-						$.mobile.changePage("#pppoe_setting", {transition: "slide", changeHash: false, reverse: true});
+						if($("#iptv_checkbox").is(":checked") || $("#iptv_checkbox_pppoe").is(":checked")){
+							$.mobile.changePage("#iptv_setting", {transition: "slide", changeHash: false, reverse: true});
+						}
+						else
+							$.mobile.changePage("#pppoe_setting", {transition: "slide", changeHash: false, reverse: true});
 					}
 					else if(qisPostData.wan_proto == "static"){
-						$.mobile.changePage("#static_setting", {transition: "slide", changeHash: false, reverse: true});
+						if($("#iptv_checkbox").is(":checked")){
+							$.mobile.changePage("#iptv_setting", {transition: "slide", changeHash: false, reverse: true});
+						}
+						else
+							$.mobile.changePage("#static_setting", {transition: "slide", changeHash: false, reverse: true});
 					}
 					else{
-						$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});
+						if($("#iptv_checkbox").is(":checked")){
+							$.mobile.changePage("#iptv_setting", {transition: "slide", changeHash: false, reverse: true});
+						}
+						else
+							$.mobile.changePage("#wan_setting", {transition: "slide", changeHash: false, reverse: true});
 					}
 				},
 
@@ -1976,7 +1996,7 @@
 				<div id="pppoe_field">
 					<div style="margin-left:17px;">
 						<div style="display:table;margin:18px 0 19px 30px;width:100%">
-							<div class="inputTitle"><#PPPConnection_UserName_itemname#></div>
+							<div class="inputTitle"><#Username#></div>
 						</div>
 						<div class="inputContainer">
 							<input id="wan_pppoe_username" type="text" maxlength="64" class="textInput" data-role="none" value="" data-clear-btn="true"></input>
@@ -2296,12 +2316,13 @@
 					</div>
 					<div class="footer_mobile">
 						<table style="width:100%;" cellpadding="0" cellspacing="0">
-							<tr>
-								<td class="mobileAbort" style="width:50%" onclick='abort.iptv()'>
+							<tr style="height:102px;text-align:center">
+								<td style="width:50%" onclick='abort.iptv()'>
 									<div class="mobile_abortBtn"><#CTL_prev#></div>
 								</td>
-								<td class="mobileApply" onclick="apply.iptv();">
-									<div class="mobile_applyBtn"><#CTL_next#></div>
+								<td style="width:50%;background:#27D1A4" onclick="apply.iptv();">
+									<div class="mobile_applyBtn"
+									><#CTL_next#></div>
 								</td>
 							</tr>
 						</table>

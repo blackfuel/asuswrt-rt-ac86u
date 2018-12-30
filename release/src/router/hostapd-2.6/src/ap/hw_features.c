@@ -754,7 +754,7 @@ static int ieee80211n_check_40mhz(struct hostapd_iface *iface)
 
 #ifdef CONFIG_ACS
 	/* ACS smart already includes these checks */
-	if (iface->conf->acs_algo == ACS_ALGO_SMART)
+	if (iface->conf->acs_algo == ACS_ALGO_SMART && iface->conf->acs_init_done)
 		return 0;
 #endif /* CONFIG_ACS */
 
@@ -1173,7 +1173,7 @@ hostapd_check_chans(struct hostapd_iface *iface)
 	 * which is used to trigger ACS.
 	 */
 
-	switch (acs_init(iface, ACS_INITIAL)) {
+	switch (acs_init(iface)) {
 	case HOSTAPD_CHAN_ACS:
 		return HOSTAPD_CHAN_ACS;
 	case HOSTAPD_CHAN_VALID:
@@ -1224,16 +1224,23 @@ int hostapd_acs_completed(struct hostapd_iface *iface, int err)
 			dfs_channel = 1;
 
 #ifdef CONFIG_ACS
-		wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO,
-				ACS_EVENT_COMPLETED "freq=%d channel=%d"
-				" OperatingChannelBandwidt=%d ExtensionChannel=%d cf1=%d cf2=%d"
-				" dfs_chan=%d",
-				freq, iface->conf->channel,
-				get_num_width(iface->conf->vht_oper_chwidth, iface->conf->secondary_channel),
-				iface->conf->secondary_channel,
-				acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg0_idx),
-				acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg1_idx),
-				dfs_channel);
+	if (!iface->conf->acs_scan_mode) {
+			wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO,
+					ACS_EVENT_COMPLETED "freq=%d channel=%d"
+					" OperatingChannelBandwidt=%d ExtensionChannel=%d cf1=%d cf2=%d"
+					" reason=%s dfs_chan=%d",
+					freq, iface->conf->channel,
+					get_num_width(iface->conf->vht_oper_chwidth, iface->conf->secondary_channel),
+					iface->conf->secondary_channel,
+					acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg0_idx),
+					acs_chan_to_freq(iface->conf->vht_oper_centr_freq_seg1_idx),
+					hostapd_channel_switch_text(HAPD_CHAN_SWITCH_OTHER),
+					dfs_channel);
+	}
+	else {
+			hostapd_set_state(iface, HAPD_IFACE_ACS_DONE);
+			wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, ACS_EVENT_COMPLETED "SCAN");
+	}
 #endif /* CONFIG_ACS */
 		break;
 	case HOSTAPD_CHAN_ACS:
@@ -1247,6 +1254,12 @@ int hostapd_acs_completed(struct hostapd_iface *iface, int err)
 		wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, ACS_EVENT_FAILED);
 		hostapd_notify_bad_chans(iface);
 		goto out;
+	}
+
+	/* After scan and ACS don't set the channel */
+	if (iface->conf->acs_scan_mode) {
+		iface->conf->acs_scan_mode = 0;
+		return 0;
 	}
 
 	ret = hostapd_check_ht_capab(iface);

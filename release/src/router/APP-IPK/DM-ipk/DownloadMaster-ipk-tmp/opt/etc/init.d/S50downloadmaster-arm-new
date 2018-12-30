@@ -415,6 +415,12 @@ case "$1" in
 	ln -sf $APP_LIB/libssl.so.$OPENSSL_VER $APP_LINK_LIB/libssl.so.0
 	ln -sf $APP_LIB/libssl.so.$OPENSSL_VER $APP_LINK_LIB/libssl.so
 
+	# libiconv
+	LIBICONV_VER=`ls $APP_LIB/libiconv.so.* |awk 'BEGIN{FS="libiconv.so."}{print $2}'`
+	ln -sf $APP_LIB/libiconv.so.$LIBICONV_VER $APP_LINK_LIB/libiconv.so
+	ln -sf $APP_LIB/libiconv.so.$LIBICONV_VER $APP_LINK_LIB/libiconv.so.2
+
+
 	# zlib
 	ZLIB_VER=`ls $APP_LIB/libz.so.* |awk 'BEGIN{FS="libz.so."}{print $2}'`
 	ln -sf $APP_LIB/libz.so.$ZLIB_VER $APP_LINK_LIB/libz.so.1

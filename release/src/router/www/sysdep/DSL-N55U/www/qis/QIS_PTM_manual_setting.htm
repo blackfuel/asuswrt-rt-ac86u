@@ -23,6 +23,7 @@ var orig_dslx_modulation ="<% nvram_get("dslx_modulation"); %>";
 var orig_dslx_annex="<% nvram_get("dslx_annex"); %>";
 var orig_dslx_vdsl_profile="<% nvram_get("dslx_vdsl_profile"); %>";
 var orig_dslx_ginp = "<% nvram_get("dslx_ginp"); %>";
+var orig_dslx_testlab = "<% nvram_get("dslx_testlab"); %>";
 
 function setIptvNumPvc() {
 	var pvc_cnt = 0;
@@ -449,11 +450,22 @@ function btnNext() {
 		document.form.dslx_ginp_try_enable_disp.value = "0";
 	}
 	if( document.form.country.value == 'Australia'
-		&& document.form.dsltmp_cfg_ispname.value=='MyRepublic'
+		&& (document.form.dsltmp_cfg_ispname.value=='MyRepublic'
+			|| document.form.dsltmp_cfg_ispname.value=='Telstra (Automatic IP)'
+			|| document.form.dsltmp_cfg_ispname.value=='Aussie Broadband')
 	) {
 		document.form.dslx_vd1q0.value = "2";
 		document.form.dsltmp_cfg_dot1q.value = 1;
 		document.form.dsltmp_cfg_vid.value = 0;
+	}
+	if( document.form.dsltmp_cfg_country.value=='Turkey'
+		&& document.form.dsltmp_cfg_ispname.value.search("Turk Telekom") >= 0
+	){
+		document.form.dslx_testlab.value = "TR_TT";
+		document.form.dslx_dla_enable.value = "0";
+	}
+	else{
+		document.form.dslx_testlab.value = "disable";
 	}
 
 	if(document.form.dslx_transmode.value != orig_dslx_transmode
@@ -461,6 +473,7 @@ function btnNext() {
 		|| document.form.dslx_annex.value != orig_dslx_annex
 		|| document.form.dslx_vdsl_profile.value != orig_dslx_vdsl_profile
 		|| document.form.dslx_ginp.value != orig_dslx_ginp
+		|| document.form.dslx_testlab.value != orig_dslx_testlab
 	) {
 		parent.restartDSLSetting = true;
 	}
@@ -570,11 +583,9 @@ function showSpecificSetting(idx) {
 <input type="hidden" name="dslx_ginp_try_enable" value="<% nvram_get("dslx_ginp_try_enable"); %>">
 <input type="hidden" name="dslx_ginp_try_enable_disp" value="0">
 <input type="hidden" name="dslx_vd1q0" value="1">
+<input type="hidden" name="dslx_testlab" value="<% nvram_get("dslx_testlab"); %>">
+<input type="hidden" name="dslx_dla_enable" value="<% nvram_get("dslx_dla_enable"); %>">
 <div class="QISmain">
-	<!--
-	<div class="formfonttitle" style="padding:0 0 0 10;" id="FailReason"><#Manual_Setting_Title#></div>
-	<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img style="width: 700px; height: 2px;" src="/images/New_ui/export/line_export.png"></div>
-	-->
 	<div class="formfonttitle" style="padding:6 0 0 10;">
 			<div>
 				<table width="730px">
@@ -585,7 +596,7 @@ function showSpecificSetting(idx) {
 					</tr>
 				</table>
 			</div>
-			<div style="margin:5px;"><img style="width: 720px; *width: 710px; height: 2px;" src="/images/New_ui/export/line_export.png"></div>
+			<div style="margin: 5px;width: 720px; *width: 710px; height: 2px;" class="splitLine"></div>
 	</div>
 	<br/>
 	<table width="80%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">

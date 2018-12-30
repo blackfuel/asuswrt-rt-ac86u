@@ -52,7 +52,28 @@ $(document).ready(function (){
 	show_menu();
 	collect_info();
 	generate_group_table();
+	setFAQ();
 });
+
+function setFAQ(){
+	var current_lang = document.form.preferred_lang.value;
+	var faq_url = "";
+	if(current_lang == "CN"){
+		faq_url = "https://www.asus.com.cn/support/FAQ/1035994";
+	}
+	else if(current_lang == "TW" || current_lang == "CZ" || current_lang == "PL" 
+		 || current_lang == "RU" || current_lang == "DE" || current_lang == "FR" 
+		 || current_lang == "TR" || current_lang == "TH" || current_lang == "ES" 
+		 || current_lang == "IT" || current_lang == "UK" || current_lang == "HU" 
+		 || current_lang == "RO" || current_lang == "KR" || current_lang == "NL"){
+		faq_url = "https://www.asus.com/"+ current_lang +"/support/FAQ/1035994";
+	}
+	else{
+		faq_url = "https://www.asus.com/support/FAQ/1035994";
+	}
+
+	$("#faq").attr("href", faq_url);
+}
 
 function group_object(active, name, desc, account_array){
 	this.active = (active == 1) ? true : false;
@@ -167,6 +188,11 @@ function add_group(flag, target){
 	var group_desc = $("#group_description").val();
 	
 	// validate form
+	if(info.group.length >= 32){
+		alert("The number of groups reaches the limitiation.");
+		return false;
+	}
+
 	if(!Block_chars(document.getElementById("group_name"), ["<", ">"])){
 		return false;
 	}
@@ -387,20 +413,11 @@ function enable_account_all(obj){
 				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Group_Name#></th>
 				<td>
 					<input id="group_name" type="text" maxlength="32" class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
+					<div style="padding: 3px 0 0 2px">
+						<a id="faq" target="_blank" style="text-decoration: underline;">User Management FAQ</a>
+					</div>
 				</td>
 			</tr>	
-			<!--tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#HSDPAConfig_Password_itemname#></th>			
-				<td>
-					<input id="account_password" type="text" maxlength="32"class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
-				</td>
-			</tr>
-			<tr>
-				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#PM_Confirm_Pwd#></th>
-				<td>
-					<input id="account_password_confirm" type="text" maxlength="32"class="input_32_table" style="height: 23px;" value="" autocorrect="off" autocapitalize="off">
-				</td>
-			</tr-->
 			<tr>
 				<th width="30%" style="font-family: Calibri;font-weight: bolder;"><#Description#></th>			
 				<td>
@@ -443,14 +460,15 @@ function enable_account_all(obj){
 								<td bgcolor="#4D595D" valign="top">
 									<div>&nbsp;</div>
 									<div class="formfonttitle"><#Permission_Management#> - <#Permission_Management_Groups#></div>
-									<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
+									<div style="margin: 10px 0 10px 5px" class="splitLine"></div>
 									<div style="margin-top:20px ;" class="formfontdesc"><#PM_UsersGroups_desc#></div>
 									<div>
 										<div style="display:flex">
 											<div style="font-weight:900;padding-left:10px;line-height:34px;"><#PM_Account_Table#></div>
 											<div style="margin-left:10px;">
 												<div class="createAccountBtn_add" onclick="show_addTable('account', 'new');"></div>
-											</div>																			
+											</div>
+											<div style="font-weight:900;padding-left:10px;line-height:34px;">(<#List_limit#> 32 units, max 200 users for each user group)</div>
 										</div>									
 										<table id="group_table" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable"></table>
 									</div>									

@@ -455,7 +455,7 @@ function gotoHome() {
 			</td>
 		</tr>
 	</table>
-	<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img style="width: 700px; height: 2px;" src="/images/New_ui/export/line_export.png"></div>
+	<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><div style="width: 700px;height: 2px;" class="splitLine"></div></div>
 	<br/>
 
 <table id="tblsetting_1" class="QISform" width="400" border=0 align="center" cellpadding="5" cellspacing="0">
@@ -472,7 +472,7 @@ function gotoHome() {
   
 <table id="tblsetting_2" class="QISform" width="400" border="0" align="center" cellpadding="3" cellspacing="0">
   <tr>
-	<th width="120"><#HSDPAConfig_Username_itemname#></th>
+	<th width="120"><#Username#></th>
 	<td>
 	  <input type="text" name="dsltmp_qis_pppoe_username" class="input_32_table" value="" maxlength="64" tabindex="1" autocorrect="off" autocapitalize="off">
 	</td>
@@ -545,11 +545,8 @@ function gotoHome() {
 	</div>
 
 	<div class="apply_gen" style="margin-top:20px">
-		<input type="button" id="prevButton" value="<#Manual_Setting_btn#>" onclick="gotoprev(document.form);" class="button_gen_long" tabindex="5">
-<!--
-		<input type="button" id="nextButton" value="Ethernet WAN" onclick="redirect_page('internet_type');" class="button_gen" >
--->
-		<input type="button" id="nextButton" value="<#CTL_next#>" onclick="submitForm();" class="button_gen_long" tabindex="4">
+		<input type="button" id="prevButton" value="<#Manual_Setting_btn#>" onclick="gotoprev(document.form);" class="button_gen" tabindex="5">
+		<input type="button" id="nextButton" value="<#CTL_next#>" onclick="submitForm();" class="button_gen" tabindex="4">
 	</div>
 
 </div>

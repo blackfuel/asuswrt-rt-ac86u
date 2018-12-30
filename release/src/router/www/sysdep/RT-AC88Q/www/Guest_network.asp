@@ -517,11 +517,15 @@ function edit_guest_unit(_unit, _subunit) {
 		document.getElementById("gnset_wl_captive_portal").style.display = "none";
 		document.getElementById("gnset_wl_guest_num").style.display = "";
 		document.getElementById("gnset_wl_expire").style.display = "";
-		document.getElementById("gnset_wl_lanaccess").style.display = "";
-		document.getElementById("gnset_wl_bw_enabled").style.display = "";
-		document.getElementById("gnset_wl_bw_setting").style.display = "";
-		if(isSwMode("ap"))
+		if(isSwMode("ap")){
 			document.getElementById("gnset_wl_lanaccess").style.display = "none";
+			document.getElementById("gnset_wl_bw_enabled").style.display = "none";
+			document.getElementById("gnset_wl_bw_setting").style.display = "none";
+		}
+		else{
+			document.getElementById("gnset_wl_lanaccess").style.display = "";
+			show_bandwidth(unit_bw_enabled);
+		}
 	}
 
 	$('#full_screen_bg').fadeIn();

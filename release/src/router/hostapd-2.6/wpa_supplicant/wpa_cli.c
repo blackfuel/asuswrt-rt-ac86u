@@ -1544,7 +1544,6 @@ static int wpa_cli_cmd_scan(struct wpa_ctrl *ctrl, int argc, char *argv[])
 static int wpa_cli_cmd_scan_results(struct wpa_ctrl *ctrl, int argc,
 				    char *argv[])
 {
-	//return wpa_ctrl_command(ctrl, "SCAN_RESULTS");
 	return wpa_cli_cmd(ctrl, "SCAN_RESULTS", 0, argc, argv);
 }
 

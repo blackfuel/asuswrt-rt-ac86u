@@ -2539,7 +2539,7 @@ static int wpa_supplicant_ctrl_iface_scan_result(
 		if (asus_ie) {
 			char ie_buf[1024];
 			memset(ie_buf, 0, sizeof(ie_buf));
-			wpa_snprintf_hex(ie_buf, sizeof(ie_buf), &asus_ie[2], asus_ie[1]);
+			wpa_snprintf_hex(ie_buf, sizeof(ie_buf), &asus_ie[2], (asus_ie[1] > 511 ? 511 : asus_ie[1]));
 			ret = os_snprintf(pos, end - pos, " vsie=%s", ie_buf);
 			if (os_snprintf_error(end - pos, ret))
 				return -1;
@@ -2645,6 +2645,11 @@ static int wpa_supplicant_ctrl_iface_scan_result(
 		pos += ret;
 
 		ret = os_snprintf(pos, end - pos, " freqband=%s", bss->freqband);
+		if (os_snprintf_error(end - pos, ret))
+			return -1;
+		pos += ret;
+
+		ret = os_snprintf(pos, end - pos, " netmode=%s", bss->netmode);
 		if (os_snprintf_error(end - pos, ret))
 			return -1;
 		pos += ret;
@@ -9455,7 +9460,6 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 	} else if (os_strncmp(buf, "SCAN ", 5) == 0) {
 		wpas_ctrl_scan(wpa_s, buf + 5, reply, reply_size, &reply_len);
 	} else if (os_strncmp(buf, "SCAN_RESULTS", 12) == 0) {
-		printf("commandddddddddddddddddddd=%s\n", buf);
 		reply_len = wpa_supplicant_ctrl_iface_scan_results(
 			wpa_s, buf + 12, reply, reply_size);
 	} else if (os_strcmp(buf, "ABORT_SCAN") == 0) {

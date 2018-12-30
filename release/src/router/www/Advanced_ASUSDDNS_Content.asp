@@ -70,9 +70,6 @@ var httpd_cert_info = [<% httpd_cert_info(); %>][0];
 var orig_le_enable = '<% nvram_get("le_enable"); %>';
 var le_state = '<% nvram_get("le_state"); %>';
 
-var ASUS_EULA_str = '<% nvram_get("ASUS_EULA"); %>';
-var ASUS_EULA_time_str = '<% nvram_get("ASUS_EULA_time"); %>';
-
 function init(){
 	show_menu();
 	httpApi.faqURL("faq", "1034294", "https://www.asus.com", "/support/FAQ/");
@@ -88,10 +85,10 @@ function init(){
 		}
 	}
 
-	setTimeout("show_warning_message();", 100);
+	setTimeout(show_warning_message, 100);
 
 	ASUS_EULA.config(applyRule, refreshpage);
-	if(ddns_enable_x == "1" && ddns_server_x == "WWW.ASUS.COM" && (ASUS_EULA_str == "0" || ASUS_EULA_time_str == "")){
+	if(ddns_enable_x == "1" && ddns_server_x == "WWW.ASUS.COM"){
 		ASUS_EULA.check('asus');
 	}
 }
@@ -278,17 +275,11 @@ function get_cert_info(){
 }
 
 function apply_eula_check(){
-	var do_applyRule = false;
-
 	if(document.form.ddns_enable_x[0].checked == true && document.form.ddns_server_x.value == "WWW.ASUS.COM"){
-		do_applyRule = ASUS_EULA.check("asus");
+		if(!ASUS_EULA.check("asus")) return false;
 	}
-	else
-		do_applyRule = true;
-
-	if(do_applyRule)
-		applyRule();
-
+	
+	applyRule();
 }
 
 function applyRule(){
@@ -624,7 +615,7 @@ function save_cert_key(){
 		  		<td bgcolor="#4D595D" valign="top"  >
 		  		<div>&nbsp;</div>
 		  		<div class="formfonttitle"><#menu5_3#> - <#menu5_3_6#></div>
-		  		<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
+		  		<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 		 		<div class="formfontdesc"><#LANHostConfig_x_DDNSEnable_sectiondesc#></div>
 		 		<div class="formfontdesc" style="margin-top:-8px;"><#NSlookup_help#></div>
 				<div class="formfontdesc" id="wan_ip_hide2" style="color:#FFCC00; display:none;"><#LANHostConfig_x_DDNSEnable_sectiondesc2#></div>

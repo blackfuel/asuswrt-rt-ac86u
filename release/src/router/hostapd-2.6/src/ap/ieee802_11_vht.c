@@ -395,6 +395,32 @@ no_capab:
 }
 
 
+u16 copy_sta_vendor2_vht(struct hostapd_data *hapd, struct sta_info *sta,
+			const u8 *vht_capab)
+{
+	/* Disable VHT caps for STAs associated to no-VHT BSSes. */
+	if (!vht_capab) {
+		sta->flags &= ~WLAN_STA_VHT;
+		os_free(sta->vht_capabilities);
+		sta->vht_capabilities = NULL;
+		return WLAN_STATUS_SUCCESS;
+	}
+
+	if (sta->vht_capabilities == NULL) {
+		sta->vht_capabilities =
+			os_zalloc(sizeof(struct ieee80211_vht_capabilities));
+		if (sta->vht_capabilities == NULL)
+			return WLAN_STATUS_UNSPECIFIED_FAILURE;
+	}
+
+	sta->flags |= WLAN_STA_VHT | WLAN_STA_VENDOR2_VHT;
+	os_memcpy(sta->vht_capabilities, vht_capab,
+		sizeof(struct ieee80211_vht_capabilities));
+
+	return WLAN_STATUS_SUCCESS;
+}
+
+
 u8 * hostapd_eid_vendor_vht(struct hostapd_data *hapd, u8 *eid)
 {
 	u8 *pos = eid;
