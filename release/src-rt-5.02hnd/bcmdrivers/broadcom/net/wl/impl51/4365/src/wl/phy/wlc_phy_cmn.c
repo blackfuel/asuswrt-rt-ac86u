@@ -17340,6 +17340,17 @@ wlc_phy_adjust_ed_thres(phy_info_t *pi, int32 *assert_thresh_dbm, bool set_thres
 
 	return BCME_OK;
 }
+
+int
+wlc_phy_update_ed_thres(wlc_phy_t *ppi, int32 *assert_thresh_dbm, bool set_threshold)
+{
+	phy_info_t *pi = (phy_info_t *)ppi;
+	int err = BCME_OK;
+
+	err = wlc_phy_adjust_ed_thres(pi, assert_thresh_dbm, set_threshold);
+
+	return err;
+}
 #endif /* ((ACCONF != 0) || (ACCONF2 != 0) || (NCONF != 0) || (HTCONF != 0) || (LCN40CONF != 0)) */
 
 static int

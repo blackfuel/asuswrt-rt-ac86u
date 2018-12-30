@@ -152,6 +152,8 @@
 #include <wlc_macfltr.h>
 #endif /* WLAUTHRESP_MAC_FILTER */
 
+#include <phy_rxgcrs_api.h>
+
 /* Default pre tbtt time for non mbss case */
 #define	PRE_TBTT_DEFAULT_us		2
 
@@ -284,6 +286,15 @@ typedef struct
 	wlc_rxchain_pwrsave_t  rxchain_pwrsave;	/* rxchain reduction power save structure */
 	ratespec_t	force_bcn_rspec; /* force setup beacon ratespec (in unit of 500kbps) */
 	bool		wlancoex;	/* flags to save WLAN dual 2G radios coex status */
+/* dynamic ed_thresh */
+	bool dynamic_ed_thresh_enable;
+	uint8 cca_count;
+	uint8 ed_thresh_dec_count;
+	int32 stored_ed_thresh;
+	int32 adjusted_ed_thresh;
+	uint32 txop_rec;
+	uint32 tx_rec;
+	uint32 rx_rec;
 } wlc_ap_info_pvt_t;
 
 typedef struct wlc_assoc_req
@@ -371,6 +382,7 @@ enum {
 	IOV_PROXY_ARP_ADVERTISE,    /* Update beacon, probe response frames for proxy arp bit */
 	IOV_SET_RADAR,		/* Set radar. Convert IOCTL to IOVAR for RSDB/BG DFS Scan. */
 	IOV_MBSS_RMAC,		/* Allow to use real-mac bssid */
+	IOV_DY_ED_THRESH,	/* Enable TXOP based dynamic ed thresh */
 	IOV_LAST		/* In case of a need to check max ID number */
 
 };
@@ -513,6 +525,9 @@ static const bcm_iovar_t wlc_ap_iovars[] = {
 	{"mbss_rmac", IOV_MBSS_RMAC,
 	(IOVF_SET_DOWN), IOVT_UINT8, 0,
 	},
+	{"dy_ed_thresh", IOV_DY_ED_THRESH,
+	(0), IOVT_BOOL, 0
+	},
 	{NULL, 0, 0, 0, 0 }
 };
 
@@ -602,6 +617,7 @@ static void wlc_bcmc_mux_free(wlc_bsscfg_t *cfg);
 static int wlc_bcmc_mux_alloc(wlc_bsscfg_t *cfg);
 #endif
 
+static void wlc_ap_dynamic_ed_thresh(wlc_ap_info_t *ap);
 /* This includes the auto generated ROM IOCTL/IOVAR patch handler C source file (if auto patching is
  * enabled). It must be included after the prototypes and declarations above (since the generated
  * source file may reference private constants, types, variables, and functions).
@@ -754,6 +770,9 @@ BCMATTACHFN(wlc_ap_attach)(wlc_info_t *wlc)
 	ap->txbcn_timeout = (getintvar(pub->vars, "watchdog") / 1000);
 
 
+	appvt->dynamic_ed_thresh_enable = getintvar(pub->vars, "dy_ed_thresh");
+	printf("wl%d: %s dynamic_ed_thresh_enable = %d\n",
+		wlc->pub->unit, __FUNCTION__, appvt->dynamic_ed_thresh_enable);
 	return (wlc_ap_info_t*)appvt;
 
 fail:
@@ -3775,6 +3794,127 @@ wlc_dump_pwrsave(wlc_pwrsave_t *pwrsave, struct bcmstrbuf *b)
 #endif /* RXCHAIN_PWRSAVE or RADIO_PWRSAVE */
 #endif /* BCMDBG */
 
+#define CCA_COUNT	5	/* cca stats count */
+#define TXOP_LOW	5	/* TXOP lower bound */
+#define TXOP_HIGH	15	/* TXOP upper bound */
+#define TXRX_BOUND	15	/* TX + RX bound */
+#define ED_THRESH_HIGH -20 /* Highest ed_thresh */
+#define ED_INC_STEP	5	/* ed_thresh step size */
+#define ED_DEC_STEP	1	/* ed_thresh step size */
+#define ED_DEC_COUNT 12	/* */
+
+static void
+wlc_ap_dynamic_ed_thresh(wlc_ap_info_t *ap)
+{
+	wlc_ap_info_pvt_t *appvt = (wlc_ap_info_pvt_t *) ap;
+	wlc_info_t *wlc = appvt->wlc;
+	wlc_chanim_stats_t *stats;
+	uint32 avg_txop, avg_tx, avg_rx;
+	int32 *ed_thresh_ptr;
+	int32 current_ed_thresh;
+
+	ed_thresh_ptr = &appvt->stored_ed_thresh;
+
+	if (wlc_phy_update_ed_thres(wlc->pi, &current_ed_thresh, FALSE) != BCME_OK) {
+		WL_ERROR(("wl%d: %s: can't get current ed_thresh \n",
+			wlc->pub->unit, __FUNCTION__));
+		return;
+	}
+
+	if (*ed_thresh_ptr == 0) {
+		*ed_thresh_ptr = current_ed_thresh;
+	}
+
+	if (appvt->adjusted_ed_thresh == 0)
+	{
+		appvt->adjusted_ed_thresh = current_ed_thresh;
+	}
+
+	if (appvt->adjusted_ed_thresh > current_ed_thresh) {
+		/* ed threshold might be adjusted somewhere in driver */
+		if (wlc_phy_update_ed_thres(wlc->pi,
+			&appvt->adjusted_ed_thresh, TRUE) != BCME_OK) {
+			WL_ERROR(("wl%d: %s: fail to raise ed_thresh \n",
+				wlc->pub->unit, __FUNCTION__));
+			return;
+		}
+	}
+
+	WL_TMP(("wl%d: %s: stored_ed_thresh %d current_ed_thresh %d \n",
+		wlc->pub->unit, __FUNCTION__, appvt->stored_ed_thresh,
+		current_ed_thresh));
+
+	stats = wlc_lq_chanim_chanspec_to_stats(wlc->chanim_info, wlc->home_chanspec);
+	if (stats) {
+		appvt->txop_rec += stats->chanim_stats.ccastats[CCASTATS_TXOP];
+		WL_TMP(("wl%d: %s: ccastats txop %d txop_rec %d \n", wlc->pub->unit,
+			__FUNCTION__, stats->chanim_stats.ccastats[CCASTATS_TXOP],
+			appvt->txop_rec));
+
+		appvt->tx_rec += stats->chanim_stats.ccastats[CCASTATS_TXDUR];
+		appvt->rx_rec += stats->chanim_stats.ccastats[CCASTATS_INBSS];
+		appvt->cca_count++;
+
+		if (appvt->cca_count == CCA_COUNT) {
+			avg_txop = appvt->txop_rec / appvt->cca_count;
+			avg_tx = appvt->tx_rec / appvt->cca_count;
+			avg_rx = appvt->rx_rec / appvt->cca_count;
+			WL_TMP(("wl%d: %s: avg_txop %d avg_tx %d avg_rx %d \n",
+				wlc->pub->unit, __FUNCTION__, avg_txop, avg_tx, avg_rx));
+
+			if (((avg_tx + avg_rx) < TXRX_BOUND) && (avg_txop < TXOP_LOW)) {
+				appvt->ed_thresh_dec_count = 0;
+				/* raise ed_thresh */
+				if (current_ed_thresh <= ED_THRESH_HIGH) {
+					appvt->adjusted_ed_thresh = MIN(ED_THRESH_HIGH,
+						current_ed_thresh + ED_INC_STEP);
+					if (wlc_phy_update_ed_thres(wlc->pi,
+						&appvt->adjusted_ed_thresh, TRUE) != BCME_OK) {
+						WL_ERROR(("wl%d: %s: fail to raise ed_thresh \n",
+							wlc->pub->unit, __FUNCTION__));
+						return;
+					} else {
+						WL_TMP(("wl%d: %s: raised ed_thresh %d \n",
+							wlc->pub->unit, __FUNCTION__,
+							appvt->adjusted_ed_thresh));
+					}
+				} else {
+					/* Do nothing */
+				}
+			} else if ((avg_txop > TXOP_HIGH) ||
+				(avg_tx + avg_rx + avg_txop) > (TXOP_HIGH + TXRX_BOUND)) {
+				appvt->ed_thresh_dec_count++;
+				if (appvt->ed_thresh_dec_count == ED_DEC_COUNT)
+				{
+					/* lower ed_thresh */
+					if (current_ed_thresh >= *ed_thresh_ptr) {
+						appvt->adjusted_ed_thresh = MAX(*ed_thresh_ptr,
+							current_ed_thresh - ED_DEC_STEP);
+					if (wlc_phy_update_ed_thres(wlc->pi,
+						&appvt->adjusted_ed_thresh, TRUE) != BCME_OK) {
+						WL_ERROR(("wl%d: %s: fail to lower ed_thresh \n",
+							wlc->pub->unit, __FUNCTION__));
+						return;
+					} else {
+						WL_TMP(("wl%d: %s: lowered ed_thresh %d \n",
+							wlc->pub->unit, __FUNCTION__,
+							appvt->adjusted_ed_thresh));
+					}
+					} else {
+						/* Do nothing */
+					}
+					appvt->ed_thresh_dec_count = 0;
+				}
+			}
+			appvt->cca_count = 0;
+			appvt->txop_rec = 0;
+			appvt->tx_rec = 0;
+			appvt->rx_rec = 0;
+		}
+	}
+	return;
+}
+
 static void
 wlc_ap_watchdog(void *arg)
 {
@@ -3786,6 +3926,8 @@ wlc_ap_watchdog(void *arg)
 #endif
 	int idx;
 	wlc_bsscfg_t *cfg;
+
+	uint8 region_group = wlc_phy_ext_get_locale((phy_info_t *)WLC_PI(wlc));
 
 	/* part 1 */
 	if (AP_ENAB(wlc->pub)) {
@@ -3829,6 +3971,9 @@ wlc_ap_watchdog(void *arg)
 			appvt->txbcn_snapshot = txbcn_snapshot;
 		}
 
+		if ((appvt->dynamic_ed_thresh_enable) && (region_group != REGION_EU)) {
+			wlc_ap_dynamic_ed_thresh(ap);
+		}
 		/* deauth rate limiting - enable sending one deauth every second */
 		FOREACHSCB(wlc->scbstate, &scbiter, scb) {
 #ifdef RXCHAIN_PWRSAVE
@@ -4970,6 +5115,15 @@ wlc_ap_doiovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *na
 	case IOV_SVAL(IOV_MBSS_RMAC):
 		wlc->pub->_mbss_rmac = (uint8)int_val;
 		break;
+
+	case IOV_SVAL(IOV_DY_ED_THRESH): {
+		appvt->dynamic_ed_thresh_enable = int_val;
+		break;
+	}
+	case IOV_GVAL(IOV_DY_ED_THRESH):
+		*ret_int_ptr = appvt->dynamic_ed_thresh_enable;
+		break;
+
 
 	default:
 		err = BCME_UNSUPPORTED;

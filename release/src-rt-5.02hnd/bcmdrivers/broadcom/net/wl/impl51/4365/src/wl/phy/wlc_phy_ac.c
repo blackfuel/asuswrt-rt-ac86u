@@ -1459,7 +1459,7 @@ void wlc_phy_adjust_ed_thres_acphy(phy_info_t *pi, int32 *assert_thresh_dbm, boo
 			assert_thres_val = READ_PHYREG(pi, ed_crs20LAssertThresh0);
 		assert_local_dBm = ((((assert_thres_val - 832)*30103)) - 48000000)/640000;
 
-		printf("djain101, assert = %d\n", assert_thres_val);
+		PHY_TRACE(("djain101, assert = %d\n", assert_thres_val));
 
 		/* TINY maps 0.2 to adc code 512, whereas non-TINY 0.4, so there is a 6dB
 		   difference in formula, and ed logic in chip does not take care of it

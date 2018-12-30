@@ -146,3 +146,10 @@ wlc_phy_get_locale(phy_rxgcrs_info_t *info)
 {
 	return info->region_group;
 }
+
+uint8
+wlc_phy_ext_get_locale(phy_info_t *pi)
+{
+	return wlc_phy_get_locale(pi->rxgcrsi);
+}
+

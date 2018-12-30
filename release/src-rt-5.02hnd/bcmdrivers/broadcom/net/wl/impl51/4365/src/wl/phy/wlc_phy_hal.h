@@ -934,6 +934,10 @@ extern void wlc_phy_interf_chan_stats_update(wlc_phy_t *pi, chanspec_t chanspec,
 
 /* WAR */
 extern void wlc_phy_ofdm_rateset_war(wlc_phy_t *pih, bool war);
+#if ((ACCONF != 0) || (ACCONF2 != 0) || (NCONF != 0) || (HTCONF != 0) || (LCN40CONF != \
+	0))
+extern int wlc_phy_update_ed_thres(wlc_phy_t *ppi, int32 *assert_thresh_dbm, bool set_threshold);
+#endif
 
 #ifdef	WL_DYNAMIC_TEMPSENSE
 extern int wlc_phy_current_temperature(wlc_phy_t *pih);

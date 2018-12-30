@@ -46,9 +46,6 @@
 #include <info.h>
 #include <wpsapi.h>
 #include <wpscommon.h>
-#ifdef AMAS
-#include <bcmnvram.h>
-#endif
 
 #ifdef WFA_WPS_20_TESTBED
 #define STR_ATTR_LEN(str, max) \
@@ -2305,26 +2302,6 @@ reg_proto_process_m8(RegData *regInfo, BufferObj *msg, void **encrSettings)
 	if ((err = reg_msg_version_check(WPS_ID_MESSAGE_M8, msg,
 		&m.version, &m.msgType)) != WPS_SUCCESS)
 		goto error;
-
-#ifdef AMAS
-	if (WPS_ID_GROUP_ID == buffobj_NextType(msg))
-	{
-		char hexdata[64];
-		int i;
-
-		tlv_err |= tlv_dserialize(&m.groupid, WPS_ID_GROUP_ID, msg, 16, 0);
-		if (tlv_err) {
-			err = RPROT_ERR_REQD_TLV_MISSING;
-			goto error;
-		}
-
-		for (i = 0; i < 16; i++)
-			sprintf(&hexdata[2 * i], "%02x", m.groupid.m_data[i]);
-		hexdata[2 * 16] = 0;
-
-		nvram_set("wps_groupid", hexdata);
-	}
-#endif
 
 	tlv_err |= tlv_dserialize(&m.enrolleeNonce, WPS_ID_ENROLLEE_NONCE,
 		msg, SIZE_128_BITS, 0);

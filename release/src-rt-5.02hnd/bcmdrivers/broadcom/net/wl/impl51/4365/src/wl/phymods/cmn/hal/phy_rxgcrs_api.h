@@ -35,4 +35,6 @@
  */
 extern void wlc_phy_set_locale(phy_info_t *pi, uint8 region_group);
 
+extern uint8 wlc_phy_ext_get_locale(phy_info_t *pi);
+
 #endif /* _phy_rssi_api_h_ */

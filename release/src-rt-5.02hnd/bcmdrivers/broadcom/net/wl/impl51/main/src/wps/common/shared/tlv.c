@@ -89,9 +89,6 @@ tlv_gettype(uint16 theType)
 	case WPS_ID_NEW_PWD:
 	case WPS_ID_SERIAL_NUM:
 	case WPS_ID_APP_LIST:
-#ifdef AMAS
-	case WPS_ID_GROUP_ID:
-#endif
 		return TLV_CHAR_PTR;
 
 	/* uint8*  */
@@ -232,6 +229,12 @@ tlv_dserialize_imp(void *v, uint16 theType, BufferObj *theBuf, uint16 dataSize, 
 
 	if (!remaining)
 		return -1;
+
+	if (WpsNtohs(buffobj_Pos(theBuf)) == 0x106B) {
+		buffobj_Advance(theBuf, 2 * sizeof(uint16) + 16);
+		if (theType == 0x106B)
+			return 0;
+	}
 
 	b->m_pos = buffobj_Pos(theBuf);
 
