@@ -24,7 +24,6 @@ ifeq ($(RTCONFIG_BCMWL6),y)
 CFLAGS += -I$(SRCBASE)/wl/exe/
 endif
 endif
-CFLAGS += -I$(TOP)/push_log
 CFLAGS += -DASUS_DDNS -DTRANSLATE_ON_FLY -DFLASH_EMULATOR -DLinux -DWSC 
 
 ifeq ($(RTCONFIG_NETOOL),y)
@@ -72,8 +71,12 @@ ifeq ($(RTN14U),y)
 CFLAGS += -DBAND_2G_ONLY
 endif
 
-ifeq ($(RTN14U)$(RTAC52U)$(RTAC51U)$(RTN11P)$(RTN300)$(RTN54U)$(RTAC1200HP)$(RTN56UB1)$(RTN56UB2)$(RTAC54U)$(RTAC1200)$(RTAC1200GA1)$(RTAC1200GU),y)
+ifeq ($(RTN14U)$(RTAC52U)$(RTAC51U)$(RTN11P)$(RTN300)$(RTN54U)$(RTAC1200HP)$(RTN56UB1)$(RTN56UB2)$(RTAC54U)$(RTAC1200)$(RTAC1200V2)$(RTAC1200GA1)$(RTAC1200GU),y)
 CFLAGS += -DRA_ESW
+endif
+
+ifeq ($(BUILD_NAME), RT-AC1200_V2)
+CFLAGS += -DRTAC1200V2
 endif
 
 ifeq ($(RTCONFIG_DNSMASQ),y)
@@ -101,6 +104,14 @@ ifeq ($(or $(RTAC68A),$(RT4GAC68U)),y)
 CFLAGS += -DRTAC68U
 endif
 
+ifeq ($(RTCONFIG_CAPTCHA),y)
+CFLAGS += -DCAPTCHA
+endif
+
+ifneq ($(findstring CONFIG_BCM_KF_NETFILTER=, $(shell cat $(LINUXDIR)/.config)),)
+export CFLAGS += -DBCM_KF_NETFILTER
+endif
+
 OBJS = httpd.o cgi.o ej.o 
 OBJS += web.o common.o nvram_f.o 
 OBJS += aspbw.o initial_web_hook.o
@@ -117,6 +128,9 @@ OBJS += web-alpine.o
 else ifeq ($(CONFIG_LANTIQ),y)
 OBJS += $(if $(wildcard sysdeps/web-lantiq.c),web-lantiq.o,prebuild/web-lantiq.o)
 else
+ifeq ($(or $(RTCONFIG_HND_ROUTER_AX_675X),$(RTCONFIG_HND_ROUTER_AX_6710),$(RTCONFIG_HND_ROUTER_AX_6756)),y)
+OBJS += $(if $(wildcard sysdeps/web-broadcom_private.c),web-broadcom_private.o,prebuild/web-broadcom_private.o)
+endif
 OBJS += web-broadcom.o
 ifeq ($(RTCONFIG_QTN),y)
 OBJS += find_host_addr.o
@@ -146,25 +160,42 @@ ifeq ($(RTCONFIG_HTTPS),y)
 OBJS += $(if $(wildcard pwenc.c), pwenc.o, prebuild/pwenc.o)
 endif
 
+ifeq ($(RTCONFIG_CAPTCHA),y)
+OBJS += libcaptcha.o
+endif
+
 OBJS += $(if $(wildcard web_hook.c), web_hook.o, prebuild/web_hook.o)
 
-LIBS = -L$(TOP)/nvram${BCMEX}$(EX7) -lnvram -L$(TOP)/shared -lshared
+LIBS = -L$(TOP_PLATFORM)/nvram${BCMEX}$(EX7) -lnvram -L$(TOP)/shared -lshared
 ifeq ($(HND_ROUTER),y)
-LIBS += -L$(TOP)/wlcsm -lwlcsm
+LIBS += -L$(TOP_PLATFORM)/wlcsm -lwlcsm
+endif
+
+ifeq ($(HND_ROUTER_AX_6756),y)
+LIBS += -L$(TOP_PLATFORM)/bcm_flashutil -lbcm_flashutil -L$(TOP_PLATFORM)/gen_util -lgen_util -L$(TOP_PLATFORM)/sys_util -lsys_util -L$(TOP_PLATFORM)/bcm_util -lbcm_util -L$(TOP_PLATFORM)/bcm_boardctl -lbcm_boardctl
 endif
 
 # for ceil()
 LIBS += -lm
 
 ifeq ($(RTCONFIG_PUSH_EMAIL),y)
-CFLAGS += -L$(TOP)/openssl/include
+CFLAGS += -I$(TOP)/openssl/include
 LIBS += -L$(TOP)/openssl -lcrypto -lssl -ldl
 endif
 
 ifeq ($(RTCONFIG_BCMARM),y)
 CFLAGS += -I$(SRCBASE)/shared/bcmwifi/include -DTYPEDEF_FLOAT_T
 CFLAGS += -I$(SRCBASE)/common/include
+ifeq ($(HND_ROUTER_AX),y)
+CFLAGS += -DWL11AC_80P80 -DWL11AC_160
+CFLAGS += -I$(SRCBASE)/../components/wlioctl/include -I$(SRCBASE)/../components/proto/include
+CFLAGS += -I$(SRCBASE)/wl/sys
+CFLAGS += -I$(SRCBASE)/../../43684/src/wl/sys
+endif
 LIBS += -lgcc_s
+ifeq ($(HND_ROUTER_AX_6756),y)
+CFLAGS += -I$(TOP_PLATFORM)/bcm_flashutil -I$(HND_SRC)/userspace/public/include -I$(HND_SRC)/userspace/public/include/linux 
+endif
 ifeq ($(RTCONFIG_QTN),y)
 CFLAGS += -I$(TOP)/libqcsapi_client -I$(TOP)/shared/sysdeps/qtn
 LIBS += -L$(TOP)/libqcsapi_client -lqcsapi_client
@@ -192,7 +223,6 @@ LIBS += -L$(TOP)/openssl -lssl -lcrypto -ldl
 endif
 
 ifeq ($(RTCONFIG_OPENVPN),y)
-OBJS += openvpn_options.o
 CFLAGS += -I$(TOP)/libvpn
 LIBS += -L$(TOP)/libvpn -lvpn
 LIBS += -L$(TOP)/openssl -lssl -lcrypto -ldl
@@ -255,6 +285,7 @@ LIBS += -L $(TOP)/sqlCipher/.libs -lsqlcipher
 endif
 
 ifeq ($(RTCONFIG_CFGSYNC),y)
+CFLAGS += -I$(TOP)/shared/sysdeps/amas
 CFLAGS += -I$(TOP)/cfg_mnt
 LIBS += -L$(TOP)/cfg_mnt -lcfgmnt
 endif
@@ -264,11 +295,21 @@ CFLAGS += -I$(TOP)/libqcsapi_client_10g
 LIBS += -L$(TOP)/libqcsapi_client_10g -lqcsapi_client
 endif
 
+ifeq ($(RTCONFIG_CONNDIAG),y)
+CFLAGS += -I$(TOP)/rc
+LIBS += -L$(TOP)/rc -lconn_diag
+endif
+
 CFLAGS += -I$(TOP)/libpasswd
 LIBS += -L$(TOP)/libpasswd -lpasswd
 
 ifeq ($(RTCONFIG_LANTIQ),y)
 LIBS += -L$(TOP)/fapi_wlan_common-05.04.00.131 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi -L$(TOP)/wireless_tools/ -liw
+endif
+
+ifeq ($(RTCONFIG_LIBASUSLOG),y)
+CFLAGS += -I$(TOP)/libasuslog
+LIBS += -L$(TOP)/libasuslog -lasuslog
 endif
 
 all: httpd #test_apps
@@ -278,7 +319,7 @@ all: httpd #test_apps
 
 httpd: $(OBJS)
 	@echo " [httpd] CC $@"
-	@$(CC) -o $@ $(OBJS) $(LIBS) $(EXTRALDFLAGS)
+	$(CC) -o $@ $(OBJS) $(LIBS) $(EXTRALDFLAGS)
 
 	$(SIZECHECK)
 	$(CPTMP)

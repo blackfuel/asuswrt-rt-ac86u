@@ -39,10 +39,19 @@
 #define MAP_FAILED (-1)
 #endif
 //#define RTK_TEST
+#ifdef RTCONFIG_RTL8198D
+const char WIF_5G[]	 = "wlan1";
+const char WIF_5G2[] = "wlan0";
+const char WIF_2G[]  = "wlan2";
+const char VXD_5G[]	 = "wlan1-vxd";
+const char VXD_5G2[] = "wlan0-vxd";
+const char VXD_2G[]  = "wlan2-vxd";
+#else
 const char WIF_5G[]	= "wl1";
 const char WIF_2G[]	= "wl0";
 const char VXD_5G[]	= "wl1-vxd";
 const char VXD_2G[]	= "wl0-vxd";
+#endif
 #define TXPWR_THRESHOLD_1	25
 #define TXPWR_THRESHOLD_2	50
 #define TXPWR_THRESHOLD_3	88
@@ -102,7 +111,6 @@ int getPid_fromFile(char *file_name)
 	
 	return result;
 }
-
 int rtk_get_channel_list_via_country(char* country_code,char* list,wlan_band band)
 {
 	rtklog("%s\n",__FUNCTION__);
@@ -148,6 +156,33 @@ int rtk_get_channel_list_via_country(char* country_code,char* list,wlan_band ban
 					}					
 				}
 			}
+#ifdef RPAC92
+			else if(band == WLAN_5G_2)
+			{
+				regDomain = countryIEArray[i].A_Band_Region;
+				rtklog("regDomain:%d\n",regDomain);
+				if (regDomain == DOMAIN_ETSI || regDomain == DOMAIN_MKK || nvram_contains_word("rc_support", "dfs"))
+				{ 
+					for(j=0;j<reg_channel_5g_full_band_2[regDomain-1].len;j++)
+					{
+						memset(tmp,0,sizeof(tmp));
+						sprintf(tmp,"%d",reg_channel_5g_full_band_2[regDomain-1].channel[j]);
+						strcat(list,tmp);
+						if(j != reg_channel_5g_full_band_2[regDomain-1].len - 1)
+							strcat(list,",");
+					}
+				} else {
+					for(j=0;j<reg_channel_5g_not_dfs_band_2[regDomain-1].len;j++)
+					{
+						memset(tmp,0,sizeof(tmp));
+						sprintf(tmp,"%d",reg_channel_5g_not_dfs_band_2[regDomain-1].channel[j]);
+						strcat(list,tmp);
+						if(j != reg_channel_5g_not_dfs_band_2[regDomain-1].len - 1)
+							strcat(list,",");
+					}					
+				}
+			}
+#endif
 			else if(band == WLAN_2G)
 			{
 				regDomain = countryIEArray[i].G_Band_Region;
@@ -178,7 +213,11 @@ int rtk_web_get_channel_list(char* country_code,wl_uint32_list_t *list,wlan_band
 	{
 		return ret;
 	}
+#ifdef RPAC92
+	if(band !=0 && band != 1 && band !=2)
+#else
 	if(band !=0 && band != 1)
+#endif
 	{
 		return ret;
 	}
@@ -211,15 +250,28 @@ int rtk_web_get_channel_list(char* country_code,wl_uint32_list_t *list,wlan_band
 					//cprintf(" %d",list->element[j]);
 				}
 			}
+#ifdef RPAC92
+			else if(band == WLAN_5G_2)
+			{
+				regDomain = countryIEArray[i].A_Band_Region;
+				//cprintf("regDomain:%d\n",regDomain);
+				list->count=reg_channel_5g_full_band_2[regDomain-1].len;
+				for(j=0;j<reg_channel_5g_full_band_2[regDomain-1].len;j++)
+				{
+					list->element[j]=reg_channel_5g_full_band_2[regDomain-1].channel[j];	
+				//	cprintf(" %d",list->element[j]);
+				}
+			}
+#endif
 			ret = 0;
 			break;
 		}
 	}
 	return ret;
 }
-
 void read_hw_setting_offset(void) 
 {
+#if !defined(RPAC92)
 	FILE *hwpart_proc;
 	hwpart_proc = fopen ( "/proc/flash/hwpart", "r" );
 	if ( hwpart_proc != NULL )
@@ -237,11 +289,13 @@ void read_hw_setting_offset(void)
 		 fclose(hwpart_proc);		 
 		 rtk_printf("read_hw_setting_offset = %x \n",hw_setting_offset);
 	}
+#endif
 }
 
 #ifdef HW_SETTING_CHECKSUM
 void restore_setting(void)
 {
+#if !defined(RPAC92)
 	int fh, hwconf_len = sizeof(HW_SETTING_T);
 	unsigned char *data = malloc(hwconf_len+1);// one byte for checksum
 
@@ -275,6 +329,7 @@ void restore_setting(void)
 
 	free(data);
 	close(fh);
+#endif
 }
 #endif /* HW_SETTING_CHECKSUM */
 
@@ -283,7 +338,6 @@ int rtk_flash_read(char *buf, int offset, int len)
 	rtklog("%s\n",__FUNCTION__);
 	int fh;
 	int ok=1;
-
 #ifdef HW_SETTING_CHECKSUM
 	restore_setting();
 #endif
@@ -315,6 +369,7 @@ int rtk_flash_write(char *buf, int offset, int len)
 	rtklog("%s\n",__FUNCTION__);
 	int fh;
 	int ok=1;
+
 #ifdef CONFIG_MTD_NAND
 	fh = open(FLASH_DEVICE_NAME, O_RDWR|O_CREAT);
 #else
@@ -365,12 +420,12 @@ int rtk_flash_write(char *buf, int offset, int len)
 		}
 	}
 #endif
-
 	return ok;
 }
 
 int read_hw_setting(char *buf)
 {
+#if !defined(RPAC92)
 	PARAM_HEADER_T header;
 	if(rtk_flash_read(&header,HW_SETTING_OFFSET,sizeof(PARAM_HEADER_T))==0){
 		rtklog("Read wlan hw setting header failed\n");
@@ -384,9 +439,11 @@ int read_hw_setting(char *buf)
 		rtklog("Read wlan hw setting to memory failed\n");
 		return -1;
 	}
+#endif
 	return 0;
 }
 
+#if !defined(RPAC92)
 int read_hw_setting_length()
 {
 	PARAM_HEADER_T header;
@@ -402,72 +459,9 @@ int read_hw_setting_length()
 	len = header.len;
 	return len;
 }
-
-static int hex_to_string(unsigned char *hex,char *str,int len)
-{
-	int i;
-	char *d,*s;
-	const static char hexdig[] = "0123456789abcdef";
-	if(hex == NULL||str == NULL)
-		return -1;
-	d = str;
-	s = hex;
-	
-	for(i = 0;i < len;i++,s++){
-		*d++ = hexdig[(*s >> 4) & 0xf];
-		*d++ = hexdig[*s & 0xf];
-	}
-	*d = 0;
-	return 0;
-}
-#if defined(CONFIG_RTL_11AC_SUPPORT)
-
-#define B1_G1	40
-#define B1_G2	48
-
-#define B2_G1	56
-#define B2_G2	64
-
-#define B3_G1	104
-#define B3_G2	112
-#define B3_G3	120
-#define B3_G4	128
-#define B3_G5	136
-#define B3_G6	144
-
-#define B4_G1	153
-#define B4_G2	161
-#define B4_G3	169
-#define B4_G4	177
-
-void assign_diff_AC(unsigned char* pMib, unsigned char* pVal)
-{
-	int x=0, y=0;
-
-	memset((pMib+35), pVal[0], (B1_G1-35));
-	memset((pMib+B1_G1), pVal[1], (B1_G2-B1_G1));
-	memset((pMib+B1_G2), pVal[2], (B2_G1-B1_G2));
-	memset((pMib+B2_G1), pVal[3], (B2_G2-B2_G1));
-	memset((pMib+B2_G2), pVal[4], (B3_G1-B2_G2));
-	memset((pMib+B3_G1), pVal[5], (B3_G2-B3_G1));
-	memset((pMib+B3_G2), pVal[6], (B3_G3-B3_G2));
-	memset((pMib+B3_G3), pVal[7], (B3_G4-B3_G3));
-	memset((pMib+B3_G4), pVal[8], (B3_G5-B3_G4));
-	memset((pMib+B3_G5), pVal[9], (B3_G6-B3_G5));
-	memset((pMib+B3_G6), pVal[10], (B4_G1-B3_G6));
-	memset((pMib+B4_G1), pVal[11], (B4_G2-B4_G1));
-	memset((pMib+B4_G2), pVal[12], (B4_G3-B4_G2));
-	memset((pMib+B4_G3), pVal[13], (B4_G4-B4_G3));
-
-}
-void assign_diff_AC_hex_to_string(unsigned char* pmib,char* str,int len)
-{
-	char mib_buf[MAX_5G_CHANNEL_NUM_MIB];
-	memset(mib_buf,0,sizeof(mib_buf));
-	assign_diff_AC(mib_buf, pmib);
-	hex_to_string(mib_buf,str,MAX_5G_CHANNEL_NUM_MIB);
-}
 #endif
+
+#if !defined(RPAC92)
 
 int set_led_type(HW_WLAN_SETTING_Tp phw)
 {
@@ -947,7 +941,7 @@ int set_tx_calibration(HW_WLAN_SETTING_Tp phw,char* interface,int txpower)
 #endif //end #if 1
 	
 #ifdef CONFIG_RTL_92D_SUPPORT
-#if defined(RPAC68U) || defined(RPAC55)
+#if defined(RPAC68U) || defined(RPAC55) || defined(RPAC92)
 	hex_to_string(phw->pwrdiff5GHT40_2S,p,MAX_5G_CHANNEL_NUM_MIB);
 	sprintf(tmpbuff,"iwpriv %s set_mib pwrdiff5GHT40_2S=%s",interface,p);
 	system(tmpbuff);
@@ -1028,7 +1022,6 @@ int set_tx_calibration(HW_WLAN_SETTING_Tp phw,char* interface,int txpower)
 #endif
 	return 0;
 }
-
 
 int set_wifi_mac(char* buf)
 {
@@ -1121,6 +1114,7 @@ int set_ethernet_mac(char* buf)
     system(tmpbuff);
 
 }
+#endif
 /*********************************************************************/
 
 #define GPIOLIB_DIR     "/sys/class/gpio"
@@ -1251,6 +1245,11 @@ uint32_t get_gpio(uint32_t gpio)
 	char path[PATH_MAX], value[10];
 	btn_rst_gpio = nvram_get_int("btn_rst_gpio");
 	btn_wps_gpio = nvram_get_int("btn_wps_gpio");
+#ifdef RPAC92
+		sprintf(path, "%s/gpio%d/value", GPIOLIB_DIR, gpio);
+		f_read_string(path, value, sizeof(value));
+		return atoi(value);
+#else
 #ifdef RPAC68U
 	if(gpio == (btn_rst_gpio & 0xff))
 	{
@@ -1304,6 +1303,7 @@ uint32_t get_gpio(uint32_t gpio)
 		ret  = 1;
 	}
 	return ret;
+#endif
 }
 
 
@@ -1390,25 +1390,54 @@ uint32_t get_phy_status(uint32_t portmask)
   	return value;	
 #endif		
 }
-#define RTL_WAN_LINKSTATUS	"proc/eth1/link_status"
 
+#ifdef RPAC92
 uint32_t rtkswitch_wanPort_phyStatus(uint32_t wan_unit)
 {
 	FILE *fp;
-	unsigned int value=0;
-	char buff[32];
-	if(wan_unit==0)
-	{
-		if((fp= fopen(RTL_WAN_LINKSTATUS, "r"))==NULL)
-			return value;
-		fgets(buff, 32, fp);
-		value =atoi(buff);
-		fclose(fp);
+	char out[64], output[64] = "";
+	char *b;
+	char phystatus[5][4];
+	int i;
 
-		
+	system("echo 'physt 1' > /proc/asus_ate");
+	fp = popen("cat /proc/asus_ate", "r");
+	if (fp) {
+		fgets(out, sizeof(out),fp);
+		pclose(fp);
 	}
-	return value;
+
+	for (i = 0, b = strtok(out, ";"); b != NULL; b = strtok(NULL, ";"), i++)
+		snprintf(phystatus[i], sizeof(phystatus[i])/sizeof(char) - 1, "%s", index(b, '=')+1);
+	
+	if(!strcmp(phystatus[1],"X"))
+		return 0;
+	else if(!strcmp(phystatus[1],"G") || !strcmp(phystatus[1],"M"))
+		return 1;
 }
+#else
+uint32_t rtkswitch_wanPort_phyStatus(uint32_t wan_unit)
+{
+	char tmp[32], prefix[] = "wanXXXXXXXXXX_";
+	char *wan_ifname;
+	char buf[32];
+
+	snprintf(prefix, sizeof(prefix), "wan%d_", wan_unit);
+	wan_ifname = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+
+	if(strlen(wan_ifname) <= 0)
+		return 0;
+
+	snprintf(tmp, sizeof(tmp), "/proc/%s/link_status", wan_ifname);
+
+	memset(buf, 0 ,sizeof(buf));
+	f_read_string(tmp, buf, sizeof(buf));
+	if(atoi(buf) == 1)
+		return 1;
+	else
+		return 0;
+}
+#endif
 
 void rtl_init_qos_patch( void)
 {
@@ -1428,7 +1457,7 @@ void rtl_init_qos_patch( void)
 	int v4v6_ok;
 	//_dprintf("qos init patch\n");
 	//to do fastpath
-	if(nvram_get_int("qos_enable") == 1 && nvram_get_int("qos_type") == 0)
+	if(IS_TQOS())
 	{
 		qos_enabled =1;
 	}
@@ -1612,10 +1641,12 @@ void set_radio(int on, int unit, int subunit)
 		doSystem("iwpriv %s set_mib func_off=%d", ifname, on?0:1);
 		if (!on && subunit == 0) // root ap only.
 			doSystem("iwpriv %s del_sta all", ifname); // kick all STA.
+#ifndef RTCONFIG_RTL8198D
 		if (unit == 0)/* for 2.4G led */
 			doSystem("echo 'led %d 255' > /proc/asus_ate", on ? 3: 0);	/* 0 is for off, 3 is for on, 255 is do nothing */
 		else if (unit == 1) 	/* for 5G led */
 			doSystem("echo 'led 255 %d' > /proc/asus_ate", on ? 3: 0);
+#endif
 	}
 }
 
@@ -1685,12 +1716,12 @@ int getWlSiteSurveyResult(char *interface, SS_STATUS_Tp pStatus )
 	pStatus->number=15;
 	for(i=0;i<15;i++)
 	{
-		pStatus->bssdb[i].bdBssId[0]=0;
+		pStatus->bssdb[i].bssid[0]=0;
 		for(j=1;i<6;j++)
-			pStatus->bssdb[i].bdBssId[j]=i*j;
+			pStatus->bssdb[i].bssid[j]=i*j;
 		pStatus->bssdb[i].bdSsId.Octet="ssidtest";
 		pStatus->bssdb[i].bdSsId.Length=strlen("ssidtest");
-		pStatus->bssdb[i].ChannelNumber=23;
+		pStatus->bssdb[i].channel=23;
 	}
 	return 0;
 }
@@ -1709,9 +1740,9 @@ int getWlStaInfo( char *interface,  WLAN_STA_INFO_Tp pInfo )
       close( skfd );
         return -1;
 	}
+	memset(pInfo, 0, sizeof(WLAN_STA_INFO_T) * (MAX_STA_NUM+1));
     wrq.u.data.pointer = (caddr_t)pInfo;
     wrq.u.data.length = sizeof(WLAN_STA_INFO_T) * (MAX_STA_NUM+1);
-    memset(pInfo, 0, sizeof(WLAN_STA_INFO_T) * (MAX_STA_NUM+1));
 
     if (iw_get_ext(skfd, interface, SIOCGIWRTLSTAINFO, &wrq) < 0){
     	close( skfd );
@@ -1957,6 +1988,51 @@ int getAclList(char *interface, WLAN_ACL_CLIENT_LIST_Tp pRtk_acl_client_list)
 	return 0;
 }
 
+int issue_beacon_measurement(char *ifname, unsigned char * macaddr, 
+    struct dot11k_beacon_measurement_req* beacon_req)
+{
+    int sock;
+    struct iwreq wrq;
+    int err;
+    int len = 0;
+    unsigned char tempbuf[1024];
+
+    /*** Inizializzazione socket ***/
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0)
+    {
+        err = errno;
+        printf("%s(%s): Can't create socket for ioctl.(%d)", __FUNCTION__, ifname, err);
+        goto out;
+    }
+    memset(tempbuf, 0, sizeof(tempbuf));
+    memcpy(tempbuf, macaddr, MACADDRLEN);
+    len += MACADDRLEN;
+    memcpy(tempbuf + len, beacon_req, sizeof(struct dot11k_beacon_measurement_req));
+    len += sizeof(struct dot11k_beacon_measurement_req);
+    
+    /*** Inizializzazione struttura iwreq ***/
+    memset(&wrq, 0, sizeof(wrq));
+    strncpy(wrq.ifr_name, ifname, IFNAMSIZ);
+
+    /*** give parameter and buffer ***/
+    wrq.u.data.pointer = (caddr_t)tempbuf;
+    wrq.u.data.length = len;
+
+    /*** ioctl ***/
+    if(ioctl(sock, SIOC11KBEACONREQ, &wrq) < 0)
+    {
+        err = errno;
+        printf("%s(%s): ioctl Error.(%d)", __FUNCTION__, ifname, err);
+        goto out;
+    }
+    err = 0;
+
+out:
+    close(sock);
+    return err;
+}
+
 void set_11ac_txrate(WLAN_STA_INFO_Tp pInfo,char* txrate)
 {
 	char channelWidth=0;//20M 0,40M 1,80M 2
@@ -2020,6 +2096,89 @@ void dump_sta_info(WLAN_STA_INFO_Tp staInfoList)
 	rtk_printf("%s:%d\n",__FUNCTION__,__LINE__);
 }
 
+// data need to be DOT11_SET_USERIE
+int update_vsie(char *interface, void *data)
+{
+	int skfd = 0;
+	struct iwreq wrq;
+
+	skfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (skfd == -1)
+		return -1;
+
+	/* Get wireless name */
+	if ( iw_get_ext(skfd, interface, SIOCGIWNAME, &wrq) < 0) {
+		/* If no wireless name : no wireless extensions */
+		close( skfd );
+		return -1;
+	}
+
+	wrq.u.data.pointer = (void*)data;
+
+	if (iw_get_ext(skfd, interface, RTL8192CD_IOCTL_USER_DAEMON_REQUEST, &wrq) < 0) {
+		close( skfd );
+		return -1;
+	}
+
+	close( skfd );
+	return 0;
+}
+
+int getmibInfo(const char *interface, void *data, int *length)
+{
+	int skfd=0;
+	struct iwreq wrq;
+
+	skfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(skfd==-1)
+		return -1;
+	/* Get wireless name */
+	if ( iw_get_ext(skfd, interface, SIOCGIWNAME, &wrq) < 0) {
+	  /* If no wireless name : no wireless extensions */
+
+		 close( skfd );
+		return -1;
+	}
+
+	wrq.u.data.pointer = (void*)data;
+	wrq.u.data.length = *length;
+
+    if (iw_get_ext(skfd, (char*)interface, RTL8192CD_IOCTL_GET_MIB, &wrq) < 0){
+		close( skfd );
+		return -1;
+	}
+	*length = wrq.u.data.length;
+	close( skfd );
+
+	return 0;
+}
+int setmibInfo(const char *interface, void *data, int length)
+{
+	int skfd=0;
+	struct iwreq wrq;
+
+	skfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(skfd==-1)
+		return -1;
+	/* Get wireless name */
+	if ( iw_get_ext(skfd, interface, SIOCGIWNAME, &wrq) < 0) {
+	  /* If no wireless name : no wireless extensions */
+
+		 close( skfd );
+		return -1;
+	}
+
+	wrq.u.data.pointer = (void*)data;
+	wrq.u.data.length = length;
+
+    if (iw_get_ext(skfd, (char*)interface, RTL8192CD_IOCTL_SET_MIB, &wrq) < 0){
+		close( skfd );
+		return -1;
+	}
+	close( skfd );
+
+	return 1;
+}
 int
 wl_ioctl(char *name, int cmd, void *buf, int len)
 {
@@ -2140,7 +2299,7 @@ wl_ioctl(char *name, int cmd, void *buf, int len)
 			int status=0;
 			if(getWlSiteSurveyRequest(name,&status)<0)
 			{
-				rtk_printf("%s getWlSiteSurveyRequest fail!\n",name);
+				_dprintf("%s getWlSiteSurveyRequest fail!\n",name);
 				return -1;
 			}
 			//cprintf("%s:%d status=%d\n",__FUNCTION__,__LINE__,status);
@@ -2180,64 +2339,64 @@ wl_ioctl(char *name, int cmd, void *buf, int len)
 			bzero(apinfos,sizeof(apinf_t)*APINFO_MAX);
 			for(i=0;i<scan_status.number;i++)
 			{
-				rtklog("%s:%d bdBssId=%02x:%02x:%02x:%02x:%02x:%02x\n",__FUNCTION__,__LINE__,
-					scan_status.bssdb[i].bdBssId[0],
-					scan_status.bssdb[i].bdBssId[1],
-					scan_status.bssdb[i].bdBssId[2],
-					scan_status.bssdb[i].bdBssId[3],
-					scan_status.bssdb[i].bdBssId[4],
-					scan_status.bssdb[i].bdBssId[5]);
+				rtklog("%s:%d bssid=%02x:%02x:%02x:%02x:%02x:%02x\n",__FUNCTION__,__LINE__,
+					scan_status.bssdb[i].bssid[0],
+					scan_status.bssdb[i].bssid[1],
+					scan_status.bssdb[i].bssid[2],
+					scan_status.bssdb[i].bssid[3],
+					scan_status.bssdb[i].bssid[4],
+					scan_status.bssdb[i].bssid[5]);
 				
 				sprintf(apinfos[i].BSSID,"%02x:%02x:%02x:%02x:%02x:%02x",
-					scan_status.bssdb[i].bdBssId[0],
-					scan_status.bssdb[i].bdBssId[1],
-					scan_status.bssdb[i].bdBssId[2],
-					scan_status.bssdb[i].bdBssId[3],
-					scan_status.bssdb[i].bdBssId[4],
-					scan_status.bssdb[i].bdBssId[5]);
-				memcpy(apinfos[i].SSID,scan_status.bssdb[i].bdSsIdBuf,SSID_LEN);
+					scan_status.bssdb[i].bssid[0],
+					scan_status.bssdb[i].bssid[1],
+					scan_status.bssdb[i].bssid[2],
+					scan_status.bssdb[i].bssid[3],
+					scan_status.bssdb[i].bssid[4],
+					scan_status.bssdb[i].bssid[5]);
+				memcpy(apinfos[i].SSID,scan_status.bssdb[i].ssid,SSID_LEN);
 				//apinfos[i].SSID_len=strlen(list->bss_info[i].SSID);
-				apinfos[i].ctl_ch=scan_status.bssdb[i].ChannelNumber;	
-				apinfos[i].channel=scan_status.bssdb[i].ChannelNumber;
+				apinfos[i].ctl_ch=scan_status.bssdb[i].channel;	
+				apinfos[i].channel=scan_status.bssdb[i].channel;
 				//apinfos[i].length = sizeof(wl_bss_info_t);
 				apinfos[i].RSSI_Quality=scan_status.bssdb[i].rssi;
-				if ((scan_status.bssdb[i].bdCap & cPrivacy) == 0)
+				if ((scan_status.bssdb[i].capability & cPrivacy) == 0)
 				{
 					apinfos[i].wep=0;
 					apinfos[i].wpa=0;
 				}
 				else {
-					if (scan_status.bssdb[i].bdTstamp[0] == 0)						
+					if (scan_status.bssdb[i].t_stamp[0] == 0)						
 						apinfos[i].wep=1;					
 					else {
 						int wpa_exist = 0, idx = 0;
 						apinfos[i].wpa=1;
-						if (scan_status.bssdb[i].bdTstamp[0] & 0x0000ffff) {
+						if (scan_status.bssdb[i].t_stamp[0] & 0x0000ffff) {
 							
-							if (((scan_status.bssdb[i].bdTstamp[0] & 0x0000f000) >> 12) == 0x4)
+							if (((scan_status.bssdb[i].t_stamp[0] & 0x0000f000) >> 12) == 0x4)
 								apinfos[i].wid.key_mgmt=WPA_KEY_MGMT_PSK_;
-							else if(((scan_status.bssdb[i].bdTstamp[0] & 0x0000f000) >> 12) == 0x2)
+							else if(((scan_status.bssdb[i].t_stamp[0] & 0x0000f000) >> 12) == 0x2)
 								apinfos[i].wid.key_mgmt=WPA_KEY_MGMT_IEEE8021X_;
 							
 
-							if (((scan_status.bssdb[i].bdTstamp[0] & 0x00000f00) >> 8) == 0x5)
+							if (((scan_status.bssdb[i].t_stamp[0] & 0x00000f00) >> 8) == 0x5)
 								apinfos[i].wid.pairwise_cipher=(WPA_CIPHER_TKIP_|WPA_CIPHER_CCMP_);
-							else if (((scan_status.bssdb[i].bdTstamp[0] & 0x00000f00) >> 8) == 0x4)
+							else if (((scan_status.bssdb[i].t_stamp[0] & 0x00000f00) >> 8) == 0x4)
 								apinfos[i].wid.pairwise_cipher=(WPA_CIPHER_CCMP_);
-							else if (((scan_status.bssdb[i].bdTstamp[0] & 0x00000f00) >> 8) == 0x1)
+							else if (((scan_status.bssdb[i].t_stamp[0] & 0x00000f00) >> 8) == 0x1)
 								apinfos[i].wid.pairwise_cipher=(WPA_CIPHER_TKIP_);
 						}
-						if (scan_status.bssdb[i].bdTstamp[0] & 0xffff0000) {
+						if (scan_status.bssdb[i].t_stamp[0] & 0xffff0000) {
 							
-							if (((scan_status.bssdb[i].bdTstamp[0] & 0xf0000000) >> 28) == 0x4)
+							if (((scan_status.bssdb[i].t_stamp[0] & 0xf0000000) >> 28) == 0x4)
 								apinfos[i].wid.key_mgmt=WPA_KEY_MGMT_PSK2_;
-							else if (((scan_status.bssdb[i].bdTstamp[0] & 0xf0000000) >> 28) == 0x2)
+							else if (((scan_status.bssdb[i].t_stamp[0] & 0xf0000000) >> 28) == 0x2)
 								apinfos[i].wid.key_mgmt=WPA_KEY_MGMT_IEEE8021X2_;
-							if (((scan_status.bssdb[i].bdTstamp[0] & 0x0f000000) >> 24) == 0x5)
+							if (((scan_status.bssdb[i].t_stamp[0] & 0x0f000000) >> 24) == 0x5)
 								apinfos[i].wid.pairwise_cipher=(WPA_CIPHER_TKIP_|WPA_CIPHER_CCMP_);
-							else if (((scan_status.bssdb[i].bdTstamp[0] & 0x0f000000) >> 24) == 0x4)
+							else if (((scan_status.bssdb[i].t_stamp[0] & 0x0f000000) >> 24) == 0x4)
 								apinfos[i].wid.pairwise_cipher=(WPA_CIPHER_CCMP_);
-							else if (((scan_status.bssdb[i].bdTstamp[0] & 0x0f000000) >> 24) == 0x1)
+							else if (((scan_status.bssdb[i].t_stamp[0] & 0x0f000000) >> 24) == 0x1)
 								apinfos[i].wid.pairwise_cipher=(WPA_CIPHER_TKIP_);
 						}
 					}
@@ -2280,7 +2439,6 @@ wl_ioctl(char *name, int cmd, void *buf, int len)
 					strcpy(countryCode,DEF_COUNTRY_CODE);
 					nvram_set(strcat_r(prefix, "country_code", tmp),DEF_COUNTRY_CODE);
 				}
-				
 				if(rtk_web_get_channel_list(countryCode,(wl_uint32_list_t *)buf,WLAN_2G)!=0)
 				{
 					return -1;
@@ -2298,6 +2456,20 @@ wl_ioctl(char *name, int cmd, void *buf, int len)
 					return -1;
 				}
 			}
+#ifdef RPAC92
+			snprintf(prefix, sizeof(prefix), "wl%d_", 2);
+			ifname = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+			if(strcmp(ifname,name)==0)
+			{
+				strncpy(countryCode, nvram_safe_get(strcat_r(prefix, "country_code", tmp)), 2);
+				if(!countryCode[0])
+					strcpy(countryCode,"CN");
+				if(rtk_web_get_channel_list(countryCode,(wl_uint32_list_t *)buf,WLAN_5G_2)!=0)
+				{
+					return -1;
+				}
+			}
+#endif
 			break;
 		}
 		case WLC_GET_INSTANCE:
@@ -2542,16 +2714,271 @@ int get_channel_list_via_country(int unit, const char *country_code, char *buffe
 
 int get_channel_list_via_driver(int unit, char *buffer, int len)
 {
-	//TODO
-	return -1;
+    int length;
+    int num = -1;
+    char tmp[32]="regdomain";
+    length = sizeof(tmp);
+
+    getmibInfo(get_wififname(unit), tmp, &length);
+
+#if defined(RPAC92)
+	int i = (int)(*(int*)tmp);
+#else		
+	int i = (int)*tmp;
+#endif
+#if defined(RPAC92)
+    if(unit==2 && i>0 && i<DOMAIN_MAX)
+    {
+        num = (len < reg_channel_5g_full_band_2[i-1].len)?len:reg_channel_5g_full_band_2[i-1].len;
+        memcpy(buffer, reg_channel_5g_full_band_2[i-1].channel, num);
+    }
+    else if(unit==1 && i>0 && i<DOMAIN_MAX)
+    {
+        num = (len < reg_channel_5g_full_band[i-1].len)?len:reg_channel_5g_full_band[i-1].len;
+        memcpy(buffer, reg_channel_5g_full_band[i-1].channel, num);
+    } 
+#else
+    if(unit > 0 && i>0 && i<DOMAIN_MAX)
+    {
+        num = (len < reg_channel_5g_full_band[i-1].len)?len:reg_channel_5g_full_band[i-1].len;
+        memcpy(buffer, reg_channel_5g_full_band[i-1].channel, num);
+    } 
+#endif
+    else if(unit == 0 && i>0 && i<DOMAIN_MAX)
+    {
+        num = (len < reg_channel_2_4g[i-1].len)?len:reg_channel_2_4g[i-1].len;
+        memcpy(buffer, reg_channel_2_4g[i-1].channel, num);
+    }
+
+    return num;
 }
 
 char *get_wififname(int band)
 {
-	const char *wif[] = { WIF_2G, WIF_5G };
+	const char *wif[] = { WIF_2G, WIF_5G
+#if defined(RPAC92)
+					,WIF_5G2
+#endif
+						};
 	if (band < 0 || band >= ARRAY_SIZE(wif)) {
 		rtk_printf("%s: Invalid wl%d band!\n", __func__, band);
 		band = 0;
 	}
 	return (char*) wif[band];
+}
+
+char *get_staifname(int band)
+{
+	const char *sta[] = { VXD_2G, VXD_5G
+#if defined(RPAC92)
+						,VXD_5G2
+#endif
+
+						};
+	if (band < 0 || band >= ARRAY_SIZE(sta)) {
+		dbg("%s: Invalid wl%d band!\n", __func__, band);
+		band = 0;
+	}
+	return (char*) sta[band];
+}
+
+int get_channel(const char *ifname)
+{
+	int length;
+	char tmp[32]="channel";
+	length = sizeof(tmp);
+
+	getmibInfo(ifname, tmp, &length);
+
+	return (int)(*(unsigned char*)tmp);
+}
+
+int get_bw_nctrlsb(const char *ifname, int *bw, int *nctrlsb) {
+	int length;
+	char tmp[32]="\0";
+
+	snprintf(tmp, sizeof(tmp), "use40M");
+	length = sizeof(tmp);
+	getmibInfo(ifname, tmp, &length);
+#if defined(RPAC92)
+	switch((int)(*(int*)tmp)) {
+#else
+	switch((int)(*tmp)) {
+#endif
+	case 0:
+		*bw = 20;
+		break;
+	case 1:
+		*bw = 40;
+		break;
+	case 2:
+		*bw = 80;
+		break;
+	default:
+		*bw = 0;
+	}
+
+	snprintf(tmp, sizeof(tmp), "2ndchoffset");
+	length = sizeof(tmp);
+	getmibInfo(ifname, tmp, &length);
+#if defined(RPAC92)
+	switch((int)(*(int*)tmp)) {
+#else
+	switch((int)(*tmp)) {
+#endif
+	case 1:
+		*nctrlsb = 1;
+		break;
+	case 2:
+		*nctrlsb = 0;
+		break;
+	default:
+		*nctrlsb = -1;
+	}
+	return *bw;
+}
+
+void set_channel(const char *ifname, int channel)
+{
+	char tmp[32]="\0";
+	snprintf(tmp, sizeof(tmp), "channel=%d", channel);
+
+	setmibInfo(ifname, tmp, sizeof(tmp));
+}
+
+void set_bw_nctrlsb(const char* ifname, int bw, int nctrlsb)
+{
+	char tmp[32]="\0";
+	int bw_mib=-1, nctrlsb_mib=-1;
+
+	switch(bw) {
+	case 20:
+		bw_mib = 0;
+		break;
+	case 40:
+		bw_mib = 1;
+		break;
+	case 80:
+		bw_mib = 2;
+		break;
+	default:
+		bw_mib = -1;
+	}
+	switch(nctrlsb) {
+	case 0:
+		nctrlsb_mib = 2;
+		break;
+	case 1:
+		nctrlsb_mib = 1;
+		break;
+	default:
+		nctrlsb_mib = -1;
+	}
+
+	if(bw_mib > -1) {
+		snprintf(tmp, sizeof(tmp), "use40M=%d", bw_mib);
+		setmibInfo(ifname, tmp, sizeof(tmp));
+	}
+	if(nctrlsb_mib > -1) {
+		snprintf(tmp, sizeof(tmp), "2ndchoffset=%d", nctrlsb_mib);
+		setmibInfo(ifname, tmp, sizeof(tmp));
+	}
+}
+int set_mib_acladdr(const char* ifname, char* addr) {
+	char tmp[32]="\0";
+	snprintf(tmp, sizeof(tmp), "acladdr=%s", addr);
+
+	return setmibInfo(ifname, tmp, sizeof(tmp));
+}
+
+int get_radar_channel_list(const char *ifname, int radar_list[], int size){
+    int skfd=0;
+    struct iwreq wrq;
+
+    skfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if(skfd==-1)
+        return -1;
+    /* Get wireless name */
+    if ( iw_get_ext(skfd, ifname, SIOCGIWNAME, &wrq) < 0) {
+      /* If no wireless name : no wireless extensions */
+        close( skfd );
+        return -1;
+    }
+
+    wrq.u.data.pointer = (void*)radar_list;
+    wrq.u.data.length = size;
+
+    if (iw_get_ext(skfd, ifname, IOCTL_GET_DFS_NOP_CHANNEL, &wrq) < 0){
+        close( skfd );
+        return -1;
+    }
+    close( skfd );
+    return wrq.u.data.length;
+}
+
+int get_radar_channel_num(const char *ifname, int *num){
+    int skfd=0;
+    struct iwreq wrq;
+
+    skfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if(skfd==-1)
+        return -1;
+    /* Get wireless name */
+    if ( iw_get_ext(skfd, ifname, SIOCGIWNAME, &wrq) < 0) {
+      /* If no wireless name : no wireless extensions */
+        close( skfd );
+        return -1;
+    }
+
+    wrq.u.data.pointer = (void*)num;
+    wrq.u.data.length = sizeof(int);
+
+    if (iw_get_ext(skfd, ifname, IOCTL_GET_DFS_STATUS, &wrq) < 0){
+        close( skfd );
+        return -1;
+    }
+    close( skfd );
+    return *num;
+}
+
+int get_regdomain_from_countrycode(char* country_code, int unit) {
+	int i = 0, num = 0;
+	int regDomain = 0;
+	num = sizeof(countryIEArray)/sizeof(COUNTRY_IE_ELEMENT);
+	while(i<num) {
+		if(strcmp(country_code,countryIEArray[i].countryA2) == 0)
+			break;
+		i++;
+	}
+	if(i >= num) {
+		return regDomain;
+	}
+	switch(unit) {
+	case WL_2G_BAND:
+		regDomain = countryIEArray[i].G_Band_Region;
+		break;
+	case WL_5G_BAND:
+#ifdef RPAC92
+	case WL_5G_2_BAND:
+#endif
+		regDomain = countryIEArray[i].A_Band_Region;
+		break;
+	default:
+		break;
+	}
+	return regDomain;
+}
+
+
+void iwpriv_set_mib_int(const char* ifname, const char* conf, int val) {
+	char tmp[32]="\0";
+	snprintf(tmp, sizeof(tmp), "%s=%d", conf, val);
+	_dprintf("ioctl cmd iwpriv %s %s\n", ifname, tmp);
+	setmibInfo(ifname, tmp, sizeof(tmp));
+}
+void iwpriv_set_mib_string(const char* ifname, const char* conf, char* val) {
+	char tmp[640]="\0";
+	snprintf(tmp, sizeof(tmp), "%s=%s", conf, val);
+	_dprintf("ioctl cmd iwpriv %s %s\n", ifname, tmp);
+	setmibInfo(ifname, tmp, sizeof(tmp));
 }

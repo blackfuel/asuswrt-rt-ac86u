@@ -55,7 +55,7 @@ void write_chap_secret(char *file)
 				continue;
 #ifdef RTCONFIG_NVRAM_ENCRYPT
 			memset(dec_passwd, 0, sizeof(dec_passwd));
-			pw_dec(passwd, dec_passwd);
+			pw_dec(passwd, dec_passwd, sizeof(dec_passwd));
 			passwd = dec_passwd;
 #endif
 			fprintf(fp, "'%s' * '%s' *\n",
@@ -86,6 +86,26 @@ void start_pptpd(void)
 		return;
 	}
 
+#if !defined(DSL_AX82U) ///TODO: !defined(RTCONFIG_HND_ROUTER_AX_675X)
+#ifdef HND_ROUTER
+	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+	char wan_proto[16];
+
+	snprintf(prefix, sizeof(prefix), "wan%d_", wan_primary_ifunit());
+	snprintf(wan_proto, sizeof(wan_proto), "%s", nvram_safe_get(strcat_r(prefix, "proto", tmp)));
+
+	if (nvram_match("fc_disable", "0") &&
+		(
+#ifdef RTCONFIG_HND_ROUTER_AX
+		 !strcmp(wan_proto, "pppoe") ||
+#endif
+		 !strcmp(wan_proto, "pptp") ||
+		 !strcmp(wan_proto, "l2tp"))) {
+		dbg("[%s, %d] Flow Cache Learning of GRE flows Tunnel: DISABLED, PassThru: ENABLED\n", __FUNCTION__, __LINE__);
+		eval("fc", "config", "--gre", "0");
+	}
+#endif
+#endif
 
 	// cprintf("stop vpn modules\n");
 	// stop_vpn_modules ();
@@ -288,4 +308,10 @@ void stop_pptpd(void)
 
 	killall_tk("pptpd");
 	killall_tk("bcrelay");
+
+#if !defined(DSL_AX82U) ///TODO: !defined(RTCONFIG_HND_ROUTER_AX_675X)
+#ifdef HND_ROUTER
+	if (nvram_match("fc_disable", "0")) eval("fc", "config", "--gre", "1");
+#endif
+#endif
 }

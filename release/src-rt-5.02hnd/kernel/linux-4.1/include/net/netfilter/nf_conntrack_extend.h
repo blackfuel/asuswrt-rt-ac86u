@@ -5,6 +5,19 @@
 
 #include <net/netfilter/nf_conntrack.h>
 
+#define CATHY_DEBUG_NAT_EXT
+
+#define CATHY_DEBUG_LOG
+
+#ifdef CATHY_DEBUG_LOG
+extern void cdebug_log(const char *fmt, ...);
+#define debug_log(fmt, arg...)			cdebug_log(fmt, ##arg)
+#define debug_log2(print2mem, fmt, arg...)	((print2mem) ? cdebug_log(fmt, ##arg) : printk(fmt, ##arg))
+#else
+#define debug_log(fmt, arg...)			printk(fmt, ##arg)
+#define debug_log2(print2mem, fmt, arg...)	printk(fmt, ##arg)
+#endif /* CATHY_DEBUG_LOG */
+
 enum nf_ct_ext_id {
 	NF_CT_EXT_HELPER,
 #if defined(CONFIG_NF_NAT) || defined(CONFIG_NF_NAT_MODULE)
@@ -47,10 +60,17 @@ enum nf_ct_ext_id {
 /* Extensions: optional stuff which isn't permanently in struct. */
 struct nf_ct_ext {
 	struct rcu_head rcu;
+#ifdef CATHY_DEBUG_NAT_EXT
+	u32 magic;
+#endif /* CATHY_DEBUG_NAT_EXT */
 	u16 offset[NF_CT_EXT_NUM];
 	u16 len;
 	char data[0];
 };
+
+#ifdef CATHY_DEBUG_NAT_EXT
+extern int get_tot_size_all_ext_types(void);
+#endif /* CATHY_DEBUG_NAT_EXT */
 
 static inline bool __nf_ct_ext_exist(const struct nf_ct_ext *ext, u8 id)
 {
@@ -66,7 +86,14 @@ static inline void *__nf_ct_ext_find(const struct nf_conn *ct, u8 id)
 {
 	if (!nf_ct_ext_exist(ct, id))
 		return NULL;
-
+#ifdef CATHY_DEBUG_NAT_EXT
+	if (id == NF_CT_EXT_HELPER) {
+		debug_log("%s: ct %px id %d ext %px data %px ret_ip %pS\n",
+			__FUNCTION__, ct, id, ct->ext,
+			(void *)ct->ext + ct->ext->offset[id],
+			(void *)_RET_IP_);
+	}
+#endif /* CATHY_DEBUG_NAT_EXT */
 	return (void *)ct->ext + ct->ext->offset[id];
 }
 #define nf_ct_ext_find(ext, id)	\

@@ -10,6 +10,8 @@
 var page_modified = 0;
 var restart_time = 0;
 
+var rc_support = '<% nvram_get("rc_support"); %>'; 
+var dsl_support = (rc_support.search("dsl") == -1) ? false : true;
 var current_page = '<% get_parameter("current_page"); %>';
 var next_page = '<% get_parameter("next_page"); %>';
 var action_script = '<% get_parameter("action_script"); %>';
@@ -206,7 +208,17 @@ function showWlHint(updateFlag){
 			}
 			else if(wl_nband_array[j] == '1'){
 				band5g_count++;
-				wl_nband_title.push("5 GHz-" + band5g_count);
+				if(parent.band6g_support){
+					if(band5g_count == '1'){
+						wl_nband_title.push("5 GHz");
+					}
+					else{
+						wl_nband_title.push("6 GHz");
+					}
+				}
+				else{					
+					wl_nband_title.push("5 GHz-" + band5g_count);
+				}				
 			}
 		}
 		if(wl_nband_title.indexOf("2.4 GHz-2") == -1) wl_nband_title[wl_nband_title.indexOf("2.4 GHz-1")] = "2.4 GHz";
@@ -265,11 +277,13 @@ function showWlHint(updateFlag){
 			if(smart_connect_nvram == 1){
 				// Tri band steering
 				wlObj.length = 1;
-				if(based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" || based_modelid == "BLUECAVE"){
-					wlObj[0].band = "Dual-Band Smart Connect";
-				}
-				else{
-					wlObj[0].band = "Tri-Band Smart Connect";
+				if(parent.smart_connect_support){
+					if(parent.band5g2_support){
+						wlObj[0].band = "<#smart_connect_tri#>";
+					}
+					else{
+						wlObj[0].band = "<#smart_connect_dual#>";
+					}
 				}
 			}
 			else if(smart_connect_nvram == 2){
@@ -281,11 +295,13 @@ function showWlHint(updateFlag){
 		else if(applyParam.smartConnect == 1){
 			// Tri band steering
 			wlObj.length = 1;
-			if(parent.based_modelid == "RT-AC88U" || parent.based_modelid == "RT-AC86U" || parent.based_modelid == "AC2900" || parent.based_modelid == "RT-AC3100" || parent.based_modelid == "BLUECAVE"){
-				wlObj[0].band = "Dual-Band Smart Connect";
-			}
-			else{
-				wlObj[0].band = "Tri-Band Smart Connect";
+			if(parent.smart_connect_support){
+				if(parent.band5g2_support){
+					wlObj[0].band = "<#smart_connect_tri#>";
+				}
+				else{
+					wlObj[0].band = "<#smart_connect_dual#>";
+				}
 			}
 		}
 		else if(applyParam.smartConnect == 2){
@@ -390,7 +406,7 @@ function showWlHint(updateFlag){
 		wlHintCss += "</style>";
 
 		var wlHintJs = '<script>setInterval(function(){var a;if(window.XMLHttpRequest)a=new XMLHttpRequest;else{if(!window.ActiveXObject)return!1;a=new ActiveXObject("Microsoft.XMLHTTP")}a.onreadystatechange=function(){4==a.readyState&&200==a.status&&(top.location.href="/")},a.open("GET","/httpd_check.xml",!0),a.send(null)},';
-		wlHintJs += (action_script == "reboot")?restart_time*1000:"3e3";
+		wlHintJs += (action_script == "reboot")?restart_time*1000:"5000";
 		wlHintJs += ');<\x2Fscript>';
 
 		var wlHintHtml = '';
@@ -518,10 +534,16 @@ function initial(){
 			}
 		}
 		
-		if(action_script == "reboot" || action_script.search("restart_dsl_wireless") != -1){
-			setTimeout(function(){
-				top.location.href = next_page;
-			}, restart_time*1000);
+		if(action_script == "reboot"){
+            setTimeout(function(){
+                top.location.href = next_page;
+            }, restart_time*1000);
+        }
+        else if(dsl_support){
+			//if(action_script.search("restart_dsl_wireless") != -1){
+			setTimeout(parent.startLiveUpdate, 40000);
+			setTimeout("parent.parent.document.getElementById('btn_gotoindex').style.visibility = 'visible';", 40000);
+			//}
 		}
 		else if(action_script.search("restart_subnet") !== -1){
 			setTimeout(doDetect, restart_time*1000);
@@ -558,7 +580,17 @@ function initial(){
 		setTimeout("parent.location.href='/qis/QIS_internet_account.htm';", restart_time*1000);
 	}	
 	else if(action_script == "saveNvram"){
-		return;
+		if(getflag == "finish"){
+			if(parent.document.getElementById("hidden_frame")){
+				setTimeout("parent.location.href='/qis/QIS_finish.htm';", restart_time*1000);
+			}
+			else{
+				parent.parent.showLoading(restart_time, "waiting");
+				setTimeout("showdr_advise('finish');", (restart_time+1)*1000);
+			}
+		}
+		else
+			return;
 	}
 	else if(getflag == "background"){
 		return;
@@ -569,6 +601,16 @@ function initial(){
 				showWlHint();
 				return;
 			}
+			else if(getflag == "finish"){
+				if(parent.document.getElementById("hidden_frame")){
+					setTimeout("parent.location.href='/qis/QIS_finish.htm';", restart_time*1000);  // Get
+				}
+				else{
+					parent.parent.showLoading(restart_time, "waiting");
+					setTimeout("showdr_advise('finish');", (restart_time+1)*1000);
+				}
+			}
+
 			if(current_page.indexOf(parent.ABS_INDEXPAGE) >= 0){
 				parent.showLoading(restart_time, "waiting");
 			}
@@ -601,9 +643,6 @@ function initial(){
 			else
 				setTimeout("top_delay_redirect('"+next_page+"');", restart_time*1000);
 		}
-	}
-	else if(getflag == "background"){
-			return;
 	}
 	else if(action_script == "reboot" || action_script.search("restart_subnet") !== -1){
 		parent.showLoading(restart_time);

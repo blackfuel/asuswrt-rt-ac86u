@@ -335,6 +335,7 @@ struct global {
 	bool bAllowTrustedDomains;
 	bool bLanmanAuth;
 	bool bNTLMAuth;
+	bool bRawNTLMv2Auth;
 	bool bUseSpnego;
 	bool bClientLanManAuth;
 	bool bClientNTLMv2Auth;
@@ -1377,6 +1378,15 @@ static struct parm_struct parm_table[] = {
 		.type		= P_BOOL,
 		.p_class	= P_GLOBAL,
 		.ptr		= &Globals.bNTLMAuth,
+		.special	= NULL,
+		.enum_list	= NULL,
+		.flags		= FLAG_ADVANCED,
+	},
+	{
+		.label		= "raw NTLMv2 auth",
+		.type		= P_BOOL,
+		.p_class	= P_GLOBAL,
+		.ptr		= &Globals.bRawNTLMv2Auth,
 		.special	= NULL,
 		.enum_list	= NULL,
 		.flags		= FLAG_ADVANCED,
@@ -5336,6 +5346,7 @@ static void init_globals(bool reinit_globals)
 	Globals.bClientPlaintextAuth = False;	/* Do NOT use a plaintext password even if is requested by the server */
 	Globals.bLanmanAuth = False;	/* Do NOT use the LanMan hash, even if it is supplied */
 	Globals.bNTLMAuth = True;	/* Do use NTLMv1 if it is supplied by the client (otherwise NTLMv2) */
+	Globals.bRawNTLMv2Auth = True;	/* Allow NTLMv2 without NTLMSSP */
 	Globals.bClientNTLMv2Auth = True; /* Client should always use use NTLMv2, as we can't tell that the server supports it, but most modern servers do */
 	/* Note, that we will also use NTLM2 session security (which is different), if it is available */
 
@@ -5818,6 +5829,7 @@ FN_GLOBAL_BOOL(lp_map_untrusted_to_domain, &Globals.bMapUntrustedToDomain)
 FN_GLOBAL_INTEGER(lp_restrict_anonymous, &Globals.restrict_anonymous)
 FN_GLOBAL_BOOL(lp_lanman_auth, &Globals.bLanmanAuth)
 FN_GLOBAL_BOOL(lp_ntlm_auth, &Globals.bNTLMAuth)
+FN_GLOBAL_BOOL(lp_raw_ntlmv2_auth, &Globals.bRawNTLMv2Auth)
 FN_GLOBAL_BOOL(lp_client_plaintext_auth, &Globals.bClientPlaintextAuth)
 FN_GLOBAL_BOOL(lp_client_lanman_auth, &Globals.bClientLanManAuth)
 FN_GLOBAL_BOOL(lp_client_ntlmv2_auth, &Globals.bClientNTLMv2Auth)

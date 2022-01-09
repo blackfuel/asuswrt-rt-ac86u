@@ -1,7 +1,7 @@
-/* $Id: upnputils.h,v 1.6 2014/03/31 12:32:57 nanard Exp $ */
+/* $Id: upnputils.h,v 1.9 2018/03/13 10:25:20 nanard Exp $ */
 /* MiniUPnP project
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2011-2013 Thomas Bernard
+ * (c) 2011-2018 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -50,7 +50,7 @@ int upnp_gettimeofday(struct timeval * tv);
  * define portability macros
  */
 #if defined(__sun)
-static size_t _sa_len(const struct sockaddr *addr)
+static __inline size_t _sa_len(const struct sockaddr *addr)
 {
         if (addr->sa_family == AF_INET)
                 return (sizeof(struct sockaddr_in));

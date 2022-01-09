@@ -142,7 +142,7 @@ const char dhcp_option_strings[] ALIGN1 =
  * udhcp_str2optset: to determine how many bytes to allocate.
  * xmalloc_optname_optval: to estimate string length
  * from binary option length: (option[LEN] / dhcp_option_lengths[opt_type])
- * is the number of elements, multiply in by one element's string width
+ * is the number of elements, multiply it by one element's string width
  * (len_of_option_as_string[opt_type]) and you know how wide string you need.
  */
 const uint8_t dhcp_option_lengths[] ALIGN1 = {
@@ -162,7 +162,18 @@ const uint8_t dhcp_option_lengths[] ALIGN1 = {
 	[OPTION_S32] =     4,
 	/* Just like OPTION_STRING, we use minimum length here */
 	[OPTION_STATIC_ROUTES] = 5,
-	[OPTION_6RD] =    22,  /* ignored by udhcp_str2optset */
+	[OPTION_6RD] =    12,  /* ignored by udhcp_str2optset */
+	/* The above value was chosen as follows:
+	 * len_of_option_as_string[] for this option is >60: it's a string of the form
+	 * "32 128 ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff 255.255.255.255 ".
+	 * Each additional ipv4 address takes 4 bytes in binary option and appends
+	 * another "255.255.255.255 " 16-byte string. We can set [OPTION_6RD] = 4
+	 * but this severely overestimates string length: instead of 16 bytes,
+	 * it adds >60 for every 4 bytes in binary option.
+	 * We cheat and declare here that option is in units of 12 bytes.
+	 * This adds more than 60 bytes for every three ipv4 addresses - more than enough.
+	 * (Even 16 instead of 12 should work, but let's be paranoid).
+	 */
 };
 
 
@@ -215,6 +226,7 @@ uint8_t* FAST_FUNC udhcp_get_option(struct dhcp_packet *packet, int code)
 	rem = sizeof(packet->options);
 	while (1) {
 		if (rem <= 0) {
+complain:
 			bb_error_msg("bad packet, malformed option field");
 			return NULL;
 		}
@@ -240,12 +252,25 @@ uint8_t* FAST_FUNC udhcp_get_option(struct dhcp_packet *packet, int code)
 			}
 			break;
 		}
+
+                if (rem <= OPT_LEN)
+                        goto complain; /* complain and return NULL */
+
 		len = 2 + optionptr[OPT_LEN];
 		rem -= len;
 		if (rem < 0)
-			continue; /* complain and return NULL */
+			goto complain; /* complain and return NULL */
 
 		if (optionptr[OPT_CODE] == code) {
+			if (optionptr[OPT_LEN] == 0) {
+				/* So far no valid option with length 0 known.
+				 * Having this check means that searching
+				 * for DHCP_MESSAGE_TYPE need not worry
+				 * that returned pointer might be unsafe
+				 * to dereference.
+				 */
+				goto complain; /* complain and return NULL */
+			}
 			log_option("Option found", optionptr);
 			return optionptr + OPT_DATA;
 		}
@@ -260,6 +285,16 @@ uint8_t* FAST_FUNC udhcp_get_option(struct dhcp_packet *packet, int code)
 	/* log3 because udhcpc uses it a lot - very noisy */
 	log3("Option 0x%02x not found", code);
 	return NULL;
+}
+
+uint8_t* FAST_FUNC udhcp_get_option32(struct dhcp_packet *packet, int code)
+{
+	uint8_t *r = udhcp_get_option(packet, code);
+	if (r) {
+		if (r[-OPT_DATA + OPT_LEN] != 4)
+			r = NULL;
+	}
+	return r;
 }
 
 /* Return the position of the 'end' option (no bounds checking) */

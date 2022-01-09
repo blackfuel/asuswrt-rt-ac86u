@@ -18,16 +18,23 @@ else
 	HTTP_VERSION=3.1.0.97
 	OPENSSL_VERSION=1.0.2j.v001
 endif
-else ifeq ($(or $(RTCONFIG_QCA),$(RTCONFIG_REALTEK),$(RTCONFIG_LANTIQ)),y)
-	pkg_type=mipsbig
-	DM_VERSION=3.1.0.101
-	HTTP_VERSION=3.1.0.97
-	OPENSSL_VERSION=1.0.2j.v001
-else ifeq ($(RTCONFIG_NEW_APP_ARM),y)
+else ifeq ($(or $(RTCONFIG_QCA),$(RTCONFIG_LANTIQ)),y)
+ifeq ($(RTCONFIG_NEW_APP_ARM),y)
 	pkg_type=arm
 	DM_VERSION=9.1.0.101
 	HTTP_VERSION=9.1.0.97
 	OPENSSL_VERSION=9.1.0.2j.v001
+else
+	pkg_type=mipsbig
+	DM_VERSION=3.1.0.101
+	HTTP_VERSION=3.1.0.97
+	OPENSSL_VERSION=1.0.2j.v001
+endif
+else ifeq ($(RTCONFIG_REALTEK),y)
+	pkg_type=mipsbig
+	DM_VERSION=3.1.0.101
+	HTTP_VERSION=3.1.0.97
+	OPENSSL_VERSION=1.0.2j.v001
 else
 	pkg_type=mipsel
 	DM_VERSION=3.1.0.101
@@ -41,6 +48,7 @@ ifeq ($(RTCONFIG_BCMARM),y)
 PKG_LIST += libsigc++ libpar2
 else ifeq ($(RTCONFIG_QCA),y)
 # libuclibc++, libcurl, libsigc++, and libpar2 are not required
+PKG_LIST += $(if $(RTCONFIG_APP_PREINSTALLED),libsigc++ libpar2)
 else
 PKG_LIST += libuclibc++ libsigc++ libpar2
 endif
@@ -52,6 +60,10 @@ PKG_LIST += ncurses-base libiconv
 
 endif
 
+ifeq ($(RTCONFIG_LIVE_UPDATE_RSA),y)
+KEY_PATH= $(SRC_ROOT)/../../../key
+endif
+
 all:
 #	@echo "" >rom/etc/motd
 #	@echo "" >>rom/etc/motd
@@ -60,9 +72,28 @@ all:
 clean:
 #	rm -f rom/etc/motd
 
+certs/ca-bundle.crt:
+	certs/mk-ca-bundle.pl -fu $@
+
+certs: dummy
+	certs/mk-ca-bundle.pl -fu certs/ca-bundle.crt
+
+certs-install: certs/ca-bundle.crt
+	install -d $(INSTALLDIR)/rom/etc/ssl/certs
+	install -m 0644 certs/ca-bundle.crt $(INSTALLDIR)/rom/etc/ssl/certs/ca-certificates.crt
+	sed -r '/^\s*(#|$$)/d;/\-BEGIN/{h;d};H;/\-END/{x;/\-BEGIN/p};d' -i $(INSTALLDIR)/rom/etc/ssl/certs/ca-certificates.crt
+
 install:
 	mkdir -p $(INSTALLDIR)
 	( tar --exclude=.svn --exclude=*.bak -cpf - rom ) | ( cd $(INSTALLDIR) && tar -xpf - )
+
+	$(MAKE) certs-install
+ifeq ($(RTCONFIG_LETSENCRYPT),y)
+	install -m 0644 certs/DST_Root_CA_X3.pem $(INSTALLDIR)/rom/etc/ssl/certs/letsencrypt.pem
+endif
+ifeq ($(RTCONFIG_APP_FILEFLEX),y)
+	install -m 0644 ipkg.conf $(INSTALLDIR)/rom/ipkg.conf
+endif
 
 ifeq ($(RTAC88U),y)
 	install -m 0644 smb.conf $(INSTALLDIR)/rom/smb.conf
@@ -125,12 +156,12 @@ ifeq ($(RTCONFIG_USB_MODEM),y)
 	install -m 0644 spn_*.dat $(INSTALLDIR)/rom
 	install -m 0755 apps_scripts/find_modem_*.sh $(INSTALLDIR)/usr/sbin
 	install -m 0755 apps_scripts/modem_*.sh $(INSTALLDIR)/usr/sbin
-	install -m 0755 apps_scripts/3ginfo.sh $(INSTALLDIR)/usr/sbin
 ifeq ($(RTCONFIG_INTERNAL_GOBI),y)
 	install -m 0755 apps_scripts/gobi_update.sh $(INSTALLDIR)/usr/sbin
 endif
 endif
 endif
+	install -m 0755 apps_scripts/3ginfo.sh $(INSTALLDIR)/usr/sbin
 
 ifeq ($(RTCONFIG_DSL),y)
 	cp -f webs_scripts/notif_update.sh $(INSTALLDIR)/usr/sbin/notif_update.sh
@@ -143,8 +174,16 @@ ifeq ($(RTCONFIG_BWDPI),y)
 	cp -f webs_scripts/sig2nd_upgrade.sh $(INSTALLDIR)/usr/sbin/sig_upgrade.sh
 	cp -f webs_scripts/sig2nd_update.sh $(INSTALLDIR)/usr/sbin/sig_update.sh
 endif
+ifeq ($(RTCONFIG_LIVE_UPDATE_RSA),y)
+ifneq ("$(wildcard $(KEY_PATH)/public$(LIVE_UPDATE_RSA).pem)","")
+	cp -f $(KEY_PATH)/public$(LIVE_UPDATE_RSA).pem $(INSTALLDIR)/usr/sbin/public.pem
+else
+	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
+endif
+else
 ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
+endif
 endif
 ifeq ($(RTAC68U),y)
 ifneq ("$(wildcard $(SRCBASE)/../../buildtools/tmks.bin)","")
@@ -154,24 +193,26 @@ endif
 else
 ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/ssl_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
+ifeq ($(RTCONFIG_FBWIFI),y)
+	cp -f webs_scripts/fbwifi_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+else ifeq ($(RTAC68A),y)
+	cp -f webs_scripts/force_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+else ifeq ($(RTCONFIG_FRS_LIVE_UPDATE),y)
+	cp -f webs_scripts/frs_live_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+else
+	cp -f webs_scripts/ssl_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+endif
 ifeq ($(RTCONFIG_CFGSYNC),y)
-	cp -f webs_scripts/ssl_webs_download.sh $(INSTALLDIR)/usr/sbin/webs_download.sh
 	cp -f webs_scripts/ssl_webs_note.sh $(INSTALLDIR)/usr/sbin/webs_note.sh
 endif
 else
 	cp -f webs_scripts/nozip_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 endif
-ifeq ($(RTCONFIG_FBWIFI),y)
-	cp -f webs_scripts/fbwifi_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
-else
-	cp -f webs_scripts/ssl_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+
+ifeq ($(RTCONFIG_URLFW),y)
+	cp -f webs_scripts/urlfw_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 endif
-ifeq ($(RTAC68A),y)
-	cp -f webs_scripts/force_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
-endif
-ifeq ($(AC2900),y)
-	cp -f webs_scripts/verizon_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
-endif
+
 ifeq ($(RTAC68U),y)
 	cp -f webs_scripts/ssl_webs_upgrade_enc.sh $(INSTALLDIR)/usr/sbin/webs_upgrade_enc.sh
 	cp -f webs_scripts/ssl_webs_update_enc.sh $(INSTALLDIR)/usr/sbin/webs_update_enc.sh
@@ -181,8 +222,16 @@ ifeq ($(or $(RTCONFIG_BWDPI),$(RTCONFIG_BWDPI_DEP)),y)
 	cp -f webs_scripts/sig2nd_upgrade.sh $(INSTALLDIR)/usr/sbin/sig_upgrade.sh
 	cp -f webs_scripts/sig2nd_update.sh $(INSTALLDIR)/usr/sbin/sig_update.sh
 endif
+ifeq ($(RTCONFIG_LIVE_UPDATE_RSA),y)
+ifneq ("$(wildcard $(KEY_PATH)/public$(LIVE_UPDATE_RSA).pem)","")
+	cp -f $(KEY_PATH)/public$(LIVE_UPDATE_RSA).pem $(INSTALLDIR)/usr/sbin/public.pem
+else
+	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
+endif
+else
 ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
+endif
 endif
 ifeq ($(RTAC68U),y)
 ifneq ("$(wildcard $(SRCBASE)/../../buildtools/tmks.bin)","")
@@ -195,6 +244,12 @@ endif
 	sed 's/#.*//g;s/[ \t]\+/ /g;s/^[ \t]*//;s/[ \t]*$$//;/^$$/d' < rom/etc/services > $(INSTALLDIR)/rom/etc/services
 	sed 's/#.*//g;s/[ \t]\+/ /g;s/^[ \t]*//;s/[ \t]*$$//;/^$$/d' < rom/etc/protocols > $(INSTALLDIR)/rom/etc/protocols
 	sed 's/#.*//g;s/[ \t]\+/ /g;s/^[ \t]*//;s/[ \t]*$$//;/^$$/d' < rom/etc/ethertypes > $(INSTALLDIR)/rom/etc/ethertypes
+
+ifeq ($(HND_ROUTER),y)
+	sed 's/#.*//g;s/[ \t]\+/ /g;s/^[ \t]*//;s/[ \t]*$$//;/^$$/d' < rom/etc/nsswitch.conf > $(INSTALLDIR)/rom/etc/nsswitch.conf
+else
+	rm -f $(INSTALLDIR)/rom/etc/nsswitch.conf
+endif
 
 ifeq ($(RTCONFIG_HTTPS),y)
 	sed 's/#.*//g;s/[ \t]\+/ /g;s/^[ \t]*//;s/[ \t]*$$//;/^$$/d' < rom/etc/openssl.cnf > $(INSTALLDIR)/rom/etc/openssl.cnf
@@ -238,6 +293,12 @@ ifeq ($(BUILD_NAME), RT-AC68U)
 	cp -rf dlna/icon_lrg.rp-ac1900.jpg $(INSTALLDIR)/rom/dlna/icon_alt2_lrg.jpg
 	cp -rf dlna/icon_lrg.rp-ac1900.png $(INSTALLDIR)/rom/dlna/icon_alt2_lrg.png
 endif
+ifeq ($(BUILD_NAME), RT-AX82U)
+	install -m 0755 dlna/icon_sm.rt-ax82u_gd.jpg $(INSTALLDIR)/rom/dlna/icon_gd_sm.jpg
+	install -m 0755 dlna/icon_sm.rt-ax82u_gd.png $(INSTALLDIR)/rom/dlna/icon_gd_sm.png
+	install -m 0755 dlna/icon_lrg.rt-ax82u_gd.jpg $(INSTALLDIR)/rom/dlna/icon_gd_lrg.jpg
+	install -m 0755 dlna/icon_lrg.rt-ax82u_gd.png $(INSTALLDIR)/rom/dlna/icon_gd_lrg.png
+endif
 ifeq ($(and $(LJPG),$(SJPG),$(LPNG),$(SPNG)),)
 	$(warning Add media server icon for $(BUILD_NAME) !!!!!!!!!!!!)
 else
@@ -251,13 +312,34 @@ ifeq ($(RTCONFIG_GETREALIP),y)
 	install -m 0755 apps_scripts/getrealip.sh $(INSTALLDIR)/usr/sbin/getrealip.sh
 endif
 
+ifneq ($(RTCONFIG_INADYN),y)
 	install -m 0755 webs_scripts/GoogleDNS_Update.sh $(INSTALLDIR)/usr/sbin
-
-ifeq ($(RTCONFIG_LETSENCRYPT),y)
-	install -m 0644 rom/etc/ssl/certs/DST_Root_CA_X3.pem $(INSTALLDIR)/rom/etc/ssl/certs/letsencrypt.pem
+endif
+ifeq ($(RTCONFIG_HND_ROUTER_AX),y)
+ifneq ($(BUILD_NAME), RP-AX56)
+	install -m 0755 apps_scripts/runin/$(BUILD_NAME)/stress_pkteng.sh $(INSTALLDIR)/usr/sbin
+endif
 endif
 
 ifeq ($(HND_ROUTER),y)
 	mkdir -p $(INSTALL_DIR)/rom/rom/usr/share/zoneinfo
 	cp -rf zoneinfo/* $(INSTALL_DIR)/rom/rom/usr/share/zoneinfo/
 endif
+
+ifeq ($(HND_ROUTER),y)
+	mv -f $(INSTALLDIR)/rom/etc/profile.hnd $(INSTALLDIR)/rom/etc/profile
+else
+	rm -f $(INSTALLDIR)/rom/etc/profile.hnd
+endif
+
+ifeq ($(RTCONFIG_TPVPN),y)
+	mkdir -p $(INSTALLDIR)/rom/vpn
+	install -m 0644 vpn/HMA_TCP.JSON $(INSTALLDIR)/rom/vpn/HMA_TCP.JSON
+	install -m 0644 vpn/HMA_UDP.JSON $(INSTALLDIR)/rom/vpn/HMA_UDP.JSON
+endif
+
+ifeq ($(RTCONFIG_HND_ROUTER_AX_6756), y)
+	install -m 0755 apps_scripts/brcm_cled.sh $(INSTALLDIR)/usr/sbin
+endif
+
+.PHONY: dummy

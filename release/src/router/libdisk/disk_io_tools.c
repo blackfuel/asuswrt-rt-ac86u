@@ -23,32 +23,48 @@
 #include <sys/vfs.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <limits.h>		//PATH_MAX, LONG_MIN, LONG_MAX
 
 #include <shared.h>
 
 #include "usb_info.h"
 #include "disk_io_tools.h"
 
-/*extern int mkdir_if_none(char *dir){
-	DIR *dp = opendir(dir);
-	if(dp != NULL){
-		closedir(dp);
-		return 0;
-	}
+int test_if_f_exist(const char *path){
+	FILE *fp;
 
-	umask(0000);
-	return (!mkdir(dir, 0777))?1:0;
-}//*/
-extern int mkdir_if_none(const char *path){
+	if((fp = fopen(path, "r")) == NULL)
+		return 0;
+
+	fclose(fp);
+	return 1;
+}
+
+int test_if_d_exist(const char *path){
 	DIR *dp;
+
+	if((dp = opendir(path)) == NULL)
+		return 0;
+
+	closedir(dp);
+	return 1;
+}
+
+int test_if_o_exist(const char *path){
+	if(!test_if_f_exist(path) && !test_if_d_exist(path))
+		return 0;
+
+	return 1;
+}
+
+extern int mkdir_if_none(const char *path){
 	char cmd[PATH_MAX];
 
-	if(!(dp = opendir(path))){
+	if(!test_if_d_exist(path)){
 		snprintf(cmd, sizeof(cmd), "mkdir -m 0777 -p '%s'", (char *)path);
 		system(cmd);
 		return 1;
 	}
-	closedir(dp);
 
 	return 0;
 }
@@ -103,17 +119,17 @@ extern int test_if_System_folder(const char *const dirname){
 	char *ptr;
 
 	for(i = 0; MS_System_folder[i] != NULL; ++i){
-		if(!upper_strcmp(dirname, MS_System_folder[i]))
+		if(strcasecmp(dirname, MS_System_folder[i]) == 0)
 			return 1;
 	}
 
 	for(i = 0; Linux_System_folder[i] != NULL; ++i){
-		if(!upper_strcmp(dirname, Linux_System_folder[i]))
+		if(strcasecmp(dirname, Linux_System_folder[i]) == 0)
 			return 1;
 	}
 
 	for(i = 0; Mac_System_folder[i] != NULL; ++i){
-		if(!upper_strcmp(dirname, Mac_System_folder[i]))
+		if(strcasecmp(dirname, Mac_System_folder[i]) == 0)
 			return 1;
 	}
 
@@ -123,7 +139,7 @@ extern int test_if_System_folder(const char *const dirname){
 		return 1;
 
 	for(i = 0; ASUS_System_folder[i] != NULL; ++i){
-		if(!upper_strncmp(dirname, ASUS_System_folder[i], strlen(ASUS_System_folder[i])))
+		if(strncasecmp(dirname, ASUS_System_folder[i], strlen(ASUS_System_folder[i])) == 0)
 			return 1;
 	}
 

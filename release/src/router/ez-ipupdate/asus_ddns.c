@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 #define IF_LOOKUP 1
 #include <sys/ioctl.h>
@@ -9,10 +10,12 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 
 #include "md5.h"
 #include "asus_ddns.h"
+#include "dprintf.h"	//show_message()
 #if 0
 #include <nvram_linux.h>
 #else //2007.03.14 Yau add for WL500gp2
@@ -20,6 +23,12 @@
 #endif
 #include <syslog.h>
 #include <shared.h>
+
+#include <shutils.h>
+extern void output(void *buf);
+extern int read_input(char *buf, int len);
+extern int get_if_addr(int sock, char *name, struct sockaddr_in *sin);
+extern void base64Encode(char *intext, char *output);
 
 #define MAX_DOMAIN_LEN	50	// hostname len (32) + "asuscomm.com" ~~ 45, reserve 5 char
 
@@ -692,7 +701,7 @@ int asus_private(void)
 	int i, l, c;
 	unsigned long secret;
 	unsigned char *p, user[256], hwaddr[6], hwaddr_str[18], key[64], msg[256], ipbuf[20], bin_pwd[16];
-#if defined(RTCONFIG_SOC_IPQ8064)
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SOC_IPQ8074)
 	unsigned char mac_buf[6], mac_buf_str[18];
 #endif
 
@@ -709,7 +718,7 @@ int asus_private(void)
 		return -1;
 	}
 
-#if defined(RTCONFIG_SOC_IPQ8064)
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SOC_IPQ8074)
 	/* Make sure last bytes of MAC address is aligned to 4. */
 	ether_atoe(p, mac_buf);
 	mac_buf[5] &= 0xFC;

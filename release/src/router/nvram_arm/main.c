@@ -40,6 +40,15 @@
 #endif
 
 #define PROTECT_CHAR	'x'
+#define DEFAULT_LOGIN_DATA	"xxxxxxxx"
+
+#ifdef RTCONFIG_JFFS_NVRAM
+#define EXT_NVRAM_SPACE   0x40000
+#else
+#define EXT_NVRAM_SPACE   MAX_NVRAM_SPACE
+#endif
+
+extern int dev_nvram_getall(char *buf, int count);
 
 static int export_mode(char* mode, char* buf_ap, char* buf)
 {
@@ -125,7 +134,7 @@ static int nvram_dec_all(char* buf_ap, char* buf)
 	struct nvram_tuple *t;
 	extern struct nvram_tuple router_defaults[];
 	char *ptr, *item, *value;
-	char name[128], nv[128];
+	char name[128], nv[65535];
 	int len;
 	char output[NVRAM_ENC_MAXLEN];
 	memset(output, 0, sizeof(output));
@@ -211,6 +220,7 @@ static char *nvlist_memset(char *list, int c, unsigned int member_mask)
 	return list;
 }
 
+#if 0
 static int _secure_conf(char* buf)
 {
 	char name[128], *value, *item;
@@ -239,6 +249,7 @@ static int _secure_conf(char* buf)
 		"wl1_phrase_x", "wl1.1_phrase_x", "wl1.2_phrase_x", "wl1.3_phrase_x",
 		"wl_phrase_x", "vpnc_openvpn_pwd", "PM_SMTP_AUTH_USER", "PM_MY_EMAIL",
 		"PM_SMTP_AUTH_PASS", "wtf_username", "ddns_hostname_x", "ddns_username_x",
+		"shell_username", "shell_passwd",
 		NULL};
 
 	//name is token
@@ -325,7 +336,222 @@ static int _secure_conf(char* buf)
 
 	return 0;
 }
+#else
+static int _convert_data(const char *name, char *value, size_t value_len)
+{
+	int i;
 
+	//name contains token
+	const char *http_token[] = {"http_username", "http_passwd", NULL};
+	const char password_token[] = "password";
+	const char acclist_token[] = "acc_list";
+
+	//name is token
+	const char *token1[] = {"wan_pppoe_passwd", "modem_pass", "modem_pincode",
+		"http_passwd", "wan0_pppoe_passwd", "dslx_pppoe_passwd", "ddns_passwd_x",
+		"wl_wpa_psk",	"wlc_wpa_psk",  "wlc_wep_key",
+		"wl0_wpa_psk", "wl0.1_wpa_psk", "wl0.2_wpa_psk", "wl0.3_wpa_psk",
+		"wl1_wpa_psk", "wl1.1_wpa_psk", "wl1.2_wpa_psk", "wl1.3_wpa_psk",
+		"wl2_wpa_psk", "wl2.1_wpa_psk", "wl2.2_wpa_psk", "wl2.3_wpa_psk",
+		"wl0.1_key1", "wl0.1_key2", "wl0.1_key3", "wl0.1_key4",
+		"wl0.2_key1", "wl0.2_key2", "wl0.2_key3", "wl0.2_key4",
+		"wl0.3_key1", "wl0.3_key2", "wl0.3_key3", "wl0.3_key4",
+		"wl0_key1", "wl0_key2", "wl0_key3", "wl0_key4",
+		"wl1.1_key1", "wl1.1_key2", "wl1.1_key3", "wl1.1_key4",
+		"wl1.2_key1", "wl1.2_key2", "wl1.2_key3", "wl1.2_key4",
+		"wl1.3_key1", "wl1.3_key2", "wl1.3_key3", "wl1.3_key4",
+		"wl1_key1", "wl1_key2", "wl1_key3", "wl1_key4",
+		"wl2.1_key1", "wl2.1_key2", "wl2.1_key3", "wl2.1_key4",
+		"wl2.2_key1", "wl2.2_key2", "wl2.2_key3", "wl2.2_key4",
+		"wl2.3_key1", "wl2.3_key2", "wl2.3_key3", "wl2.3_key4",
+		"wl2_key1", "wl2_key2", "wl2_key3", "wl2_key4",
+		"wl_key1", "wl_key2", "wl_key3", "wl_key4",
+		"wl0_phrase_x", "wl0.1_phrase_x", "wl0.2_phrase_x", "wl0.3_phrase_x",
+		"wl1_phrase_x", "wl1.1_phrase_x", "wl1.2_phrase_x", "wl1.3_phrase_x",
+		"wl2_phrase_x", "wl2.1_phrase_x", "wl2.2_phrase_x", "wl2.3_phrase_x",
+		"wl_phrase_x", "vpnc_openvpn_pwd", "PM_SMTP_AUTH_USER", "PM_MY_EMAIL",
+		"PM_SMTP_AUTH_PASS", "wtf_username", "ddns_hostname_x", "ddns_username_x",
+		"shell_username", "shell_passwd",
+		NULL};
+
+	//name is token
+	//value is [<]username>password<username...
+	const char *token2[] = {"pptpd_clientlist", "vpn_serverx_clientlist", 	NULL};
+
+	//name is token
+	//valus is [<]desc>type>index>username>password<desc...
+	const char vpnc_token[] = "vpnc_clientlist";
+
+	//name is token
+	//value is [<]type>username>password>url>rule>dir>enable<type...
+	const char cloud_token[] = "cloud_sync";
+
+	//name is token
+	//value is username@domain.tld
+	const char pppoe_username_token[] = "pppoe_username";
+
+	if(!value)
+		return 0;
+
+	//change http login username and password as xxxxxxxx
+	for(i = 0; http_token[i]; ++i)
+	{
+		if(!strcmp(name, http_token[i]))
+		{
+			strlcpy(value, DEFAULT_LOGIN_DATA, value_len);
+			return 1;
+		}		
+	}
+
+	//check the password keyword token
+	if (strstr(name, password_token) != NULL) 
+	{
+		memset(value, PROTECT_CHAR, strlen(value));
+		return 1;
+	}
+
+	//check the first token group
+	for (i = 0; token1[i]; i++) 
+	{
+		if (strcmp(name, token1[i]) == 0) 
+		{
+			memset(value, PROTECT_CHAR, strlen(value));
+			return 1;
+		}
+	}
+
+	//check the 2nd token group
+	//value is [<]username>password<username...
+	for (i = 0; token2[i]; i++)
+	{
+		if (strcmp(name, token2[i]) == 0)
+		{
+			nvlist_memset(value, PROTECT_CHAR, (1u << 1));
+			return 1;
+		}
+	}
+
+	//check vpnc token
+	//valus is [<]desc>type>index>username>password<desc...
+	if (strcmp(name, vpnc_token) == 0) 
+	{
+		nvlist_memset(value, PROTECT_CHAR, (1u << 4));
+		return 1;
+	}
+
+	//check cloud sync token
+	//value is [<]type>xxx1>xxx2>xxx3>xxx4>xxx5>xxx6<type...
+	if (strcmp(name, cloud_token) == 0) 
+	{
+		nvlist_memset(value, PROTECT_CHAR, (1u << 2)|(1u << 3)|(1u << 5));
+		return 1;
+	}
+
+	//check
+	//value is password@domain.tld
+	if (strstr(name, pppoe_username_token) != NULL) 
+	{
+		char *e = strchr(value, '@') ? : strchr(value, 0);
+		memset(value, PROTECT_CHAR, e - value);
+		return 1;
+	}
+
+	//convert acc_list as DEFAULT_LOGIN_DATA>DEFAULT_LOGIN_DATA
+	if(strcmp(name, acclist_token) == 0)
+	{
+		snprintf(value, value_len, "%s>%s", DEFAULT_LOGIN_DATA, DEFAULT_LOGIN_DATA);
+		return 1;
+	}
+
+	return 0;
+}
+
+static char* _get_attr(const char *buf, char *name, size_t name_len, char *value, size_t value_len)
+{
+	char *p, *e,  *v;
+	if(!buf || !name || !value)
+		return NULL;
+
+	memset(name, 0, name_len);
+	memset(value, 0, value_len);
+	
+	p = strchr(buf, '=');
+	if(p)
+	{
+		strlcpy(name, buf, ((p - buf + 1) > name_len)? name_len:  (p - buf + 1));
+
+		v = p + 1;
+		e = strchr(v, '\0');
+		if(e)
+		{
+			strlcpy(value, v, ((e - v + 1) > value_len)? value_len:  (e - v + 1));
+			return e + 1;
+		}
+		else	//last line
+		{
+			strlcpy(value, v, value_len);
+			return 0;
+		}
+		
+	}
+	return NULL;
+}
+
+static int _secure_conf(char* buf, size_t len)
+{
+	char *tmp, *p = buf, *b;
+	char name[256], *value;
+	int tmp_len;
+
+	if(!buf || !len)
+		return -1;
+
+	tmp = malloc(len);
+	if(!tmp)
+	{
+		fprintf(stderr, "Can NOT alloc memory!!!");
+		return -1;
+	}
+
+	value = malloc(CKN_STR_MAX);
+	if(!value)
+	{
+		fprintf(stderr, "Can NOT alloc memory!!!");
+		free(tmp);
+		return -1;
+	}
+
+	memset(tmp, 0, len);
+	b = tmp;
+	
+	while(1)
+	{
+		p = _get_attr(p, name, sizeof(name), value, CKN_STR_MAX);
+
+		if(name[0] != '\0')
+		{
+			//handle data
+			_convert_data(name, value, CKN_STR_MAX);
+
+			//write data in the new buffer
+			if(value)
+				tmp_len = snprintf(b, len - (b - tmp), "%s=%s", name, value);
+			else
+				tmp_len = snprintf(b, len - (b - tmp), "%s=", name);
+			
+			b += (tmp_len + 1);	//Add NULL at the end of the value
+		}
+		else
+			break;
+	}
+
+	memcpy(buf, tmp, len);
+
+	free(tmp);
+	free(value);
+	return 0;
+}
+#endif
 
 unsigned char get_rand()
 {
@@ -420,8 +646,11 @@ int issyspara(char *p)
 	extern struct nvram_tuple router_defaults[];
 	
 	// skip checking for wl[]_, wan[], lan[]_
-	if (strstr(p, "wl") || strstr(p, "wan") || strstr(p, "lan")
+	if ((strstr(p, "wl") && strncmp(p+3, "_failed", 7)) || strstr(p, "wan") || strstr(p, "lan")
 		|| strstr(p, "vpn_server") || strstr(p, "vpn_client")
+#ifdef RTCONFIG_DSL
+		|| !strncmp(p, "dsl", 3)
+#endif
 	)
 		return 1;
 
@@ -518,8 +747,12 @@ int nvram_restore_new(char *file, char *buf)
 		{
 			*v++ = '\0';
 
-			if (issyspara(p))
-				nvram_set(p, v);
+			if (issyspara(p)) {
+				if (ate_brcm_factory_mode() && (!strcmp(p, "http_username") || !strcmp(p, "http_passwd")))
+					nvram_set(p, "admin");
+				else
+					nvram_set(p, v);
+			}
 
 			p = v + strlen(v) + 1;
 		}
@@ -546,7 +779,7 @@ usage(void)
 int
 main(int argc, char **argv)
 {
-	char *name, *value, buf[MAX_NVRAM_SPACE];
+	char *name, *value, buf[EXT_NVRAM_SPACE];
 	int size;
 
 	/* Skip program name */
@@ -577,14 +810,14 @@ main(int argc, char **argv)
 		} else if (!strcmp(*argv, "save")) {
 			if (*++argv)
 			{
-				nvram_getall(buf, NVRAM_SPACE);
+				nvram_getall(buf, sizeof(buf));
 #ifdef RTCONFIG_NVRAM_ENCRYPT
-				char *tmp_dnv = malloc(MAX_NVRAM_SPACE);
+				char *tmp_dnv = malloc(EXT_NVRAM_SPACE);
 				if (!tmp_dnv) {
 					fprintf(stderr, "Can NOT alloc memory!!!");
 					return 0;
 				}
-				memset(tmp_dnv, 0, MAX_NVRAM_SPACE);
+				memset(tmp_dnv, 0, EXT_NVRAM_SPACE);
 				nvram_dec_all(tmp_dnv, buf);
 				nvram_save_new(*argv, tmp_dnv);
 				free(tmp_dnv);
@@ -596,20 +829,21 @@ main(int argc, char **argv)
 			   !strncmp(*argv, "save_rp", 7)) {
 			char *mode = *argv;
 			if (*++argv) {
-				char *tmp_export = malloc(MAX_NVRAM_SPACE);
+				char *tmp_export = malloc(EXT_NVRAM_SPACE);
 				if (!tmp_export) {
 					fprintf(stderr, "Can NOT alloc memory!!!");
 					return 0;
 				}
-				memset(tmp_export, 0, MAX_NVRAM_SPACE);
-				nvram_getall(buf, NVRAM_SPACE);
+				memset(tmp_export, 0, EXT_NVRAM_SPACE);
+				nvram_getall(buf, sizeof(buf));
 #ifdef RTCONFIG_NVRAM_ENCRYPT
-				char *tmp_dnv = malloc(MAX_NVRAM_SPACE);
+				char *tmp_dnv = malloc(EXT_NVRAM_SPACE);
 				if (!tmp_dnv) {
 					fprintf(stderr, "Can NOT alloc memory!!!");
+					free(tmp_export);
 					return 0;
 				}
-				memset(tmp_dnv, 0, MAX_NVRAM_SPACE);
+				memset(tmp_dnv, 0, EXT_NVRAM_SPACE);
 				nvram_dec_all(tmp_dnv, buf);
 				export_mode(mode, tmp_export, tmp_dnv);
 				free(tmp_dnv);
@@ -622,14 +856,19 @@ main(int argc, char **argv)
 		//Andy Chiu, 2015/06/09
 		} else if (!strncmp(*argv, "fb_save", 7)) {
 			if (*++argv) {
-				char *tmpbuf = malloc(MAX_NVRAM_SPACE);
+				char *tmpbuf = malloc(EXT_NVRAM_SPACE);
 				if (!tmpbuf) {
 					fprintf(stderr, "Can NOT alloc memory!!!");
 					return 0;
 				}
-				nvram_getall(buf, MAX_NVRAM_SPACE);
-				memcpy(tmpbuf, buf, MAX_NVRAM_SPACE);
-				_secure_conf(tmpbuf);
+				nvram_getall(buf, sizeof(buf));
+#ifdef RTCONFIG_NVRAM_ENCRYPT
+				memset(tmpbuf, 0, EXT_NVRAM_SPACE);
+				nvram_dec_all(tmpbuf, buf);
+#else
+				memcpy(tmpbuf, buf, EXT_NVRAM_SPACE);
+#endif
+				_secure_conf(tmpbuf, EXT_NVRAM_SPACE);
 				nvram_save_new(*argv, tmpbuf);
 				free(tmpbuf);
 			}
@@ -640,13 +879,24 @@ main(int argc, char **argv)
 			system("nvram_erase");
 		} else if (!strcmp(*argv, "show") ||
 		           !strcmp(*argv, "dump")) {
-			nvram_getall(buf, sizeof(buf));
+			dev_nvram_getall(buf, sizeof(buf));
 			for (name = buf; *name; name += strlen(name) + 1)
 				puts(name);
 			size = sizeof(struct nvram_header) + (int) name - (int) buf;
 			if (**argv != 'd')
 				fprintf(stderr, "size: %d bytes (%d left)\n",
 				        size, MAX_NVRAM_SPACE - size);
+#ifdef RTCONFIG_JFFS_NVRAM
+			jffs_nvram_getall(name - buf, buf, sizeof(buf));
+			for ( ; *name; name += strlen(name) + 1)
+				puts(name);
+#endif
+#ifdef RTCONFIG_VAR_NVRAM
+			memset(buf, 0, sizeof(buf));
+			var_nvram_getall(buf, sizeof(buf));
+			for (name = buf; *name; name += strlen(name) + 1)
+				puts(name);
+#endif
 		} else
 			usage();
 	}

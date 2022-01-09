@@ -27,7 +27,7 @@
 #include "dbutil.h"
 #include "bignum.h"
 #include "dbrandom.h"
-
+#include "runopts.h"
 
 /* this is used to generate unique output from the same hashpool */
 static uint32_t counter = 0;
@@ -49,24 +49,19 @@ static int donerandinit = 0;
  *
  */
 
-/* Pass len=0 to hash an entire file */
+/* Pass wantlen=0 to hash an entire file */
 static int
 process_file(hash_state *hs, const char *filename,
-		unsigned int len, int prngd)
-{
-	static int already_blocked = 0;
-	int readfd;
+		unsigned int wantlen, int prngd) {
+	int readfd = -1;
 	unsigned int readcount;
 	int ret = DROPBEAR_FAILURE;
 
-#if DROPBEAR_PRNGD_SOCKET
-	if (prngd)
-	{
+	if (prngd) {
+#if DROPBEAR_USE_PRNGD
 		readfd = connect_unix(filename);
-	}
-	else
 #endif
-	{
+	} else {
 		readfd = open(filename, O_RDONLY);
 	}
 
@@ -75,58 +70,31 @@ process_file(hash_state *hs, const char *filename,
 	}
 
 	readcount = 0;
-	while (len == 0 || readcount < len)
-	{
+	while (wantlen == 0 || readcount < wantlen) {
 		int readlen, wantread;
 		unsigned char readbuf[4096];
-		if (!already_blocked && !prngd)
-		{
-			int res;
-			struct timeval timeout;
-			fd_set read_fds;
-
- 			timeout.tv_sec  = 2;
- 			timeout.tv_usec = 0;
-
-			FD_ZERO(&read_fds);
-			FD_SET(readfd, &read_fds);
-			res = select(readfd + 1, &read_fds, NULL, NULL, &timeout);
-			if (res == 0)
-			{
-				dropbear_log(LOG_WARNING, "Warning: Reading the randomness source '%s' seems to have blocked.\nYou may need to find a better entropy source.", filename);
-				already_blocked = 1;
-			}
-		}
-
-		if (len == 0)
-		{
+		if (wantlen == 0) {
 			wantread = sizeof(readbuf);
-		} 
-		else
-		{
-			wantread = MIN(sizeof(readbuf), len-readcount);
+		} else {
+			wantread = MIN(sizeof(readbuf), wantlen-readcount);
 		}
 
-#if DROPBEAR_PRNGD_SOCKET
-		if (prngd)
-		{
+#if DROPBEAR_USE_PRNGD
+		if (prngd) {
 			char egdcmd[2];
 			egdcmd[0] = 0x02;	/* blocking read */
 			egdcmd[1] = (unsigned char)wantread;
-			if (write(readfd, egdcmd, 2) < 0)
-			{
+			if (write(readfd, egdcmd, 2) < 0) {
 				dropbear_exit("Can't send command to egd");
 			}
 		}
 #endif
-
 		readlen = read(readfd, readbuf, wantread);
 		if (readlen <= 0) {
 			if (readlen < 0 && errno == EINTR) {
 				continue;
 			}
-			if (readlen == 0 && len == 0)
-			{
+			if (readlen == 0 && wantlen == 0) {
 				/* whole file was read as requested */
 				break;
 			}
@@ -141,9 +109,15 @@ out:
 	return ret;
 }
 
-void addrandom(unsigned char * buf, unsigned int len)
+void addrandom(const unsigned char * buf, unsigned int len)
 {
 	hash_state hs;
+
+#if DROPBEAR_FUZZ
+	if (fuzz.fuzzing) {
+		return;
+	}
+#endif
 
 	/* hash in the new seed data */
 	sha1_init(&hs);
@@ -157,7 +131,12 @@ void addrandom(unsigned char * buf, unsigned int len)
 
 static void write_urandom()
 {
-#ifndef DROPBEAR_PRNGD_SOCKET
+#if DROPBEAR_FUZZ
+	if (fuzz.fuzzing) {
+		return;
+	}
+#endif
+#if !DROPBEAR_USE_PRNGD
 	/* This is opportunistic, don't worry about failure */
 	unsigned char buf[INIT_SEED_SIZE];
 	FILE *f = fopen(DROPBEAR_URANDOM_DEV, "w");
@@ -170,6 +149,75 @@ static void write_urandom()
 #endif
 }
 
+#if DROPBEAR_FUZZ
+void fuzz_seed(void) {
+	hash_state hs;
+	sha1_init(&hs);
+	sha1_process(&hs, "fuzzfuzzfuzz", strlen("fuzzfuzzfuzz"));
+	sha1_done(&hs, hashpool);
+
+	counter = 0;
+	donerandinit = 1;
+}
+#endif
+
+
+#ifdef HAVE_GETRANDOM
+/* Reads entropy seed with getrandom(). 
+ * May block if the kernel isn't ready.
+ * Return DROPBEAR_SUCCESS or DROPBEAR_FAILURE */
+static int process_getrandom(hash_state *hs) {
+	char buf[INIT_SEED_SIZE];
+	ssize_t ret;
+
+	/* First try non-blocking so that we can warn about waiting */
+	ret = getrandom(buf, sizeof(buf), GRND_NONBLOCK);
+	if (ret == -1) {
+		if (errno == ENOSYS) {
+			/* Old kernel */
+			return DROPBEAR_FAILURE;
+		}
+		/* Other errors fall through to blocking getrandom() */
+		TRACE(("first getrandom() failed: %d %s", errno, strerror(errno)))
+		if (errno == EAGAIN) {
+			dropbear_log(LOG_WARNING, "Waiting for kernel randomness to be initialised...");
+		}
+	}
+
+	/* Wait blocking if needed. Loop in case we get EINTR */
+	while (ret != sizeof(buf)) {
+		ret = getrandom(buf, sizeof(buf), 0);
+
+		if (ret == sizeof(buf)) {
+			/* Success */
+			break;
+		}
+		if (ret == -1 && errno == EINTR) {
+			/* Try again. */
+			continue;
+		}
+		if (ret >= 0) {
+			TRACE(("Short read %zd from getrandom() shouldn't happen", ret))
+			/* Try again? */
+			continue;
+		}
+
+		/* Unexpected problem, fall back to /dev/urandom */
+		TRACE(("2nd getrandom() failed: %d %s", errno, strerror(errno)))
+		break;
+	}
+
+	if (ret == sizeof(buf)) {
+		/* Success, stir in the entropy */
+		sha1_process(hs, (void*)buf, sizeof(buf));
+		return DROPBEAR_SUCCESS;
+	}
+
+	return DROPBEAR_FAILURE;
+
+}
+#endif /* HAVE_GETRANDOM */
+
 /* Initialise the prng from /dev/urandom or prngd. This function can
  * be called multiple times */
 void seedrandom() {
@@ -179,26 +227,44 @@ void seedrandom() {
 	pid_t pid;
 	struct timeval tv;
 	clock_t clockval;
+	int urandom_seeded = 0;
+
+#if DROPBEAR_FUZZ
+	if (fuzz.fuzzing) {
+		return;
+	}
+#endif
 
 	/* hash in the new seed data */
 	sha1_init(&hs);
+
 	/* existing state */
 	sha1_process(&hs, (void*)hashpool, sizeof(hashpool));
 
-#if DROPBEAR_PRNGD_SOCKET
-	if (process_file(&hs, DROPBEAR_PRNGD_SOCKET, INIT_SEED_SIZE, 1) 
-			!= DROPBEAR_SUCCESS) {
-		dropbear_exit("Failure reading random device %s", 
-				DROPBEAR_PRNGD_SOCKET);
-	}
-#else
-	/* non-blocking random source (probably /dev/urandom) */
-	if (process_file(&hs, DROPBEAR_URANDOM_DEV, INIT_SEED_SIZE, 0) 
-			!= DROPBEAR_SUCCESS) {
-		dropbear_exit("Failure reading random device %s", 
-				DROPBEAR_URANDOM_DEV);
+#ifdef HAVE_GETRANDOM
+	if (process_getrandom(&hs) == DROPBEAR_SUCCESS) {
+		urandom_seeded = 1;
 	}
 #endif
+
+	if (!urandom_seeded) {
+#if DROPBEAR_USE_PRNGD
+		if (process_file(&hs, DROPBEAR_PRNGD_SOCKET, INIT_SEED_SIZE, 1) 
+				!= DROPBEAR_SUCCESS) {
+			dropbear_exit("Failure reading random device %s", 
+					DROPBEAR_PRNGD_SOCKET);
+			urandom_seeded = 1;
+		}
+#else
+		/* non-blocking random source (probably /dev/urandom) */
+		if (process_file(&hs, DROPBEAR_URANDOM_DEV, INIT_SEED_SIZE, 0) 
+				!= DROPBEAR_SUCCESS) {
+			dropbear_exit("Failure reading random device %s", 
+					DROPBEAR_URANDOM_DEV);
+			urandom_seeded = 1;
+		}
+#endif
+	} /* urandom_seeded */
 
 	/* A few other sources to fall back on. 
 	 * Add more here for other platforms */
@@ -275,6 +341,11 @@ void genrandom(unsigned char* buf, unsigned int len) {
 		buf += copylen;
 	}
 	m_burn(hash, sizeof(hash));
+}
+
+mp_err genrandom_ltm(void *out, size_t size) {
+    genrandom(out, size);
+    return MP_OKAY;
 }
 
 /* Generates a random mp_int. 

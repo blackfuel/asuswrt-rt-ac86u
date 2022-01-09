@@ -1,23 +1,21 @@
 ﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<html xmlns:v>
+<html>
 <head>
-<meta http-equiv="X-UA-Compatible" content="IE=Edge"/>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta HTTP-EQUIV="Pragma" CONTENT="no-cache">
-<meta HTTP-EQUIV="Expires" CONTENT="-1">
-<link rel="shortcut icon" href="images/favicon.png">
-<link rel="icon" href="images/favicon.png">
-<title><#Web_Title#> - <#menu5_1_6#></title>
-<link rel="stylesheet" type="text/css" href="index_style.css"> 
-<link rel="stylesheet" type="text/css" href="form_style.css">
-<script type="text/javascript" src="/state.js"></script>
-<script type="text/javascript" src="/general.js"></script>
-<script type="text/javascript" src="/help.js"></script>
-<script type="text/javascript" src="/popup.js"></script>
-<script type="text/javascript" src="/validator.js"></script>
-<script type="text/javascript" src="/js/jquery.js"></script>
-<script type="text/javascript" src="/calendar/jquery-ui.js"></script> 
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scale=0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<link rel="shortcut icon" href="images/favicon.png">
+	<title><#Web_Title#> - <#menu5_1_6#></title>
+	<link rel="stylesheet" href="index_style.css"> 
+	<link rel="stylesheet" href="form_style.css">
+
+	<script src="/state.js"></script>
+	<script src="/general.js"></script>
+	<script src="/help.js"></script>
+	<script src="/popup.js"></script>
+	<script src="/validator.js"></script>
+	<script src="/js/jquery.js"></script>
+	<script src="/calendar/jquery-ui.js"></script> 
 <style>
 .ui-slider {
 	position: relative;
@@ -125,7 +123,7 @@
 </style>
 <script>
 $(function () {
-	if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+	if(amesh_support && (isSwMode("rt") || isSwMode("ap")) && ameshRouter_support) {
 		addNewScript('/require/modules/amesh.js');
 	}
 });
@@ -163,6 +161,7 @@ var mcast_rates = [
 	["CCK 11",	 "6",  1, 0, 1]
 ];
 
+var tcode = ttc.substring(0,2);
 var sdk_6 = sdk_version_array[0] == "6" ? true:false
 var sdk_7 = sdk_version_array[0] == "7" ? true:false
 var wl_user_rssi_onload = '<% nvram_get("wl_user_rssi"); %>';
@@ -175,7 +174,10 @@ var array;
 var clock_type = "";
 var wifi_schedule_value = '<% nvram_get("wl_sched"); %>'.replace(/&#62/g, ">").replace(/&#60/g, "<");
 var wl_unit_value = '<% nvram_get("wl_unit"); %>';
+var wl_bw_160_value = '<% nvram_get("wl_bw_160"); %>';
 var country_array = [<% get_support_region_list(); %>][0];
+var EG_mode = ('<% nvram_get("EG_mode"); %>' == 1);
+
 if(country_array == undefined)
 	country_array = [];
 
@@ -183,6 +185,29 @@ var country_selection_list = [["AA", "<#country_AA#>"], ["CN", "<#country_CN#>"]
 var country_selection_array = new Array();
 var _AU1_support = false;
 var _AU2_support = false;
+
+if(tcode == "GD"){
+	country_array = country_array.join("-").replace("-CN", "").split("-")
+	country_selection_list.push(["GD", "<#country_CN#>"]);
+}
+
+if(EG_mode){
+	location_list_support = true;
+	country_array = ["EU"];
+	country_selection_list[3][1] = "Egypt";
+}
+
+// for RT-AC58U CX/01
+if(country_array.indexOf("CX") != -1){
+	country_selection_list[7][0] = "CX";
+	country_selection_list[7][1] = "New Zealand";
+	country_selection_list.splice(8,1);
+}
+// for RT-AC58U SP/01
+if(country_array.indexOf("SP") != -1){
+	country_selection_list[7][0] = "SP";
+	country_selection_list.splice(8,1);
+}
 
 if(country_array.indexOf("NZ") != -1){
 	country_selection_list[7][1] = "New Zealand";
@@ -216,12 +241,58 @@ for(i=0;i<country_selection_list.length;i++){
 	}
 }
 var cfg_ui_region_disable = 0;
-if(location_list_support && amesh_support) {
+if(location_list_support && amesh_support && ameshRouter_support) {
 	cfg_ui_region_disable = parseInt('<% nvram_get("cfg_ui_region_disable"); %>');
 	if(isNaN(cfg_ui_region_disable))
 		cfg_ui_region_disable = 0;
 }
 
+var QAM256_support = false;
+var QAM1024_support = false;
+(function(){
+	if(Bcmwifi_support){
+		var _cap = '';
+		var _chipset = '';
+		if(wl_unit_value == '0'){
+			_cap = '<% wl_cap_2g(); %>';
+			_chipset = '<% wl_chipnum_2g(); %>';
+		}
+		else if(wl_unit_value == '1'){
+			_cap = '<% wl_cap_5g(); %>';
+			_chipset = '<% wl_chipnum_5g(); %>';
+		}
+		else if(wl_unit_value == '2'){
+			_cap = '<% wl_cap_5g_2(); %>';
+			_chipset = '<% wl_chipnum_5g_2(); %>';
+		}
+
+		QAM1024_support = (function(){
+			if(isNaN(_chipset)){	// check the value is hexdecimal and then convert it to decimal
+				_chipset = parseInt(_chipset, 16);
+			}
+
+			if(_cap.indexOf('11ax') != -1 || _chipset == '4366' || _chipset == '4365' || _chipset == '43664' || _chipset == '43666'){
+				return true
+			}
+
+			return false;
+		})();
+
+		QAM256_support = (_cap.indexOf('vht-prop-rates') != -1) ? true : false;
+	}
+	else{
+		if(based_modelid == "GT-AXY16000"
+		|| based_modelid == "RT-AX89U" || based_modelid == "PL-AX56_XP4"
+		|| based_modelid == "RT-AC95U" || based_modelid == "RT-AC88N" || based_modelid == "RT-AC88Q" || based_modelid == "RT-AC82U" || based_modelid == "RT-AC58U"
+		|| based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "MAP-AC1750" || based_modelid == "MAP-AC3000" 
+		|| based_modelid == "RT-AD7200"
+		|| based_modelid == "BRT-AC828"){
+			QAM256_support = true;
+		}
+	}
+
+})();
+  
 function initial(){
 	show_menu();
 	register_event();
@@ -231,6 +302,13 @@ function initial(){
 	count_time();
 	if(lantiq_support){
 		checkWLReady();
+	}
+
+	if("<% get_parameter("af"); %>" == "wl_timesched"){
+		autoFocus("wl_timesched");
+	}
+	if("<% get_parameter("af"); %>" == "wl_radio"){
+		autoFocus("wl_radio");
 	}
 
 	if(userRSSI_support)
@@ -244,9 +322,6 @@ function initial(){
 		document.getElementById("wl_unit_field").style.display = "none";
 
 	regen_band(document.form.wl_unit);
-
-	document.getElementById("wl_rate").style.display = "none";
-
 	if(Rawifi_support){
 		inputCtrl(document.form.wl_noisemitigation, 0);
 	}
@@ -277,14 +352,14 @@ function initial(){
 		inputCtrl(document.form.wl_ack_ratio, 0);
 	}else if(Qcawifi_support){
 		inputCtrl(document.form.wl_ampdu_mpdu, 0);
+		document.getElementById("ampdu_rts_tr").style.display = "none";
 		inputCtrl(document.form.wl_ack_ratio, 0);
 	}else{
 		if (sdk_6){
 			// for BRCM new SDK 6.x
 			inputCtrl(document.form.wl_ampdu_mpdu, 1);
 			inputCtrl(document.form.wl_ack_ratio, 1);
-		}else if(sdk_7){
-			// for BRCM new SDK 7.x
+		}else if(sdk_7 || sdk_9 || sdk_version_array[0] == '17'){ // for BRCM new SDK 7.x/9.x/17.x
 			inputCtrl(document.form.wl_ampdu_mpdu, 1);
 			inputCtrl(document.form.wl_ack_ratio, 0);
 		}else{
@@ -303,31 +378,48 @@ function initial(){
 		if(	based_modelid == "RT-AC3200" ||
 			based_modelid == "RT-AC56S" || based_modelid == "RT-AC56U" ||
 			based_modelid == "RT-AC68U" || based_modelid == "RT-AC68A" || based_modelid == "DSL-AC68U" || based_modelid == "4G-AC68U" ||
-			based_modelid == "RT-AC87U" || based_modelid == "EA-AC87" ||
-			based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" ||
-			based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300")
+			based_modelid == "RT-AC87U" || based_modelid == "EA-AC87" || based_modelid == "RT-AX55" ||
+			based_modelid == "RT-AC88U" || based_modelid == "RT-AX88U" || based_modelid == "RT-AC86U" || based_modelid == "GT-AC2900" || based_modelid == "RT-AC3100" ||
+			based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300" || based_modelid == "GT-AX11000" || based_modelid == "RT-AX92U" || based_modelid == "RT-AX95Q" || based_modelid == "XT8PRO" || based_modelid == "RT-AXE95Q" || based_modelid == "ET8PRO" || based_modelid == "RT-AX56_XD4" || based_modelid == "XD4PRO" || based_modelid == "CT-AX56_XD4" || based_modelid == "RT-AX58U" || based_modelid == "RT-AX58U_V2" || based_modelid == "TUF-AX3000" || based_modelid == "TUF-AX5400" || based_modelid == "DSL-AX82U" || based_modelid == "RT-AX82U" || based_modelid == "RT-AX56U" || based_modelid == "RP-AX56" || based_modelid == "RP-AX58" || based_modelid == "RT-AX86U" || based_modelid == "RT-AX68U" || based_modelid == "RT-AC68U_V4" || based_modelid == "GT-AXE11000" || based_modelid == "GS-AX3000" || based_modelid == "GS-AX5400" || based_modelid == "GT-AX6000" || based_modelid == "GT-AX11000_PRO" || based_modelid == "ET12" || based_modelid == "XT12" || based_modelid == "GT-AXE16000")
 		{
 			if(no_vht_support){
 				inputCtrl(document.form.wl_txbf, 0);
 				inputCtrl(document.form.wl_itxbf, 0);
 			}
 			else{
-				document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_acBeam#>";
+				if(band5g_11ax_support){
+					if(wl_unit_value == '1' && based_modelid == 'RT-AX92U'){
+						document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_acBeam#>";
+					}
+					else{
+						document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_axBeam#>";
+					}			
+				}
+				else{
+					document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_acBeam#>";
+				}
+				
 				inputCtrl(document.form.wl_txbf, 1);
 				inputCtrl(document.form.wl_itxbf, 1);
 			}
 		}
 
-		if(based_modelid == "RT-AC88N" || based_modelid == "RT-AC88Q" || based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200" || based_modelid == "RT-AC58U" || based_modelid == "RT-AC82U" || based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "MAP-AC1750" || based_modelid == "RT-AC92U"){
+		if(based_modelid == "RT-AC88N" || based_modelid == "RT-AC88Q" 
+		|| based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200" 
+		|| based_modelid == "RT-AC58U" || based_modelid.substring(0,7) == "RT-AC59" || based_modelid == "RT-AC82U" 
+		|| based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" 
+		|| based_modelid == "VZW-AC1300"
+		|| based_modelid == "RT-AC95U" || based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U" || based_modelid == "PL-AX56_XP4"){
 			inputCtrl(document.form.wl_txbf, 1);
 			document.getElementById("wl_MU_MIMO_field").style.display = "";
 			document.form.wl_mumimo.disabled = false;
 		}
 		if( based_modelid == "RT-AC55U" || based_modelid == "RT-AC55UHP")
 			inputCtrl(document.form.traffic_5g, 1);
+		if(Qcawifi_support && band5g_11ax_support)
+			document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_axBeam#>";
 
-		if(	based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" ||
-			based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300"){
+		if(QAM1024_support || (Bcmwifi_support && QAM256_support)){
 			if(document.form.wl_nmode_x.value == "0" || document.form.wl_nmode_x.value == "8"){		// wireless mode: Auto , N/AC mixed
 				inputCtrl(document.form.wl_turbo_qam, 1);
 			}
@@ -340,21 +432,28 @@ function initial(){
 			}
 			
 			$("#turbo_qam_title").html("<#WLANConfig11b_x_ModulationScheme#>");
-			var desc =  ["Up to MCS 9 (802.11ac)", "Up to MCS 11 (NitroQAM/1024-QAM)"];
-			var value = ["1", "2"];
+			if(QAM1024_support){
+				var desc = ["Up to MCS 9 (802.11ac)", "Up to MCS 11 (NitroQAM/1024-QAM)"];
+				var value = ["1", "2"];
+			}
+			else if(QAM256_support){
+				var desc = ["Up to MCS 9 (802.11ac)"];
+				var value = ["1"];
+			}
+			
 			add_options_x2(document.form.wl_turbo_qam, desc, value, '<% nvram_get("wl_turbo_qam"); %>');
 			$('#turbo_qam_hint').click(function(){openHint(3,33);});
 		}
 
 		if((!Qcawifi_support && !Rawifi_support) || based_modelid == "RT-AC87U"
-		    || based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "RT-AC92U"
+		    || based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "RT-AC95U"
 		    || based_modelid == "RT-AC82U" || based_modelid == "RT-AC58U" || based_modelid == "4G-AC53U" || (based_modelid == "RP-AC87" && wl_unit_value == "1") ){		// hide on Broadcom platform
 			document.getElementById("wl_plcphdr_field").style.display = "none";
 		}
 
-		if(based_modelid == "RT-AC66U" || based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U"){
+		if(based_modelid == "RT-AC66U" || based_modelid == "RT-AC85U" || based_modelid == "RT-AC65U" || based_modelid == "RT-AC85P" || based_modelid == "RT-ACRH26" || based_modelid == "RT-AC1200_V2"){
 			document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_acBeam#>";
-			inputCtrl(document.form.wl_txbf, 1);
+			inputCtrl(document.form.wl_txbf, 1);	
 		}
 	}
 	else if(wl_unit_value == '3'){ // 60GHz up
@@ -368,15 +467,14 @@ function initial(){
 		inputCtrl(document.form.wl_wme_apsd, 0);
 		inputCtrl(document.form.wl_atf, 0);
 		inputCtrl(document.form.wl_txbf, 0);
+		document.getElementById("wl_implicitxbf_field").style.display = "none";
+		document.getElementById("wl_txPower_field").style.display = "none";
 	}
 	else{ // 2.4GHz
-		if(	based_modelid == "RT-AC3200" ||
-			based_modelid == "RT-N18U" ||
-			based_modelid == "RT-AC87U" ||
-			based_modelid == "RT-AC68U" || based_modelid == "RT-AC68A" || based_modelid == "DSL-AC68U" || based_modelid == "4G-AC68U" ||
-			based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" ||
-			based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300")
-		{
+		if(Qcawifi_support && QAM256_support){
+			inputCtrl(document.form.wl_turbo_qam, 1);
+		}
+		else if(QAM1024_support || (Bcmwifi_support && QAM256_support)){
 			if(based_modelid == "RT-N18U" && bootLoader_ver < 2000)
 				inputCtrl(document.form.wl_turbo_qam, 0);
 			else{
@@ -387,14 +485,18 @@ function initial(){
 					inputCtrl(document.form.wl_turbo_qam, 0);
 				}
 				
-				if(	based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" ||
-					based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300"){
-					$("#turbo_qam_title").html("<#WLANConfig11b_x_ModulationScheme#>");
+				$("#turbo_qam_title").html("<#WLANConfig11b_x_ModulationScheme#>");
+				if(QAM1024_support){
 					var desc = ["Up to MCS 7 (802.11n)", "Up to MCS 9 (TurboQAM/256-QAM)", "Up to MCS 11 (NitroQAM/1024-QAM)"];
 					var value = ["0", "1", "2"];
-					add_options_x2(document.form.wl_turbo_qam, desc, value, '<% nvram_get("wl_turbo_qam"); %>');
-					$('#turbo_qam_hint').click(function(){openHint(3,33);});
-				}				
+				}
+				else if(QAM256_support){
+					var desc = ["Up to MCS 7 (802.11n)", "Up to MCS 9 (TurboQAM/256-QAM)"];
+					var value = ["0", "1"];
+				}
+				
+				add_options_x2(document.form.wl_turbo_qam, desc, value, '<% nvram_get("wl_turbo_qam"); %>');
+				$('#turbo_qam_hint').click(function(){openHint(3,33);});				
 			}
 				
 			if(no_vht_support){	//Hide 11AC/80MHz from GUI
@@ -408,11 +510,26 @@ function initial(){
 				inputCtrl(document.form.wl_itxbf, 1);
 			}	
 		}	
-		if(based_modelid == "RT-AC88N" || based_modelid == "RT-AC88Q" || based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200" || based_modelid == "RT-AC58U" || based_modelid == "RT-AC82U" || based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "MAP-AC1750" || based_modelid == "RT-AC92U")
+		if(based_modelid == "RT-AC88N" || based_modelid == "RT-AC88Q" 
+		|| based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200" || based_modelid == "RT-AC58U" 
+		|| based_modelid == "RT-AC82U" || based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" 
+		|| based_modelid == "VZW-AC1300" || based_modelid == "RT-AC95U"
+		|| based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U" || based_modelid == "PL-AX56_XP4")
 		{
 			$('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_ExpBeam#>";
 			inputCtrl(document.form.wl_txbf, 1);
-			inputCtrl(document.form.wl_turbo_qam, 1);
+		}
+		if(Qcawifi_support && band5g_11ax_support)
+			document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_acBeam#>";
+		if(Qcawifi_support && (based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U" || based_modelid == "PL-AX56_XP4" ) && document.form.wl_nmode_x.value == "0" && document.form.wl0_11ax.value == "1"){
+			inputCtrl(document.form.wl_txbf, 1);
+			document.getElementById("wl_MU_MIMO_field").style.display = "";
+			document.form.wl_mumimo.disabled = false;
+		}
+		if(Qcawifi_support && (based_modelid == "RT-AC95U")){
+			inputCtrl(document.form.wl_txbf, 1);
+			document.getElementById("wl_MU_MIMO_field").style.display = "";
+			document.form.wl_mumimo.disabled = false;
 		}
 	}
 
@@ -424,7 +541,7 @@ function initial(){
 	else
 		HtTxStream = '<% nvram_get("wl0_HT_TxStream"); %>';
 	for (var i = 0; i < mcast_rates.length; i++) {
-		if (mcast_unit == '1' && mcast_rates[i][2]) // 5Ghz && CCK
+		if ((mcast_unit == '1' || mcast_unit == '2') && mcast_rates[i][2]) // 5Ghz && CCK
 			continue;
 		if (!Rawifi_support && !Qcawifi_support && mcast_rates[i][3]) // BCM && HTMIX
 			continue;
@@ -456,6 +573,11 @@ function initial(){
 			inputCtrl(document.form.wl_wme_no_ack, 0);
 			inputCtrl(document.form.wl_wme_apsd, 0);
 		}
+
+		document.form.wl_txbf.value = 0;
+		document.form.wl_mumimo.value = 0;
+		document.getElementById("wl_MU_MIMO_field").style.display = "none";
+		inputCtrl(document.form.wl_txbf, 0);
 	}
 	else{  
 		var wme_array = ["<#WLANConfig11b_WirelessCtrl_button1name#>"];
@@ -480,31 +602,52 @@ function initial(){
 		document.getElementById("wl_MU_MIMO_field").style.display = "";
 		document.form.wl_mumimo.disabled = false;
 	}
+	
+	if(non_frameburst_support){
+		document.getElementById("wl_frameburst_field").style.display = "none";
+	}
 
 	if(bcm_mumimo_support){
 		document.getElementById("wl_MU_MIMO_field").style.display = "";
 		document.form.wl_mumimo.disabled = false;
 
 		/* MODELDEP */
-		if(based_modelid == "AC2900"){	//MODELDEP: AC2900(RT-AC86U)
+		if (based_modelid == "GT-AC2900") {	//MODELDEP: AC2900(RT-AC86U)
 			document.getElementById("wl_MU_MIMO_field").style.display = "none";
-		}	
-		else if((based_modelid == "RT-AC85U" || based_modelid == "RT-AC85P" || based_modelid == "RT-AC65U") && wl_unit_value == '0'){
+			document.form.wl_mumimo.disabled = true;
+		}
+		else if((based_modelid == "RT-AC85U" || based_modelid == "RT-AC85P" || based_modelid == "RT-ACRH26" || based_modelid == "RT-AC65U") && wl_unit_value == '0'){
 			document.getElementById("wl_MU_MIMO_field").style.display = "none";
+		}
+		else if(based_modelid == "RT-AX92U" && (wl_unit_value == '0' || wl_unit_value == '1')){
+			document.getElementById("wl_MU_MIMO_field").style.display = "none";
+			document.form.wl_mumimo.disabled = true;
+		}
+		else if (based_modelid == 'RT-AX88U' && wl_unit_value == '0') {
+			document.getElementById("wl_MU_MIMO_field").style.display = "none";
+			document.form.wl_mumimo.disabled = true;
+		}
+		else if ((based_modelid == 'RT-AX92U' || based_modelid == 'RT-AX95Q' || based_modelid == 'XT8PRO' || based_modelid == 'RT-AXE95Q' || based_modelid == 'ET8PRO' || based_modelid == 'RT-AX56_XD4' || based_modelid == 'XD4PRO' || based_modelid == 'CT-AX56_XD4' || based_modelid == 'RT-AX56U' || based_modelid == "RP-AX56" || based_modelid == "RP-AX58") && (wl_unit_value == '0' || wl_unit_value == '1')){
+			document.getElementById("wl_MU_MIMO_field").style.display = "none";
+			document.form.wl_mumimo.disabled = true;
 		}	
+	}
+
+	if (lantiq_support) {
+		if (wl_unit_value == '1') {
+			$('#wl_MU_MIMO_field').show();
+			document.form.wl_mumimo.disabled = false;
+			document.form.wl1_mumimo.disabled = false;
+			document.form.wl_mumimo.value = document.form.wl1_mumimo.value;
+		}
 	}
 	
 	/*Airtime fairness, only for Broadcom ARM platform, except RT-AC87U 5 GHz*/
-	if(	based_modelid == "RT-N18U" ||
-		based_modelid == "RT-AC56U" || based_modelid == "RT-AC56S" ||
-		based_modelid == "RT-AC68U" || based_modelid == "RT-AC68A" || based_modelid == "DSL-AC68U" || based_modelid == "4G-AC68U" ||
-		based_modelid == "RT-AC87U" || based_modelid == "RT-AC3200" ||
-		based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" || based_modelid == "RT-AC5300" ||
-		based_modelid == "GT-AC5300" || based_modelid == "RT-AC1200G" || based_modelid == "RT-AC1200G+"){
-		
+	if(Bcmwifi_support && machine_arm){
 		inputCtrl(document.form.wl_atf, 1);
-		if(based_modelid == "RT-AC87U" && wl_unit_value == '1')	
+		if(based_modelid == "RT-AC87U" && wl_unit_value == '1'){
 			inputCtrl(document.form.wl_atf, 0);
+		}		
 	}
 	else if(atf_support && wl_unit_value != '3'){
 		inputCtrl(document.form.wl_atf, 1); /* QCA Airtime fairness. */
@@ -514,10 +657,21 @@ function initial(){
 	}
 	
 
-	if( based_modelid == "BRT-AC828" || based_modelid == "RT-AC82U" || based_modelid == "RT-AC58U" || based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" || based_modelid == "MAP-AC1750" || based_modelid == "RT-AC92U")
+	if( based_modelid == "BRT-AC828" || based_modelid == "RT-AC82U" || based_modelid == "RT-AC58U" 
+	|| based_modelid == "MAP-AC1300" || based_modelid == "MAP-AC2200" || based_modelid == "VZW-AC1300" 
+	|| based_modelid == "RT-AC95U" || (based_modelid == "GT-AXY16000" && wl_unit_value != '3') || based_modelid == "RT-AX89U" || based_modelid == "PL-AX56_XP4"
+	|| (based_modelid.substring(0,7) == "RT-AC59" && wl_unit_value == '1'))
 		document.getElementById("wl_implicitxbf_field").style.display = "";
 	else
 		document.getElementById("wl_implicitxbf_field").style.display = "none";
+
+	/* Extended NSS, 5G 160MHz only */
+	if((wl_unit_value == '1' || wl_unit_value == '2') && document.form.wl_nmode_x.value != 2 && wl_bw_160_value == '1' && (based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U")){
+		inputCtrl(document.form.wl_ext_nss, 1);
+	}
+	else{
+		inputCtrl(document.form.wl_ext_nss, 0);
+	}
 
 	/* Hardware WiFi offloading */
 	if(wl_unit_value != '3' && (based_modelid == "RT-AC88Q" || based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200")){
@@ -525,6 +679,14 @@ function initial(){
 	}
 	else{
 		inputCtrl(document.form.wl_hwol, 0);
+	}
+
+	/* Agile DFS, EU sku, HE2.0 only */
+	if((wl_unit_value == '1' || wl_unit_value == '2') && "<% nvram_get("wl0_country_code"); %>" == 'GB' && "<% soc_version_major(); %>" == "2" && (based_modelid == "RT-AX89U" || based_modelid == "GT-AXY16000")){
+		inputCtrl(document.form.wl_precacen, 1);
+	}
+	else{
+		inputCtrl(document.form.wl_precacen, 0);
 	}
 
 	if(based_modelid != "RT-AC87U"){
@@ -590,9 +752,37 @@ function initial(){
 			document.getElementById('wl_txbf_desc').innerHTML = "<#WLANConfig11b_x_acBeam#>";
 		}
 	}
+
+	if(ofdma_support && sw_mode != 2){
+		var wl_11ax = '<% nvram_get("wl_11ax"); %>';
+		if(document.form.wl_nmode_x.value == '0' || document.form.wl_nmode_x.value == '8'){
+			if (based_modelid != 'RT-AX92U' || (wl_unit_value != '0' && wl_unit_value != '1')) {
+				$('#ofdma_field').show();
+				if(wl_11ax == '0'){
+					document.form.wl_ofdma.value = 0;
+					document.form.wl_ofdma.disabled = true;
+					$('#ofdma_hint').show();
+				}
+			}
+		}
+		else if(document.form.wl_nmode_x.value == '9'){
+			$('#ofdma_field').show();
+			if(wl_11ax == '0'){
+				document.form.wl_ofdma.value = 0;
+				document.form.wl_ofdma.disabled = true;
+				$('#ofdma_hint').show();
+			}
+		}
+
+		if(ofdma_onlyDL_support){
+			var value = ['0', '1', '3'];
+			var desc = ['<#WLANConfig11b_WirelessCtrl_buttonname#>', 'DL OFDMA only', 'DL OFDMA + MU-MIMO'];
+			add_options_x2(document.form.wl_ofdma, desc, value, document.form.wl_ofdma.value);
+
+		}
+	}
 }
 
-var tcode = ttc.substring(0,2);
 function generate_country_selection(){
 	var code = '';
 	var matched = false;
@@ -620,6 +810,19 @@ function generate_country_selection(){
 
 	document.getElementById('region_div').innerHTML = code;
 
+	if(EG_mode){
+		document.form.location_code.disabled = true;
+		document.getElementById('tx_power_desc_EG').style.display = "";
+		if(wl_unit_value == "0"){	//2.4GHz
+			document.getElementById('wl_txPower_field_title').innerHTML = "<#WLANConfig11b_TxPower_itemname#>&nbsp;&nbsp;&nbsp;&nbsp;<20dBm";
+			document.getElementById('tx_power_desc_EG').innerHTML = "<20dBm";
+		}
+		else{
+			document.getElementById('wl_txPower_field_title').innerHTML = "<#WLANConfig11b_TxPower_itemname#>&nbsp;&nbsp;&nbsp;<23dBm";
+			document.getElementById('tx_power_desc_EG').innerHTML = "<23dBm";
+		}
+	}
+
 	if(orig_region == ""){
 		document.form.location_code.value = tcode;
 	}
@@ -636,9 +839,6 @@ function adjust_tx_power(){
 	
 	if(!power_support){
 		document.getElementById("wl_txPower_field").style.display = "none";
-	}
-	else if(based_modelid == "AC2900" && wl_unit_value == '0'){	//MODELDEP: AC2900(RT-AC86U)
-		document.getElementById("wl_txPower_field").style.display = "none";	
 	}
 	else{
 		if(power_value_old != ""){
@@ -659,7 +859,7 @@ function adjust_tx_power(){
 			document.getElementById('slider').children[1].style.left = power_value_new + "%";
 			document.form.wl_txpower.value = power_value_new;
 		}
-		
+
 		if(document.form.wl_txpower.value < 25){
 			document.getElementById('slider').children[0].style.width = "0%";
 			document.getElementById('slider').children[1].style.left =  "0%";
@@ -689,7 +889,7 @@ function adjust_tx_power(){
 			document.getElementById('slider').children[1].style.left =  "100%";
 			document.form.wl_txpower.value = 100;
 			document.getElementById("tx_power_desc").innerHTML = power_table_desc[4];
-		}
+		}	
 	}
 }
 
@@ -701,8 +901,8 @@ function changeRSSI(_switch){
 	else{
 		document.getElementById("rssiDbm").style.display = "";
 		var default_value = "-70";
-		if(amesh_support && wl_unit_value == "0")
-			default_value = "-55";
+		if(amesh_support && wl_unit_value == "0" && ameshRouter_support)
+			default_value = "-70";
 		if(wl_user_rssi_onload == 0)
 			document.form.wl_user_rssi.value = default_value;
 		else
@@ -726,15 +926,15 @@ function applyRule(){
 			document.form.wl_TxPower.value = "";	
 		}
 		
-		if(	based_modelid == "RT-AC88U" || based_modelid == "RT-AC86U" || based_modelid == "AC2900" || based_modelid == "RT-AC3100" ||
-			based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300"){
+		if(	based_modelid == "RT-AC88U" || based_modelid == "RT-AX88U" || based_modelid == "RT-AC86U" || based_modelid == "GT-AC2900" || based_modelid == "RT-AC3100" ||
+			based_modelid == "RT-AC5300" || based_modelid == "GT-AC5300" || based_modelid == "GT-AX11000" || based_modelid == "RT-AX92U" || based_modelid == "RT-AX95Q" || based_modelid == "XT8PRO" || based_modelid == "RT-AXE95Q" || based_modelid == "ET8PRO" || based_modelid == "RT-AX56_XD4" || based_modelid == "XD4PRO" || based_modelid == "CT-AX56_XD4" || based_modelid == "RT-AX58U" || based_modelid == "RT-AX58U_V2" || based_modelid == "TUF-AX3000" || based_modelid == "TUF-AX5400" || based_modelid == "DSL-AX82U" || based_modelid == "RT-AX82U" || based_modelid == "RT-AX56U" || based_modelid == "RP-AX56" || based_modelid == "RP-AX58" || based_modelid == "RT-AX86U" || based_modelid == "RT-AX68U" || based_modelid == "RT-AC68U_V4" || based_modelid == "GT-AXE11000" || based_modelid == "GS-AX3000" || based_modelid == "GS-AX5400" || based_modelid == "GT-AX6000" || based_modelid == "GT-AX11000_PRO" || based_modelid == "ET12" || based_modelid == "XT12" || based_modelid == "GT-AXE16000"){
 			document.form.action_wait.value = "10";
 		}
 		else if(sdk_7){
 			document.form.action_wait.value = "5";
 		}
 
-		if(Bcmwifi_support &&  wl_txpower_orig != document.form.wl_txpower.value){
+		if (Bcmwifi_support && wl_txpower_orig != document.form.wl_txpower.value) {
 			FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
 		}
 
@@ -746,7 +946,7 @@ function applyRule(){
 		if(location_list_support && !cfg_ui_region_disable){
 			if((orig_region.length > 0 && orig_region != document.form.location_code.value)
 			|| (orig_region == "" && document.form.location_code.value != tcode)){
-				if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+				if(amesh_support && (isSwMode("rt") || isSwMode("ap")) && ameshRouter_support) {
 					if(!AiMesh_confirm_msg("Wireless_CountryCode"))
 						return;
 				}
@@ -770,16 +970,16 @@ function applyRule(){
 
 		if(lantiq_support && wl_unit_value == "1"){
 			document.form.wl1_mumimo.value = document.form.wl_mumimo.value;
-			document.form.wl_mumimo.disabled = true;
 			document.form.group_id.value = "mumimo"
 		}
 		
 		document.form.wl_sched.value = wifi_schedule_value;	
-		if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+		if(amesh_support && (isSwMode("rt") || isSwMode("ap")) && ameshRouter_support) {
 			var radio_value = (document.form.wl_radio[0].checked) ? 1 : 0;
 			if(!AiMesh_confirm_msg("Wireless_Radio",radio_value))
 				return;
 		}
+
 		showLoading();
 		document.form.submit();
 	}
@@ -796,8 +996,9 @@ function validForm(){
 		}	
 		if(Qcawifi_support){
 			min_bcn=40;
-			if(based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200")
+			if(based_modelid == "BRT-AC828" || based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U" || based_modelid == "RT-AD7200" || based_modelid == "PL-AX56_XP4")
 				min_bcn=100;
+				
 			if(!validator.range(document.form.wl_bcn, min_bcn, 1000))
 				return false;
 		}
@@ -1339,16 +1540,16 @@ function show_wifi_schedule(){
 	code_temp += '<option value="1" >24-hour</option>';
 	code_temp += '</select>';
 	code_temp += '</div></td>';
-	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;">Allow</div></td>';
+	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;"><#ParentalCtrl_allow#></div></td>';
 	code_temp += '<td><div style="width:90px;height:20px;background:#9CB2BA;"></div></td>';
-	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;">Deny</div></td>';
-	code_temp += '<td><div style="width:90px;height:20px;border:solid 1px #000"></div></td>';
+	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;"><#ParentalCtrl_deny#></div></td>';
+	code_temp += '<td><div style="width:90px;height:20px;border:1px solid #000;background:#475A5F;"></div></td>';
 	code_temp += '</tr></table>';
 	document.getElementById('hintBlock').innerHTML = code_temp;
 	document.getElementById('hintBlock').style.marginTop = "10px";
 	document.getElementById('hintBlock').style.display = "";
-	document.getElementById("ctrlBtn").innerHTML = '<input class="button_gen" type="button" onClick="cancel_wifi_schedule();" value="<#CTL_Cancel#>">';
-	document.getElementById("ctrlBtn").innerHTML += '<input class="button_gen" type="button" onClick="save_wifi_schedule();" value="<#CTL_ok#>">';  
+	document.getElementById("ctrlBtn").innerHTML = '<input class="button_gen" type="button" onClick="cancel_wifi_schedule();" value="<#CTL_Cancel#>" style="margin:0 10px;">';
+	document.getElementById("ctrlBtn").innerHTML += '<input class="button_gen" type="button" onClick="save_wifi_schedule();" value="<#CTL_ok#>" style="margin:0 10px;">';  
 	document.getElementById('clock_type_select')[clock_type].selected = true;		// set clock type by cookie
 	
 	document.getElementById("mainTable").style.display = "";
@@ -1382,20 +1583,23 @@ function handle_mimo(value){
 }
 
 function handle_beamforming(value){
-	if(value == 0 && document.form.wl_mumimo.value == 1){
-		var string = "";
-		if(wl_unit_value == 0){
-			string = "It will disable MU-MIMO while disabling Explicit Beamforming";	/* Untranslated */
-		}
-		else{
-			string = "It will disable MU-MIMO while disabling 802.11ac Beamforming";	/* Untranslated */
-		}
-		
-		if(confirm(string)){
-			document.form.wl_mumimo.value = 0;
-		}
-		else{
-			return false;
+	if(based_modelid == 'RT-AX92U' && wl_unit_value == '2' || based_modelid != 'RT-AX92U'){
+		if (value == 0 && document.form.wl_mumimo.value == 1) {
+			var string = "";
+			if (wl_unit_value == 0) {
+				string = "It will disable MU-MIMO while disabling Explicit Beamforming";	/* Untranslated */
+			}
+			else {
+				string = "It will disable MU-MIMO while disabling 802.11ac Beamforming";	/* Untranslated */
+			}
+
+			if (confirm(string)) {
+				document.form.wl_mumimo.value = 0;
+			}
+			else {
+				document.form.wl_txbf.value = 1;
+				return false;
+			}
 		}
 	}
 }
@@ -1422,7 +1626,7 @@ function checkWLReady(){
 </script>
 </head>
 
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 
 <div id="Loading" class="popup_bg"></div>
@@ -1433,6 +1637,7 @@ function checkWLReady(){
 <input type="hidden" name="productid" value="<% nvram_get("productid"); %>">
 <input type="hidden" name="wl_nmode_x" value="<% nvram_get("wl_nmode_x"); %>">
 <input type="hidden" name="wl_gmode_protection_x" value="<% nvram_get("wl_gmode_protection_x"); %>">
+<input type="hidden" name="wl0_11ax" value="<% nvram_get("wl0_11ax"); %>">
 <input type="hidden" name="current_page" value="Advanced_WAdvanced_Content.asp">
 <input type="hidden" name="next_page" value="Advanced_WAdvanced_Content.asp">
 <input type="hidden" name="group_id" value="">
@@ -1485,9 +1690,7 @@ function checkWLReady(){
 
 
 					<div id="schedule_block" style="display:none">
-						<div id="hintBlock" style="width: 650px; margin-top: 10px;">
-							<table style="width:350px;"><tbody><tr><td><div style="width:95px;font-family:Arial,sans-serif,Helvetica;font-size:18px;"><#Clock_Format#></div></td><td><div><select id="clock_type_select" class="input_option" onchange="change_clock_type(this.value);"><option value="0">12-hour</option><option value="1">24-hour</option></select></div></td><td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;">Allow</div></td><td><div style="width:90px;height:20px;background:#9CB2BA;"></div></td><td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;">Deny</div></td><td><div style="width:90px;height:20px;border:solid 1px #000"></div></td></tr></tbody></table>
-						</div>
+						<div id="hintBlock" style="width: 650px; margin-top: 10px;"></div>
 						<div id="mainTable" style="padding:0 20px 20px 20px;"></div>
 						<div id="ctrlBtn" style="text-align:center;"></div>
 					</div>
@@ -1528,27 +1731,6 @@ function checkWLReady(){
 							<input type="radio" value="0" name="wl_ap_isolate" class="input" onClick="return change_common_radio(this, 'WLANConfig11b', 'wl_ap_isolate', '0')" <% nvram_match("wl_ap_isolate", "0", "checked"); %>><#checkbox_No#>
 			  			</td>
 					</tr>
-					
-					<tr id="wl_rate">
-			  			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(3, 6);"><#WLANConfig11b_DataRateAll_itemname#></a></th>
-			  			<td>
-							<select name="wl_rate" class="input_option">
-				  				<option value="0" <% nvram_match("wl_rate", "0","selected"); %>><#Auto#></option>
-				  				<option value="1000000" <% nvram_match("wl_rate", "1000000","selected"); %>>1</option>
-				  				<option value="2000000" <% nvram_match("wl_rate", "2000000","selected"); %>>2</option>
-				  				<option value="5500000" <% nvram_match("wl_rate", "5500000","selected"); %>>5.5</option>
-				  				<option value="6000000" <% nvram_match("wl_rate", "6000000","selected"); %>>6</option>
-				  				<option value="9000000" <% nvram_match("wl_rate", "9000000","selected"); %>>9</option>
-				  				<option value="11000000" <% nvram_match("wl_rate", "11000000","selected"); %>>11</option>
-				  				<option value="12000000" <% nvram_match("wl_rate", "12000000","selected"); %>>12</option>
-				  				<option value="18000000" <% nvram_match("wl_rate", "18000000","selected"); %>>18</option>
-				  				<option value="24000000" <% nvram_match("wl_rate", "24000000","selected"); %>>24</option>
-				  				<option value="36000000" <% nvram_match("wl_rate", "36000000","selected"); %>>36</option>
-				  				<option value="48000000" <% nvram_match("wl_rate", "48000000","selected"); %>>48</option>
-				  				<option value="54000000" <% nvram_match("wl_rate", "54000000","selected"); %>>54</option>
-							</div>
-			  			</td>
-					</tr>
 
 					<tr id="rssiTr" class="rept ew">
 		  			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(3, 31);"><#Roaming_assistant#></a></th>
@@ -1572,7 +1754,7 @@ function checkWLReady(){
 							<select name="wl_btc_mode" class="input_option">
 									<option value="0" <% nvram_match("wl_btc_mode", "0","selected"); %> ><#WLANConfig11b_WirelessCtrl_buttonname#></option>
 									<option value="1" <% nvram_match("wl_btc_mode", "1","selected"); %> ><#WLANConfig11b_WirelessCtrl_button1name#></option>
-									<option value="2" <% nvram_match("wl_btc_mode", "2","selected"); %> >Pre-emptive</option>
+									<option value="2" <% nvram_match("wl_btc_mode", "2","selected"); %> ><#WLANConfig11b_x_BTCoexistence_pre-emptive#></option>
 							</select>
 						</td>
 					</tr>
@@ -1591,16 +1773,6 @@ function checkWLReady(){
 						<td>
 							<select name="wl_mrate_x" class="input_option">
 								<option value="0" <% nvram_match("wl_mrate_x", "0", "selected"); %>><#Auto#></option>
-							</select>
-						</td>
-					</tr>
-					<tr style="display:none;">
-			  			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(3, 8);"><#WLANConfig11b_DataRate_itemname#></a></th>
-			  			<td>
-			  				<select name="wl_rateset" class="input_option">
-				  				<option value="default" <% nvram_match("wl_rateset", "default","selected"); %>><#Setting_factorydefault_value#></option>
-				  				<option value="all" <% nvram_match("wl_rateset", "all","selected"); %>><#All#></option>
-				  				<option value="12" <% nvram_match("wl_rateset", "12","selected"); %>>1, 2 Mbps</option>
 							</select>
 						</td>
 					</tr>
@@ -1638,7 +1810,7 @@ function checkWLReady(){
 			  			</td>
 					</tr>
 					<tr id="wl_dtim_field">
-			  			<th><a class="hintstyle" id="wl_dtim_th" href="javascript:void(0);" onClick=""><#WLANConfig11b_x_DTIM_itemname#></a></th>
+			  			<th><a class="hintstyle" id="wl_dtim_th"><#WLANConfig11b_x_DTIM_itemname#></a></th>
 						<td>
 			  				<input type="text" maxlength="3" name="wl_dtim" class="input_6_table" value="<% nvram_get("wl_dtim"); %>" onKeyPress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off">
 						</td>			  
@@ -1770,7 +1942,7 @@ function checkWLReady(){
 					<!-- [MODELDEP] end -->
 					<!--For 5GHz of RT-AC87U  -->
 					<tr id="wl_80211h_tr" style="display:none;">
-						<th><a class="hintstyle" href="javascript:void(0);" onClick=""><#WLANConfig11b_x_80211H#></a></th>
+						<th><a class="hintstyle"><#WLANConfig11b_x_80211H#></a></th>
 						<td>
 							<select name="wl1_80211h" class="input_option">
 									<option value="0" <% nvram_match("wl1_80211h", "0","selected"); %>><#WLANConfig11b_WirelessCtrl_buttonname#></option>
@@ -1791,9 +1963,9 @@ function checkWLReady(){
 						</td>
 					</tr>
 					
-					<!--Multi-User MU-MIMO for RT-AC88U, RT-AC86U, AC2900, RT-AC3100, RT-AC5300 and RT-AC87U 5 GHz only-->
+					<!--Multi-User MU-MIMO for RT-AC88U, RT-AX88U, RT-AC86U, GT-AC2900, RT-AC3100, RT-AC5300, GT-AX11000, RT-AX92U and RT-AC87U 5 GHz only-->
 					<tr id="wl_MU_MIMO_field" style="display:none">
-						<th><a class="hintstyle" href="javascript:void(0);" onClick=""><#WLANConfig11b_MUMIMO_itemdesc#></a></th>
+						<th><a class="hintstyle"><#WLANConfig11b_MUMIMO_itemdesc#></a></th>
 						<td>
 							<div style="display:table-cell;vertical-align:middle">
 								<select name="wl_mumimo" class="input_option" onchange="handle_mimo(this.value)" disabled>
@@ -1802,7 +1974,21 @@ function checkWLReady(){
 								</select>
 							</div>
 						</td>
-					</tr>					
+					</tr>
+					<tr id="ofdma_field" style="display:none">
+						<th><a class="hintstyle"><#OFDMA_title#></a></th>
+						<td>
+							<div style="display:table-cell;vertical-align:middle">
+								<select name="wl_ofdma" class="input_option">
+									<option value="0" <% nvram_match("wl_ofdma", "0","selected"); %>><#WLANConfig11b_WirelessCtrl_buttonname#></option>
+									<option value="1" <% nvram_match("wl_ofdma", "1","selected"); %>>DL OFDMA only</option>
+									<option value="2" <% nvram_match("wl_ofdma", "2","selected"); %>>DL/UL OFDMA</option>
+									<option value="3" <% nvram_match("wl_ofdma", "3","selected"); %>>DL/UL OFDMA + MU-MIMO</option>
+								</select>
+								<span id="ofdma_hint" style="margin-left:4px;display:none">*Need to enable <a href="Advanced_Wireless_Content.asp" style="color:#FC0;text-decoration:underline;">802.11ax / WiFi 6 mode</a></span>
+							</div>
+						</td>
+					</tr>
 					<tr id="wl_txbf_field">
 						<th><a id="wl_txbf_desc" class="hintstyle" href="javascript:void(0);" onClick="openHint(3,24);"><#WLANConfig11b_x_ExpBeam#></a></th>
 						<td>
@@ -1821,9 +2007,9 @@ function checkWLReady(){
 							</select>
 						</td>
 					</tr>					
-					<!-- RT-AC82U & RT-AC58U & 4G-AC53U & MAP-AC1300 & MAP-AC2200 & VZW-AC1300 & RT-AC92U -->
+					<!-- RT-AC82U & RT-AC58U & 4G-AC53U & MAP-AC1300 & MAP-AC2200 & VZW-AC1300 & RT-AC95U -->
 					<tr id="wl_implicitxbf_field"  style="display:none">
-						<th><a class="hintstyle" href="javascript:void(0);" onClick="">Implicit beamforming</a></th>
+						<th><a class="hintstyle"><#WLANConfig11b_x_uniBeam#></a></th>
 						<td>
 							<select name="wl_implicitxbf" class="input_option">
 								<option value="0" <% nvram_match("wl_implicitxbf", "0","selected"); %>><#WLANConfig11b_WirelessCtrl_buttonname#></option>
@@ -1831,8 +2017,17 @@ function checkWLReady(){
 							</select>
 						</td>
 					</tr>
+					<tr id="ext_nss_field" style="display:none">
+						<th><a class="hintstyle">Extended NSS</a></th>
+						<td>
+							<select name="wl_ext_nss" class="input_option">
+								<option value="0" <% nvram_match("wl_ext_nss", "0","selected"); %>><#WLANConfig11b_WirelessCtrl_buttonname#></option>
+								<option value="1" <% nvram_match("wl_ext_nss", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
+							</select>
+						</td>
+					</tr>
 					<tr id="wl_txPower_field">
-						<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(0, 16);"><#WLANConfig11b_TxPower_itemname#></a></th>
+						<th><a id="wl_txPower_field_title" class="hintstyle" href="javascript:void(0);" onClick="openHint(0, 16);"><#WLANConfig11b_TxPower_itemname#></a></th>
 						<td>
 							<div>
 								<table>
@@ -1842,6 +2037,7 @@ function checkWLReady(){
 										</td>									
 										<td style="border:0px;width:60px;">
 											<div id="tx_power_desc" style="width:150px;font-size:14px;"></div>
+											<div id="tx_power_desc_EG" style="margin-top:-20px;margin-left:140px;display:none;"></div>
 										</td>					
 
 									</tr>
@@ -1851,8 +2047,17 @@ function checkWLReady(){
 					</tr>
 
 					<!--QCA9984 platform only, e.g. BRT-AC828 -->
+					<tr id="agiledfs_tr" style="display:none">
+						<th>Agile DFS</th>
+						<td>
+							<select name="wl_precacen" class="input_option">
+									<option value="0" <% nvram_match("wl_precacen", "0","selected"); %> ><#WLANConfig11b_WirelessCtrl_buttonname#></option>
+									<option value="1" <% nvram_match("wl_precacen", "1","selected"); %> ><#WLANConfig11b_WirelessCtrl_button1name#></option>
+							</select>
+						</td>
+					</tr>
 					<tr>
-						<th>Hardware WiFi Offloading</th><!-- untranslated -->
+						<th><#WLANConfig11b_x_Hardware_Offloading#></th>
 						<td>
 							<select name="wl_hwol" class="input_option">
 									<option value="0" <% nvram_match("wl_hwol", "0","selected"); %> ><#WLANConfig11b_WirelessCtrl_buttonname#></option>
@@ -1862,7 +2067,7 @@ function checkWLReady(){
 					</tr>
 
 					<tr id="region_tr" style="display:none" class="rept ew">
-						<th><a class="hintstyle" href="javascript:void(0);" onClick=""><#WLANConfig11b_x_Region#></a></th>
+						<th><a class="hintstyle"><#WLANConfig11b_x_Region#></a></th>
 						<td><div id="region_div"></div></td>
 					</tr>
 				</table>				

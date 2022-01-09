@@ -1,7 +1,8 @@
-/* $Id: testasyncsendto.c,v 1.2 2014/02/25 11:00:14 nanard Exp $ */
-/* MiniUPnP project
- * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2006-2014 Thomas Bernard
+/* $Id: testasyncsendto.c,v 1.6 2019/09/24 11:48:47 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
+ * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
+ * (c) 2006-2019 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -73,8 +74,8 @@ int test(void)
 		int max_fd;
 		struct timeval timeout;
 		struct timeval now;
-		syslog(LOG_DEBUG, "get_next_scheduled_send : %d next_send=%ld.%06ld",
-		       i, (long)next_send.tv_sec, (long)next_send.tv_usec);
+		syslog(LOG_DEBUG, "get_next_scheduled_send : %d next_send=%lld.%06ld",
+		       i, (long long)next_send.tv_sec, (long)next_send.tv_usec);
 		FD_ZERO(&writefds);
 		max_fd = 0;
 		gettimeofday(&now, NULL);
@@ -82,7 +83,7 @@ int test(void)
 		if(now.tv_sec > next_send.tv_sec ||
 		   (now.tv_sec == next_send.tv_sec && now.tv_usec >= next_send.tv_usec)) {
 			if(i > 0) {
-				/* dont wait */
+				/* don't wait */
 				timeout.tv_sec = 0;
 			} else {
 				/* wait 10sec :) */
@@ -99,8 +100,8 @@ int test(void)
 			}
 		}
 		syslog(LOG_DEBUG, "get_sendto_fds() returned %d", i);
-		syslog(LOG_DEBUG, "select(%d, NULL, xx, NULL, %ld.%06ld)",
-		       max_fd, (long)timeout.tv_sec, (long)timeout.tv_usec);
+		syslog(LOG_DEBUG, "select(%d, NULL, xx, NULL, %lld.%06ld)",
+		       max_fd, (long long)timeout.tv_sec, (long)timeout.tv_usec);
 		i = select(max_fd, NULL, &writefds, NULL, &timeout);
 		if(i < 0) {
 			syslog(LOG_ERR, "select: %m");

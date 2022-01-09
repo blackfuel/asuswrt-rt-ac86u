@@ -37,7 +37,7 @@ BUILD_DIR:=$(HND_SRC)
 include $(BUILD_DIR)/make.common
 
 
-conditional_build: sanity_check $(EXE) generic_exe_install install_links install_scripts
+conditional_build: sanity_check $(EXE) generic_exe_install install_links #install_scripts
 
 
 #

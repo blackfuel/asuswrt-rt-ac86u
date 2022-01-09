@@ -44,6 +44,7 @@ a.ui-btn{
 <script type="text/JavaScript" src="state.js"></script>
 <script type="text/javascript" src="popup.js"></script>
 <script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="/js/https_redirect/https_redirect.js"></script>
 <script>
 var sw_mode = '<% nvram_get("sw_mode"); %>';
 if(((sw_mode == 2 || sw_mode == 3) && '<% nvram_get("wlc_psta"); %>' == 1) || (sw_mode == 3 && '<% nvram_get("wlc_psta"); %>' == 3))
@@ -880,7 +881,7 @@ function uploadSetting(){
 	<input type="hidden" name="action_wait" value="5">
 	<input type="hidden" name="modified" value="">  
 	<!-- system -->                  
-	<input type="hidden" name="machine_name" value="<% nvram_get("machine_name"); %>">
+	<input type="hidden" name="lan_hostname" value="<% nvram_get("lan_hostname"); %>">
 	<input type="hidden" name="time_zone" value="<% nvram_get("time_zone"); %>">
 	
 	

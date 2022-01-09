@@ -360,7 +360,7 @@ function QIS_manual_setting_load_body() {
 
 	hidePVCInfo(1);
 	
-	if (x_Setting != "0" && parent.based_modelid != "DSL-AC68U") {
+	if (x_Setting != "0" && parent.based_modelid != "DSL-AC68U" && parent.base_modelid != "DSL-AX82U") {
 		document.getElementById("detectButton").style.display = "none";
 	}
 	
@@ -382,7 +382,7 @@ function QKfinish_load_body(){
 function submit_detect(){
 	document.form.current_page.value = "/qis/QIS_detect.htm";
 	document.form.next_page.value = "/qis/QIS_detect.htm";
-	if(parent.based_modelid == "DSL-AC68U")
+	if(parent.based_modelid == "DSL-AC68U" || parent.based_modelid == "DSL-AX82U")
 		document.form.action_script.value = "restart_dsl_autodet";
 	document.form.submit();
 }
@@ -462,8 +462,8 @@ function btnNext() {
 		if(document.form.dsltmp_cfg_vid.value != "")
 			document.form.dsltmp_cfg_dot1q.value = 1;
 		document.form.dsltmp_cfg_iptv_idx.value = "";
-		document.form.dsltmp_cfg_ispname.value = "";
-		document.form.dsltmp_cfg_country.value = "";
+		document.form.dsltmp_cfg_ispname.value = "";		
+		document.form.dsltmp_cfg_country.value = (document.form.country.value=='Turkey' || document.form.country.value=='Australia')? document.form.country.value:"";
 	}
 	else {
 		var isp_idx = 0
@@ -493,6 +493,7 @@ function btnNext() {
 	setIptvNumPvc();
 
 	//Specific setting
+	if (parent.based_modelid == "DSL-AC68U") {
 	if( document.form.dsltmp_cfg_country.value=='Thailand'
 		&& document.form.dsltmp_cfg_ispname.value=='3BB 15M/1.5M'
 		&& parent.based_modelid != "DSL-N55U-B"
@@ -500,16 +501,20 @@ function btnNext() {
 		document.form.dslx_modulation.value = "4";
 		document.form.dslx_annex.value = "3";
 	}
-	if(parent.based_modelid == "DSL-AC68U") {
-		if( document.form.dsltmp_cfg_country.value=='Turkey'
-			&& document.form.dsltmp_cfg_ispname.value.search("Turk Telekom") >= 0
-		){
-			document.form.dslx_testlab.value = "TR_TT";
-			document.form.dslx_dla_enable.value = "0";
+
+	if(document.form.dsltmp_cfg_country.value=='Turkey'){
+		if(document.form.dslx_bitswap.value != "0"){
+			parent.restartDSLSetting = true;
 		}
-		else{
-			document.form.dslx_testlab.value = "disable";
-		}
+		document.form.dslx_bitswap.value = "0";
+	}
+	if( document.form.dsltmp_cfg_country.value=='Turkey'
+		&& document.form.dsltmp_cfg_ispname.value.search("Turk Telekom") >= 0 ){
+		document.form.dslx_testlab.value = "TR_TT";
+		document.form.dslx_dla_enable.value = "0";
+	}
+	else{
+		document.form.dslx_testlab.value = "disable";
 	}
 
 	if(document.form.dslx_transmode.value != orig_dslx_transmode
@@ -523,6 +528,7 @@ function btnNext() {
 	if(parent.restartDSLSetting) {
 		document.form.action_script.value = "restart_dsl_setting;".concat(document.form.action_script.value);
 	}
+	} //DSL-AC68U
 
 	if (connection_type==0 || connection_type==1)
 	{
@@ -534,6 +540,10 @@ function btnNext() {
 	else if (connection_type==2)
 	{
 		//mer
+		if(document.form.dsltmp_cfg_country.value=='Australia'){
+			document.form.dhcpc_mode.disabled = false;
+			document.form.dhcpc_mode.value = 2;
+		}	
 		document.form.next_page.value = "/qis/QIS_mer_cfg_tmp.htm";
 		document.form.submit();
 
@@ -591,6 +601,8 @@ function btnNext() {
 <input type="hidden" name="dslx_annex" value="<% nvram_get("dslx_annex"); %>">
 <input type="hidden" name="dslx_testlab" value="<% nvram_get("dslx_testlab"); %>">
 <input type="hidden" name="dslx_dla_enable" value="<% nvram_get("dslx_dla_enable"); %>">
+<input type="hidden" name="dslx_bitswap" value="<% nvram_get("dslx_bitswap"); %>">
+<input type="hidden" name="dhcpc_mode" value="" disabled>
 
 <div class="QISmain">
 	<div class="formfonttitle" style="padding:6 0 0 10;">
@@ -651,34 +663,34 @@ function btnNext() {
 	<table width="80%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
 		<tbody>
 			<tr>
-				<td colspan="2""><#Manual_Setting_desc3#></td>
+				<td colspan="2"><#Manual_Setting_desc3#></td>
 			</tr>
 			<tr>
 				<th width="40%">VPI:</th>
-				<td><input type='text' name='user_vpi' tabindex="5" maxlength="3" class="input_6_table"><span> 0-255</span></td>
+				<td><input type="text" name="user_vpi" tabindex="5" maxlength="3" class="input_6_table"><span> 0-255</span></td>
 			</tr>
 			<tr>
 				<th>VCI:</th>
-				<td><input type='text' name='user_vci' tabindex="6" maxlength="5" class="input_6_table"><span> 32-65535</span></td>
+				<td><input type="text" name="user_vci" tabindex="6" maxlength="5" class="input_6_table"><span> 32-65535</span></td>
 			</tr>
 			<tr>
 				<th><#Layer3Forwarding_x_ConnectionType_itemname#>:</th>
 				<td>
-				<select	name='user_prctl' class='input_option' tabindex="7">
-				<option value = 0>PPPoE</option>
-				<option value = 1>PPPoA</option>
-				<option value = 2>MER</option>
-				<option value = 3>Bridge</option>
-				<option value = 4>IPoA</option>
+				<select	name="user_prctl" class="input_option" tabindex="7">
+				<option value="0">PPPoE</option>
+				<option value="1">PPPoA</option>
+				<option value="2">MER</option>
+				<option value="3">Bridge</option>
+				<option value="4">IPoA</option>
 				</select>
 				</td>
 			</tr>
 			<tr>
 				<th><#prtcl_JS_encmode#>:</th>
 				<td>
-				<select	name='user_encap' class='input_option' tabindex="8">
-				<option value = 0>LLC</option>
-				<option value = 1>VC-Mux</option>
+				<select	name="user_encap" class="input_option" tabindex="8">
+				<option value="0">LLC</option>
+				<option value="1">VC-Mux</option>
 				</select>
 				</td>
 			</tr>

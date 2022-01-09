@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <mntent.h>
+#include <paths.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/mount.h>

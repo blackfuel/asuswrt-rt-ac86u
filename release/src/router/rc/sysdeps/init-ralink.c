@@ -50,7 +50,7 @@ void init_devs(void)
 {
 #define MKNOD(name,mode,dev)	if(mknod(name,mode,dev)) perror("## mknod " name)
 
-#if defined(LINUX30) && !defined(RTN14U) && !defined(RTAC52U) && !defined(RTAC51U) && !defined(RTN11P) && !defined(RTN300) && !defined(RTN54U) && !defined(RTAC1200HP) && !defined(RTN56UB1) && !defined(RTN56UB2) && !defined(RTAC54U) && !defined(RTAC51UP) && !defined(RTAC53) && !defined(RTAC1200GA1) && !defined(RTAC1200GU) && !defined(RTAC1200) && !defined(RTN11P_B1) && !defined(RPAC87) && !defined(RTAC85U) && !defined(RTAC85P) && !defined(RTN800HP)
+#if defined(LINUX30) && !defined(RTN14U) && !defined(RTAC52U) && !defined(RTAC51U) && !defined(RTN11P) && !defined(RTN300) && !defined(RTN54U) && !defined(RTAC1200HP) && !defined(RTN56UB1) && !defined(RTN56UB2) && !defined(RTAC54U) && !defined(RTAC51UP) && !defined(RTAC53) && !defined(RTAC1200GA1) && !defined(RTAC1200GU) && !defined(RTAC1200) && !defined(RTAC1200V2) && !defined(RTN11P_B1) && !defined(RPAC87) && !defined(RTAC85U) && !defined(RTAC85P) && !defined(RTN800HP) && !defined(RTACRH26) && !defined(TUFAC1750)
 	/* Below device node are used by proprietary driver.
 	 * Thus, we cannot use GPL-only symbol to create/remove device node dynamically.
 	 */
@@ -63,13 +63,13 @@ void init_devs(void)
 	MKNOD("/dev/nvram", S_IFCHR | 0666, makedev(228, 0));
 #else
 	MKNOD("/dev/video0", S_IFCHR | 0666, makedev(81, 0));
-#if !defined(RTN14U) && !defined(RTAC52U) && !defined(RTAC51U) && !defined(RTN11P) && !defined(RTN300) && !defined(RTN54U) && !defined(RTAC1200HP) && !defined(RTN56UB1) && !defined(RTN56UB2) && !defined(RTAC54U) && !defined(RTAC1200GA1) && !defined(RTAC1200GU)  && !defined(RTAC1200) && !defined(RTN11P_B1) && !defined(RPAC87) && !defined(RTAC85U) && !defined(RTAC85P) && !defined(RTN800HP)
+#if !defined(RTN14U) && !defined(RTAC52U) && !defined(RTAC51U) && !defined(RTN11P) && !defined(RTN300) && !defined(RTN54U) && !defined(RTAC1200HP) && !defined(RTN56UB1) && !defined(RTN56UB2) && !defined(RTAC54U) && !defined(RTAC1200GA1) && !defined(RTAC1200GU)  && !defined(RTAC1200) && !defined(RTAC1200V2) && !defined(RTN11P_B1) && !defined(RPAC87) && !defined(RTAC85U) && !defined(RTAC85P) && !defined(RTN800HP) && !defined(RTACRH26) && !defined(TUFAC1750)
 	MKNOD("/dev/rtkswitch", S_IFCHR | 0666, makedev(206, 0));
 #endif
 	MKNOD("/dev/spiS0", S_IFCHR | 0666, makedev(217, 0));
 	MKNOD("/dev/i2cM0", S_IFCHR | 0666, makedev(218, 0));
 #if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC54U)
-#elif defined(RTAC1200) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTN11P_B1) || defined(RPAC87) || defined(RTAC51UP) || defined(RTAC53) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#elif defined(RTAC1200) || defined(RTAC1200V2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTN11P_B1) || defined(RPAC87) || defined(RTAC51UP) || defined(RTAC53) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	MKNOD("/dev/rdm0", S_IFCHR | 0x666, makedev(253, 0));
 #else
 	MKNOD("/dev/rdm0", S_IFCHR | 0666, makedev(254, 0));
@@ -89,6 +89,31 @@ void init_devs(void)
 		int status;
 		if((status = WEXITSTATUS(modprobe("nvram_linux"))))	printf("## modprove(nvram_linux) fail status(%d)\n", status);
 	}
+}
+
+int is_if_up(char *ifname)
+{
+    int s;
+    struct ifreq ifr;
+
+    /* Open a raw socket to the kernel */
+    if ((s = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) return -1;
+
+    /* Set interface name */
+    strlcpy(ifr.ifr_name, ifname, IFNAMSIZ);
+
+    /* Get interface flags */
+    if (ioctl(s, SIOCGIFFLAGS, &ifr) < 0) {
+        fprintf(stderr, "SIOCGIFFLAGS error\n");
+    } else {
+        if (ifr.ifr_flags & IFF_UP) {
+            fprintf(stderr, "%s is up\n", ifname);
+            close(s);
+            return 1;
+        }
+    }
+    close(s);
+    return 0;
 }
 
 //void init_gpio(void)
@@ -152,11 +177,14 @@ void generate_switch_para(void)
 		case MODEL_RTAC1200GA1:      /* fall through */
 		case MODEL_RTAC1200GU:      /* fall through */
 		case MODEL_RTAC1200:
+		case MODEL_RTAC1200V2:
 		case MODEL_RTAC51UP:	/* fall through */
 		case MODEL_RTAC53:
 		case MODEL_RTN11P_B1:
 		case MODEL_RTAC85U:
 		case MODEL_RTAC85P:
+		case MODEL_RTACRH26:
+		case MODEL_TUFAC1750:
 			nvram_unset("vlan3hwname");
 			if ((wans_cap && wanslan_cap) ||
 			    (wanslan_cap && (!nvram_match("switch_wantag", "none") && !nvram_match("switch_wantag", "")))
@@ -190,7 +218,8 @@ static void init_switch_ralink(void)
 			eval("ifconfig", nvram_safe_get("wan0_ifname"), "hw", "ether", nvram_safe_get("et0macaddr"));
 	}
 #endif
-#if defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined (RTAC1200GU) || defined (RTAC85U) || defined (RTAC85P) || defined(RTN800HP)//workaround, let network device initialize before config_switch()
+#if defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined (RTAC1200GU) || defined (RTAC85U) || defined (RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
+//workaround, let network device initialize before config_switch()
 	eval("ifconfig", "eth2", "up");
 	sleep(1);
 #endif
@@ -349,11 +378,14 @@ void config_switch()
 	case MODEL_RTAC1200GA1:	/* fall through */
 	case MODEL_RTAC1200GU:	/* fall through */
 	case MODEL_RTAC1200:	/* fall through */
+	case MODEL_RTAC1200V2:	/* fall through */
 	case MODEL_RTN11P_B1:	
 	case MODEL_RTAC85U:
 	case MODEL_RTAC85P:
+	case MODEL_RTACRH26:
 	case MODEL_RPAC87:
 	case MODEL_RTN800HP:
+	case MODEL_TUFAC1750:
 		merge_wan_port_into_lan_ports = 1;
 		break;
 	default:
@@ -375,7 +407,7 @@ void config_switch()
 		dbG("software reset\n");
 		eval("rtkswitch", "27");	// software reset
 	}
-#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC51UP)  || defined(RTAC53)|| defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC1200) || defined(RTN11P_B1) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC51UP)  || defined(RTAC53)|| defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC1200) || defined(RTAC1200V2) || defined(RTN11P_B1) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	system("rtkswitch 8 0"); //Barton add
 #endif
 
@@ -720,6 +752,13 @@ void config_switch()
 				__setup_vlan(3, 0, 0x00000210);
 #endif
 			}
+				else if (!strcmp(nvram_safe_get("switch_wantag"), "starhub")) {
+					//skip setting any lan port to IPTV port.
+					system("rtkswitch 38 0");
+#if defined(RTCONFIG_RALINK_MT7620) || defined(RTCONFIG_RALINK_MT7621)
+					__setup_vlan(2, 0, 0x02100210);
+#endif
+				}
 #endif
 				else if (!strcmp(nvram_safe_get("switch_wantag"), "meo")) {
 					system("rtkswitch 40 1");			/* admin all frames on all ports */
@@ -896,7 +935,7 @@ void config_switch()
 	if (is_swports_bled("led_wan_gpio")) {
 		update_swports_bled("led_wan_gpio", nvram_get_int("wanports_mask"));
 	}
-#if defined(RTCONFIG_WANPORT2)
+#if defined(RTCONFIG_WANLEDX2)
 	if (is_swports_bled("led_wan2_gpio")) {
 		update_swports_bled("led_wan2_gpio", nvram_get_int("wan1ports_mask"));
 	}
@@ -920,6 +959,70 @@ switch_exist(void)
 
 void init_wl(void)
 {
+	unsigned char buffer[16];
+	unsigned char *dst;
+	char tmpStr1[16];
+	char tmpStr2[24];
+	char tmpStr3[24];
+	int i;
+
+	memset(tmpStr1, 0, sizeof(tmpStr1));
+	memset(tmpStr2, 0, sizeof(tmpStr2));
+	memset(tmpStr3, 0, sizeof(tmpStr3));
+	dst = buffer;
+	memset(buffer, 0, sizeof(buffer));
+	memset(dst, 0, MAX_REGSPEC_LEN+1);
+	
+	if(FRead(dst, REGSPEC_ADDR, MAX_REGSPEC_LEN) < 0)
+	{
+		_dprintf("READ REGSPEC_ADDR ERROR\n");
+	}
+	else
+	{
+		for(i = 0; i < MAX_REGSPEC_LEN && dst[i] != '\0'; i++) {
+			if (dst[i] == 0xff)
+			{
+				dst[i] = '\0';
+				break;
+			}
+		}
+	}
+	sprintf(tmpStr1, "regspec=%s", dst);
+	
+	memset(dst, 0, MAX_REGDOMAIN_LEN+1);
+	if(FRead(dst, REG2G_EEPROM_ADDR, MAX_REGDOMAIN_LEN) < 0)
+	{
+		_dprintf("READ REG2G_EEPROM_ADDR ERROR\n");
+	}
+	else
+	{
+		for(i = 0; i < MAX_REGDOMAIN_LEN && dst[i] != '\0'; i++) {
+			if (dst[i] == 0xff)
+			{
+				dst[i] = '\0';
+				break;
+			}
+		}
+	}
+	sprintf(tmpStr2, "regspec_2g=%s", dst);
+
+	memset(dst, 0, MAX_REGDOMAIN_LEN+1);
+	if(FRead(dst, REG5G_EEPROM_ADDR, MAX_REGDOMAIN_LEN) < 0)
+	{
+		_dprintf("READ REG5G_EEPROM_ADDR ERROR\n");
+	}
+	else
+	{
+		for(i = 0; i < MAX_REGDOMAIN_LEN && dst[i] != '\0'; i++) {
+			if (dst[i] == 0xff)
+			{
+				dst[i] = '\0';
+				break;
+			}
+		}
+	}
+	sprintf(tmpStr3, "regspec_5g=%s", dst);
+
 	if (!module_loaded("rt2860v2_ap"))
 		modprobe("rt2860v2_ap");
 #if defined (RTCONFIG_WLMODULE_RT3090_AP)
@@ -939,7 +1042,7 @@ void init_wl(void)
 
 #if defined (RTCONFIG_WLMODULE_MT7628_AP)
 	if (!module_loaded("mt_wifi_7628"))
-		modprobe("mt_wifi_7628");
+		modprobe("mt_wifi_7628", tmpStr1, tmpStr2, tmpStr3);
 #endif
 
 #if defined (RTCONFIG_WLMODULE_RLT_WIFI)
@@ -962,6 +1065,14 @@ void init_wl(void)
 	if (!module_loaded("mt_wifi_7615E"))
 		modprobe("mt_wifi_7615E");
 #endif
+
+#if defined (RTCONFIG_WLMODULE_MT7663E_AP)
+	system("dd if=/dev/mtdblock2 of=/lib/firmware/e2p bs=65535 skip=0 count=1");
+	if (!module_loaded("mt_wifi_7663"))
+		modprobe("mt_wifi_7663", tmpStr1, tmpStr2, tmpStr3);
+#endif
+
+
 	sleep(1);
 }
 
@@ -981,10 +1092,14 @@ void fini_wl(void)
 	if (module_loaded("MT7610_ap"))
 		modprobe_r("MT7610_ap");
 #endif
+
 #if defined (RTCONFIG_WLMODULE_MT7628_AP)
+#if !defined(RTAC1200V2)
 	if (module_loaded("mt_wifi_7628"))
 		modprobe_r("mt_wifi_7628");
 #endif
+#endif
+
 #if defined (RTCONFIG_WLMODULE_RLT_WIFI)
 	if (module_loaded("rlt_wifi"))
 	{   
@@ -1016,6 +1131,14 @@ void fini_wl(void)
 		modprobe_r("RTPCI_ap");
 	}
 #endif
+
+#if defined (RTCONFIG_WLMODULE_MT7663E_AP)
+#if !defined(RTAC1200V2)
+	if (module_loaded("mt_wifi_7663"))
+		modprobe_r("mt_wifi_7663");
+#endif
+#endif
+
 
 	if (module_loaded("rt2860v2_ap"))
 		modprobe_r("rt2860v2_ap");
@@ -1110,8 +1233,8 @@ void init_syspara(void)
 #endif	/* RTAC51U */
 
 
-#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
-#if defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
+#if defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	char brstp;
 #else
 	char fixch;
@@ -1169,8 +1292,8 @@ void init_syspara(void)
 	}
 #endif	/* RTAC51U FIX EU2CN */
 
-#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
-#if defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
+#if defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	brstp='0';
 	FRead(&brstp, OFFSET_BR_STP, 1);
 	if(brstp=='1')
@@ -1214,11 +1337,16 @@ void init_syspara(void)
 	else
 		nvram_set("wl_mssid", "1");
 
+#if defined(RTAC1200V2)
+		/* set et1macaddr the same as et0macaddr for spec. */
+		strcpy(macaddr, macaddr2);
+#endif
+
 #if defined(RTN14U) || defined(RTN11P) || defined(RTN300) || defined(RTN11P_B1) || defined(RTN800HP)// single band
 	nvram_set("et0macaddr", macaddr);
 	nvram_set("et1macaddr", macaddr);
 #else
-#if defined(RTAC1200) || defined(RTAC53)
+#if defined(RTAC1200) || defined(RTAC1200V2) || defined(RTAC53)
 	nvram_set("et0macaddr", macaddr2);
 	nvram_set("et1macaddr", macaddr);
 #else
@@ -1389,12 +1517,30 @@ void init_syspara(void)
 		}
 		else if (strcmp(dst, "5G_BAND14") == 0)
 			nvram_set("wl1_country_code", "US");
+		else if (strcmp(dst, "5G_BAND12") == 0)
+			nvram_set("wl1_country_code", "IL");
 		else if (strcmp(dst, "5G_BAND24") == 0)
 			nvram_set("wl1_country_code", "TW");
 		else if (strcmp(dst, "5G_BAND4") == 0)
 			nvram_set("wl1_country_code", "CN");
 		else if (strcmp(dst, "5G_BAND124") == 0)
 			nvram_set("wl1_country_code", "IN");
+		else if (strcmp(dst, "5G_BAND12") == 0)	{
+			nvram_set("wl1_country_code", "IL");
+#ifdef RTCONFIG_RALINK_DFS
+			nvram_set("wl1_IEEE80211H", "1");
+#endif	/* RTCONFIG_RALINK_DFS */
+		}
+		else if (strcmp(dst, "5G_ALL") == 0)	{
+#if defined(RTAC85P)
+			nvram_set("wl1_country_code", "RU");
+#else
+			nvram_set("wl1_country_code", "DB");
+#endif
+#ifdef RTCONFIG_RALINK_DFS
+			nvram_set("wl1_IEEE80211H", "1");
+#endif	/* RTCONFIG_RALINK_DFS */
+		}
 		else
 			nvram_set("wl1_country_code", "DB");
 	}
@@ -1627,7 +1773,7 @@ void generate_wl_para(int unit, int subunit)
 {
 }
 
-#if defined(RTAC52U) || defined(RTAC51U) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2)  || defined(RTAC54U) || defined(RTAC1200GA1)  || defined(RTAC1200GU) || defined(RTAC51UP) || defined(RTAC53) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTAC52U) || defined(RTAC51U) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTN56UB2)  || defined(RTAC54U) || defined(RTAC1200GA1)  || defined(RTAC1200GU) || defined(RTAC53) || defined(RTAC85U) || defined(RTN800HP) || defined(RTACRH26)
 #define HW_NAT_WIFI_OFFLOADING		(0xFF00)
 #define HW_NAT_DEVNAME			"hwnat0"
 static void adjust_hwnat_wifi_offloading(void)
@@ -1641,7 +1787,7 @@ static void adjust_hwnat_wifi_offloading(void)
 			enable_hwnat_wifi = 0;
 	}
 	
-#if defined (RTCONFIG_WLMODULE_MT7615E_AP)
+#if defined (RTCONFIG_WLMODULE_MT7615E_AP) && !defined(RTCONFIG_MTK_8021XD3000)
 		if (get_ipv6_service() == IPV6_PASSTHROUGH)
 				enable_hwnat_wifi = 0;
 		doSystem("iwpriv ra0 set wifi_hwnat=%d", enable_hwnat_wifi);	
@@ -1657,7 +1803,7 @@ static void adjust_hwnat_wifi_offloading(void)
 		_dprintf("ioctl error. errno %d (%s)\n", errno, strerror(errno));
 
 	close(fd);
-#endif	
+#endif
 }
 #else
 static inline void adjust_hwnat_wifi_offloading(void) { }
@@ -1682,16 +1828,16 @@ void reinit_hwnat(int unit)
 	if (!nvram_get_int("hwnat"))
 		return;
 
-#if defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	if(!is_wan_connect(prim_unit))
 		return;
 #endif
 
 	/* If QoS is enabled, disable hwnat. */
-	if (nvram_get_int("qos_enable") == 1 && nvram_get_int("qos_type") != 1)
+	if (nvram_get_int("qos_enable") == 1)
 		act = 0;
 
-#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC1200GA1)  || defined(RTAC1200GU) || defined(RTAC51UP) || defined(RTAC53) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC1200GA1)  || defined(RTAC1200GU) || defined(RTAC53) || defined(RTAC85U) || defined(RTN800HP) || defined(RTACRH26)
 	if (act > 0 && !nvram_match("switch_wantag", "none") && !nvram_match("switch_wantag", ""))
 		act = 0;
 #endif
@@ -1721,7 +1867,7 @@ void reinit_hwnat(int unit)
 #endif
 	}
 
-#if defined(RTN65U) || defined(RTN56U) || defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC51UP) || defined(RTAC53) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTN65U) || defined(RTN56U) || defined(RTN14U) || defined(RTAC52U) || defined(RTAC51U) || defined(RTN11P) || defined(RTN300) || defined(RTN54U) || defined(RTAC1200HP) || defined(RTN56UB1) || defined(RTAC54U) || defined(RTN56UB2) || defined(RTAC1200GA1) || defined(RTAC1200GU) || defined(RTAC51UP) || defined(RTAC53) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	if (act > 0) {
 #if defined(RTCONFIG_DUALWAN)
 		if (unit < 0 || unit > WAN_UNIT_SECOND || nvram_match("wans_mode", "lb")) {
@@ -1858,7 +2004,9 @@ set_wan_tag(char *interface) {
 	case MODEL_RTN56UB2:
 	case MODEL_RTAC85U:
 	case MODEL_RTAC85P:
+	case MODEL_RTACRH26:
 	case MODEL_RTN800HP:
+	case MODEL_TUFAC1750:
 		ifconfig(interface, IFUP, 0, 0);
 		if(wan_vid) { /* config wan port */
 			eval("vconfig", "rem", "vlan2");
@@ -1876,6 +2024,7 @@ set_wan_tag(char *interface) {
 	{
 		int iptv_vid, voip_vid, iptv_prio, voip_prio, switch_stb;
 		int mang_vid, mang_prio;
+		char iptv_prio_str[4] = "4";
 
 		iptv_vid  = nvram_get_int("switch_wan1tagid") & 0x0fff;
 		voip_vid  = nvram_get_int("switch_wan2tagid") & 0x0fff;
@@ -1904,7 +2053,8 @@ set_wan_tag(char *interface) {
 				__setup_vlan(iptv_vid, iptv_prio, 0x00000210);	/* config WAN & WAN_MAC port */
 
 				if (iptv_prio) { /* config priority */
-					eval("vconfig", "set_egress_map", wan_dev, "0", (char *)iptv_prio);
+					snprintf(iptv_prio_str, sizeof(iptv_prio_str), "%d", iptv_prio);
+					eval("vconfig", "set_egress_map", wan_dev, "0", iptv_prio_str);
 				}
 			}
 		}
@@ -1969,7 +2119,7 @@ void reset_ra_sku(const char *location, const char *country, const char *reg_spe
 
 void setup_smp(void)
 {
-#if defined(RTAC1200GU) || defined(RTAC1200GA1) || defined(RPAC87) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP)
+#if defined(RTAC1200GU) || defined(RTAC1200GA1) || defined(RPAC87) || defined(RTAC85U) || defined(RTAC85P) || defined(RTN800HP) || defined(RTACRH26) || defined(TUFAC1750)
 	eval("/sbin/smp.sh", "wifi", NULL);
 #endif
 

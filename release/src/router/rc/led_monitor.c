@@ -11,6 +11,7 @@
 #define NORMAL_PERIOD           1               /* second */
 #define DELAY_0			0		/* No flash */
 #define DELAY_1S		1000000		/* 1 second */
+#define DELAY_3S		3000000		/* 3 second */
 #define DELAY_0_5S		500000		/* 0.5 second */
 #define DELAY_0_25S		250000		/* 0.25 second */
 #define DELAY_0_2S		200000		/* 0.2 second */
@@ -23,7 +24,7 @@
 #define link_quality_level4  70
 #endif
 
-#ifdef RPAC66
+#if  defined(RPAC51) || defined(RPAC66)
 #define link_quality_level1  0
 #define link_quality_level2  70
 #define link_quality_level3  80
@@ -35,10 +36,16 @@
 #define link_quality_level3  60
 #endif
 
-#if defined(RPAC51) || defined(RPAC55)
+#if defined(RPAC55)
 #define link_quality_level1  0
 #define link_quality_level2  35 // RSSI: -65
 #define link_quality_level3  80 // RSSI: -20
+#endif
+
+#if defined(RPAC92)
+#define link_quality_level1  0
+#define link_quality_level2  30 // RSSI: -70
+#define link_quality_level3  45 // RSSI: -55
 #endif
 
 static enum LED_STATUS status;
@@ -76,6 +83,25 @@ led_state_t leds[LEDS_COUNT] = {
 		.id = LED_SIG2
 	},
 };
+#elif defined(RPAC92)
+#define LEDS_COUNT 5
+led_state_t leds[LEDS_COUNT] = {
+	[0] = {
+		.id = LED_POWER
+	},
+	[1] = {
+		.id = LED_WIFI
+	},
+	[2] = {
+		.id = LED_SIG1
+	},
+	[3] = {
+		.id = LED_SIG2
+	},
+	[4] = {
+		.id = LED_PURPLE
+	},
+};
 #elif defined(RPAC51)
 #define LEDS_COUNT 4
 led_state_t leds[LEDS_COUNT] = {
@@ -86,10 +112,10 @@ led_state_t leds[LEDS_COUNT] = {
 		.id = LED_SINGLE
 	},
 	[2] = {
-		.id = LED_FAR
+		.id = LED_NEAR
 	},
 	[3] = {
-		.id = LED_NEAR
+		.id = LED_FAR
 	},
 };
 #else /* RP-AC66 */
@@ -220,6 +246,9 @@ static void detect_eth_link()
 			update_gpiomode(14, 1);
 #elif defined(RPAC51) || defined(RPAC55)
 			update_led(&leds[1], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+			update_led(&leds[0], LED_RED, DELAY_0);
+			update_led(&leds[2], LED_NONE, DELAY_0);
 #else
 			update_led(&leds[0], LED_GREEN, DELAY_0_5S);
 #endif
@@ -230,6 +259,9 @@ static void detect_eth_link()
 			update_gpiomode(14, 0);
 #elif defined(RPAC51) || defined(RPAC55)
 			update_led(&leds[1], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+			update_led(&leds[0], LED_NONE, DELAY_0);
+			update_led(&leds[2], LED_SIG1, DELAY_0);
 #else
 			update_led(&leds[0], LED_GREEN, DELAY_0);
 #endif
@@ -389,7 +421,7 @@ static void detect_conn_link_quality()
 	}
 }
 
-#if (defined(RPAC51) || defined(RPAC55)) && defined(RTCONFIG_WLCSCAN_RSSI)
+#if (defined(RPAC51) || defined(RPAC55) || defined(RPAC92)) && defined(RTCONFIG_WLCSCAN_RSSI)
 #define DISTANCE_NORMAL 0
 #define DISTANCE_TOO_CLOSE 1
 #define DISTANCE_TOO_FAR 2
@@ -435,11 +467,19 @@ static int detect_conn_link_internet()
 		pre_link_internet = nvram_get_int("link_internet");
 
 		if (pre_link_internet == 2) { // Connected.
+#if defined(RPAC92)
+			update_led(&leds[2], LED_SIG1, DELAY_0);
+#else
 			update_led(&leds[1], LED_BLUE, DELAY_0);
+#endif
 			return 1;
 		}
 		else
+#if defined(RPAC92)
+			update_led(&leds[2], LED_NONE, DELAY_0);
+#else
 			update_led(&leds[1], LED_NONE, DELAY_0);
+#endif
 	}
 	else {
 		if (pre_link_internet == 2)
@@ -457,6 +497,10 @@ static int select_detect_band()
 
 	static int signal_2g = 0;
 	static int signal_5g = 0;
+#if defined(RPAC92)
+	static int signal_5g2 = 0;
+	char tmp3[16] = {0};
+#endif
 	static int done_2g = 0, done_5g = 0;
 	char tmp[64] = {0}, tmp2[16] = {0};
 
@@ -470,6 +514,11 @@ static int select_detect_band()
 			snprintf(tmp2, sizeof(tmp2), "wlc1_ssid");
 			snprintf(tmp, sizeof(tmp), "wlcscan_ssid_rssi 1 %s &", nvram_safe_get(tmp2));
 			system(tmp);
+#if defined(RPAC92)
+			snprintf(tmp3, sizeof(tmp3), "wlc2_ssid");
+			snprintf(tmp, sizeof(tmp), "wlcscan_ssid_rssi 2 %s &", nvram_safe_get(tmp3));
+			system(tmp);
+#endif
 		}
 	}
 	else if (nvram_get_int("wlcscan_ssid_rssi_state") == 2) { // Finished
@@ -482,6 +531,10 @@ static int select_detect_band()
 		else {
 			snprintf(tmp, sizeof(tmp), "wlc1_scan_rssi");
 			signal_5g = nvram_get_int(tmp);
+#if defined(RPAC92)
+			snprintf(tmp, sizeof(tmp), "wlc2_scan_rssi");
+			signal_5g2 = nvram_get_int(tmp);
+#endif
 			done_5g = 1;
 		}
 	}
@@ -493,12 +546,19 @@ static int select_detect_band()
 		}
 		else {
 			signal_5g = 0;
+#if defined(RPAC92)
+			signal_5g2 = 0;
+#endif
 			done_5g = 1;
 		}
 	}
 
 	if (done_2g && done_5g) {
+#if defined(RPAC92)
+		if ((signal_5g >= signal_2g) || (signal_5g2 >= signal_2g))
+#else
 		if (signal_5g >= signal_2g)
+#endif
 			return 1;
 		else
 			return 0;
@@ -523,12 +583,14 @@ static void detect_conn_link_zone()
 	/* Stop detect conn link */
 	if (sw_mode != SW_MODE_REPEATER
 #ifdef RTCONFIG_REALTEK
-	&& !mediabridge_mode()
+    && !mediabridge_mode()
+#ifdef RTCONFIG_AMAS
+    && !((sw_mode == SW_MODE_AP) && nvram_match("re_mode", "1"))
+#endif
 #endif
 	   ) {// Only for repeater mode
 		return;
 	}
-
 	static int pre_link_status = -1;
 	int link_quality = 0;
 	static int band = -1;
@@ -541,6 +603,10 @@ static void detect_conn_link_zone()
 			link_quality = get_conn_link_quality(0);
 		else if (nvram_get_int("wlc_band") == 1) // 5G connected
 			link_quality = get_conn_link_quality(1);
+#if defined(RPAC92)
+		else if (nvram_get_int("wlc_band") == 2) // 5G high connected
+			link_quality = get_conn_link_quality(2);
+#endif
 		else
 			return;
 			/* Do nothing... */
@@ -572,11 +638,23 @@ static void detect_conn_link_zone()
 		snprintf(tmp, sizeof(tmp), "wlc%d_scan_rssi", band);
 		link_quality = nvram_get_int(tmp);
 	}
+#if defined(RPAC92)
+	if (link_quality>0 && ((band==1 && link_quality >= link_quality_level2) ||  (band==0 && link_quality >= link_quality_level3))) { // Too close.
+#else
 	if (link_quality >= link_quality_level3) { // Too close.
+#endif
 		if (pre_link_status == DISTANCE_TOO_CLOSE) {
 			if (time_stop(0, 30)) {
+#if defined(RPAC92)
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[1], LED_NONE, DELAY_0);
+				update_led(&leds[2], LED_SIG1, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
+#else
 				update_led(&leds[2], LED_NONE, DELAY_0);
 				update_led(&leds[3], LED_BLUE, DELAY_0);
+#endif	
 				return;
 			}
 			else
@@ -587,24 +665,55 @@ static void detect_conn_link_zone()
 			pre_link_status = DISTANCE_TOO_CLOSE;
 		}
 
+#if defined(RPAC92)
+		update_led(&leds[0], LED_NONE, DELAY_0);
+		update_led(&leds[1], LED_NONE, DELAY_0);
+		update_led(&leds[2], LED_SIG1, DELAY_0_5S);
+		update_led(&leds[3], LED_NONE, DELAY_0);
+		update_led(&leds[4], LED_NONE, DELAY_0);
+#else
 		update_led(&leds[2], LED_NONE, DELAY_0);
 		update_led(&leds[3], LED_BLUE, DELAY_0_5S);
+#endif
 		update_interval_timer();
 	}
+#if defined(RPAC92)
+	else if (link_quality>0 &&  ((band==1 && link_quality >= link_quality_level2) ||  (band==0 && link_quality >= link_quality_level3))) { // Normal
+#else
 	else if (link_quality >= link_quality_level2) { // Normal
+#endif
 		if (pre_link_status == DISTANCE_NORMAL)
 			return; // Don't do anything.
 		else
 			pre_link_status = DISTANCE_NORMAL;
-
+#if defined(RPAC92)
+		update_led(&leds[0], LED_NONE, DELAY_0);
+		update_led(&leds[1], LED_NONE, DELAY_0);
+		update_led(&leds[2], LED_SIG1, DELAY_0);
+		update_led(&leds[3], LED_NONE, DELAY_0);
+		update_led(&leds[4], LED_NONE, DELAY_0);
+#else
 		update_led(&leds[2], LED_NONE, DELAY_0);
 		update_led(&leds[3], LED_NONE, DELAY_0);
+#endif
 	}
+#if defined(RPAC92)
+	else if (link_quality>0 && ((band==1 && link_quality < link_quality_level2) ||  (band==0 && link_quality < link_quality_level3 && link_quality))) { // Too far.
+#else
 	else if (link_quality > link_quality_level1) { // Too far.
+#endif
 		if (pre_link_status == DISTANCE_TOO_FAR) {
 			if (time_stop(0, 30)) {
+#if defined(RPAC92)
+		update_led(&leds[0], LED_NONE, DELAY_0);
+		update_led(&leds[1], LED_NONE, DELAY_0);
+		update_led(&leds[2], LED_NONE, DELAY_0);
+		update_led(&leds[3], LED_SIG2, DELAY_0);
+		update_led(&leds[4], LED_NONE, DELAY_0);
+#else
 				update_led(&leds[2], LED_BLUE, DELAY_0);
 				update_led(&leds[3], LED_NONE, DELAY_0);
+#endif
 				return;
 			}
 			else
@@ -614,9 +723,16 @@ static void detect_conn_link_zone()
 			time_stop(1, 30);
 			pre_link_status = DISTANCE_TOO_FAR;
 		}
-
+#if defined(RPAC92)
+		update_led(&leds[0], LED_NONE, DELAY_0);
+		update_led(&leds[1], LED_NONE, DELAY_0);
+		update_led(&leds[2], LED_NONE, DELAY_0);
+		update_led(&leds[3], LED_SIG2, DELAY_0_5S);
+		update_led(&leds[4], LED_NONE, DELAY_0);
+#else
 		update_led(&leds[2], LED_BLUE, DELAY_0);
 		update_led(&leds[3], LED_NONE, DELAY_0_5S);
+#endif
 		update_interval_timer();
 	}
 	else { // Disconnected.
@@ -625,8 +741,16 @@ static void detect_conn_link_zone()
 		else
 			pre_link_status = -1;
 
+#if defined(RPAC92)
+		update_led(&leds[0], LED_RED, DELAY_0);
+		update_led(&leds[1], LED_NONE, DELAY_0);
 		update_led(&leds[2], LED_NONE, DELAY_0);
 		update_led(&leds[3], LED_NONE, DELAY_0);
+		update_led(&leds[4], LED_NONE, DELAY_0);
+#else
+		update_led(&leds[2], LED_NONE, DELAY_0);
+		update_led(&leds[3], LED_NONE, DELAY_0);
+#endif
 	}
 }
 #endif
@@ -683,23 +807,39 @@ static void process_status(int sig)
 #endif
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_RED, DELAY_0);
+#endif
+#if defined(RPAC92)
+				update_led(&leds[0], LED_BLUE, DELAY_3S);
+				update_led(&leds[1], LED_NONE, DELAY_0);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #endif	
 				break;
 
 			case LED_BOOTED:
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_BLUE, DELAY_0);
 #else
 				update_led(&leds[0], LED_GREEN, DELAY_0);
 #endif
 				update_led(&leds[1], LED_NONE, DELAY_0);
+#ifdef RPAC92
 				update_led(&leds[2], LED_NONE, DELAY_0);
+#else
+				update_led(&leds[2], LED_NONE, DELAY_0);
+#endif
 #ifdef RPAC53
 				update_led(&leds[3], LED_NONE, DELAY_0);
 				update_gpiomode(14, 0);
 #endif
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[3], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #endif				
 				break;
 
@@ -710,6 +850,12 @@ static void process_status(int sig)
 				update_led(&leds[1], LED_NONE, DELAY_0);
 				update_led(&leds[2], LED_NONE, DELAY_0);
 				update_led(&leds[3], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_BLUE, DELAY_0);
+				update_led(&leds[1], LED_NONE, DELAY_0);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #else
 				update_led(&leds[0], LED_GREEN, DELAY_0);
 #endif			
@@ -735,14 +881,14 @@ static void process_status(int sig)
 
 				break;
 			case LED_WIFI_2G_DOWN:
-#if defined(RPAC51) || defined(RPAC55)
+#if defined(RPAC51) || defined(RPAC55) || defined(RPAC92)
 				// TBD.
 #else
 				update_led(&leds[1], LED_NONE, DELAY_0);
 #endif				
 				break;
 			case LED_WIFI_5G_DOWN:
-#if defined(RPAC51) || defined(RPAC55)
+#if defined(RPAC51) || defined(RPAC55) || defined(RPAC92)
 				// TBD.
 #else
 				update_led(&leds[2], LED_NONE, DELAY_0);
@@ -752,6 +898,12 @@ static void process_status(int sig)
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
 				update_led(&leds[1], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_5S);
 #endif			
@@ -767,7 +919,13 @@ static void process_status(int sig)
 			case LED_WPS_SCANNING:
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
-				update_led(&leds[1], LED_NONE, DELAY_0);			
+				update_led(&leds[1], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);	
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);		
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_5S);			
 #endif			
@@ -784,6 +942,12 @@ static void process_status(int sig)
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
 				update_led(&leds[1], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);	
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_5S);
 #endif				
@@ -800,6 +964,12 @@ static void process_status(int sig)
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
 				update_led(&leds[1], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);	
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_5S);
 #endif					
@@ -822,6 +992,12 @@ static void process_status(int sig)
 						update_gpiomode(14, 0);
 #elif defined(RPAC51) || defined(RPAC55)
 						update_led(&leds[0], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+						update_led(&leds[0], LED_BLUE, DELAY_0);
+						update_led(&leds[1], LED_NONE, DELAY_0);	
+						update_led(&leds[2], LED_NONE, DELAY_0);
+						update_led(&leds[3], LED_NONE, DELAY_0);
+						update_led(&leds[4], LED_NONE, DELAY_0);
 #else						
 						update_led(&leds[0], LED_GREEN, DELAY_0);
 #endif
@@ -832,6 +1008,12 @@ static void process_status(int sig)
 						update_gpiomode(14, 1);
 #elif defined(RPAC51) || defined(RPAC55)
 						update_led(&leds[0], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+						update_led(&leds[0], LED_BLUE, DELAY_0);
+						update_led(&leds[1], LED_NONE, DELAY_0);	
+						update_led(&leds[2], LED_NONE, DELAY_0);
+						update_led(&leds[3], LED_NONE, DELAY_0);
+						update_led(&leds[4], LED_NONE, DELAY_0);
 #else						
 						update_led(&leds[0], LED_GREEN, DELAY_0_5S);
 #endif
@@ -855,6 +1037,12 @@ static void process_status(int sig)
 				else {
 #if defined(RPAC51) || defined(RPAC55)
 					update_led(&leds[0], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+					update_led(&leds[0], LED_BLUE, DELAY_0);
+					update_led(&leds[1], LED_NONE, DELAY_0);
+					update_led(&leds[2], LED_NONE, DELAY_0);
+					update_led(&leds[3], LED_NONE, DELAY_0);
+					update_led(&leds[4], LED_NONE, DELAY_0);	
 #else					
 					update_led(&leds[0], LED_GREEN, DELAY_0);
 					update_led(&leds[1], LED_NONE, DELAY_0);
@@ -867,6 +1055,12 @@ static void process_status(int sig)
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
 				update_led(&leds[1], LED_NONE, DELAY_0);
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_2S);
 #endif				
@@ -885,7 +1079,7 @@ static void process_status(int sig)
 #endif
 				break;
 			case LED_WPS_RESTART_WL:
-#if defined(RPAC51) || defined(RPAC55)
+#if defined(RPAC51) || defined(RPAC55) || defined(RPAC92)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_5S);
@@ -902,6 +1096,14 @@ static void process_status(int sig)
 			case LED_RESTART_WL:
 #if defined(RPAC51) || defined(RPAC55)
 				// TBD.
+
+#elif defined(RPAC92)
+				update_led(&leds[0], LED_BLUE, DELAY_0_5S);
+				update_led(&leds[0], LED_RED, DELAY_0_5S);
+				update_led(&leds[2], LED_SIG1, DELAY_0_5S);
+				update_led(&leds[3], LED_SIG2, DELAY_0_5S);
+				update_led(&leds[4], LED_PURPLE, DELAY_0_5S);
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);
 #else			
 				update_led(&leds[0], LED_GREEN, DELAY_0_5S);
 #endif				
@@ -918,8 +1120,14 @@ static void process_status(int sig)
 
 				if (access_point_mode()) {
 					/* Check gw_status */
-#if defined(RPAC51) || defined(RPAC55)				
+#if defined(RPAC51) || defined(RPAC55)			
 					update_led(&leds[0], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+					update_led(&leds[0], LED_BLUE, DELAY_0);
+					update_led(&leds[1], LED_NONE, DELAY_0);
+					update_led(&leds[2], LED_NONE, DELAY_0);
+					update_led(&leds[3], LED_NONE, DELAY_0);
+					update_led(&leds[4], LED_NONE, DELAY_0);
 #else					
 					if (nvram_get_int("dnsqmode") == 1)
 						update_led(&leds[0], LED_GREEN, DELAY_0);
@@ -947,6 +1155,12 @@ static void process_status(int sig)
 				else {
 #if defined(RPAC51) || defined(RPAC55)
 					update_led(&leds[0], LED_BLUE, DELAY_0);
+#elif defined(RPAC92)
+					update_led(&leds[0], LED_BLUE, DELAY_0);
+					update_led(&leds[1], LED_NONE, DELAY_0);
+					update_led(&leds[2], LED_NONE, DELAY_0);
+					update_led(&leds[3], LED_NONE, DELAY_0);
+					update_led(&leds[4], LED_NONE, DELAY_0);
 #else					
 					update_led(&leds[0], LED_GREEN, DELAY_0);
 					update_led(&leds[1], LED_NONE, DELAY_0);
@@ -979,6 +1193,13 @@ static void process_status(int sig)
 				update_led(&leds[1], LED_NONE, DELAY_0);
 				update_led(&leds[2], LED_NONE, DELAY_0);
 				update_led(&leds[3], LED_NONE, DELAY_0);
+#endif
+#if defined(RPAC92)
+				update_led(&leds[0], LED_RED, DELAY_0);				
+				update_led(&leds[1], LED_NONE, DELAY_0);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
 #endif				
 				break;
 			case LED_FACTORY_RESET:
@@ -1005,7 +1226,14 @@ static void process_status(int sig)
 				update_led(&leds[1], LED_NONE, DELAY_0);
 				update_led(&leds[2], LED_NONE, DELAY_0);
 				update_led(&leds[3], LED_NONE, DELAY_0);
-#endif				
+#endif
+#if  defined(RPAC92)
+				update_led(&leds[0], LED_NONE, DELAY_0);			
+				update_led(&leds[1], LED_NONE, DELAY_0);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_SIG2, DELAY_1S);
+				update_led(&leds[4], LED_NONE, DELAY_0);
+#endif					
 				break;
 			case LED_AP_WPS_START:
 #ifdef RPAC87
@@ -1022,6 +1250,13 @@ static void process_status(int sig)
 #if defined(RPAC51) || defined(RPAC55)
 				update_led(&leds[0], LED_BLUE, DELAY_0_5S);			
 #endif
+#if  defined(RPAC92)
+				update_led(&leds[1], LED_GREEN, DELAY_0_5S);
+				update_led(&leds[2], LED_NONE, DELAY_0);
+				update_led(&leds[3], LED_NONE, DELAY_0);
+				update_led(&leds[0], LED_NONE, DELAY_0);
+				update_led(&leds[4], LED_NONE, DELAY_0);
+#endif
 				break;
 			default:
 				TRACE_PT("status error.\n");
@@ -1031,7 +1266,7 @@ static void process_status(int sig)
 		update_interval_timer();
 	}
 	process_leds();
-#if (defined(RPAC51) || defined(RPAC55)) && defined(RTCONFIG_WLCSCAN_RSSI)
+#if (defined(RPAC51) || defined(RPAC55) || defined(RPAC92)) && defined(RTCONFIG_WLCSCAN_RSSI)
 	detect_conn_link_zone();
 #else
 	detect_conn_link_quality(); // Check and change WiFi LED in Real time mode.
@@ -1076,7 +1311,7 @@ led_monitor_main(int argc, char *argv[])
 
 	pre_status = -1;
 
-#if (defined(RPAC51) || defined(RPAC55)) && defined(RTCONFIG_WLCSCAN_RSSI)
+#if (defined(RPAC51) || defined(RPAC55) || defined(RPAC92)) && defined(RTCONFIG_WLCSCAN_RSSI)
 	nvram_set_int("wlcscan_ssid_rssi_state", 0); // Init wlcscan_ssid_rssi_state
 	nvram_set_int("wlc0_scan_rssi", 0); // Init wlc0_scan_rssi
 	nvram_set_int("wlc1_scan_rssi", 0); // Init wlc1_scan_rssi

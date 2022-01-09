@@ -100,8 +100,10 @@ var lastClickedObj = 0;
 var disk_flag=0;
 var PROTOCOL = "cifs";
 window.onresize = function() {
-	if(document.getElementById("folderTree_panel").style.display == "block") {
-		cal_panel_block("folderTree_panel", 0.25);
+	if(document.getElementById("folderTree_panel") != null){
+		if(document.getElementById("folderTree_panel").style.display == "block") {
+			cal_panel_block("folderTree_panel", 0.25);
+		}
 	}
 } 
 
@@ -133,15 +135,28 @@ function daapd_display(){
 }
 
 function initial(){
-	show_menu();
+	if(re_mode == "1"){
+		$("#FormTitle").addClass("perNode_MainContent");
+		$("#returnBtn").addClass("perNode_returnBtn");
+		$("#apply_btn").addClass("perNode_apply_gen");
+		show_loading_obj();
+	}
+	else{
+		$("#content_table").addClass("content");
+		$("#FormTitle").addClass("upnp_table content_bg");
+		$("#returnBtn").addClass("returnBtn");
+		$("#apply_btn").addClass("apply_gen");
+		show_menu();
+	}
+
+	$("#FormTitle").css("display", "");
+
 	document.aidiskForm.protocol.value = PROTOCOL;
 	initial_dir();
 	check_dir_path();
 	
 	daapd_display();
 	dlna_path_display();
-	do_get_friendly_name("daapd");
-	do_get_friendly_name("dms");
 	check_dms_status();
 	
 	if(noiTunes_support){		
@@ -256,55 +271,46 @@ function applyRule(){
 
 function validForm(){
 
-if(document.form.daapd_enable.value == 1){	
-	if(document.form.daapd_friendly_name.value.length == 0){
-		showtext(document.getElementById("alert_msg1"), "<#JS_fieldblank#>");
-		document.form.daapd_friendly_name.focus();
-		document.form.daapd_friendly_name.select();
-		return false;
-	}
-	else{
-		
-		var alert_str1 = validator.hostName(document.form.daapd_friendly_name);
-		if(alert_str1 != ""){
-			showtext(document.getElementById("alert_msg1"), alert_str1);
-			document.getElementById("alert_msg1").style.display = "";
-			document.form.daapd_friendly_name.focus();
-			document.form.daapd_friendly_name.select();
-			return false;
-		}else{
+	if(document.form.daapd_enable.value == 1){
+		if(document.form.daapd_friendly_name.value.length > 0){
+			var alert_str1 = validator.friendly_name(document.form.daapd_friendly_name);
+			if(alert_str1 != ""){
+				showtext(document.getElementById("alert_msg1"), alert_str1);
+				document.getElementById("alert_msg1").style.display = "";
+				document.form.daapd_friendly_name.focus();
+				document.form.daapd_friendly_name.select();
+				return false;
+			}
+			else
+				document.getElementById("alert_msg1").style.display = "none";
+
+			document.form.daapd_friendly_name.value = trim(document.form.daapd_friendly_name.value);
+		}
+		else
 			document.getElementById("alert_msg1").style.display = "none";
-  	}
-
-		document.form.daapd_friendly_name.value = trim(document.form.daapd_friendly_name.value);
-	}	
-}
-
-if(document.form.dms_enable.value == 1){
-	if(document.form.dms_friendly_name.value.length == 0){
-		showtext(document.getElementById("alert_msg2"), "<#JS_fieldblank#>");
-		document.form.dms_friendly_name.focus();
-		document.form.dms_friendly_name.select();
-		return false;
 	}
-	else{
-		
-		var alert_str2 = validator.hostName(document.form.dms_friendly_name);
-		if(alert_str2 != ""){
-			showtext(document.getElementById("alert_msg2"), alert_str2);
-			document.getElementById("alert_msg2").style.display = "";
-			document.form.dms_friendly_name.focus();
-			document.form.dms_friendly_name.select();
-			return false;
-		}else{
-			document.getElementById("alert_msg2").style.display = "none";
-  	}
 
-		document.form.dms_friendly_name.value = trim(document.form.dms_friendly_name.value);
+	if(document.form.dms_enable.value == 1){
+		if(document.form.dms_friendly_name.value.length > 0){
+			var alert_str2 = validator.friendly_name(document.form.dms_friendly_name);
+			if(alert_str2 != ""){
+				showtext(document.getElementById("alert_msg2"), alert_str2);
+				document.getElementById("alert_msg2").style.display = "";
+				document.form.dms_friendly_name.focus();
+				document.form.dms_friendly_name.select();
+				return false;
+			}
+			else{
+				document.getElementById("alert_msg2").style.display = "none";
+			}
+
+			document.form.dms_friendly_name.value = trim(document.form.dms_friendly_name.value);
+		}
+		else
+			document.getElementById("alert_msg2").style.display = "none";
 	}	
-}	
-	
-	return true;	
+
+	return true;
 }
 
 function get_disk_tree(){
@@ -731,31 +737,6 @@ function show_dlna_path(){
 	document.getElementById("dlna_path_Block").innerHTML = code;	
 }
 
-function do_get_friendly_name(v){
-if(v == "daapd"){
-	var friendly_name_daapd	= "";
-	if("<% nvram_get("daapd_friendly_name"); %>" != "")
-		friendly_name_daapd = "<% nvram_get("daapd_friendly_name"); %>";
-	else if("<% nvram_get("odmpid"); %>" != "")
-		friendly_name_daapd = "<% nvram_get("odmpid"); %>";
-	else
-		friendly_name_daapd = "<% nvram_get("productid"); %>";
-	
-	document.form.daapd_friendly_name.value = friendly_name_daapd;
-}	
-else if(v == "dms"){	
-	var friendly_name_dms	= "";
-	if("<% nvram_get("dms_friendly_name"); %>" != "")
-		friendly_name_dms = "<% nvram_get("dms_friendly_name"); %>";
-	else if("<% nvram_get("odmpid"); %>" != "")	
-		friendly_name_dms = "<% nvram_get("odmpid"); %>";
-	else	
-		friendly_name_dms = "<% nvram_get("productid"); %>";
-	
-	document.form.dms_friendly_name.value = friendly_name_dms;
-}	
-}
-
 function set_dms_dir(obj){
 	if(obj.value == 1){	//manual path
 		document.getElementById("dlna_path_div").style.display = "";
@@ -771,7 +752,7 @@ function set_dms_dir(obj){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <!-- floder tree-->
 <div id="DM_mask" class="mask_bg"></div>
@@ -831,8 +812,7 @@ function set_dms_dir(obj){
 <input type="hidden" name="dms_dir_x" value="">
 <input type="hidden" name="dms_dir_type_x" value="">
 <input type="hidden" name="dms_dir_manual" value="<% nvram_get("dms_dir_manual"); %>">
-
-<table class="content" align="center" cellpadding="0" cellspacing="0">
+<table id="content_table" align="center" cellpadding="0" cellspacing="0">
   <tr>
 	<td width="17">&nbsp;</td>
 	
@@ -847,26 +827,20 @@ function set_dms_dir(obj){
 		<br>
 
 <!--=====Beginning of Main Content=====-->
-<div id="FormTitle" class="upnp_table content_bg" align="left" border="0" cellpadding="0" cellspacing="0">
+<div id="FormTitle" align="left" border="0" cellpadding="0" cellspacing="0" style="display: none;">
 <table width="98%" border="0" align="left" cellpadding="0" cellspacing="0">
   <tr>
   	<td>
-				<div>
-					<table width="730px">
-						<tr>
-							<td align="left">
-								<span class="formfonttitle"><#UPnPMediaServer#></span>
-							</td>
-							<td align="right">
-								<img onclick="go_setting('/APP_Installation.asp')" align="right" style="cursor:pointer;position:absolute;margin-left:-20px;margin-top:-30px;" title="<#Menu_usb_application#>" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'">
-							</td>
-						</tr>
-					</table>
-				</div>
-				<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
-			<div id="upnp_desc_id" class="formfontdesc"><#upnp_Desc#></div>
-		</td>
-  </tr>  
+		<div style="width: 99%; margin-top: 30px; margin-bottom: 5px;">
+			<span class="formfonttitle"><#UPnPMediaServer#></span>
+			<span id="returnBtn">
+				<img id="returnBtn" onclick="go_setting('/APP_Installation.asp')" align="right" title="<#Menu_usb_application#>" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'">
+			</span>
+		</div>
+		<div id="splitLine" class="splitLine"></div>
+		<div id="upnp_desc_id" class="formfontdesc" style="margin-top: 10px;"><#upnp_Desc#></div>
+	</td>
+  </tr>
 
   <tr>
    	<td>
@@ -889,7 +863,6 @@ function set_dms_dir(obj){
 										 function() {
 											document.form.daapd_friendly_name.parentNode.parentNode.parentNode.style.display = "none";
 											document.form.daapd_enable.value = 0;
-											do_get_friendly_name("daapd");
 										 }
 									);
 							</script>
@@ -898,7 +871,7 @@ function set_dms_dir(obj){
        	<tr>
        		<th><#iTunesServer_itemname#></th>
 					<td>
-						<div><input name="daapd_friendly_name" type="text" style="margin-left:15px;" class="input_15_table" maxlength="32" value="" autocorrect="off" autocapitalize="off"><br/><div id="alert_msg1" style="color:#FC0;margin-left:10px;"></div></div>
+						<div><input name="daapd_friendly_name" type="text" style="margin-left:15px;" class="input_32_table" maxlength="32" placeholder="<% nvram_get("lan_hostname"); %>" value="<% nvram_get("daapd_friendly_name"); %>" autocorrect="off" autocapitalize="off"><br/><div id="alert_msg1" style="color:#FC0;margin-left:10px;"></div></div>
 					</td>
       	</tr>
       	</table> 
@@ -930,7 +903,6 @@ function set_dms_dir(obj){
 											document.getElementById("dmsStatus").parentNode.parentNode.style.display = "none";
 											document.getElementById("dlna_path_div").style.display = "none";
 											document.form.dms_enable.value = 0;
-											do_get_friendly_name("dms");
 										 }
 									);
 							</script>
@@ -940,7 +912,7 @@ function set_dms_dir(obj){
        	<tr>
        		<th><#DLNA_itemname#></th>
 					<td>
-						<div><input name="dms_friendly_name" type="text" style="margin-left:15px;" class="input_15_table" maxlength="32" value="" autocorrect="off" autocapitalize="off"><br/><div id="alert_msg2" style="color:#FC0;margin-left:10px;"></div></div>
+						<div><input name="dms_friendly_name" type="text" style="margin-left:15px;" class="input_32_table" maxlength="32" placeholder="<% nvram_get("lan_hostname"); %>" value="<% nvram_get("dms_friendly_name"); %>" autocorrect="off" autocapitalize="off"><br/><div id="alert_msg2" style="color:#FC0;margin-left:10px;"></div></div>
 					</td>
       	</tr>
    			<tr>
@@ -970,7 +942,7 @@ function set_dms_dir(obj){
 		  			<th><#DLNA_directory#></th>
         		<th><#DLNA_contenttype#></th>
         		<th><#list_add_delete#></th>
-			  	</tr>			  
+				</tr>
 			  	<tr>
 						<td width="45%">
 								<input id="PATH" type="text" class="input_30_table" value="" onclick="get_disk_tree();" autocorrect="off" autocapitalize="off" readonly="readonly"/" placeholder="<#Select_menu_default#>" >
@@ -983,12 +955,11 @@ function set_dms_dir(obj){
 						<td width="15%">
 								<input type="button" class="add_btn" onClick="addRow_Group(10);" value="">
 						</td>
-			  	</tr>		  
+				</tr>
 			  </table>
-			  <div id="dlna_path_Block"></div>
-			  
+			<div id="dlna_path_Block"></div>
       	</div>
-       <div class="apply_gen">
+		<div id="apply_btn">
            		<input type="button" class="button_gen" onclick="applyRule()" value="<#CTL_apply#>"/>
        </div>      	
     	</td> 
@@ -1000,14 +971,13 @@ function set_dms_dir(obj){
   	</td>
   </tr>
 </table>
-
+</div>
 <!--=====End of Main Content=====-->
 		</td>
 
 		<td width="20" align="center" valign="top"></td>
 	</tr>
 </table>
-</div>
 </form>
 
 

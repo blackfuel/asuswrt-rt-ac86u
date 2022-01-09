@@ -9,13 +9,20 @@
  *
  */
 
-#if !(defined(RTCONFIG_QCA) || defined(RTCONFIG_RALINK) || defined(RTCONFIG_REALTEK))
+#if !(defined(RTCONFIG_QCA) || defined(RTCONFIG_RALINK) || defined(RTCONFIG_REALTEK)) \
+ || defined(RTCONFIG_SOC_IPQ8074)
 #include <rc.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <wlioctl.h>
 #include <wlutils.h>
 #include <limits.h>
+
+#if defined(RTCONFIG_QCA)
+#include <qca.h>
+
+#define PROC_NSS_CLOCK	"/proc/sys/dev/nss/clock"
+#endif
 
 // ErP debug
 #define ERP_DEBUG  "/tmp/ERP_DEBUG"
@@ -75,6 +82,25 @@ static int erp_check_wl_stat(int model)
 		if ret = 3, active interface = 3
 	*/
 
+#if defined(RTCONFIG_QCA)
+	int ret = 0, band;
+	char prefix[sizeof("wlXYYY_")];
+
+	for (band = WL_2G_BAND; band < MAX_NR_WL_IF ; ++band) {
+		SKIP_ABSENT_BAND(band);
+
+		snprintf(prefix, sizeof(prefix), "wl%d_", band);
+		if (nvram_pf_match(prefix, "timesched", "1")) {
+			ret = -1;
+			break;
+		}
+
+		if (nvram_pf_get_int(prefix, "radio"))
+			ret++;
+	}
+
+	return ret;
+#else
 	int ret = 0;
 
 	/* wifi scheduler casse */
@@ -86,16 +112,61 @@ static int erp_check_wl_stat(int model)
 	if (nvram_get_int("wl1_radio")) ret++;
 
 	/* special case */
-	if (model == MODEL_RTAC5300 || model == MODEL_RTAC3200 || model == MODEL_GTAC5300)
-	{
-		if (nvram_get_int("wl2_radio")) ret++;
-	}
+#ifdef RTCONFIG_HAS_5G_2
+	if (nvram_get_int("wl2_radio")) ret++;
+#endif
 
 	return ret;
+#endif
 }
+
+#if defined(RTCONFIG_QCA)
+/* Helper of erp_check_wl_auth_stat()
+ * @src:	pointer to WLANCONFIG_LIST
+ * @arg:
+ * @return:
+ * 	0:	success
+ *  otherwise:	error
+ */
+static int handle_erp_check_wl_auth_stat(const WLANCONFIG_LIST *src, void *arg)
+{
+	int *sta_count = arg;
+
+	if (!src || !arg)
+		return -1;
+
+	sta_count++;
+	return 0;
+}
+#endif
 
 static int erp_check_wl_auth_stat()
 {
+#if defined(RTCONFIG_QCA)
+	int sta_count = 0, band, sunit, max_sunit;
+	char wif[IFNAMSIZ], prefix[sizeof("wlX.YYYY_")];
+
+	for (band = 0; band < MAX_NR_WL_IF; ++band) {
+		SKIP_ABSENT_BAND(band);
+
+		snprintf(prefix, sizeof(prefix), "wl%d_", band);
+		if (!nvram_pf_match(prefix, "radio", "1"))
+			continue;
+
+		max_sunit = num_of_mssid_support(band);
+		snprintf(prefix, sizeof(prefix), "wl%d_", band);
+		for (sunit = 0; sunit <= max_sunit; ++sunit) {
+			snprintf(prefix, sizeof(prefix), "wl%d.%d_", band, sunit);
+			if (!nvram_pf_match(prefix, "bss_enabled", "1"))
+				continue;
+
+			__get_wlifname(band, sunit, wif);
+			__get_qca_sta_info_by_ifname(wif, 0, handle_erp_check_wl_auth_stat, &sta_count);
+		}
+	}
+
+	return sta_count;
+#else
 	char ifname[128], name[128], *next;
 	char prefix[32], tmp[128];
 	int unit, sub_unit;
@@ -133,13 +204,14 @@ static int erp_check_wl_auth_stat()
 		}
 		unit++;
 	}
+	if(mac_list) free(mac_list);
 
 	return total_sta_cnt;
 
 exit:
-        if(mac_list) free(mac_list);
+	if(mac_list) free(mac_list);
 	return -1;
-
+#endif
 }
 
 static int erp_check_arp_stat(int model)
@@ -151,7 +223,7 @@ static int erp_check_arp_stat(int model)
 		2 : wan connection exist
 	*/
 
-	char buf[256];
+	char buf[256], br_if[IFNAMSIZ];
 	FILE *fp = NULL;
 	int ret = 0;
 	int br_n = 0;     // bridge client num
@@ -163,6 +235,7 @@ static int erp_check_arp_stat(int model)
 	int wan_conn = 0; // wan connection stat
 
 	/* check arp table for IPv4 */
+	strlcpy(br_if, nvram_get("lan_ifname")? : "br0", sizeof(br_if));
 	if ((fp = fopen("/proc/net/arp", "r")) != NULL)
 	{
 		// skip first row
@@ -174,13 +247,14 @@ static int erp_check_arp_stat(int model)
 			memset(ifname, 0, sizeof(ifname));
 			if (sscanf(buf, "%*s %*s 0x%x %*s %*s %s", &flags, ifname) != 2) continue;
 			ERP_DBG("ifname=%s, flags=%d\n", ifname, flags);
-			if (strstr(ifname, "br") && (flags != 0)) br_n++;
+			if (!strcmp(ifname, br_if) && (flags != 0)) br_n++;
 		}
 
 		fclose(fp);
 	}
 
 	/* check ipv6 client for IPv6 */
+	eval("mkdir", "-p", ERP_FOLDER);
 	doSystem("ip -f inet6 neigh show dev %s > %s", nvram_safe_get("lan_ifname"), ERP_IPV6_ARP);
 
 	if ((fp = fopen(ERP_IPV6_ARP, "r")) != NULL)
@@ -245,6 +319,29 @@ static int erp_check_gphy_stat(int model)
 		if ret = 2, there is "wan" gphy linked
 	*/
 
+#if defined(RTCONFIG_QCA)
+#if defined(RTCONFIG_DUALWAN)
+	const int fb_fo = nvram_match("wans_mode", "fo") || nvram_match("wans_mode", "fb");
+#else
+	const int fb_fo = 1;
+#endif
+	int ret = 1, wlink = 0, llink, unit;
+
+	for (unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; ++unit) {
+		if (wan_primary_ifunit() != unit && fb_fo)
+			continue;
+		wlink += rtkswitch_wanPort_phyStatus(unit);
+	}
+	llink = rtkswitch_lanPorts_phyStatus();
+
+	if (!wlink && !llink)
+		ret = 0;
+	else if (wlink)
+		ret = 2;
+
+	ERP_DBG("wlink %d llink %d fb_fo %d ret %d\n", wlink, llink, fb_fo, ret);
+	return ret;
+#else
 	/* create ERP_FOLDOER */
 	if (!f_exists(ERP_FOLDER))
 		mkdir(ERP_FOLDER, 0666);
@@ -260,6 +357,7 @@ static int erp_check_gphy_stat(int model)
 	{
 		while (fgets(buf, sizeof(buf), fp))
 		{
+			memset(v0, 0, sizeof(v0));
 			memset(v1, 0, sizeof(v1));
 			memset(v2, 0, sizeof(v2));
 			memset(v3, 0, sizeof(v3));
@@ -276,6 +374,18 @@ static int erp_check_gphy_stat(int model)
 				if ( (!strcmp(v0, "X") || (model==MODEL_DSLAC68U)) /* DSL-AC68U v0 always = "M" */
 					&& !strcmp(v1, "X") && !strcmp(v2, "X") && !strcmp(v3, "X") && !strcmp(v4, "X")
 					&& !strcmp(v5, "X") && !strcmp(v6, "X") && !strcmp(v7, "X") && !strcmp(v8, "X"))
+				{
+					ret = 0;
+				}
+				else if (strcmp(v0, "X") && (model!=MODEL_DSLAC68U)) /* no DSL-model */
+				{
+					ret = 2;
+				}
+			}
+			else if(len == 31) {
+				sscanf(buf, "W0=%[^;];L1=%[^;];L2=%[^;];L3=%[^;];L4=%[^;];L5=%[^;];", v0, v1, v2, v3, v4, v5);
+				if ( (!strcmp(v0, "X") || (model==MODEL_DSLAC68U)) /* DSL-AC68U v0 always = "M" */
+					&& !strcmp(v1, "X") && !strcmp(v2, "X") && !strcmp(v3, "X") && !strcmp(v4, "X") && !strcmp(v5, "X"))
 				{
 					ret = 0;
 				}
@@ -302,6 +412,7 @@ static int erp_check_gphy_stat(int model)
 
 	ERP_DBG("v0=%s, v1=%s, v2=%s, v3=%s, v4=%s, v5=%s, v6=%s, v7=%s, v8=%s, ret=%d\n", v0, v1, v2, v3, v4, v5, v6, v7, v8, ret);
 	return ret;
+#endif
 }
 
 static int erp_check_dsl_stat(int model)
@@ -323,16 +434,153 @@ static int erp_check_dsl_stat(int model)
 	return ret;
 }
 
+#if defined(RTCONFIG_QCA)
+#if defined(RTCONFIG_SOC_IPQ8074)
+/* Reference to ipq8074_battery_power() of /etc/pm/power.d/ipq-power-save.sh of QSDK */
+static void ipq8074_battery_power(void)
+{
+	char path[128], nss_freq[16] = "";
+
+#if defined(RTCONFIG_FANCTRL)
+	/* Turn off FAN */
+	__setFanOnOff(0);
+#endif
+
+#if defined(RTCONFIG_WIGIG)
+#warning FIXME: Implement PCIe Power-Down Sequence
+	/* remove devices
+	sleep 2
+	for i in `ls /sys/bus/pci/devices/`; do
+		d=/sys/bus/pci/devices/${i}
+		v=`cat ${d}/vendor`
+		[ "xx${v}" != "xx0x17cb" ] && echo 1 > ${d}/remove
+	done
+	 * remove Buses
+	sleep 2
+	for i in `ls /sys/bus/pci/devices/`; do
+		d=/sys/bus/pci/devices/${i}
+		echo 1 > ${d}/remove
+	done
+	 * remove RC.
+	sleep 2
+
+	[ -f /sys/bus/pci/rcremove ] && {
+		echo 1 > /sys/bus/pci/rcremove
+	}
+	[ -f /sys/devices/pci0000:00/pci_bus/0000:00/rcremove ] && {
+		echo 1 > /sys/devices/pci0000:00/pci_bus/0000:00/rcremove
+	}
+	sleep 1
+	 */
+#endif
+
+	/* Wifi Power-down Sequence = fini_wl() in caller. */
+	/* Find scsi devices and remove it and USB Power-down Sequence */
+	system("(ejusb -1 -u 1 ; rmmod dwc3 ; rmmod dwc3-of-simple ; rmmod phy_msm_qusb ; rmmod phy_msm_ssusb_qmp) &");
+
+	/* Power off Malibu PHY of LAN ports = lanport_ctrl(0) in caller */
+	/* SD/MMC Power-down Sequence */
+	/* LAN interface down */
+
+	/* Disabling Auto scale on NSS cores */
+	snprintf(path, sizeof(path), "%s/auto_scale", PROC_NSS_CLOCK);
+	f_write_string(path, "0", 0, 0);
+
+	/* Scaling Down UBI Cores */
+	snprintf(nss_freq, sizeof(nss_freq), "%lu", 748800000UL);
+	snprintf(path, sizeof(path), "%s/current_freq", PROC_NSS_CLOCK);
+	f_write_string(path, nss_freq, 0, 0);
+
+	/* Cortex Power-down Sequence */
+	set_cpufreq_attr("scaling_governor", "powersave");
+}
+#endif	/* RTCONFIG_SOC_IPQ8074 */
+
+static void pre_erp_standby_mode(int model)
+{
+	if (model <= MODEL_UNKNOWN)
+		return;
+
+	return;
+}
+
+static void post_erp_standby_mode(int model)
+{
+	if (model <= MODEL_UNKNOWN)
+		return;
+
+	switch (model) {
+		case MODEL_RTAX89U:
+		case MODEL_GTAXY16000:	/* fall-through */
+			ipq8074_battery_power();
+			break;
+	}
+	return;
+}
+#endif
+
 static void erp_standby_mode(int model)
 {
 	ERP_DBG("enter standby mode, model = %d\n", model);
 
 	// step1. wireless interface down
+#if defined(RTCONFIG_QCA)
+	pre_erp_standby_mode(model);
+#else
 	switch(model) {
 		case MODEL_RTAC87U:
 			eval("wl", "-i", "eth1", "down");
 			break;
 		case MODEL_GTAC5300:
+		case MODEL_GTAX11000:
+		case MODEL_RTAX92U:
+		case MODEL_GTAXE11000:
+			eval("wl", "-i", "eth6", "down");
+			eval("wl", "-i", "eth7", "down"); // turn off 5g radio
+			break;
+		case MODEL_GTAX6000:
+		case MODEL_GTAX11000_PRO:
+			eval("wl", "-i", "eth6", "down");
+			eval("wl", "-i", "eth7", "down"); // turn off 5g radio
+			break;
+		case MODEL_GTAXE16000:
+			eval("wl", "-i", "eth10", "down");
+			eval("wl", "-i", "eth7", "down"); // turn off 5g radio
+			break;
+		case MODEL_RTAX95Q:
+		case MODEL_XT8PRO:
+		case MODEL_RTAXE95Q:
+		case MODEL_ET8PRO:
+		case MODEL_ET12:
+		case MODEL_XT12:
+			eval("wl", "-i", "eth4", "down");
+			eval("wl", "-i", "eth5", "down"); // turn off 5g radio
+			break;
+		case MODEL_RTAX56_XD4:
+		case MODEL_XD4PRO:
+		case MODEL_CTAX56_XD4:
+			eval("wl", "-i", "wl0", "down");
+			eval("wl", "-i", "wl1", "down"); // turn off 5g radio
+			break;
+		case MODEL_RTAX58U:
+			eval("wl", "-i", "eth5", "down");
+			eval("wl", "-i", "eth6", "down"); // turn off 5g radio
+			break;
+		case MODEL_RTAX55:
+		case MODEL_RTAX58U_V2:
+			eval("wl", "-i", "eth2", "down");
+			eval("wl", "-i", "eth3", "down"); // turn off 5g radio
+			break;
+		case MODEL_RTAX56U:
+			eval("wl", "-i", "eth5", "down");
+			eval("wl", "-i", "eth6", "down"); // turn off 5g radio
+			break;
+		case MODEL_RPAX56:
+		case MODEL_RPAX58:
+			eval("wl", "-i", "eth1", "down");
+			eval("wl", "-i", "eth2", "down"); // turn off 5g radio
+			break;
+		case MODEL_RTAX88U:
 			eval("wl", "-i", "eth6", "down");
 			eval("wl", "-i", "eth7", "down"); // turn off 5g radio
 			break;
@@ -354,14 +602,64 @@ static void erp_standby_mode(int model)
 		eval("wl", "-i", "eth3", "down"); // turn off 5g-2 radio
 	}
 
-	if (model == MODEL_GTAC5300) {
+	if (model == MODEL_GTAC5300 || model == MODEL_GTAX11000 || model == MODEL_GTAXE11000) {
 		// triple band
 		eval("wl", "-i", "eth8", "down"); // turn off 5g-2 radio
+	}
+
+	if (model == MODEL_GTAX11000_PRO) {
+		// triple band
+		eval("wl", "-i", "eth8", "down"); // turn off 5g-2 radio
+	}
+
+	if (model == MODEL_GTAXE16000) {
+		// triple band
+		eval("wl", "-i", "eth8", "down"); // turn off 5g-2 radio
+	}
+
+	if (model == MODEL_ET12 || model == MODEL_XT12) {
+		// triple band
+		eval("wl", "-i", "eth6", "down"); // turn off 5g-2 radio
+	}
+
+	if (model == MODEL_RTAX92U) {
+		// triple band
+		eval("wl", "-i", "eth5", "down"); // turn off 2g radio
+	}
+
+	if (model == MODEL_RTAX95Q || model == MODEL_XT8PRO || model == MODEL_RTAXE95Q || model == MODEL_ET8PRO) {
+		// triple band
+		eval("wl", "-i", "eth4", "down"); // turn off 2g radio
+	}
+
+	if (model == MODEL_RTAX56_XD4 || model == MODEL_XD4PRO || model == MODEL_CTAX56_XD4) {
+		// triple band
+		eval("wl", "-i", "wl0", "down"); // turn off 2g radio
+	}
+
+	if (model == MODEL_RTAX58U) {
+		// triple band
+		eval("wl", "-i", "eth5", "down"); // turn off 2g radio
+	}
+
+	if (model == MODEL_RTAX56U) {
+		// triple band
+		eval("wl", "-i", "eth5", "down"); // turn off 2g radio
+	}
+
+	if (model == MODEL_RPAX56 || model == MODEL_RPAX58) {
+		eval("wl", "-i", "eth1", "down"); // turn off 2g radio
+	}
+
+	if (model == MODEL_RTAX55 || model == MODEL_RTAX58U_V2) {
+		// triple band
+		eval("wl", "-i", "eth2", "down"); // turn off 2g radio
 	}
 
 	if (model == MODEL_DSLAC68U) {
 		eval("req_dsl_drv", "dslenable", "off"); //turn off DSL
 	}
+#endif
 
 	// step2. remove wireless driver module
 	fini_wl();
@@ -371,15 +669,95 @@ static void erp_standby_mode(int model)
 	lanport_ctrl(0);
 
 	// step4. special case
+#if defined(RTCONFIG_QCA)
+	post_erp_standby_mode(model);
+#else
 	if (model == MODEL_RTAC88U || model == MODEL_RTAC5300 || model == MODEL_RTAC3100) {
 		eval("devmem", "0x18000068", "32", "0x401");
 		eval("devmem", "0x18000064", "32", "0x0");
 	}
+#endif
 
 	/* update status */
 	erp_status = ERP_STANDBY;
 	erp_count = -1;
 }
+
+#if defined(RTCONFIG_QCA)
+#if defined(RTCONFIG_SOC_IPQ8074)
+/* Reference to ipq8074_ac_power() of /etc/pm/power.d/ipq-power-save.sh of QSDK */
+static void ipq8074_ac_power(void)
+{
+	char path[128];
+
+	/* Cortex Power-UP Sequence  = ipq807x_power_auto() of /etc/init.d/powerctl */
+	/* change scaling governor as ondemand to enable clock scaling based on system load */
+	set_cpufreq_attr("scaling_governor", "ondemand");
+	/* Change sampling rate for frequency scaling decisions to 1s, from 10 ms */
+	/* FIXME: It's 200000 on ASUSWRT */
+	f_write_string("/sys/devices/system/cpu/cpufreq/ondemand/sampling_rate", "1000000", 0, 0);
+
+	/* Change sampling rate for frequency down scaling decision to 10s */
+	/* FIXME: It's 1 on ASUSWRT */
+	f_write_string("/sys/devices/system/cpu/cpufreq/ondemand/sampling_down_factor", "10", 0, 0);
+
+	/* Change the CPU load threshold above which frequency is up-scaled to
+	 * turbo frequency,to 50%
+	 */
+	/* FIXME: It's 95 on ASUSWRT */
+	f_write_string("/sys/devices/system/cpu/cpufreq/ondemand/up_threshold", "50", 0, 0);
+
+	/* Enabling Auto scale on NSS cores */
+	snprintf(path, sizeof(path), "%s/auto_scale", PROC_NSS_CLOCK);
+	f_write_string(path, "1", 0, 0);
+
+	/* Power on Malibu PHY of LAN ports = lanport_ctrl(1) of caller. */
+
+#if defined(RTCONFIG_WIGIG)
+	/* PCIe Power-UP Sequence */
+	/* FIXME: It's not good idea to sleep in signal handler. */
+	sleep(1);
+	f_write_string("/sys/bus/pci/rcrescan", "1", 0, 0);
+	sleep(2);
+	f_write_string("/sys/bus/pci/rescan", "1", 0, 0);
+#endif
+
+	/* Wifi Power-up Sequence = restart_wireless in caller. */
+
+	/* USB Power-UP Sequence */
+	system("(insmod phy-msm-ssusb-qmp.ko ; insmod phy-msm-qusb.ko ; insmod dwc3-of-simple.ko ; insmod dwc3.ko) &");
+
+	/* LAN interface up, closed to restart_wireless in caller. */
+	/* SD/MMC Power-UP sequence */
+
+#if defined(RTCONFIG_FANCTRL)
+	restart_fanctrl();
+#endif
+}
+#endif	/* RTCONFIG_SOC_IPQ8074 */
+
+static void pre_erp_wakeup_mode(int model)
+{
+	if (model <= MODEL_UNKNOWN)
+		return;
+
+	switch (model) {
+		case MODEL_RTAX89U:
+		case MODEL_GTAXY16000:	/* fall-through */
+			ipq8074_ac_power();
+			break;
+	}
+	return;
+}
+
+static void post_erp_wakeup_mode(int model)
+{
+	if (model <= MODEL_UNKNOWN)
+		return;
+
+	return;
+}
+#endif
 
 static void erp_wakeup_mode(int model)
 {
@@ -388,6 +766,9 @@ static void erp_wakeup_mode(int model)
 	/* usb power up*/
 	eval("rc", "pwr_usb", "1");
 
+#if defined(RTCONFIG_QCA)
+	pre_erp_wakeup_mode(model);
+#else
 	/* TODO : add different platform or model case here */
 	if (model == MODEL_RTAC88U) {
 		// Realtek set reset mode
@@ -409,6 +790,7 @@ static void erp_wakeup_mode(int model)
 	if (model == MODEL_DSLAC68U) {
 		eval("req_dsl_drv", "dslenable", "on"); //turn on DSL
 	}
+#endif
 
 	/* use set_phy_ctrl to control all lan / wan ports up */
 	wanport_ctrl(1);
@@ -416,6 +798,10 @@ static void erp_wakeup_mode(int model)
 
 	/* restart_wireless */
 	notify_rc("restart_wireless");
+
+#if defined(RTCONFIG_QCA)
+	post_erp_wakeup_mode(model);
+#endif
 
 	/* update status */
 	erp_status = ERP_WAKEUP;
@@ -426,16 +812,28 @@ static void ERP_BTN_WAKEUP()
 {
 	int active = 0;
 	int model = get_model();
-#ifdef RTCONFIG_LED_BTN
+#if defined(RTCONFIG_LED_BTN) || !defined(RTCONFIG_WIFI_TOG_BTN)
 	static int led_status_on = 1;
 #endif
 
 	if (erp_status != ERP_STANDBY || erp_count != -1)
 		return;
 
-#ifdef RTCONFIG_LED_BTN
+#if defined(RTCONFIG_LED_BTN) || !defined(RTCONFIG_WIFI_TOG_BTN)
 	if (model != MODEL_RTAC87U) {
+#if defined(RTAX88U) || defined(RTAX92U) || defined(RTCONFIG_HND_ROUTER_AX_675X) || defined(RTCONFIG_QCA)
+#ifndef RTCONFIG_WIFI_TOG_BTN
+		if (button_pressed(BTN_WPS) && nvram_match("btn_ez_radiotoggle", "0") && nvram_match("btn_ez_mode", "1"))
+#else
+		if (button_pressed(BTN_LED))
+#endif
+#else
+#ifndef RTCONFIG_WIFI_TOG_BTN
+		if (!button_pressed(BTN_WPS) && nvram_match("btn_ez_radiotoggle", "0") && nvram_match("btn_ez_mode", "1"))
+#else
 		if (!button_pressed(BTN_LED))
+#endif
+#endif
 		{
 			ERP_DBG("PRESSED LED BUTTON!\n");
 			active = 1;
@@ -465,6 +863,13 @@ static void ERP_BTN_WAKEUP()
 	}
 #if defined(RTCONFIG_WIFI_TOG_BTN)
 	if (button_pressed(BTN_WIFI_TOG))
+	{
+		ERP_DBG("PRESSED WIFI_TOG BUTTON!\n");
+		active = 1;
+	}
+#endif
+#if defined(RTCONFIG_TURBO_BTN)
+	if (button_pressed(BTN_TURBO))
 	{
 		ERP_DBG("PRESSED WIFI_TOG BUTTON!\n");
 		active = 1;
@@ -501,7 +906,12 @@ static void ERP_CHECK_MODE()
 		RT-AC66U / RT-N66U
 	*/
 	int model = get_model();
-	if (model != MODEL_RTAC88U
+	if (
+#if defined(RTCONFIG_QCA)
+		   model != MODEL_RTAX89U
+		&& model != MODEL_GTAXY16000
+#else
+		   model != MODEL_RTAC88U
 		&& model != MODEL_RTAC3100
 		&& model != MODEL_RTAC5300
 		&& model != MODEL_RTAC3200
@@ -510,7 +920,31 @@ static void ERP_CHECK_MODE()
 		&& model != MODEL_DSLAC68U
 		&& model != MODEL_RTAC66U
 		&& model != MODEL_RTN66U
-		&& model != MODEL_GTAC5300)
+		&& model != MODEL_GTAC5300
+		&& model != MODEL_RTAX88U
+		&& model != MODEL_GTAX11000
+		&& model != MODEL_RTAX92U
+		&& model != MODEL_RTAX95Q
+		&& model != MODEL_XT8PRO
+		&& model != MODEL_RTAXE95Q
+		&& model != MODEL_ET8PRO
+		&& model != MODEL_RTAX56_XD4
+		&& model != MODEL_XD4PRO
+		&& model != MODEL_CTAX56_XD4
+		&& model != MODEL_RTAX58U
+		&& model != MODEL_RTAX58U_V2
+		&& model != MODEL_RTAX55
+		&& model != MODEL_RTAX56U
+		&& model != MODEL_RPAX56
+		&& model != MODEL_RPAX58
+		&& model != MODEL_GTAXE11000
+		&& model != MODEL_GTAX6000
+		&& model != MODEL_GTAX11000_PRO
+		&& model != MODEL_GTAXE16000
+		&& model != MODEL_ET12
+		&& model != MODEL_XT12
+#endif
+	   )
 	{
 		ERP_DBG("The model isn't under support list!\n");
 		return;
@@ -519,9 +953,17 @@ static void ERP_CHECK_MODE()
 	// step2. tcode in EE / WE / UK / EU
 	char *tcode = nvram_safe_get("territory_code");
 	if (strstr(tcode, "EE") == NULL && strstr(tcode, "WE") == NULL
-		&& strstr(tcode, "UK") == NULL && strstr(tcode, "EU") == NULL)
-	{
+		&& strstr(tcode, "UK") == NULL && strstr(tcode, "EU") == NULL
+#if defined(RTAX89U)
+	    && !strstr(tcode, "IL")
+#endif
+	   ) {
 		ERP_DBG("The model isn't under EU SKU!\n");
+		return;
+	}
+
+	if (nvram_get_int("Ate_power_on_off_enable")) {
+		ERP_DBG("ATE run-in mode\n");
 		return;
 	}
 
@@ -539,8 +981,12 @@ static void ERP_CHECK_MODE()
 	int erp_arp  = erp_check_arp_stat(model);
 	int erp_gphy = erp_check_gphy_stat(model);
 	int erp_dsl  = erp_check_dsl_stat(model); // DSL model
-	if (model == MODEL_GTAC5300)
+#if defined(RTCONFIG_QCA)
+	erp_wl_sta_num = erp_check_wl_auth_stat();
+#else
+	if (model == MODEL_GTAC5300 || model == MODEL_RTAX88U || model == MODEL_GTAX11000 || model == MODEL_RTAX92U || model == MODEL_RTAX95Q || model == MODEL_XT8PRO || model == MODEL_RTAXE95Q || model == MODEL_ET8PRO || model == MODEL_RTAX56_XD4 || model == MODEL_XD4PRO || model == MODEL_CTAX56_XD4 || model == MODEL_RTAX58U || model == MODEL_RTAX58U_V2 || model == MODEL_RTAX55 || model == MODEL_RTAX56U || model == MODEL_RPAX56 || model == MODEL_RPAX58 || model == MODEL_GTAXE11000)
 		erp_wl_sta_num = erp_check_wl_auth_stat();
+#endif
 
 	ERP_DBG("erp_usb=%d, erp_wl=%d, erp_arp=%d, erp_gphy=%d, erp_dsl=%d, erp_status=%d, erp_wl_sta_num=%d, erp_count=%d\n",
 		erp_usb, erp_wl, erp_arp, erp_gphy, erp_dsl, erp_status, erp_wl_sta_num, erp_count);
@@ -643,7 +1089,12 @@ int erp_monitor_main(int argc, char **argv)
 		RT-AC66U / RT-N66U
 	*/
 	int model = get_model();
-	if (model != MODEL_RTAC88U
+	if (
+#if defined(RTCONFIG_QCA)
+		   model != MODEL_RTAX89U
+		&& model != MODEL_GTAXY16000
+#else
+		   model != MODEL_RTAC88U
 		&& model != MODEL_RTAC3100
 		&& model != MODEL_RTAC5300
 		&& model != MODEL_RTAC3200
@@ -652,7 +1103,26 @@ int erp_monitor_main(int argc, char **argv)
 		&& model != MODEL_DSLAC68U
 		&& model != MODEL_RTAC66U
 		&& model != MODEL_RTN66U
-		&& model != MODEL_GTAC5300)
+		&& model != MODEL_GTAC5300
+		&& model != MODEL_RTAX88U
+		&& model != MODEL_GTAX11000
+		&& model != MODEL_RTAX92U
+		&& model != MODEL_RTAX95Q
+		&& model != MODEL_XT8PRO
+		&& model != MODEL_RTAXE95Q
+		&& model != MODEL_ET8PRO
+		&& model != MODEL_RTAX56_XD4
+		&& model != MODEL_XD4PRO
+		&& model != MODEL_CTAX56_XD4
+		&& model != MODEL_RTAX58U
+		&& model != MODEL_RTAX58U_V2
+		&& model != MODEL_RTAX55
+		&& model != MODEL_RTAX56U
+		&& model != MODEL_RPAX56
+		&& model != MODEL_RPAX58
+		&& model != MODEL_GTAXE11000
+#endif
+	   )
 	{
 		logmessage("ERP", "The model isn't under support list!\n");
 		return -1;
@@ -661,8 +1131,11 @@ int erp_monitor_main(int argc, char **argv)
 	/* tcode support in EE / WE / UK / EU */
 	char *tcode = nvram_safe_get("territory_code");
 	if (strstr(tcode, "EE") == NULL && strstr(tcode, "WE") == NULL
-		&& strstr(tcode, "UK") == NULL && strstr(tcode, "EU") == NULL)
-	{
+		&& strstr(tcode, "UK") == NULL && strstr(tcode, "EU") == NULL
+#if defined(RTAX89U)
+	    && !strstr(tcode, "IL")
+#endif
+	   ) {
 		logmessage("ERP", "The model isn't under EU SKU!\n");
 		return -2;
 	}

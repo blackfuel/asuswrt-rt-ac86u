@@ -21,6 +21,7 @@
 <script language="JavaScript" type="text/javascript" src="/validator.js"></script>
 <script type="text/javascript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
 #pull_arrow{
  	float:center;
@@ -39,7 +40,8 @@
 var wl_maclist_x_array = '<% nvram_get("wl_maclist_x"); %>';
 
 var manually_maclist_list_array = new Array();
-
+var manually_maclist_list_ori_array = new Array();
+var wl_macmode_ori = ('<% nvram_get("wl_macmode"); %>' == "disabled") ? "allow" : '<% nvram_get("wl_macmode"); %>';
 function initial(){
 	if(isSwMode("re") && concurrep_support){
 		document.form.wl_subunit.value = 1;
@@ -58,13 +60,16 @@ function initial(){
 	var wl_maclist_x_row = wl_maclist_x_array.split('&#60');
 	var clientName = "New device";
 	for(var i = 1; i < wl_maclist_x_row.length; i += 1) {
-		if(clientList[wl_maclist_x_row[i]]) {
-			clientName = (clientList[wl_maclist_x_row[i]].nickName == "") ? clientList[wl_maclist_x_row[i]].name : clientList[wl_maclist_x_row[i]].nickName;
+		var _index = wl_maclist_x_row[i].toUpperCase();
+		if(clientList[_index]) {
+			clientName = (clientList[_index].nickName == "") ? clientList[_index].name : clientList[_index].nickName;
 		}
 		else {
 			clientName = "New device";
 		}
-		manually_maclist_list_array[wl_maclist_x_row[i]] = clientName;
+
+		manually_maclist_list_array[_index] = clientName;
+		manually_maclist_list_ori_array[_index] = clientName;
 	}
 
 	if((sw_mode == 2 || sw_mode == 4) && document.form.wl_unit.value == '<% nvram_get("wlc_band"); %>' && !concurrep_support){
@@ -158,7 +163,6 @@ function deleteRow(r, delMac){
 	var i = r.parentNode.parentNode.rowIndex;
 	delete manually_maclist_list_array[delMac];
 	document.getElementById('wl_maclist_x_table').deleteRow(i);
-
 	if(Object.keys(manually_maclist_list_array).length == 0)
 		show_wl_maclist_x();
 }
@@ -169,7 +173,7 @@ function addRow(obj, upper){
 	var mac = obj.value.toUpperCase();
 
 	if(rule_num >= upper){
-		alert("<#JS_itemlimit1#> " + upper + " <#JS_itemlimit2#>");
+		alert("<#AiMesh_Binding_Rule_Maxi#>\n<#AiMesh_Delete_Unused_Rule#>");
 		return false;	
 	}	
 	
@@ -178,7 +182,7 @@ function addRow(obj, upper){
 		obj.focus();
 		obj.select();			
 		return false;
-	}else if(!check_macaddr(obj, check_hwaddr_flag(obj))){
+	}else if(!check_macaddr(obj, check_hwaddr_flag(obj, 'inner'))){
 		obj.focus();
 		obj.select();	
 		return false;	
@@ -193,7 +197,62 @@ function addRow(obj, upper){
 			}	
 		}		
 	}		
-	
+
+	if(document.form.enable_mac[0].checked){
+		if(isSupport("amas") && isSupport("force_roaming") && isSupport("sta_ap_bind")){
+			var rule_hint = "";
+			var acl_and_client_bind_allow_maximum = 0;
+			if(isSupport("acl96") && document.form.wl_macmode_show.value == "deny")
+				acl_and_client_bind_allow_maximum = 96;
+			else if(!isSupport("acl96")){
+				var cfg_re_maxnum = httpApi.hookGet("get_onboardingstatus").cfg_re_maxnum;
+				acl_and_client_bind_allow_maximum = 64 - (cfg_re_maxnum * 2);
+			}
+
+			if(acl_and_client_bind_allow_maximum > 0){
+				var sta_binding_count = 0;
+				var sta_binding_list = decodeURIComponent(httpApi.nvramCharToAscii(["sta_binding_list"], true).sta_binding_list);
+				var each_node_rule = sta_binding_list.split("<");
+				$.each(each_node_rule, function(index, value){
+					if(value != ""){
+						var node_client_rule = value.split(">");
+						var node_mac = "";
+						$.each(node_client_rule, function(index, value){
+							switch(index){
+								case 2://client list
+									var each_client = value.split("|");
+									$.each(each_client, function(index, value){
+										sta_binding_count++;
+									});
+									break;
+							}
+						});
+					}
+				});
+
+				var current_rule_count = Object.keys(manually_maclist_list_array).length;
+				if((sta_binding_count + current_rule_count) >= acl_and_client_bind_allow_maximum) {
+					rule_hint = "<#AiMesh_Binding_Rule_Maxi#>";
+					rule_hint += "\n";
+					rule_hint += "<#AiMesh_Delete_Unused_Rule#>";
+					if(sta_binding_count != 0){
+						rule_hint += "\n";
+						rule_hint += "- AiMesh client binding rule";/* untranslated */
+					}
+					if(current_rule_count != 0){
+						rule_hint += "\n";
+						rule_hint += "- <#FirewallConfig_MFList_groupitemname#>";
+					}
+				}
+			}
+
+			if(rule_hint != ""){
+				alert(rule_hint);
+				return false;
+			}
+		}
+	}
+
 	if(clientList[mac]) {
 		manually_maclist_list_array[mac] = (clientList[mac].nickName == "") ? clientList[mac].name : clientList[mac].nickName;
 	}
@@ -201,7 +260,7 @@ function addRow(obj, upper){
 		manually_maclist_list_array[mac] = "New device";
 	}
 
-	obj.value = ""
+	obj.value = "";
 	show_wl_maclist_x();
 }
 
@@ -216,6 +275,7 @@ function applyRule(){
 	var tmp_value = "";
 
 	Object.keys(manually_maclist_list_array).forEach(function(key) {
+		key = key.toUpperCase();
 		tmp_value += "<" + key;
 	});
 
@@ -344,10 +404,27 @@ function checkWLReady(){
 	    }
   	});
 }
+function change_wl_macmode(){
+	if(wl_macmode_ori != document.form.wl_macmode_show.value){
+		manually_maclist_list_array = [];
+		$("#change_filter_mode_hint").css("display", "flex");
+	}
+	else{
+		manually_maclist_list_array = [];
+		Object.keys(manually_maclist_list_ori_array).forEach(function(key) {
+			var clientMac = key.toUpperCase();
+			var clientName = manually_maclist_list_ori_array[key];
+			manually_maclist_list_array[clientMac] = clientName;
+		});
+		$("#change_filter_mode_hint").css("display", "none");
+	}
+
+	show_wl_maclist_x();
+}
 </script>
 </head>
 
-<body onload="initial();">
+<body onload="initial();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
@@ -419,10 +496,11 @@ function checkWLReady(){
 								<a class="hintstyle" href="javascript:void(0);" onClick="openHint(18,1);"><#FirewallConfig_MFMethod_itemname#></a>
 							</th>
 							<td>
-								<select name="wl_macmode_show" class="input_option">
+								<select name="wl_macmode_show" class="input_option" onChange="change_wl_macmode();">
 									<option class="content_input_fd" value="allow" <% nvram_match("wl_macmode", "allow","selected"); %>><#FirewallConfig_MFMethod_item1#></option>
 									<option class="content_input_fd" value="deny" <% nvram_match("wl_macmode", "deny","selected"); %>><#FirewallConfig_MFMethod_item2#></option>
 								</select>
+								<span id="change_filter_mode_hint" style="margin-top:4px;display:none;">The "MAC filter list" will be removed when you switch the "MAC Filter Mode".</span>
 							</td>
 						</tr>
 					</table>

@@ -1,24 +1,14 @@
-#
-# Linux eventd Makefile
-#
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom.
-#
-# $Id:  $
-#
-
 include $(TOP)/.config
 
+CFLAGS	+= -I. -I$(TOP)/shared -I$(SRCBASE)/include ${WLAN_StdIncPathA} -I$(SRCBASE)/common/include -Wall -Werror
+ifeq ($(RTCONFIG_HND_ROUTER_AX),y)
+CFLAGS += -I$(SRCBASE)/../components/proto/include -I$(SRCBASE)/../components/wlioctl/include -I$(SRCBASE)/../components/math/include
+endif
 CFLAGS	+= -I. -I$(TOP)/shared -I$(SRCBASE)/include ${WLAN_StdIncPathA} -I$(SRCBASE)/common/include -Wall -Werror
 CFLAGS	+= $(if $(WLAN_ComponentIncPath),$(WLAN_ComponentIncPath),$(addprefix -I,$(wildcard $(SRCBASE)/shared/bcmwifi/include)))
 #CFLAGS	+= -g -DDEBUG
 CFLAGS	+= -s -O2
-LDFLAGS += -L$(TOP)/nvram${BCMEX}${EX7} -lnvram ${EXTRA_NV_LDFLAGS}
+LDFLAGS += -L$(TOP_PLATFORM)/nvram${BCMEX}${EX7} -lnvram ${EXTRA_NV_LDFLAGS}
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
 LDFLAGS += $(EXTRA_LDFLAGS)
 

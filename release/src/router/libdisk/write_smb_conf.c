@@ -15,12 +15,15 @@
  * MA 02111-1307 USA
  */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <limits.h>		//PATH_MAX, LONG_MIN, LONG_MAX
 #include <bcmnvram.h>
 #include <shutils.h>
 #include <shared.h>
@@ -36,7 +39,7 @@
 #endif
 
 #define SAMBA_CONF "/etc/smb.conf"
-//#define SAMBA_CONF "/etc/test.conf"
+#define SAMBA_LOG "/var/log/samba.log"
 
 /* @return:
  * 	If mount_point is equal to one of partition of all disks case-insensitivity, return true.
@@ -63,65 +66,6 @@ static int check_mount_point_icase(const disk_info_t *d_info, const partition_in
 	}
 
 	return v;
-}
-
-int
-is_invalid_char_for_hostname(char c)
-{
-	int ret = 0;
-
-	if(c < 0x20)
-		ret = 1;
-	else if(c >= 0x21 && c <= 0x2c)
-		ret = 1;
-	else if(c >= 0x2e && c <= 0x2f)
-		ret = 1;
-	else if(c >= 0x3a && c <= 0x40)
-		ret = 1;
-#if 0
-	else if(c >= 0x5b && c <= 0x60)
-		ret = 1;
-#else	/* allow '_' */
-	else if(c >= 0x5b && c <= 0x5e)
-		ret = 1;
-	else if(c == 0x60)
-		ret = 1;
-#endif
-	else if(c >= 0x7b)
-		ret = 1;
-#if 0
-	printf("%c (0x%02x) is %svalid for hostname\n", c, c, (ret == 0) ? "  " : "in");
-#endif
-	return ret;
-}
-
-int
-is_valid_hostname(const char *name)
-{
-	int ret = 1, len, i;
-
-	if(!name)
-		return 0;
-
-	len = strlen(name);
-	if(len == 0)
-	{
-		ret = 0;
-		goto ENDERR;
-	}
-
-	for(i = 0; i < len ; i++)
-		if(is_invalid_char_for_hostname(name[i]))
-		{
-			ret = 0;
-			break;
-		}
-
-ENDERR:
-#if 0
-	printf("%s is %svalid for hostname\n", name, (ret == 1) ? "  " : "in");
-#endif
-	return ret;
 }
 
 /* For NETBIOS name,
@@ -191,10 +135,62 @@ int get_list_strings_count(char **list, int size, char *str)
 	return count;
 }
 
+int get_string_in_list(char *in_list, int idx, char *out, int out_len)
+{
+	int find_idx = 0;
+	char *buf, *g, *p;
+
+	if((in_list) && (strlen(in_list) > 0) && (out) && (out_len > 0))
+	{
+		g = buf = strdup(in_list);
+
+		while ((p = strchr(g, '>')) != NULL) {
+			if(find_idx == idx)
+			{
+				g[(int)(p - g)] = '\0';
+				strlcpy(out, g, out_len);
+				break;
+			}
+			else{
+				g = p + 1;
+				find_idx++;
+			}
+		}
+
+		free(buf);
+	}
+	return 0;
+}
+
+int get_ipsec_subnet(char *buf, int len)
+{
+	int i = 1;
+	char name[] = "ipsec_profile_1";
+	char ipsec_profile_buf[1024] = {0};
+	char virtual_subnet[32] = {0};
+
+	for(i = 1; i < 6; i++)
+	{
+		snprintf(name, sizeof(name), "ipsec_profile_%d", i);
+		snprintf(ipsec_profile_buf, sizeof(ipsec_profile_buf), "%s", nvram_safe_get(name));
+		memset(virtual_subnet, 0, sizeof(virtual_subnet));
+		get_string_in_list(ipsec_profile_buf, 14, virtual_subnet, sizeof(virtual_subnet));
+		if(strlen(virtual_subnet) > 0)
+		{
+			if(!strstr(buf, virtual_subnet))
+			{
+				snprintf(buf + strlen(buf), len - strlen(buf), "%s.0/24 ", virtual_subnet);
+			}
+		}
+	}
+
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	FILE *fp;
-	int n=0;
+	int n=0, spnego = 0;
 	char p_computer_name[16]; // computer_name's len is CKN_STR15.
 	disk_info_t *follow_disk, *disks_info = NULL;
 	partition_info_t *follow_partition;
@@ -203,6 +199,9 @@ int main(int argc, char *argv[])
 	int sh_num;
 	char **folder_list = NULL;
 	int acc_num, first;
+#if defined(RTCONFIG_SOC_IPQ8074) || defined(RTCONFIG_SOC_IPQ8064)
+	int max_user = 32;
+#endif
 #ifdef RTCONFIG_PERMISSION_MANAGEMENT
 	PMS_ACCOUNT_INFO_T *account_list, *follow_account;
 	int group_num;
@@ -210,7 +209,7 @@ int main(int argc, char *argv[])
 	PMS_OWNED_INFO_T *owned_group;
 	PMS_ACCOUNT_GROUP_INFO_T *group_member;
 	int samba_right_group;
-	char char_user[64];
+	char char_user[128];
 #else
 	char **account_list;
 	int i;
@@ -218,34 +217,51 @@ int main(int argc, char *argv[])
 	int dup, same_m_pt = 0;
 	char unique_share_name[PATH_MAX];
 	int st_samba_mode = nvram_get_int("st_samba_mode");
+#if defined(RTCONFIG_SAMBA36X)
+	spnego = 1;
+#endif
 
-	unlink("/var/log.samba");
-
-	if((fp=fopen(SAMBA_CONF, "r"))){
-		fclose(fp);
+	if (access(SAMBA_CONF, F_OK) == 0)
 		unlink(SAMBA_CONF);
-	}
-
-	if((fp = fopen(SAMBA_CONF, "w")) == NULL)
+	if ((fp = fopen(SAMBA_CONF, "w")) == NULL)
 		goto confpage;
 
-	fprintf(fp, "[global]\n");
-	if(nvram_safe_get("st_samba_workgroup"))
-		fprintf(fp, "workgroup = %s\n", nvram_safe_get("st_samba_workgroup"));
-#if 0
-	if(nvram_safe_get("computer_name")){
-		fprintf(fp, "netbios name = %s\n", nvram_safe_get("computer_name"));
-		fprintf(fp, "server string = %s\n", nvram_safe_get("computer_name"));
-	}
-#else
-	snprintf(p_computer_name, sizeof(p_computer_name), "%s", nvram_safe_get("computer_name"));
-	if(strlen(p_computer_name) <= 0 || !is_valid_netbios_name(p_computer_name))
-		snprintf(p_computer_name, sizeof(p_computer_name), "%s", get_productid());
+	unlink(SAMBA_LOG);
 
-	if(strlen(p_computer_name) > 0){
-		fprintf(fp, "netbios name = %s\n", p_computer_name);
-		fprintf(fp, "server string = %s\n", p_computer_name);
+	fprintf(fp, "[global]\n");
+
+	strlcpy(p_computer_name, nvram_safe_get("computer_name"), sizeof(p_computer_name));
+	if (*p_computer_name == '\0' || !is_valid_netbios_name(p_computer_name)) {
+		strlcpy(p_computer_name, get_lan_hostname(), sizeof(p_computer_name));
+		toUpperCase(p_computer_name);
 	}
+	if (*p_computer_name) {
+		fprintf(fp, "netbios name = %s\n", p_computer_name);
+		fprintf(fp, "server string = %s\n", get_productid());
+	}
+
+	strlcpy(p_computer_name, nvram_safe_get("st_samba_workgroup"), sizeof(p_computer_name));
+	if (*p_computer_name == '\0' || !is_valid_netbios_name(p_computer_name)) {
+		strlcpy(p_computer_name, nvram_safe_get("lan_domain"), sizeof(p_computer_name));
+		*strchrnul(p_computer_name, '.') = '\0';
+		toUpperCase(p_computer_name);
+	}
+	if (*p_computer_name)
+		fprintf(fp, "workgroup = %s\n", p_computer_name);
+
+#if defined(RTCONFIG_SAMBA36X)
+	fprintf(fp, "max protocol = SMB2\n"); /* enable SMB1 & SMB2 simultaneously, rewrite when GUI is ready!! */
+	fprintf(fp, "passdb backend = smbpasswd\n");
+//#endif
+//#if defined(RTCONFIG_SAMBA36X) && defined(RTCONFIG_QCA)
+#if defined(RTCONFIG_QCA)
+	/* min protocol = SMB2, min protocol = LANMAN2, max protocol = SMB3 ... */
+	fprintf(fp, "smb encrypt = disabled\n");
+	fprintf(fp, "min receivefile size = 16384\n");
+	fprintf(fp, "smb passwd file = /etc/samba/smbpasswd\n");
+#endif
+//#if defined(RTCONFIG_SAMBA36X)
+	fprintf(fp, "username level = 20\n");
 #endif
 
 	fprintf(fp, "unix charset = UTF8\n");		// ASUS add
@@ -253,7 +269,7 @@ int main(int argc, char *argv[])
 	fprintf(fp, "load printers = no\n");	//Andy Chiu, 2017/1/20. Add for Samba printcap issue.
 	fprintf(fp, "printing = bsd\n");
 	fprintf(fp, "printcap name = /dev/null\n");
-	fprintf(fp, "log file = /var/log.samba\n");
+	fprintf(fp, "log file = %s\n", SAMBA_LOG);
 	fprintf(fp, "log level = 0\n");
 	fprintf(fp, "max log size = 5\n");
 
@@ -267,35 +283,15 @@ int main(int argc, char *argv[])
 	}
 	// share mode
 	else if(st_samba_mode == 1 || st_samba_mode == 3){
-#if 0
-//#if defined(RTCONFIG_TFAT) || defined(RTCONFIG_TUXERA_NTFS) || defined(RTCONFIG_TUXERA_HFS)
-		if(nvram_get_int("enable_samba_tuxera") == 1){
-			fprintf(fp, "auth methods = guest\n");
-			fprintf(fp, "guest account = admin\n");
-			fprintf(fp, "map to guest = Bad Password\n");
-			fprintf(fp, "guest ok = yes\n");
-		}
-		else{
-#if defined(RTCONFIG_SAMBA36X)
-			fprintf(fp, "auth methods = guest\n");
-			fprintf(fp, "guest account = admin\n");
-			fprintf(fp, "map to guest = Bad Password\n");
-			fprintf(fp, "guest ok = yes\n");
-#else
-			fprintf(fp, "security = SHARE\n");
-			fprintf(fp, "guest only = yes\n");
-#endif
-		}
-#else
+//#if defined(RTCONFIG_SAMBA3) && defined(RTCONFIG_SAMBA36X)
 #if defined(RTCONFIG_SAMBA36X)
 		fprintf(fp, "auth methods = guest\n");
-		fprintf(fp, "guest account = admin\n");
+		fprintf(fp, "guest account = %s\n", nvram_get("http_username")? : "admin");
 		fprintf(fp, "map to guest = Bad Password\n");
 		fprintf(fp, "guest ok = yes\n");
 #else
 		fprintf(fp, "security = SHARE\n");
 		fprintf(fp, "guest only = yes\n");
-#endif
 #endif
 	}
 	else{
@@ -311,11 +307,18 @@ int main(int argc, char *argv[])
 	fprintf(fp, "force create mode = 0777\n");
 
 	/* max users */
-	if(strcmp(nvram_safe_get("st_max_user"), "") != 0)
+#if defined(RTCONFIG_SOC_IPQ8074) || defined(RTCONFIG_SOC_IPQ8064)
+	if (nvram_get_int("st_max_user") > max_user)
+		max_user = nvram_get_int("st_max_user");
+	fprintf(fp, "max connections = %d\n", max_user);
+#else
+	if(strcmp(nvram_safe_get("st_max_user"), "") != 0){
 		fprintf(fp, "max connections = %s\n", nvram_safe_get("st_max_user"));
+	}
+#endif
 
 	if(!nvram_get_int("stop_samba_speedup")){
-#if defined(RTCONFIG_SOC_IPQ8064)
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SOC_IPQ8074)
 		fprintf(fp, "socket options = TCP_NODELAY SO_KEEPALIVE\n");
 #elif defined(RTCONFIG_ALPINE)
 		fprintf(fp, "socket options = TCP_NODELAY IPTOS_LOWDELAY IPTOS_THROUGHPUT SO_RCVBUF=5048576 SO_SNDBUF=5048576\n");
@@ -328,7 +331,7 @@ int main(int argc, char *argv[])
 #endif
 	}
 	fprintf(fp, "obey pam restrictions = no\n");
-	fprintf(fp, "use spnego = no\n");		// ASUS add
+	fprintf(fp, "use spnego = %s\n", spnego? "yes" : "no");		// ASUS add
 	fprintf(fp, "client use spnego = no\n");	// ASUS add
 //	fprintf(fp, "client use spnego = yes\n");	// ASUS add
 	fprintf(fp, "disable spoolss = yes\n");		// ASUS add
@@ -338,10 +341,11 @@ int main(int argc, char *argv[])
 	fprintf(fp, "wide links = no\n"); 		// ASUS add
 	fprintf(fp, "bind interfaces only = yes\n");	// ASUS add
 	fprintf(fp, "interfaces = lo br0 %s/%s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), (is_routing_enabled() && nvram_get_int("smbd_wanac")) ? nvram_safe_get("wan0_ifname") : "");
-#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD) || defined(RTCONFIG_OPENVPN)
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD) || defined(RTCONFIG_OPENVPN) || defined(RTCONFIG_IPSEC)
 	int ip[5];
 	char pptpd_subnet[16];
 	char openvpn_subnet[32];
+	char ipsec_subnet[180] = {0};
 
 	memset(pptpd_subnet, 0, sizeof(pptpd_subnet));
 	memset(openvpn_subnet, 0, sizeof(openvpn_subnet));
@@ -356,19 +360,31 @@ int main(int argc, char *argv[])
 		if (nvram_get_int("VPNServer_enable") && strstr(nvram_safe_get("vpn_server1_if"), "tun") && nvram_get_int("vpn_server1_plan"))
 			snprintf(openvpn_subnet, sizeof(openvpn_subnet), "%s/%s", nvram_safe_get("vpn_server1_sn"), nvram_safe_get("vpn_server1_nm"));
 #endif
+#ifdef RTCONFIG_IPSEC
+		if (nvram_match("ipsec_server_enable", "1") || nvram_match("ipsec_ig_enable", "1")) {
+			get_ipsec_subnet(ipsec_subnet, sizeof(ipsec_subnet));
+		}
+#endif /* RTCONFIG_IPSEC */
 	}
-	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s %s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), pptpd_subnet, openvpn_subnet);
+	if(nvram_invmatch("re_mode", "1"))
+	{
+		fprintf(fp, "hosts allow = 127.0.0.1 %s/%s %s %s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), pptpd_subnet, openvpn_subnet, ipsec_subnet);
 #else
-	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"));
+		fprintf(fp, "hosts allow = 127.0.0.1 %s/%s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"));
 #endif
-	fprintf(fp, "hosts deny = 0.0.0.0/0\n");
+		fprintf(fp, "hosts deny = 0.0.0.0/0\n");
+	}
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
 	fprintf(fp, "use sendfile = no\n");
 #else
 	fprintf(fp, "use sendfile = yes\n");
 #endif
 #ifdef RTCONFIG_RECVFILE
-	if(!nvram_get_int("stop_samba_recv"))
+	if(!nvram_get_int("stop_samba_recv")
+#if defined(RTCONFIG_SAMBA36X)
+			&& 0
+#endif
+			)
 		fprintf(fp, "use recvfile = yes\n");
 #endif
 
@@ -376,19 +392,28 @@ int main(int argc, char *argv[])
 	fprintf(fp, "map hidden = no\n");
 	fprintf(fp, "map read only = no\n");
 	fprintf(fp, "map system = no\n");
+#ifdef RTCONFIG_SAMBA36X
+	fprintf(fp, "store dos attributes = no\n");
+#else
 	fprintf(fp, "store dos attributes = yes\n");
+#endif
 	fprintf(fp, "dos filemode = yes\n");
 	fprintf(fp, "oplocks = yes\n");
 	fprintf(fp, "level2 oplocks = yes\n");
 	fprintf(fp, "kernel oplocks = no\n");
 
-	fprintf(fp, "[ipc$]\n");
-#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD) || defined(RTCONFIG_OPENVPN)
-	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s %s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), pptpd_subnet, openvpn_subnet);
+	if(nvram_invmatch("re_mode", "1"))
+	{
+#if !defined(RTCONFIG_SAMBA36X)
+		fprintf(fp, "[ipc$]\n");
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD) || defined(RTCONFIG_OPENVPN) || defined(RTCONFIG_IPSEC)
+		fprintf(fp, "hosts allow = 127.0.0.1 %s/%s %s %s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), pptpd_subnet, openvpn_subnet, ipsec_subnet);
 #else
-	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"));
+		fprintf(fp, "hosts allow = 127.0.0.1 %s/%s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"));
 #endif
-	fprintf(fp, "hosts deny = 0.0.0.0/0\n");
+		fprintf(fp, "hosts deny = 0.0.0.0/0\n");
+#endif
+	}
 
 	disks_info = read_disk_data();
 	if(disks_info == NULL){
@@ -418,10 +443,12 @@ int main(int argc, char *argv[])
 
 				fprintf(fp, "[%s]\n", mount_folder);
 				fprintf(fp, "comment = %s's %s\n", follow_disk->tag, mount_folder);
+#ifdef RTCONFIG_USB_CDROM
+				if(!is_cdrom_name(follow_partition->device))
+#endif
 				fprintf(fp, "veto files = /.__*.txt*/asusware*/asus_lighttpdpasswd/\n");
 				fprintf(fp, "path = %s\n", follow_partition->mount_point);
-				fprintf(fp, "writeable = yes\n");
-
+				fprintf(fp, "writeable = %s\n", strcmp(follow_partition->permission, "rw") == 0 ? "yes" : "no");
 				fprintf(fp, "dos filetimes = yes\n");
 				fprintf(fp, "fake directory create times = yes\n");
 			}
@@ -449,12 +476,19 @@ int main(int argc, char *argv[])
 					fprintf(fp, "[%s]\n", mount_folder);
 					fprintf(fp, "comment = %s's %s\n", follow_disk->tag, mount_folder);
 					fprintf(fp, "path = %s\n", follow_partition->mount_point);
-					fprintf(fp, "writeable = yes\n");
-
+					fprintf(fp, "writeable = %s\n", strcmp(follow_partition->permission, "rw") == 0 ? "yes" : "no");
 					fprintf(fp, "dos filetimes = yes\n");
 					fprintf(fp, "fake directory create times = yes\n");
 				}
 				else{
+#ifdef RTCONFIG_USB_CDROM
+					//if(is_cdrom_name(follow_partition->device)){
+					//	if(get_all_folder(follow_partition->mount_point, &sh_num, &folder_list) < 0){
+					//		free_2_dimension_list(&sh_num, &folder_list);
+					//		continue;
+					//	}
+					//} else
+#endif
 					//if(get_all_folder(follow_partition->mount_point, &sh_num, &folder_list) < 0)
 					if(get_folder_list(follow_partition->mount_point, &sh_num, &folder_list) < 0)
 					{
@@ -475,7 +509,7 @@ int main(int argc, char *argv[])
 								fprintf(fp, "[%s (at %s)]\n", folder_list[n], mount_folder);
 							fprintf(fp, "comment = %s's %s in %s\n", mount_folder, folder_list[n], follow_disk->tag);
 							fprintf(fp, "path = %s/%s\n", follow_partition->mount_point, folder_list[n]);
-							if(samba_right == 3)
+							if(samba_right == 3 && strcmp(follow_partition->permission, "rw") == 0)
 								fprintf(fp, "writeable = yes\n");
 							else
 								fprintf(fp, "writeable = no\n");
@@ -508,6 +542,12 @@ int main(int argc, char *argv[])
 				mount_folder = strrchr(follow_partition->mount_point, '/')+1;
 
 				// 1. get the folder list
+#ifdef RTCONFIG_USB_CDROM
+				//if(is_cdrom_name(follow_partition->device)){
+				//	if(get_all_folder(follow_partition->mount_point, &sh_num, &folder_list) < 0)
+				//		free_2_dimension_list(&sh_num, &folder_list);
+				//} else
+#endif
 				if(get_folder_list(follow_partition->mount_point, &sh_num, &folder_list) < 0){
 					free_2_dimension_list(&sh_num, &folder_list);
 				}
@@ -640,6 +680,83 @@ int main(int argc, char *argv[])
 			for(follow_partition = follow_disk->partitions; follow_partition != NULL; follow_partition = follow_partition->next){
 				if(follow_partition->mount_point == NULL)
 					continue;
+
+#ifdef RTCONFIG_USB_CDROM
+				if(is_cdrom_name(follow_partition->device)){
+					snprintf(unique_share_name, sizeof(unique_share_name), "%s", follow_partition->mount_point);
+					do {
+						dup = check_mount_point_icase(disks_info, follow_partition, follow_disk, follow_partition->partition_order, unique_share_name);
+						if(dup)
+							snprintf(unique_share_name, sizeof(unique_share_name), "%s(%d)", follow_partition->mount_point, ++same_m_pt);
+					} while(dup);
+					mount_folder = strrchr(unique_share_name, '/')+1;
+
+					fprintf(fp, "[%s]\n", mount_folder);
+					fprintf(fp, "comment = %s's %s\n", follow_disk->tag, mount_folder);
+					fprintf(fp, "path = %s\n", follow_partition->mount_point);
+					fprintf(fp, "writeable = %s\n", strcmp(follow_partition->permission, "rw") == 0 ? "yes" : "no");
+					fprintf(fp, "dos filetimes = yes\n");
+					fprintf(fp, "fake directory create times = yes\n");
+
+					fprintf(fp, "valid users = ");
+					first = 1;
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+					for(follow_account = account_list; follow_account != NULL; follow_account = follow_account->next){
+						memset(char_user, 0, sizeof(char_user));
+						ascii_to_char_safe(char_user, follow_account->name, sizeof(char_user));
+
+						if(first == 1)
+							first = 0;
+						else
+							fprintf(fp, ", ");
+
+						fprintf(fp, "%s", char_user);
+					}
+#else
+					for(i = 0; i < acc_num; ++i){
+						if(first == 1)
+							first = 0;
+						else
+							fprintf(fp, ", ");
+
+						fprintf(fp, "%s", account_list[i]);
+					}
+#endif
+					fprintf(fp, "\n");
+
+					fprintf(fp, "invalid users = \n");
+
+					fprintf(fp, "read list = ");
+					first = 1;
+#ifdef RTCONFIG_PERMISSION_MANAGEMENT
+					for(follow_account = account_list; follow_account != NULL; follow_account = follow_account->next){
+						memset(char_user, 0, sizeof(char_user));
+						ascii_to_char_safe(char_user, follow_account->name, sizeof(char_user));
+
+						if(first == 1)
+							first = 0;
+						else
+							fprintf(fp, ", ");
+
+						fprintf(fp, "%s", char_user);
+					}
+#else
+					for(i = 0; i < acc_num; ++i){
+						if(first == 1)
+							first = 0;
+						else
+							fprintf(fp, ", ");
+
+						fprintf(fp, "%s", account_list[i]);
+					}
+#endif
+					fprintf(fp, "\n");
+
+					fprintf(fp, "write list = \n");
+
+					continue;
+				}
+#endif
 
 				mount_folder = strrchr(follow_partition->mount_point, '/')+1;
 

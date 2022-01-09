@@ -37,11 +37,11 @@
 
 #if DROPBEAR_DSS
 
-static void getq(dropbear_dss_key *key);
-static void getp(dropbear_dss_key *key, unsigned int size);
-static void getg(dropbear_dss_key *key);
-static void getx(dropbear_dss_key *key);
-static void gety(dropbear_dss_key *key);
+static void getq(const dropbear_dss_key *key);
+static void getp(const dropbear_dss_key *key, unsigned int size);
+static void getg(const dropbear_dss_key *key);
+static void getx(const dropbear_dss_key *key);
+static void gety(const dropbear_dss_key *key);
 
 dropbear_dss_key * gen_dss_priv_key(unsigned int size) {
 
@@ -65,9 +65,10 @@ dropbear_dss_key * gen_dss_priv_key(unsigned int size) {
 	
 }
 
-static void getq(dropbear_dss_key *key) {
+static void getq(const dropbear_dss_key *key) {
 
 	unsigned char buf[QSIZE];
+	int trials;
 
 	/* 160 bit prime */
 	genrandom(buf, QSIZE);
@@ -76,20 +77,21 @@ static void getq(dropbear_dss_key *key) {
 
 	bytes_to_mp(key->q, buf, QSIZE);
 
-	/* 18 rounds are required according to HAC */
-	if (mp_prime_next_prime(key->q, 18, 0) != MP_OKAY) {
+	/* ask FIPS 186.4 how many Rabin-Miller trials are required */
+	trials = mp_prime_rabin_miller_trials(mp_count_bits(key->q));
+	if (mp_prime_next_prime(key->q, trials, 0) != MP_OKAY) {
 		fprintf(stderr, "DSS key generation failed\n");
 		exit(1);
 	}
 }
 
-static void getp(dropbear_dss_key *key, unsigned int size) {
+static void getp(const dropbear_dss_key *key, unsigned int size) {
 
 	DEF_MP_INT(tempX);
 	DEF_MP_INT(tempC);
 	DEF_MP_INT(tempP);
 	DEF_MP_INT(temp2q);
-	int result;
+	int result, trials;
 	unsigned char *buf;
 
 	m_mp_init_multi(&tempX, &tempC, &tempP, &temp2q, NULL);
@@ -129,9 +131,10 @@ static void getp(dropbear_dss_key *key, unsigned int size) {
 			exit(1);
 		}
 
-		/* now check for prime, 5 rounds is enough according to HAC */
+		/* ask FIPS 186.4 how many Rabin-Miller trials are required */
+		trials = mp_prime_rabin_miller_trials(mp_count_bits(key->p));
 		/* result == 1  =>  p is prime */
-		if (mp_prime_is_prime(key->p, 5, &result) != MP_OKAY) {
+		if (mp_prime_is_prime(key->p, trials, &result) != MP_OKAY) {
 			fprintf(stderr, "DSS key generation failed\n");
 			exit(1);
 		}
@@ -142,7 +145,7 @@ static void getp(dropbear_dss_key *key, unsigned int size) {
 	m_free(buf);
 }
 
-static void getg(dropbear_dss_key * key) {
+static void getg(const dropbear_dss_key * key) {
 
 	DEF_MP_INT(div);
 	DEF_MP_INT(h);
@@ -179,12 +182,12 @@ static void getg(dropbear_dss_key * key) {
 	mp_clear_multi(&div, &h, &val, NULL);
 }
 
-static void getx(dropbear_dss_key *key) {
+static void getx(const dropbear_dss_key *key) {
 
 	gen_random_mpint(key->q, key->x);
 }
 
-static void gety(dropbear_dss_key *key) {
+static void gety(const dropbear_dss_key *key) {
 
 	if (mp_exptmod(key->g, key->x, key->p, key->y) != MP_OKAY) {
 		fprintf(stderr, "DSS key generation failed\n");

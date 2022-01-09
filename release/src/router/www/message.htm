@@ -14,7 +14,7 @@ body{
 	font-family: Arial;
 }
 .wrapper{
-	background:url(images/New_ui/login_bg.png) #283437 no-repeat;
+	background:url(images/New_ui/login_bg.png) #1F1F1F no-repeat;
 	background-size: 1280px 1076px;
 	background-position: center 0%;
 	margin: 0px; 
@@ -87,8 +87,9 @@ var cfg_master_ipaddr = decodeURIComponent('<% nvram_char_to_ascii("","cfg_maste
 var cfg_alive = decodeURIComponent('<% nvram_char_to_ascii("","cfg_alive"); %>');
 
 var isAMeshRE = ('<% nvram_get("re_mode"); %>' == '1') ? true : false;
+var isDisableUI = ('<% nvram_get("disable_ui"); %>' == '1') ? true : false;
 (function(){
-	if(isAMeshRE) {
+	if(isAMeshRE || isDisableUI) {
 		if(cfg_alive == "1" && cfg_master_ipaddr != "") {
 			var s = document.createElement("script");
 			s.type = "text/javascript";

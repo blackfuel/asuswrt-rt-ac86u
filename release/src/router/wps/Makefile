@@ -1,17 +1,3 @@
-#
-# Broadcom Linux Router WPS Makefile
-#
-# Copyright (C) 2012, Broadcom Corporation
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom Corporation;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom Corporation.
-#
-# $Id: Makefile 372004 2012-11-30 03:46:58Z $
-#
-
 REBUILD = $(shell if [ -f "prebuilt/wps_monitor" ]; then echo 0; else echo 1; fi)
 
 ifneq (true,$(parallel))
@@ -96,11 +82,6 @@ CFLAGS += -I$(SRCBASE)/include -I$(SRCBASE)/wps/common/include	\
 	-I$(SRCBASE)/include/bcmcrypto #${WLAN_ComponentIncPath}
 
 LDFLAGS += $(EXTRA_LDFLAGS)
-
-ifeq ($(RTCONFIG_HTTPS),y)
-CFLAGS += -I$(TOP)/openssl/include/openssl
-LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
-endif
 
 WPSM_LIBS = -lnvram -lbcm -lshared -lbcmcrypto -lm -lc
 

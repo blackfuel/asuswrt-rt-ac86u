@@ -753,7 +753,7 @@ void *malloc_array(size_t el_size, unsigned int count);
  *
  * results are returned in *dfree and *dsize, in 512 byte units
 */
-_PUBLIC_ int sys_fsusage(const char *path, uint64_t *dfree, uint64_t *dsize);
+_PUBLIC_ int sys_fsusage(const char *path, uint64_t *dfree, uint64_t *dsize, uint64_t *bsize);
 
 /* The following definitions come from lib/util/ms_fnmatch.c  */
 

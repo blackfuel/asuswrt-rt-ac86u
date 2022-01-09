@@ -13,12 +13,14 @@
 #include <sys/stat.h>
 #include <syslog.h>
 #include <shared.h>
+#if defined(RTCONFIG_USB)
 #include <disk_io_tools.h>
+#endif
 #include <linklist.h>
 
 #define NETOOL_DEBUG                       "/tmp/NETOOL_DEBUG"
 #define NETOOL_QUEUE                       "/tmp/NETOOL_QUEUE"
-#define NETOOL_SOCKET_PATH                 "/etc/netool_socket"
+#define NETOOL_SOCKET_PATH                 "/var/run/netool_socket"
 #define MAX_SOCKET_CLIENT                  5
 
 #define NETOOL_RESULT_DIR                  "/tmp/netool"

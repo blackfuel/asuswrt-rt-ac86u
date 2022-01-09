@@ -289,7 +289,7 @@ int ej_get_DSL_WAN_list(int eid, webs_t wp, int argc, char_t **argv){
 	if(nvram_match("dsltmp_transmode", "atm")) {
 		char *display_items[] = {"dsl_enable", "dsl_vpi", "dsl_vci","dsl_proto", "dsl_encap", 
 			"dsl_svc_cat", "dsl_pcr","dsl_scr","dsl_mbs",
-#ifdef RTCONFIG_DSL_TCLINUX
+#if defined(RTCONFIG_DSL_TCLINUX) || defined(RTCONFIG_DSL_BCM)
 			"dsl_dot1q", "dsl_vid", "dsl_dot1p",
 #endif
 			NULL};
@@ -306,12 +306,12 @@ int ej_get_DSL_WAN_list(int eid, webs_t wp, int argc, char_t **argv){
 				else {
 					websWrite(wp, ", ");
 				}
-				strcpy(buf,nvram_safe_get(strcat_r(prefix, &display_items[j][4], tmp)));
+				strlcpy(buf,nvram_safe_get(strcat_r(prefix, &display_items[j][4], tmp)), sizeof(buf));
 				if (strcmp(buf,"")==0) {
-					strcpy(buf2,"\"0\"");
+					strlcpy(buf2,"\"0\"", sizeof(buf2));
 				}
 				else {
-					sprintf(buf2,"\"%s\"",buf);
+					snprintf(buf2, sizeof(buf2),"\"%s\"",buf);
 				}
 				websWrite(wp, "%s", buf2);
 			}
@@ -341,12 +341,12 @@ int ej_get_DSL_WAN_list(int eid, webs_t wp, int argc, char_t **argv){
 				else {
 					websWrite(wp, ", ");
 				}
-				strcpy(buf,nvram_safe_get(strcat_r(prefix, &display_items[j][4], tmp)));
+				strlcpy(buf,nvram_safe_get(strcat_r(prefix, &display_items[j][4], tmp)), sizeof(buf));
 				if (strcmp(buf,"")==0) {
-					strcpy(buf2,"\"0\"");
+					strlcpy(buf2,"\"0\"", sizeof(buf2));
 				}
 				else {
-					sprintf(buf2,"\"%s\"",buf);
+					snprintf(buf2, sizeof(buf2),"\"%s\"",buf);
 				}
 				websWrite(wp, "%s", buf2);
 			}
@@ -370,10 +370,24 @@ int update_dsl_iptv_variables()
 	char prefix[] = "dslxxx_xxxxxxxx";
 	char tmp[64];
 	int is_dhcp = 0;
+	int is_stb_bridge = 0;
+#ifdef DSL_AX82U
+	char *reboot_flag = "0";
+#else
+	char *reboot_flag = "1";
+#endif
+#if defined(DSL_AX82U) //new qis
+	int is_ptm = nvram_match("dslx_transmode", "ptm") ? 1 : 0;
+#endif
 
 	//PVC
+#if defined(DSL_AX82U) //new qis
+	if (nvram_match("dsl0_proto", "mer") || nvram_match("dsl8_proto", "dhcp"))
+		is_dhcp = 1;
+#else
 	if(nvram_match("dsltmp_qis_proto", "dhcp") || nvram_match("dsltmp_qis_proto", "mer"))
 		is_dhcp = 1;
+#endif
 	_dprintf("dsltmp_cfg_iptv_pvclist=%s\n", nvram_safe_get("dsltmp_cfg_iptv_pvclist"));
 	nvp = nv = strdup(nvram_safe_get("dsltmp_cfg_iptv_pvclist"));
 	while(nv && (b = strsep(&nvp, "<")) != NULL){
@@ -384,6 +398,19 @@ int update_dsl_iptv_variables()
 
 		_dprintf("vpi=[%s], vci=[%s], proto=[%s], encap=[%s], vid=[%s]\n", vpi, vci, proto, encap, vid);
 
+#if defined(DSL_AX82U) //new qis
+		if(is_ptm) {
+			snprintf(prefix, sizeof(prefix), "dsl8.%d_", unit);
+			nvram_set("dsltmp_transmode", "ptm");
+		}
+		else {
+			snprintf(prefix, sizeof(prefix), "dsl%d_", unit);
+			nvram_set(strcat_r(prefix, "vpi", tmp), vpi);
+			nvram_set(strcat_r(prefix, "vci", tmp), vci);
+			nvram_set(strcat_r(prefix, "encap", tmp), encap);
+			nvram_set("dsltmp_transmode", "atm");
+		}
+#else
 		if(nvram_match("dsltmp_transmode", "atm")) {
 			snprintf(prefix, sizeof(prefix), "dsl%d_", unit);
 
@@ -397,27 +424,42 @@ int update_dsl_iptv_variables()
 			nvram_set("dslx_transmode", "ptm");
 			notify_rc("restart_dsl_setting");
 		}
+#endif
 
 		nvram_set(strcat_r(prefix, "enable", tmp), "1");
 
 		if(!strcmp(proto, "0")) {
 			nvram_set(strcat_r(prefix, "proto", tmp), "pppoe");
+			nvram_set(strcat_r(prefix, "nat", tmp), "1");
+			nvram_set(strcat_r(prefix, "dnsenable", tmp), "1");
 		}
 		else if(!strcmp(proto, "1")) {
 			nvram_set(strcat_r(prefix, "proto", tmp), "pppoa");
+			nvram_set(strcat_r(prefix, "nat", tmp), "1");
+			nvram_set(strcat_r(prefix, "dnsenable", tmp), "1");
 		}
 		else if(!strcmp(proto, "2")) {
-			nvram_set(strcat_r(prefix, "proto", tmp), "dhcp");
+			if(nvram_match("dsltmp_transmode", "atm"))
+				nvram_set(strcat_r(prefix, "proto", tmp), "mer");
+			else
+				nvram_set(strcat_r(prefix, "proto", tmp), "dhcp");
+			nvram_set(strcat_r(prefix, "DHCPClient", tmp), "1");
+			nvram_set(strcat_r(prefix, "nat", tmp), "1");
+			nvram_set(strcat_r(prefix, "dnsenable", tmp), "1");
 			is_dhcp = 1;
 		}
 		else if(!strcmp(proto, "3")) {
 			nvram_set(strcat_r(prefix, "proto", tmp), "bridge");
+			is_stb_bridge = 1;
 		}
 		else if(!strcmp(proto, "4")) {
 			nvram_set(strcat_r(prefix, "proto", tmp), "ipoa");
+			nvram_set(strcat_r(prefix, "nat", tmp), "1");
+			nvram_set(strcat_r(prefix, "dnsenable", tmp), "1");
 		}
 		else {
 			nvram_set(strcat_r(prefix, "proto", tmp), "bridge");
+			is_stb_bridge = 1;
 		}
 
 		if(strlen(vid)) {
@@ -429,15 +471,16 @@ int update_dsl_iptv_variables()
 
 	//STB port
 	if(unit) {
-		if(nvram_match("switch_stb_x", "1")
-			&& (nvram_get_int("dslx_config_num") > 1)
-		) {
-			nvram_set("dsltmp_qis_reboot", "0");
-		}
-		else {
-			nvram_set("switch_stb_x", "1");
+		if (is_stb_bridge) {
 			nvram_set("wans_lanport", "4");
-			nvram_set("dsltmp_qis_reboot", "1");
+			if(!nvram_match("switch_stb_x", "1")) {
+				nvram_set("switch_stb_x", "1");
+				nvram_set("dsltmp_qis_reboot", reboot_flag);
+			}
+		}
+		else if(!nvram_match("switch_stb_x", "0"))  {
+			nvram_set("switch_stb_x", "0");
+			nvram_set("dsltmp_qis_reboot", reboot_flag);
 		}
 	}
 	else {
@@ -446,29 +489,31 @@ int update_dsl_iptv_variables()
 		}
 		else {
 			nvram_set("switch_stb_x", "0");
-			nvram_set("dsl1_enable", "0");
-			nvram_set("dsl2_enable", "0");
-			nvram_set("dsl3_enable", "0");
-			nvram_set("dsl4_enable", "0");
-			nvram_set("dsl5_enable", "0");
-			nvram_set("dsl6_enable", "0");
-			nvram_set("dsl7_enable", "0");
-#ifdef RTCONFIG_VDSL
-			nvram_set("dsl8.1_enable", "0");
-			nvram_set("dsl8.2_enable", "0");
-			nvram_set("dsl8.3_enable", "0");
-			nvram_set("dsl8.4_enable", "0");
-			nvram_set("dsl8.5_enable", "0");
-			nvram_set("dsl8.6_enable", "0");
-			nvram_set("dsl8.7_enable", "0");
-#endif
-			nvram_set("dsltmp_qis_reboot", "1");
+			nvram_set("dsltmp_qis_reboot", reboot_flag);
 		}
+		nvram_set("dsl1_enable", "0");
+		nvram_set("dsl2_enable", "0");
+		nvram_set("dsl3_enable", "0");
+		nvram_set("dsl4_enable", "0");
+		nvram_set("dsl5_enable", "0");
+		nvram_set("dsl6_enable", "0");
+		nvram_set("dsl7_enable", "0");
+#ifdef RTCONFIG_VDSL
+		nvram_set("dsl8.1_enable", "0");
+		nvram_set("dsl8.2_enable", "0");
+		nvram_set("dsl8.3_enable", "0");
+		nvram_set("dsl8.4_enable", "0");
+		nvram_set("dsl8.5_enable", "0");
+		nvram_set("dsl8.6_enable", "0");
+		nvram_set("dsl8.7_enable", "0");
+#endif
 	}
 
 	//vlan tag
 	_dprintf("dsltmp_cfg_iptv_rmvlan=%s\n", nvram_safe_get("dsltmp_cfg_iptv_rmvlan"));
-	if(nvram_get_int("dsltmp_cfg_iptv_rmvlan") > 0) {
+	if(nvram_get_int("dsltmp_cfg_iptv_rmvlan") > 0
+	 || (unit > 0 && is_stb_bridge == 0)
+	) {
 		nvram_set("dslx_rmvlan", "1");
 	}
 	else {
@@ -489,6 +534,11 @@ int update_dsl_iptv_variables()
 		if(is_dhcp) {
 			nvram_set("dr_enable_x", "3");	//option 121 & 249
 		}
+#ifdef RTCONFIG_MULTISERVICE_WAN
+		if (unit) {
+			nvram_set("mr_mswan_idx", "1");
+		}
+#endif
 	}
 	else {
 		nvram_set("mr_enable_x", "0");

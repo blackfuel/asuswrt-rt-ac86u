@@ -21,6 +21,7 @@
 <script type="text/javascript" src="/client_function.js"></script>
 <script type="text/javascript" src="/validator.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
 .contentM_qis{
 	position:absolute;
@@ -49,6 +50,8 @@ var info = {
 //var radius_client = "1>Client_1>123456>192.168.1.100<1>Client_2>1234567>192.168.1.200";
 var radius_client =  decodeURIComponent('<% nvram_char_to_ascii("","radius_serv_list"); %>').replace(/&#62/g, ">");
 
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=155";
+
 function client_object(active, name, password, ipaddr){
 	this.active = (active == 1) ? true : false;
 	this.name = name;
@@ -60,6 +63,11 @@ $(document).ready(function (){
 	show_menu();
 	collect_info();
 	generate_client_table();
+	var series = productid.split("-")[0].toUpperCase();
+	if(series == "BRT")
+		document.getElementById("faq").href=faq_href;
+	else
+		$(".brt_series").remove();
 });
 
 function collect_info(){
@@ -355,6 +363,9 @@ function check_active(obj){
 									<div class="formfonttitle"><#Permission_Management#> - <#Permission_Management_RADIUS#></div>
 									<div style="margin: 10px 0 10px 5px" class="splitLine"></div>
 									<div class="formfontdesc"><#PM_RADIUS_desc#></div>
+									<div class="formfontdesc brt_series">
+										<#FAQ_Find#> : <a id="faq" href="" target="_blank" style="font-weight:bolder;text-decoration:underline;" href="" target="_blank">GO</a>
+									</div>
 									<div>
 										<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
 											<tr>

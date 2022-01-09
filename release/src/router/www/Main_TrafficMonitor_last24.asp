@@ -18,11 +18,11 @@
 <script language="JavaScript" type="text/javascript" src="/tmmenu.js"></script>
 <script language="JavaScript" type="text/javascript" src="/tmcal.js"></script>
 <script language="JavaScript" type="text/javascript" src="/popup.js"></script>
+<script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
+<script language="JavaScript" type="text/javascript" src="/js/httpApi.js"></script>
 
 <script type='text/javascript'>
-
-<% backup_nvram("wan_ifname,lan_ifname,wl_ifname,wan_proto,web_svg,rstats_enable,rstats_colors"); %>
-
+var nvram = httpApi.nvramGet(["wan_ifname", "lan_ifname", "wl_ifname", "wan_proto", "web_svg", "rstats_enable", "rstats_colors", "bond_wan", "rc_support", "http_id"])
 var cprefix = 'bw_24';
 var updateInt = 30;
 var updateDiv = updateInt;
@@ -31,50 +31,6 @@ var updateReTotal = 1;
 var hours = 24;
 var lastHours = 0;
 var debugTime = 0;
-var href_lang = get_supportsite_lang();
-switch("<% nvram_get("preferred_lang"); %>"){
-	case "KR":
-						href_lang = "/";
-						break;
-	case "RO":
-						href_lang = "/";
-						break;
-	case "HU":
-						href_lang = "/";
-						break;
-	case "IT":
-						href_lang = "/";
-						break;
-	case "DA":
-						href_lang = "/";
-						break;	
-	case "BR":
-						href_lang = "/";
-						break;
-	case "SV":
-						href_lang = "/";
-						break;
-	case "FI":
-						href_lang = "/";
-						break;
-	case "NO":
-						href_lang = "/";
-						break;
-	case "TH":
-						href_lang = "/";
-						break;
-	case "DE":
-						href_lang = "/";
-						break;
-	case "PL":
-						href_lang = "/";
-						break;
-	case "CZ":
-						href_lang = "/";
-						break;
-	default:
-						break;
-}
 
 // disable auto log out
 AUTOLOGOUT_MAX_MINUTE = 0;
@@ -170,10 +126,13 @@ function init()
 	showHours();
 	initCommon(1, 0, 0, 1);	   //Viz 2010.09
 	ref.initX();
-	document.getElementById("faq0").href = "https://www.asus.com/support/FAQ/114483/" ;
+	var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=158";
+	document.getElementById("faq0").href = faq_href;
 	if(bwdpi_support){
 		document.getElementById('content_title').innerHTML = "<#traffic_monitor#>";
-	}	
+	}
+
+	document.getElementById('traffic_unit').value = getTrafficUnit();
 }
 
 function switchPage(page){
@@ -208,10 +167,15 @@ function Zoom(func){
 	else
 		return false;
 }
+
+function setUnit(unit){
+	cookie.set('ASUS_TrafficMonitor_unit', unit);
+	initCommon(1, 0, 0, 1);
+}
 </script>
 </head>
 
-<body onload="show_menu();init();" >
+<body onload="show_menu();init();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
@@ -287,7 +251,23 @@ function Zoom(func){
 							</table>
 							<!--End-->
           				</td>
-        			</tr>
+					</tr>
+					<tr>
+						<td>
+							<div style="display:flex;align-items: center;margin: 4px 0;">
+								<div><#Scale#></div>
+								<div style="margin-left: 24px;">
+									<select class="input_option" id="traffic_unit" onchange="setUnit(this.value);">
+										<option value="0">KB</option>
+										<option value="1">MB</option>
+										<option value="2">GB</option>
+										<option value="3">TB</option>
+									</select>
+								</div>
+							</div>
+							
+						</td>
+					</tr>
         			<tr>
           				<td height="30" align="left" valign="middle" >
 							<div class="formfontcontent"><p><#traffic_monitor_desc2#></p></div>		
@@ -302,7 +282,7 @@ function Zoom(func){
 								<input title="Zoom in" type="button" onclick="Zoom('in');" class="zoomin_btn" name="button">
          						<input title="Zoom out" type="button" onclick="Zoom('out');" class="zoomout_btn" name="button">
 							</span>
-							<span id="iftitle" style="font-weight: bold; color: #A0B06B; position: absolute; margin-top: 30px; margin-left: 41%; min-width: 180px;"></span>
+							<span id="iftitle" style="font-weight: bold; color: #A0B06B; position: absolute; top: 380px; left: 45%; min-width: 180px;"></span>
 							<!--========= svg =========-->
 							<!--[if IE]>
 								<div id="svg-table" align="left" class="IE8HACK">

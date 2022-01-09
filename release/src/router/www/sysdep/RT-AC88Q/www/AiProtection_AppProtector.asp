@@ -333,7 +333,7 @@ function addRow_main(obj, length){
 	}
 
 	if(blank_category == 0){
-		alert("The Content Category can not be empty");
+		alert("<#AiProtection_Category_Alert#>");
 		return false;
 	}
 
@@ -593,7 +593,7 @@ function edit_table(){
 		}
 
 		if(blank_category == 0){
-			alert("The Content Category can not be empty");
+			alert("<#AiProtection_Category_Alert#>");
 			return false;
 		}
 	}
@@ -607,7 +607,7 @@ var ctf_fa_mode = '<% nvram_get("ctf_fa_mode"); %>';
 function applyRule(){
 	var wrs_app_filter_row = "";
 	if(document.form.PC_devicename.value != ""){
-		alert("You must press add icon to add a new rule first.");
+		alert("<#JS_add_rule#>");
 		return false;
 	}
 
@@ -672,10 +672,15 @@ function applyRule(){
 		}
 	}
 
-	if(reset_wan_to_fo(document.form, document.form.wrs_app_enable.value)) {
-		showLoading();
-		document.form.submit();
+	if(reset_wan_to_fo.check_status()) {
+		if(reset_wan_to_fo.change_status)
+			reset_wan_to_fo.change_wan_mode(document.form);
 	}
+	else
+		return false;
+
+	showLoading();
+	document.form.submit();
 }
 
 function translate_category_id(){
@@ -816,7 +821,7 @@ function setGroup(name){
 								<div id="PC_desc">
 									<table width="700px" style="margin-left:25px;">
 										<tr>
-											<td style="font-style: italic;font-size: 14px;">
+											<td style="font-size: 14px;">
 												<span><#Firewall_App_Patrol_Desc#></span>
 											</td>
 										</tr>
@@ -883,7 +888,7 @@ function setGroup(name){
 											<div id="mainTable" style="margin-top:10px;"></div>
 											<div id="ctrlBtn" style="text-align:center;margin-top:20px;">
 												<input class="button_gen" type="button" onclick="applyRule();" value="<#CTL_apply#>">
-												<div style="width:135px;height:55px;position:absolute;bottom:5px;right:5px;background-image:url('images/New_ui/tm_logo_power.png');"></div>
+												<div style="width:96px;height:44px;position:absolute;bottom:5px;right:5px;background-image:url('images/New_ui/TrendMirco_logo.svg');background-size: 100%;"></div>
 											</div>
 										</td>
 									</tr>

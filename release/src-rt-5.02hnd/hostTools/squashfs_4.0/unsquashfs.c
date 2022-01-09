@@ -21,10 +21,13 @@
  * unsquashfs.c
  */
 
+#include <sys/sysmacros.h>
 #include "unsquashfs.h"
 #include "squashfs_swap.h"
 #include "squashfs_compat.h"
 #include "read_fs.h"
+
+#include <sys/sysmacros.h>
 
 struct cache *fragment_cache, *data_cache;
 struct queue *to_reader, *to_deflate, *to_writer, *from_writer;

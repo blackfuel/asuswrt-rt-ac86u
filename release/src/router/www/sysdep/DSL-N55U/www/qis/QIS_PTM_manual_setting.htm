@@ -379,8 +379,8 @@ function btnNext() {
                 alert("<#JS_fieldblank#>");
                 document.form.country.focus();
                 return false;
-        }
-        else if ( document.form.country.value=='NO'|| document.form.ISP.value=='NO' ){
+	}
+	else if ( document.form.country.value=='NO'|| document.form.ISP.value=='NO' ){
 		var tmp_vlanid = document.form.dslx_vid.value;
 		if ( isNaN(tmp_vlanid) == true ) {
 			alert('<#WANVLANIDText#> "' + tmp_vlanid + '" <#Manual_Setting_JS_invalid#>');
@@ -394,7 +394,7 @@ function btnNext() {
 		document.form.dsltmp_cfg_vid.value = document.form.dslx_vid.value;
 		document.form.dsltmp_cfg_iptv_idx.value = "";
 		document.form.dsltmp_cfg_ispname.value = "";
-		document.form.dsltmp_cfg_country.value = "";
+		document.form.dsltmp_cfg_country.value = (document.form.country.value=='Turkey' || document.form.country.value=='Australia')? document.form.country.value:"";
 	}
 	else {
 		var isp_idx = 0
@@ -421,6 +421,7 @@ function btnNext() {
 	setIptvNumPvc();
 
 	//Specific setting
+	if (parent.based_modelid == "DSL-AC68U") {
 	if( document.form.dsltmp_cfg_country.value=='Thailand'
 		&& document.form.dsltmp_cfg_ispname.value=='3BB 15M/1.5M'
 	){
@@ -449,18 +450,16 @@ function btnNext() {
 	else {
 		document.form.dslx_ginp_try_enable_disp.value = "0";
 	}
-	if( document.form.country.value == 'Australia'
-		&& (document.form.dsltmp_cfg_ispname.value=='MyRepublic'
-			|| document.form.dsltmp_cfg_ispname.value=='Telstra (Automatic IP)'
-			|| document.form.dsltmp_cfg_ispname.value=='Aussie Broadband')
-	) {
-		document.form.dslx_vd1q0.value = "2";
-		document.form.dsltmp_cfg_dot1q.value = 1;
-		document.form.dsltmp_cfg_vid.value = 0;
+
+	if(document.form.dsltmp_cfg_country.value=='Turkey'){
+		if(document.form.dslx_vdsl_bitswap.value != "0"){
+			parent.restartDSLSetting = true;
+		}
+		document.form.dslx_vdsl_bitswap.value = "0";
 	}
+
 	if( document.form.dsltmp_cfg_country.value=='Turkey'
-		&& document.form.dsltmp_cfg_ispname.value.search("Turk Telekom") >= 0
-	){
+		&& document.form.dsltmp_cfg_ispname.value.search("Turk Telekom") >= 0 ){
 		document.form.dslx_testlab.value = "TR_TT";
 		document.form.dslx_dla_enable.value = "0";
 	}
@@ -481,6 +480,7 @@ function btnNext() {
 	if(parent.restartDSLSetting) {
 		document.form.action_script.value = "restart_dsl_setting;".concat(document.form.action_script.value);
 	}
+	} //DSL-AC68U
 
 	if (connection_type==0) //PPPoE
 	{
@@ -489,6 +489,10 @@ function btnNext() {
 	}
 	else if (connection_type==2) //Automatic IP
 	{
+		if(document.form.dsltmp_cfg_country.value=='Australia'){
+			document.form.dhcpc_mode.disabled = false;
+			document.form.dhcpc_mode.value = 2;
+		}
 		document.form.next_page.value = "/qis/QIS_mer_cfg_tmp.htm";
 		document.form.submit();
 	}
@@ -582,9 +586,11 @@ function showSpecificSetting(idx) {
 <input type="hidden" name="dslx_ginp" value="<% nvram_get("dslx_ginp"); %>">
 <input type="hidden" name="dslx_ginp_try_enable" value="<% nvram_get("dslx_ginp_try_enable"); %>">
 <input type="hidden" name="dslx_ginp_try_enable_disp" value="0">
-<input type="hidden" name="dslx_vd1q0" value="1">
 <input type="hidden" name="dslx_testlab" value="<% nvram_get("dslx_testlab"); %>">
 <input type="hidden" name="dslx_dla_enable" value="<% nvram_get("dslx_dla_enable"); %>">
+<input type="hidden" name="dslx_vdsl_bitswap" value="<% nvram_get("dslx_vdsl_bitswap"); %>">
+<input type="hidden" name="dhcpc_mode" value="" disabled>
+
 <div class="QISmain">
 	<div class="formfonttitle" style="padding:6 0 0 10;">
 			<div>
@@ -653,16 +659,16 @@ function showSpecificSetting(idx) {
 		<th><#Layer3Forwarding_x_ConnectionType_itemname#>:</th>
 		<td>
 			<select name="user_prctl" class="input_option" tabindex="5">
-				<option value = 2><#BOP_ctype_title1#></option>
-				<option value = 4><#BOP_ctype_title5#></option>
-				<option value = 0>PPPoE</option>				
-				<option value = 3>BRIDGE</option>
+				<option value="2"><#BOP_ctype_title1#></option>
+				<option value="4"><#BOP_ctype_title5#></option>
+				<option value="0">PPPoE</option>				
+				<option value="3">BRIDGE</option>
 			</select>
 		</td>
 	</tr>
 	<tr>
 		<th><#WANVLANIDText#>:</th>
-		<td><input type='text' name='dslx_vid' tabindex="6" maxlength="5" class="input_6_table"></td>
+		<td><input type="text" name="dslx_vid" tabindex="6" maxlength="5" class="input_6_table"></td>
 	</tr>
 	</tbody>
 </table>

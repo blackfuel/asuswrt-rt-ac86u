@@ -40,7 +40,11 @@
 #endif
 
 #include <sys/types.h>
+#if defined(__GLIBC__) || defined(__UCLIBC__) /* not musl */
 #include <sys/poll.h>
+#else
+#include <poll.h>
+#endif
 #include <sys/time.h>
 
 #include <errno.h>
@@ -292,6 +296,7 @@ prompt(const char *message, char *response, int echo)
 	if (isatty(STDIN_FILENO)) {
 		fflush(stdout);
 #ifdef HAVE_FPURGE
+		int fpurge(FILE *stream);	/* unsupported in standard c */
 		fpurge(stdin);
 #endif
 		ifd = STDIN_FILENO;

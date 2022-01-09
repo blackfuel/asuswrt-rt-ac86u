@@ -65,6 +65,9 @@
 	(uint8_t) o[8], (uint8_t) o[9], (uint8_t) o[10], (uint8_t) o[11], 	\
 	(uint8_t) o[12], (uint8_t) o[13], (uint8_t) o[14], (uint8_t) o[15]
 
+#if defined(DBG)
+#undef DBG
+#endif
 #define DBG(fmt, args...)
 //#define DBG(fmt, args...) 	fprintf(stderr, fmt, ##args);
 #define ERR(fmt, args...) 	fprintf(stderr, "Error: " fmt, ##args);
@@ -196,6 +199,40 @@ typedef struct qos_app_stat
 	qos_tc_cls_t *tc_dl_cls;
 	qos_tc_cls_t *tc_ul_cls;
 } qos_app_stat_t;
+
+#define ENV_SHN_HOME_DIR "SHN_HOME_DIR"
+
+static __attribute__((unused)) char *shn_path(const char *path)
+{	
+	static char abs_path[CONF_PATH_MAX_LEN];
+	char *home = getenv(ENV_SHN_HOME_DIR);
+
+	memset(abs_path, 0, sizeof(abs_path));
+
+	if (home)
+	{
+		if (strlen(home) + strlen(path) + 2 >= sizeof(abs_path))
+		{
+			ERR("path is too long!\n");
+			goto __ret;
+		}
+		
+		snprintf(abs_path, sizeof(abs_path) - 1, "%s/%s", home, path);
+	}
+	else
+	{
+		if (strlen(path) + 3 >= sizeof(abs_path))
+		{
+			ERR("path is too long!\n");
+			goto __ret;
+		}
+
+		snprintf(abs_path, sizeof(abs_path) - 1, "./%s", path);
+	}
+
+__ret:
+	return abs_path;
+}
 
 int init_app_inf(struct list_head *head);
 void free_app_inf(struct list_head *head);

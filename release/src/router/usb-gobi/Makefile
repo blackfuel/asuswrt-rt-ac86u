@@ -19,7 +19,11 @@ GOBI_LIB_DIR=lib/qca95xx
 endif
 LIBSTDC=$(shell dirname $(shell which $(CXX)))/../lib/libstdc++.so.6
 endif
+ifeq ($(UCLIBC_NG), y)
+LIBRT=$(shell dirname $(shell which $(CXX)))/../lib/librt.so.1
+else
 LIBRT=$(shell dirname $(shell which $(CXX)))/../lib/librt.so.0
+endif
 
 export GOBI_LIB_DIR
 
@@ -61,7 +65,11 @@ endif
 install: $(GOBI_KO) $(GOBI_UTIL)
 	@rm -rf $(INSTALLDIR)
 	@install -D $(GOBI_KO) $(NET_USB_GOBI)/gobi.ko
+ifeq ($(UCLIBC_NG), y)
+	@install -D $(LIBRT) $(INSTALLDIR)/lib/librt.so.1
+else
 	@install -D $(LIBRT) $(INSTALLDIR)/lib/librt.so.0
+endif
 	@install -D $(LIBSTDC) $(INSTALLDIR)/usr/lib/libstdc++.so.6
 ifneq ($(wildcard src),)
 	@cp -f $(GOBI_UTIL_DIR)/$(GOBI_LIB_DIR)/$(LIB_GOBI_CONN_MGMT) src/lib/

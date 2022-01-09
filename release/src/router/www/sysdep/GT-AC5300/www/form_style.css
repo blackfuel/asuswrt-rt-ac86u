@@ -477,18 +477,19 @@
 .button_gen{
 	font-weight: bolder;
 	text-shadow: 1px 1px 0px black;
-  	border:0;
-  	color: #FFFFFF;
+	border:0;
+	color: #FFFFFF;
 	height:33px;
 	font-family:Verdana;
 	font-size:12px;
-  	padding:0 .70em 0 .70em;
- 	width:122px;
-  	overflow:visible;
+	padding:0 .70em 0 .70em;
+	width: auto;
+	min-width: 122px;
+	overflow:visible;
 	cursor:pointer;
 	outline: none; /* for Firefox */
- 	hlbr:expression(this.onFocus=this.blur()); /* for IE */
- 	white-space:normal;
+	hlbr:expression(this.onFocus=this.blur()); /* for IE */
+	white-space:normal;
  	background: rgb(145,7,31);
  	-webkit-border-radius: 4px;
  	-moz-border-radius: 4px;
@@ -710,7 +711,8 @@ form{
  	cursor:pointer;
  	border:2px outset #EFEFEF;
  	background-color:#CCC;
- 	padding:3px 2px 4px 0px;
+	padding:3px 2px 4px 0px;
+	box-sizing: content-box;
 }
 
 .list_table{
@@ -895,6 +897,11 @@ form{
 	background: url(images/New_ui/helpicon.png) no-repeat;
 }
 /* CSS Document */
+@font-face{
+	font-family: rog;
+	src: url(/fonts/ROG_Fonts-Regular.woff) format("woff"),
+	     url(./fonts/ROG_Fonts-Regular.otf) format("opentype");
+}
 body{
 color:#FFFFFF;
 font-family:Arial, Helvetica, sans-serif;
@@ -918,6 +925,8 @@ a:active {
 }
 
 p{margin-top:   0;margin-bottom:   0}
+
+
 
 /*  Move to index_style.css By Viz , aidisk still use this*/
 .titlebtn {
@@ -992,8 +1001,9 @@ color:#FFFFFF;
 	text-decoration: none;
 	text-align:center;
 	max-width:240px;
-	background: rgb(104,5,22);
+/*	background: rgb(104,5,22);*/
 	border-radius: 5px 5px 0 0;
+	border-bottom: 2px solid #680516;
 }
 .tab_NW span {
 	cursor:pointer;
@@ -1003,7 +1013,7 @@ color:#FFFFFF;
 	display: block;
 	padding: 5px 5px 0 12px;
 	line-height: 20px;
-	font-family: Arial, Helvetica, MS UI Gothic, MS P Gothic, sans-serif;
+	font-family: Arial, Helvetica, MS UI Gothic, MS P Gothic, Microsoft Yahei UI, sans-serif;
 	font-size: 13px;
 	border-radius: 5px 5px 0 0;
 }
@@ -1016,7 +1026,7 @@ color:#FFFFFF;
 
 .tabclick_NW {
 	font-weight: bolder;
-	font-family: Verdana, MS UI Gothic, MS P Gothic, sans-serif;
+	font-family: Verdana, MS UI Gothic, MS P Gothic, Microsoft Yahei UI, sans-serif;
 	color: White;
 	display: block;
 	float: left;
@@ -1026,7 +1036,7 @@ color:#FFFFFF;
 	text-align:center;
 	text-decoration: none;
 	max-width:240px;
-	background: rgb(62,3,13);
+	background: #680516;
 	border-radius: 5px 5px 0 0;
 }
 .tabclick_NW span {
@@ -1034,7 +1044,7 @@ color:#FFFFFF;
 	font-weight: bolder;
 	white-space:nowrap;
 	font-weight: bolder;
-	font-family: Arial, Helvetica, MS UI Gothic, MS P Gothic, sans-serif;
+	font-family: Arial, Helvetica, MS UI Gothic, MS P Gothic, Microsoft Yahei UI, sans-serif;
 	display: block;
 	padding: 5px 5px 0 12px;
 	line-height: 20px;
@@ -1063,17 +1073,20 @@ color:#FFFFFF;
 	text-align: center;
 }
 .tab_item  {
+/*
 	background-color: rgb(104,5,22);
+*/
 	border-radius: 6px 6px 0 0;
 	height: 100%;
 	width: 99%;
 	display: table;
+	border-bottom: 2px solid #680516;
 }
 .tab_item:hover {
 	background-color: rgb(207,10,44);
 }
 .tab_item_click {
-	background-color: rgb(62,3,13);
+	background-color: #680516;
 	border-radius: 6px 6px 0 0;
 	height: 100%;
 	width: 99%;
@@ -1171,38 +1184,30 @@ padding-top:1px;
 
 #bwdpi_status{
 	cursor: pointer;
+	height: 22px;
+	width: 22px;
+	margin: auto;
+	background-size: 100%;
+	background-repeat:no-repeat;
 }
 
 .bwdpistatus_game{
-	height:20px;
-	width:22px;
 	background-image:url(images/New_ui/QoS_quick/game_icon.svg);
-	background-repeat:no-repeat;
-	background-position:0px 2px;
 }
-
 .bwdpistatus_media{
-	height:20px;
-	width:21px;
 	background-image:url(images/New_ui/QoS_quick/media_icon.svg);
-	background-repeat:no-repeat;
-	background-position:0px 2px;
 }
-
 .bwdpistatus_web{
-	height:20px;
-	width:22px;
 	background-image:url(images/New_ui/QoS_quick/web_icon.svg);
-	background-repeat:no-repeat;
-	background-position:2px 0px;
 }
-
+.bwdpistatus_videoConference{
+	background-image:url(images/New_ui/QoS_quick/video_conference_icon.svg);
+}
+.bwdpistatus_eLearning{
+	background-image:url(images/New_ui/QoS_quick/elearning_icon.svg);
+}
 .bwdpistatus_customize{
-	height:21px;
-	width:23px;
 	background-image:url(images/New_ui/QoS_quick/customize_icon.svg);
-	background-repeat:no-repeat;
-	background-position:2px 2px;
 }
 
 .vpnstatuson{
@@ -1629,14 +1634,14 @@ padding-top:1px;
 	width:740px;
 	height:760px;
 	position:relative;
-	background-color:#111;
+	background-color:rgba(17, 17, 17, .5);
 }
 
 /* 整體設置*/
 .navigation {
-	margin-left:790px;
+	margin-left:820px;
 	*margin-left:45px;
-	margin-top:13px;
+	margin-top:20px;
 	width:100px;
 	list-style-type:none;
 	font:12px Arial, Helvetica, sans-serif;
@@ -1668,16 +1673,13 @@ padding-top:1px;
 /* 設置主選單dt */
 .navigation li dt {
 	background:url('/images/New_ui/dropdown_bt.png') no-repeat;
-	padding-top:8px;
-	padding-right:8px;
+	padding:8px 8px 0 0;
 	text-align:center;
-	/*background-color:transparent;*/
 	font-size: 13px;
-	font-weight: bold;
-	height:26px;
+	height: 34px;
 	overflow:hidden;
-	width:144px;
-	}
+	width: 152px;
+}
 
 .navigation li dt:hover{
 	color:#CF0A2C;
@@ -1953,16 +1955,19 @@ padding-top:1px;
 }
 
 .single_wan_connected{
-	background: #32393B;
-	height:35px;
-	width:4px;
+	background: #3E030D;
+	height: 30px;
+	width: 3px;
+	margin-left: 2px;
+	margin-top: 5px;
 }
 .single_wan_disconnected{
 	background-image:url(images/New_ui/networkmap/line_dualwan_disconnected.png);
 	background-repeat:no-repeat;
-	background-position:0px -5px;
-	height:35px;
-	width:20px;
+	background-position: 2px -5px;
+	height: 30px;
+	width: 20px;
+	margin-top: 5px;
 }
 .single_wan_error{
 	background-image:url(images/New_ui/networkmap/line_singwan_error.png);
@@ -1972,18 +1977,17 @@ padding-top:1px;
 	width:20px;
 }
 .primary_wan_connected{
-	background: #32393B;
-	margin-left:68px;
+	background: #3E030D;
+	margin-left: 79px;
 	height:35px;
 	width:4px;
 }
 .primary_wan_disconnected{
 	background-image:url(images/New_ui/networkmap/line_dualwan_disconnected.png);
 	background-repeat:no-repeat;
-	background-position:0px -5px;
-	margin-left:68px;
+	background-position:4px 0px;
+	margin-left: 70px;
 	height:35px;
-	width:20px;
 }
 .primary_wan_standby{
 	background-image:url(images/New_ui/networkmap/line_dualwan_dot.png);
@@ -2002,8 +2006,8 @@ padding-top:1px;
 	width:20px;
 }
 .secondary_wan_connected{
-	background: #32393B;
-	margin-left:105px;
+	background: #3E030D;
+	margin-left:113px;
 	*margin-left:103px;
 	height:35px;
 	width:4px;
@@ -2011,11 +2015,10 @@ padding-top:1px;
 .secondary_wan_disconnected{
 	background-image:url(images/New_ui/networkmap/line_dualwan_disconnected.png);
 	background-repeat:no-repeat;
-	background-position:0px -5px;
+	background-position:0px 0px;
 	margin-left:105px;
 	*margin-left:103px;
 	height:35px;
-	width:20px;
 }
 .secondary_wan_standby{
 	background-image:url(images/New_ui/networkmap/line_dualwan_dot.png);
@@ -2037,7 +2040,7 @@ padding-top:1px;
 }
 .textarea_ssh_table{
 	color: #FFFFFF;
-	background-color: #111;
+	background-color: rgba(17, 17, 17, .5);
 	border-color: rgb(145,7,31);
 }
 
@@ -2066,13 +2069,13 @@ padding-top:1px;
 }
 
 .content_bg{
-	background: #111;
+	background: rgba(17, 17, 17, .5);
 }
 .divide_line{
 	border: 1px solid #FFF;
 }
 [bgcolor="#4D595D"]{
-	background: #111;
+	background: rgba(17, 17, 17, .5);
 }
 .block_bg{
 	background: transparent;
@@ -2084,16 +2087,16 @@ padding-top:1px;
 	border: 1px solid rgb(145,7,31);
 }
 .control_bg{
-	background: #111;
+	background: rgba(17, 17, 17, .5);
 }
 .tab_font_color{
 	color: #FFF;
 }
-.pop_div_bg, .list_bg{
+.pop_div_bg{
 	background-color: rgb(62,3,13);
 }
 .analysis_bg, .web_frame{
-	background: #111;
+	background: rgba(17, 17, 17, .5);
 	border: 1px solid rgb(145,7,31);
 }
 .tm_title_bg{
@@ -2118,7 +2121,7 @@ padding-top:1px;
 	font-weight: bolder;
 }
 .tab_info_bg{
-	background: #1E0505;
+	background: #860220;
 }
 .textarea_bg{
 	background: rgb(62,3,13);
@@ -2134,13 +2137,16 @@ padding-top:1px;
 	background-color:transparent !important;
 }
 .eula_panel_container{
-	margin-left: 25%;
+	margin: 20px 0 0 210px;
 	display: none;
-	position: absolute;
-	width: 50%;
+	position: fixed;
+	width: 600px;
 	z-index: 10000;
-	border: 3px solid #4D5C63;
-	border-radius: 4px;
+	border: 3px solid #5C0C0B;
+	border-radius: 6px;
+	font-family: monospace;
+	font-size: 14px;
+	text-align: left;
 }
 
 #bottom_border{
@@ -2151,6 +2157,19 @@ padding-top:1px;
 	width: 3px; 
 	height: 102px;
 	background: #354248;
+}
+.oauth_google_btn{
+	float: left;
+	background: transparent url(images/New_ui/btn_google_signin_dark_normal_web.png) no-repeat scroll center top;
+	width: 133px;
+	height: 26px;
+	cursor: pointer;
+}
+.oauth_google_status{
+	float: left;
+	margin-top: 3px;
+	margin-left: 5px;
+	display: none;
 }
 .quotabar{
 	background: #8DB6D8;
@@ -2166,4 +2185,104 @@ padding-top:1px;
 	height: 2px;
 	width: 740px;
 	margin: 1px 0;
+}
+.MainContent{
+	background-color: transparent;
+	width: 99%;
+	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius:3px;
+}
+.query_list{
+	display: none;
+	background-color: rgb(62,3,13);
+	border: 1px solid  rgb(147,7,31);
+	list-style: none;
+	width:339px; height:120px; 
+	margin:0 0 0 2px;
+	padding: 6px;position: absolute;
+	overflow-y: auto;
+}
+
+.dns_server_list_dropdown {
+	border:1px outset rgb(145,7,31);
+	background-color: rgb(62,3,13);
+	position:absolute;
+	margin-left:2px;
+	width:255px;
+	text-align:left;
+	height:380px;
+	overflow-y:auto;
+	z-index:200;
+	padding: 1px;
+	display:none;
+}
+.dns_server_list_dropdown div {
+	background-color: rgb(62,3,13);
+	height:auto;
+	line-height:20px;
+	text-decoration:none;
+	font-family: Lucida Console;
+}
+.dns_server_list_dropdown a {
+	background-color:#EFEFEF;
+	color:#FFF;
+	font-size:12px;
+	font-family:Arial, Helvetica, sans-serif;
+	text-decoration:none;
+}
+.dns_server_list_dropdown strong {
+	padding-left: 3px;
+}
+.dns_server_list_dropdown div:hover, .dns_server_list_dropdown a:hover {
+	background-color:#3366FF;
+	color:#FFFFFF;
+	cursor:default;
+}
+.dns_pull_arrow {
+	position: absolute;
+	float: left;
+	cursor: pointer;
+	border: 2px outset #EFEFEF;
+	background-color: #CCC;
+	padding: 3px 2px 4px 0px;
+	height: 16px;
+	width: 14px;
+	display: none;
+}
+.hint-color{
+	color: #FFCC00;
+}
+.button-text{
+    display: table-cell;
+    vertical-align: middle;
+    font-family: Roboto;
+    font-size: 14px;
+    padding-left: 12px;
+}
+.button-icon{
+    width: 18px;
+    height: 18px;
+    display:table-cell;
+    background-repeat: no-repeat;
+    background-size: 100%;
+}
+.icon-cancel{
+    background-image: url('../images/gameprofile/cancel.svg');
+}
+.button-icon-check{
+    background-image: url('../images/gameprofile/ok.svg');
+}
+.button-container:hover, .button-container:active,
+.icon-button-container:hover, .icon-button-container:active{
+    border: 2px solid #E64100;
+    background-color: #000000;
+}
+.button-container{
+    display: table;
+    border: 2px solid #842500;
+    border-radius: 24px;
+    padding: 12px 24px;
+    background-color: #141618;
+    cursor: pointer;
 }

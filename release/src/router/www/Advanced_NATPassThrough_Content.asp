@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"> 
 <html xmlns:v>
 <head>
@@ -16,13 +16,27 @@
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
 <script language="JavaScript" type="text/javascript" src="/popup.js"></script>
 <script language="JavaScript" type="text/javascript" src="/validator.js"></script>
-<script>function initial(){
+<script language="JavaScript" type="text/javascript" src="js/jquery.js"></script>
+<script language="JavaScript" type="text/javascript" src="js/httpApi.js"></script>
+<script>
+
+function initial(){
 	show_menu();
 	update_pppoerelay_option();
+	update_sip_alg_mode_option();
 
-	if(!usb_support){
-		document.form.vts_ftpport.parentNode.parentNode.style.display = "none";
-		document.form.vts_ftpport.disabled = true;
+	if(wan_proto=="v6plus" && array_ipv6_s46_ports.length > 1){
+		$(".setup_info_icon").show();
+		$(".setup_info_icon").click(
+			function() {				
+				if($("#s46_ports_content").is(':visible'))
+					$("#s46_ports_content").fadeOut();
+				else{
+					var position = $(".setup_info_icon").position();
+					pop_s46_ports(position);
+				}
+			}
+		);
 	}
 }
 
@@ -38,10 +52,34 @@ function update_pppoerelay_option(){
 	}
 }
 
+function update_sip_alg_mode_option(){
+	document.getElementById("fw_pt_sip_mode_th").style.display = "none";
+	document.getElementById("fw_pt_sip_mode_td").style.display = "none";
+	if(based_modelid != "BRT-AC828")
+		return;
+
+	if(document.form.fw_pt_sip.value == "1"){
+		document.getElementById("fw_pt_sip_mode_th").style.display = "";
+		document.getElementById("fw_pt_sip_mode_td").style.display = "";
+	}
+}
+
 function applyRule(){
 	if(usb_support){
 		if(!validator.numberRange(document.form.vts_ftpport, 1, 65535))
 			return false;
+		if(wan_proto=="v6plus" && array_ipv6_s46_ports.length > 1){
+			if (!validator.range_s46_ports(document.form.vts_ftpport, "none")){
+				if(!confirm("The following port related settings may not work properly since the port is not available in current v6plus usable port range. Do you want to continue?")){
+					document.form.vts_ftpport.focus();
+					return false;
+				}
+			}
+		}
+	}
+	if(document.form.fw_pt_sip.value == "1" && httpApi.nvramGet(["fw_pt_sip"], true).fw_pt_sip == "0") {
+		document.form.action_script.value = "restart_net_and_phy";
+		document.form.action_wait.value = "30";
 	}
 	showLoading();
 	document.form.submit();	
@@ -49,7 +87,7 @@ function applyRule(){
 </script>
 </head>
 
-<body onload="initial();">
+<body onload="initial();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
@@ -90,7 +128,7 @@ function applyRule(){
 										
 										<tr>
 											<th><#NAT_PPTP_Passthrough#></th>
-											<td colspan=3>
+											<td>
 												<select name="fw_pt_pptp" class="input_option">
 													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_pptp", "0","selected"); %>><#btn_disable#></option>
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_pptp", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
@@ -100,7 +138,7 @@ function applyRule(){
 							
 										<tr>
 											<th><#NAT_L2TP_Passthrough#></th>
-											<td colspan=3>
+											<td>
 												<select name="fw_pt_l2tp" class="input_option">
 													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_l2tp", "0","selected"); %>><#btn_disable#></option>
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_l2tp", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
@@ -110,7 +148,7 @@ function applyRule(){
 							
 										<tr>
 											<th><#NAT_IPSec_Passthrough#></th>
-											<td colspan=3>
+											<td>
 												<select name="fw_pt_ipsec" class="input_option">
 													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_ipsec", "0","selected"); %>><#btn_disable#></option>
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_ipsec", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
@@ -120,7 +158,7 @@ function applyRule(){
 
 						<tr>
   	         					<th><#NAT_RTSP_Passthrough#></th>
-						<td colspan=3>
+						<td>
 												<select name="fw_pt_rtsp" class="input_option">
 													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_rtsp", "0","selected"); %>><#btn_disable#></option>
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_rtsp", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
@@ -130,7 +168,7 @@ function applyRule(){
 
 						<tr>
 							<th><#NAT_H323_Passthrough#></th>
-						<td colspan=3>
+						<td>
 												<select name="fw_pt_h323" class="input_option">
 													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_h323", "0","selected"); %>><#btn_disable#></option>
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_h323", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
@@ -140,12 +178,21 @@ function applyRule(){
 
 						<tr>
 							<th><#NAT_SIP_Passthrough#></th>
-						<td colspan=3>
-												<select name="fw_pt_sip" class="input_option">
+						<td>
+												<select name="fw_pt_sip" class="input_option" OnChange="update_sip_alg_mode_option();">
 													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_sip", "0","selected"); %>><#btn_disable#></option>
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_sip", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
 												</select>
 						</td>
+						</tr>
+						<tr>
+										<th id="fw_pt_sip_mode_th">SIP Passthrough mode<!--untranslated--></th>
+										<td id="fw_pt_sip_mode_td">
+												<select name="fw_pt_sip_mode" class="input_option">
+													<option class="content_input_fd" value="0" <% nvram_match("fw_pt_sip_mode", "0","selected"); %>>Original<!--untranslated--></option>
+													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_sip_mode", "1","selected"); %>>Cisco<!--untranslated--></option>
+												</select>
+										</td>
 						</tr>
 
 										<tr>
@@ -156,7 +203,9 @@ function applyRule(){
 													<option class="content_input_fd" value="1"<% nvram_match("fw_pt_pppoerelay", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
 												</select>
 						</td>
-										<th id="pppoerelay_unit_th"><#wan_interface#></th>
+						</tr>
+						<tr>
+										<th id="pppoerelay_unit_th">PPPoE Relay interface<!--untranslated--></th>
 										<td id="pppoerelay_unit_td">
 												<select name="pppoerelay_unit" class="input_option">
 													<option class="content_input_fd" value="0" <% nvram_match("pppoerelay_unit", "0","selected"); %>><#dualwan_primary#></option>
@@ -165,7 +214,7 @@ function applyRule(){
 										</td>
 										</tr>
 										<tr>
-											<th>FTP_ALG Port<!-- untranslated --></th>
+											<th><#FTP_ALG_port#><div class="setup_info_icon" style="display:none;"></div></th>
 											<td>
 												<input type="text" maxlength="5" name="vts_ftpport" class="input_6_table" value="<% nvram_get("vts_ftpport"); %>" onkeypress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off">
 											</td>

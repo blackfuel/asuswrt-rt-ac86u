@@ -27,11 +27,16 @@ function initial(){
 	}
 	if(yadns_support)
 		$("#item_yandex").css("display", "list-item");
+
+	if(!isSupport("webs_filter") || !isSupport("apps_filter")){
+		$("#item_filter").css("display", "none");
+		$("#Link_to_ParentalCtrl").attr("href", "ParentalControl.asp");
+	}
 }
 
 </script>
 </head>
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 
@@ -77,7 +82,7 @@ function initial(){
 						</tr>
 						<tr>
 							<td>
-								<div class="formfontdesc" style="font-size:14px;font-style:italic;"><#AiProtection_desc#></div>
+								<div class="formfontdesc" style="font-size:14px;"><#AiProtection_desc#></div>
 							</td> 
 						</tr>					
 					<!-- Service table -->
@@ -156,7 +161,7 @@ function initial(){
 						</tr>  
 					</table>
 
-					<div style="width:135px;height:55px;position:absolute;bottom:5px;right:5px;background-image:url('images/New_ui/tm_logo_power.png');"></div>
+					<div style="width:96px;height:44px;position:absolute;bottom:5px;right:5px;background-image:url('images/New_ui/TrendMirco_logo.svg');background-size: 100%;"></div>
 				</div>
 		<!--=====End of Main Content=====-->
 			</td>

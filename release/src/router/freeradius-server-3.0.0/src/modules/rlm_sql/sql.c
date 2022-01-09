@@ -2,7 +2,7 @@
  *  sql.c		rlm_sql - FreeRADIUS SQL Module
  *		Main code directly taken from ICRADIUS
  *
- * Version:	$Id: 92bf7ea1c9c8303f163163852af2f1dd6e9febca $
+ * Version:	$Id: 1a49fcfd19a07a23da237c5c3a0b592d476b3bb7 $
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
  * Copyright 2001  Chad Miller <cmiller@surfsouth.com>
  */
 
-RCSID("$Id: 92bf7ea1c9c8303f163163852af2f1dd6e9febca $")
+RCSID("$Id: 1a49fcfd19a07a23da237c5c3a0b592d476b3bb7 $")
 
 #include	<freeradius-devel/radiusd.h>
 #include	<freeradius-devel/rad_assert.h>
@@ -437,6 +437,7 @@ int sql_getvpdata(rlm_sql_t * inst, rlm_sql_handle_t **handle,
 	return rows;
 }
 
+#include <fcntl.h>
 /*
  *	Log the query to a file.
  */

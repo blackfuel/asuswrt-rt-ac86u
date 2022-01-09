@@ -1,7 +1,8 @@
-/* $Id: testupnpdescgen.c,v 1.32 2014/03/10 11:04:52 nanard Exp $ */
-/* MiniUPnP project
+/* $Id: testupnpdescgen.c,v 1.37 2020/11/04 21:02:29 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2006-2014 Thomas Bernard
+ * (c) 2006-2020 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -15,6 +16,7 @@
 
 #include "macros.h"
 #include "config.h"
+#include "upnpglobalvars.h"
 #include "upnpdescgen.h"
 #include "upnpdescstrings.h"
 #include "getifaddr.h"
@@ -27,15 +29,19 @@ char modelnumber[] = "1";
 char presentationurl[] = "http://192.168.0.1:8080/";
 /*char presentationurl[] = "";*/
 #ifdef ENABLE_MANUFACTURER_INFO_CONFIGURATION
-char friendly_name[] = ROOTDEV_FRIENDLYNAME;
+char friendly_name[] = OS_NAME " router";
 char manufacturer_name[] = ROOTDEV_MANUFACTURER;
 char manufacturer_url[] = ROOTDEV_MANUFACTURERURL;
 char model_name[] = ROOTDEV_MODELNAME;
 char model_description[] = ROOTDEV_MODELDESCRIPTION;
 char model_url[] = ROOTDEV_MODELURL;
-#endif
+#endif /* ENABLE_MANUFACTURER_INFO_CONFIGURATION */
+#ifdef RANDOMIZE_URLS
+char random_url[RANDOM_URL_MAX_LEN] = "RANDOM";
+#endif /* RANDOMIZE_URLS */
+unsigned int upnp_configid = 666;
 
-char * use_ext_ip_addr = NULL;
+const char * use_ext_ip_addr = NULL;
 const char * ext_if_name = "eth0";
 
 int runtime_flags = 0;
@@ -46,6 +52,12 @@ int getifaddr(const char * ifname, char * buf, int len, struct in_addr * addr, s
 	UNUSED(addr);
 	UNUSED(mask);
 	strncpy(buf, "1.2.3.4", len);
+	return 0;
+}
+
+int addr_is_reserved(struct in_addr * addr)
+{
+	UNUSED(addr);
 	return 0;
 }
 
@@ -135,8 +147,25 @@ main(int argc, char * * argv)
 	char * s;
 	int l;
 	FILE * f;
-	UNUSED(argc);
-	UNUSED(argv);
+
+	for(l = 1; l < argc; l++) {
+		if(0 == strcmp(argv[l], "--help") || 0 == strcmp(argv[l], "-h")) {
+			printf("Usage:\t%s [options]\n", argv[0]);
+			printf("options:\n");
+#ifdef IGD_V2
+			printf("\t--forceigdv1    Force versions of devices to be 1\n");
+#else
+			printf("\tNone\n");
+#endif
+			return 0;
+#ifdef IGD_V2
+		} else if(0 == strcmp(argv[l], "--forceigdv1")) {
+			SETFLAG(FORCEIGDDESCV1MASK);
+#endif
+		} else {
+			fprintf(stderr, "unknown option %s\n", argv[l]);
+		}
+	}
 
 	if(mkdir("testdescs", 0777) < 0) {
 		if(errno != EEXIST) {
@@ -194,6 +223,18 @@ main(int argc, char * * argv)
 		xml_pretty_print(s, l, f);
 		fclose(f);
 	}
+	free(s);
+	printf("\n-------------\n");
+#endif
+#ifdef ENABLE_AURASYNC
+	s = getVarsAS(&l);
+	xml_pretty_print(s, l, stdout);
+	free(s);
+	printf("\n-------------\n");
+#endif
+#ifdef ENABLE_NVGFN
+	s = getVarsNVGFN(&l);
+	xml_pretty_print(s, l, stdout);
 	free(s);
 	printf("\n-------------\n");
 #endif

@@ -23,9 +23,7 @@ case $f in
 		;;
 esac
 ASUS_SERVER=`nvram get apps_ipkg_server`
-wget_timeout=`nvram get apps_wget_timeout`
-#wget_options="-nv -t 2 -T $wget_timeout --dns-timeout=120"
-wget_options="-q -t 2 -T $wget_timeout"
+wget_options="-q -t 2 -T 30"
 
 APPS_PATH=/opt
 CONF_FILE=$APPS_PATH/etc/ipkg.conf
@@ -37,6 +35,7 @@ TEMP_LIST_FILE=/tmp/Packages.gz
 LIST_DIR=$APPS_PATH/lib/ipkg/lists
 apps_local_space=`nvram get apps_local_space`
 apps_new_arm=`nvram get apps_new_arm`  #sherry add 2016.7.3
+fileflex_support=`nvram get rc_support |grep " fileflex"`
 
 if [ ! -f "$CONF_FILE" ]; then
 	echo "No conf file of ipkg!"
@@ -50,6 +49,10 @@ fi
 
 
 nvram set apps_state_update=0 # INITIALIZING
+if [ -n "$fileflex_support" ]; then
+	cp -f /rom/ipkg.conf $CONF_FILE
+fi
+
 #nvram set apps_state_error=0
 #2016.7.1 sherry new oleg arm{
 #if [ "$pkg_type" == "arm" ]; then

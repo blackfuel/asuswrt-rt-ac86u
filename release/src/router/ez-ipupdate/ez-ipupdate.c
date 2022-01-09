@@ -318,10 +318,10 @@ char update_entry_putbuf[BUFFER_SIZE+1];
 //2007.03.14 Yau add
 #ifdef ASUS_DDNS
 volatile int client_sockfd;
-volatile FILE * volatile client_sockfp;
+volatile FILE * volatile client_sockfp = NULL;
 #else   // !ASUS_DDNS
 static volatile int client_sockfd;
-static volatile FILE * volatile client_sockfp;
+static volatile FILE * volatile client_sockfp = NULL;
 #endif  // ASUS_DDNS
 static volatile int last_sig = 0;
 
@@ -850,6 +850,8 @@ void print_signalhelp( void )
 RETSIGTYPE sigint_handler(int sig)
 {
   char message[] = "interupted.\n";
+
+  if(client_sockfp)
   fclose((FILE *)client_sockfp);
   write(2, message, sizeof(message)-1);
 

@@ -19,6 +19,7 @@
 <script type="text/javascript" src="validator.js"></script>
 <script type="text/javaScript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 
 <style>
 .contentM_connection{
@@ -56,23 +57,48 @@ var lacp_enabled = '<% nvram_get("lacp_enabled"); %>' == 1 ?true: false;
 var orig_mr_enable = '<% nvram_get("mr_enable_x"); %>';
 var orig_emf_enable = '<% nvram_get("emf_enable"); %>';
 var orig_wan_vpndhcp = '<% nvram_get("wan_vpndhcp"); %>';
-var orig_quagga_enable = '<% nvram_get("quagga_enable"); %>';
 var orig_ttl_inc_enable = '<% nvram_get("ttl_inc_enable"); %>';
 var iptv_profiles = [<% get_iptvSettings();%>][0];
 var isp_profiles = iptv_profiles.isp_profiles;
+var orig_wnaports_bond = '<% nvram_get("wanports_bond"); %>';
+
+if(wan_bonding_support)
+	var orig_bond_wan = httpApi.nvramGet(["bond_wan"], true).bond_wan;
+
+// get Primary WAN setting list from hook.
+// cplumn 0: dsl(wan)_enable
+var MSWAN_List_Pri = [ <% get_MS_WAN_list_Pri(); %> ];
+var mr_mswan_idx_orig = '<% nvram_get("mr_mswan_idx"); %>';
+var with_multiservice=0;
+for(var i = 1; i < MSWAN_List_Pri.length; i++){
+	if (MSWAN_List_Pri[i][0] == "1") {
+		with_multiservice++;
+	}
+}
 
 function initial(){
 	show_menu();
 
+	create_stb_select(original_switch_stb_x);
+	if(mswan_support){
+		update_mr_mswan_idx();
+		inputCtrl(document.form.mr_mswan_idx, with_multiservice ? 1 : 0);
+	}
+	create_mr_select(orig_mr_enable);
 	if(dsl_support) {
-		document.form.action_script.value = "reboot";
-		document.form.action_wait.value = "<% get_default_reboot_time(); %>";
+		document.form.action_wait.value = 20;
+		if( based_modelid == "DSL-AC68U"){
+			$("#dsl_vlan_check").show();
+			document.form.action_script.value = "reboot";
+			document.form.action_wait.value = "<% get_default_reboot_time(); %>";
+		}
+		$("#isp_profile_tr").hide();
+		$("#mr_enable_field").show();
+		$("#enable_eff_multicast_forward").show();
 	}
 	else{	//DSL not support
-		create_stb_select();
 		create_ISP_select();
 		ISP_Profile_Selection(original_switch_wantag);
-		document.form.switch_stb_x.disabled = false;
 	}
 	
 	if(vdsl_support) {
@@ -191,13 +217,19 @@ function set_manual_items(){
 
 
 	if(manual_settings.iptv_port != ""){
-		port_name = "LAN Port " + manual_settings.iptv_port.substr(3);
+		if(manual_settings.iptv_port.substr(0, 3) == "LAN")
+			port_name = "LAN Port " + manual_settings.iptv_port.substr(3);
+		else
+			port_name = manual_settings.iptv_port;
 		document.getElementById("wan_iptv_port4_x").style.display = "";
 		document.getElementById("iptv_port4").innerHTML = port_name;
 	}
 
 	if(manual_settings.voip_port != ""){
-		port_name = "LAN Port " + manual_settings.voip_port.substr(3);
+		if(manual_settings.voip_port.substr(0, 3) == "LAN")
+			port_name = "LAN Port " + manual_settings.voip_port.substr(3);
+		else
+			port_name = manual_settings.voip_port;
 		document.getElementById("wan_voip_port3_x").style.display = "";
 		document.getElementById("voip_port3").innerHTML = port_name;
 	}
@@ -211,9 +243,9 @@ function get_isp_settings(isp){
 	}
 }
 
-function control_wans_primary() {
+function control_wans_primary(switch_stb_x) {
 	if(based_modelid == "BRT-AC828" || based_modelid == "RT-AD7200"){
-		if(document.form.switch_stb_x0.value != "0" || document.form.switch_stb_x0.value != "none"){
+		if(switch_stb_x != "0" || document.form.switch_wantag.value != "none"){
 			var primary_wan = wans_dualwan_orig.split(" ")[0];
 			if(primary_wan != "lan") {
 				document.getElementById("tr_wans_primary").style.display = "";
@@ -238,10 +270,8 @@ function ISP_Profile_Selection(isp){
 
 	iptv_modified = 0;
 	voip_modified = 0;
-	if(isp == "none"){
+	if(isp == "none")
 		document.getElementById("wan_stb_x").style.display = "";
-		create_stb_select(isp_settings.switch_stb_x);
-	}
 	else
 		document.getElementById("wan_stb_x").style.display = "none";
 
@@ -254,6 +284,7 @@ function ISP_Profile_Selection(isp){
 		document.getElementById("wan_internet_x").style.display = "none";
 		document.getElementById("wan_iptv_port4_x").style.display = "none";
 		document.getElementById("wan_voip_port3_x").style.display = "none";
+		document.form.switch_stb_x.value = isp_settings.switch_stb_x;
 		document.form.switch_wan0tagid.disabled = true;
 		document.form.switch_wan0prio.disabled = true;
 		document.form.switch_wan1tagid.disabled = true;
@@ -323,49 +354,31 @@ function ISP_Profile_Selection(isp){
 	/* Special Applications */
 	if(isp_settings.mr_enable_x != ""){
 		document.getElementById("mr_enable_field").style.display = "none";
-		document.form.mr_enable_x.value = isp_settings.mr_enable_x;
+		document.form.mr_enable_x.disabled = true;
+		change_mr_enable(0);
 	}
 	else{
 		document.getElementById("mr_enable_field").style.display = "";
+		document.form.mr_enable_x.disabled = false;
 		document.form.mr_enable_x.value = orig_mr_enable;
+		if(document.form.mr_enable_x.selectedIndex < 0)
+			document.form.mr_enable_x.selectedIndex = 0;
+		change_switch_stb(isp_settings.switch_stb_x); //hnd or BLUECAVE
 	}
 
 	if(isp_settings.emf_enable != ""){
 		document.getElementById("enable_eff_multicast_forward").style.display = "none";
-		document.form.emf_enable.value = isp_settings.emf_enable;
+		document.form.emf_enable.disabled = true;
 	}
 	else{
 		document.getElementById("enable_eff_multicast_forward").style.display = "";
+		document.form.emf_enable.disabled = false;
 		document.form.emf_enable.value = orig_emf_enable;
-	}
-
-	if(isp_settings.wan_vpndhcp != ""){
-		document.form.wan_vpndhcp.value = isp_settings.wan_vpndhcp;
-	}
-	else{
-		document.form.wan_vpndhcp.value = orig_wan_vpndhcp;
-	}
-
-	if(isp_settings.quagga_enable != ""){
-		document.form.quagga_enable.value = isp_settings.quagga_enable;
-	}
-	else{
-		document.form.quagga_enable.value = orig_quagga_enable;
-	}
-
-	document.form.mr_altnet_x.value = isp_settings.mr_altnet_x;
-
-	if(isp_settings.ttl_inc_enable != ""){
-		document.form.ttl_inc_enable.value = isp_settings.ttl_inc_enable;
-	}
-	else{
-		document.form.ttl_inc_enable.value = orig_ttl_inc_enable;
 	}
 	/*--*/
 
 	/* Model dependent requirements */
-	control_wans_primary(); //BRT-AC828
-	change_mr_enable(isp_settings.switch_stb_x); //hnd or BLUECAVE
+	control_wans_primary(isp_settings.switch_stb_x); //BRT-AC828
 	if(based_modelid == "GT-AC5300" || based_modelid == "GT-AC9600"){
 		change_port_settings(document.form.iptv_port_settings.value);
 	}
@@ -375,6 +388,7 @@ function ISP_Profile_Selection(isp){
 function validForm(){
 	if (!dsl_support){
         if(document.form.switch_wantag.value == "manual"){
+			document.form.switch_stb_x.disabled = false;
 			if(document.form.switch_wan1tagid.value == "" && document.form.switch_wan2tagid.value == "")
 				document.form.switch_stb_x.value = "0";
 			else if(document.form.switch_wan1tagid.value == "" && document.form.switch_wan2tagid.value != "")
@@ -403,14 +417,19 @@ function validForm(){
 				return false;
 		}
 		else if(document.form.switch_wantag.value == "none"){
+			document.form.switch_stb_x.disabled = false;
 			document.form.switch_stb_x.value = document.form.switch_stb_x0.value;
 		}
+		else{
+			var isp_profile = get_isp_settings(document.form.switch_wantag.value);
+			document.form.switch_stb_x.value = isp_profile.switch_stb_x;
+		}
+	}
+	else{
+		document.form.switch_stb_x.disabled = false;
+		document.form.switch_stb_x.value = document.form.switch_stb_x0.value;
 	}
 
-	return true;
-}
-
-function applyRule(){
 	if(dualWAN_support){	// dualwan LAN port should not be equal to IPTV port
 		var tmp_pri_if = wans_dualwan_orig.split(" ")[0].toUpperCase();
 		var tmp_sec_if = wans_dualwan_orig.split(" ")[1].toUpperCase();
@@ -421,16 +440,33 @@ function applyRule(){
 				port_conflict = true;
 			else if( (wans_lanport == 1 || wans_lanport == 2) && iptv_port == 5)
 				port_conflict = true;
-			else if( (wans_lanport == 3 || wans_lanport == 4) && iptv_port == 6)
+			else if( (wans_lanport == 3 || wans_lanport == 4) && (iptv_port == 6 || iptv_port == 8) )
 				port_conflict = true;
 
 			if (port_conflict) {
 				alert("<#RouterConfig_IPTV_conflict#>");
-				return;
+				return false;
 			}
 		}
 	}
 
+	return true;
+}
+
+function turn_off_lacp_if_conflicts(){
+	if (!lacp_enabled)
+		return;
+
+	if((based_modelid == "RT-AX89U" || based_modelid == "GT-AXY16000")){
+		// LAN1 and/or LAN2.
+		if(document.form.switch_wantag.value == "none" && (document.form.switch_stb_x0.value == 1 || document.form.switch_stb_x0.value == 2 || document.form.switch_stb_x0.value == 5)){
+			document.form.lacp_enabled.disabled = false;
+			document.form.lacp_enabled.value = "0";
+		}
+	}
+}
+
+function applyRule(){
 	if(!dsl_support){
 		if( (original_switch_stb_x != document.form.switch_stb_x0.value)
 			|| (original_switch_wantag != document.form.switch_wantag.value)
@@ -441,6 +477,7 @@ function applyRule(){
 																	|| (original_switch_wan2tagid != document.form.switch_wan2tagid.value)
 																	|| (original_switch_wan2prio != document.form.switch_wan2prio.value)) )
 			){
+			turn_off_lacp_if_conflicts();
 			FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
 		}
 	}
@@ -489,6 +526,22 @@ function applyRule(){
 			}
 		}
 
+		if(wan_bonding_support && orig_bond_wan == "1"){
+			if(wanAggr_p2_conflicts_w_stb_port(document.form.switch_stb_x.value, wanAggr_p2_num(orig_wnaports_bond))){
+				var msg = "<#WANAggregation_PortConflict_hint1#>".replace(/LAN-*\D* 4/, wanAggr_p2_name(orig_wnaports_bond));
+				if(confirm(msg)){
+					document.form.bond_wan.disabled = false;
+					document.form.bond_wan.value = "0";
+				}
+				else{
+					document.form.switch_wantag.value = original_switch_wantag;
+					ISP_Profile_Selection(original_switch_wantag);
+					return false;
+				}
+			}
+		}
+
+		turn_off_lacp_if_conflicts();
 		showLoading();
 		document.form.submit();
 	}
@@ -741,6 +794,7 @@ function copy_index_to_unindex(service){
 		document.form.wan_pppoe_service_now.value = document.form.wan10_pppoe_service.value;
 		document.form.wan_pppoe_ac_now.value = document.form.wan10_pppoe_ac.value;
 		document.form.wan_pppoe_options_x_now.value = document.form.wan10_pppoe_options_x.value;
+		document.form.wan_pptp_options_x_now.value = document.form.wan10_pptp_options_x.value;
 		document.form.wan_ipaddr_x_now.value = document.form.wan10_ipaddr_x.value;
 		document.form.wan_netmask_x_now.value = document.form.wan10_netmask_x.value;
 		document.form.wan_gateway_x_now.value = document.form.wan10_gateway_x.value;
@@ -760,6 +814,7 @@ function copy_index_to_unindex(service){
 		document.form.wan_pppoe_service_now.value = document.form.wan11_pppoe_service.value;
 		document.form.wan_pppoe_ac_now.value = document.form.wan11_pppoe_ac.value;
 		document.form.wan_pppoe_options_x_now.value = document.form.wan11_pppoe_options_x.value;
+		document.form.wan_pptp_options_x_now.value = document.form.wan11_pptp_options_x.value;
 		document.form.wan_ipaddr_x_now.value = document.form.wan11_ipaddr_x.value;
 		document.form.wan_netmask_x_now.value = document.form.wan11_netmask_x.value;
 		document.form.wan_gateway_x_now.value = document.form.wan11_gateway_x.value;
@@ -782,6 +837,7 @@ function copy_unindex_to_index(service){
 		document.form.wan10_pppoe_service.value = document.form.wan_pppoe_service_now.value;
 		document.form.wan10_pppoe_ac.value = document.form.wan_pppoe_ac_now.value;
 		document.form.wan10_pppoe_options_x.value = document.form.wan_pppoe_options_x_now.value;
+		document.form.wan10_pptp_options_x.value = document.form.wan_pptp_options_x_now.value;
 		document.form.wan10_ipaddr_x.value = document.form.wan_ipaddr_x_now.value;
 		document.form.wan10_netmask_x.value = document.form.wan_netmask_x_now.value;
 		document.form.wan10_gateway_x.value = document.form.wan_gateway_x_now.value;
@@ -802,6 +858,7 @@ function copy_unindex_to_index(service){
 		document.form.wan11_pppoe_service.value = document.form.wan_pppoe_service_now.value;
 		document.form.wan11_pppoe_ac.value = document.form.wan_pppoe_ac_now.value;
 		document.form.wan11_pppoe_options_x.value = document.form.wan_pppoe_options_x_now.value;
+		document.form.wan11_pptp_options_x.value = document.form.wan_pptp_options_x_now.value;
 		document.form.wan11_ipaddr_x.value = document.form.wan_ipaddr_x_now.value;
 		document.form.wan11_netmask_x.value = document.form.wan_netmask_x_now.value;
 		document.form.wan11_gateway_x.value = document.form.wan_gateway_x_now.value;
@@ -1040,7 +1097,7 @@ function change_port_settings(val, changed){
 	}
 	else if(val == "56"){
 		if(changed){
-			var msg="Change IPTV/ VOIP port settings to LAN5/ LAN6 will disable Bonding/ Link aggregation function. Are you sure to do it?";
+			var msg="<#NAT_lacp_disable_note#>";	/*Untranslated*/
 			if(lacp_enabled){
 				if(!confirm(msg)){
 					document.form.iptv_port_settings.value = "12";
@@ -1072,7 +1129,43 @@ function show_gaming_note(val){
 	document.getElementById("gaming_note_div").style.display = "";
 }
 
-function change_mr_enable(switch_stb_x){
+function create_mr_select(val)
+{
+	var select = document.form.mr_enable_x;
+
+	if(improxy_support){
+		add_option(select, "<#WLANConfig11b_WirelessCtrl_button1name#> IGMP", "1", 0);
+	//	add_option(select, "<#WLANConfig11b_WirelessCtrl_button1name#> MLD", "2", 0);
+		add_option(select, "<#WLANConfig11b_WirelessCtrl_button1name#> IGMP & MLD", "3", 0);
+	}
+	else
+		add_option(select, "<#WLANConfig11b_WirelessCtrl_button1name#>", "1", 0);
+
+	select.value = val;
+	if(select.selectedIndex < 0)
+		select.selectedIndex = 0;
+
+	change_mr_enable(select.value);
+}
+
+function change_mr_enable(val){
+	var igmp_enable = (val == "1" || val == "3") && (improxy_support || hnd_support);
+	var mld_enable = (val == "2" || val == "3") && improxy_support;
+	var qleave_enable = val && (val != "0");
+	inputCtrl(document.form.mr_igmp_ver, igmp_enable ? 1 : 0);
+	inputCtrl(document.form.mr_mld_ver, mld_enable ? 1 : 0);
+	inputCtrl(document.form.mr_qleave_x, qleave_enable ? 1 : 0);
+}
+
+function update_mr_mswan_idx(){
+	for(var i = 1; i < MSWAN_List_Pri.length; i++){
+		if (MSWAN_List_Pri[i][0] == "1") {
+			add_option(document.form.mr_mswan_idx, i, i, (mr_mswan_idx_orig==i)?1:0);
+		}
+	}
+}
+
+function change_switch_stb(switch_stb_x){
 	if(hnd_support || based_modelid == "BLUECAVE"){
 		if(switch_stb_x != "0"){
 			document.getElementById("mr_enable_x").style.display = "none";
@@ -1083,15 +1176,19 @@ function change_mr_enable(switch_stb_x){
 			document.getElementById("mr_enable_x").style.display = "";
 			document.getElementById("mr_disable").style.display = "none";
 			document.form.mr_enable_x.value = orig_mr_enable;
+			if(document.form.mr_enable_x.selectedIndex < 0)
+				document.form.mr_enable_x.selectedIndex = 0;
 		}
 	}
 	else
 		document.getElementById("mr_disable").style.display = "none";
+
+	change_mr_enable(document.form.mr_enable_x.value);
 }
 </script>
 </head>
 
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="hiddenMask" class="popup_bg">
 	<table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center">
@@ -1145,6 +1242,7 @@ function change_mr_enable(switch_stb_x){
 <input type="hidden" name="wan10_pppoe_service" value="<% nvram_get("wan10_pppoe_service"); %>">
 <input type="hidden" name="wan10_pppoe_ac" value="<% nvram_get("wan10_pppoe_ac"); %>">
 <input type="hidden" name="wan10_pppoe_options_x" value="<% nvram_get("wan10_pppoe_options_x"); %>">
+<input type="hidden" name="wan10_pptp_options_x" value="<% nvram_get("wan10_pptp_options_x"); %>">
 <input type="hidden" name="wan10_ipaddr_x" value="<% nvram_get("wan10_ipaddr_x"); %>">
 <input type="hidden" name="wan10_netmask_x" value="<% nvram_get("wan10_netmask_x"); %>">
 <input type="hidden" name="wan10_gateway_x" value="<% nvram_get("wan10_gateway_x"); %>">
@@ -1163,16 +1261,16 @@ function change_mr_enable(switch_stb_x){
 <input type="hidden" name="wan11_pppoe_service" value="<% nvram_get("wan11_pppoe_service"); %>">
 <input type="hidden" name="wan11_pppoe_ac" value="<% nvram_get("wan11_pppoe_ac"); %>">
 <input type="hidden" name="wan11_pppoe_options_x" value="<% nvram_get("wan11_pppoe_options_x"); %>">
+<input type="hidden" name="wan11_pptp_options_x" value="<% nvram_get("wan11_pptp_options_x"); %>">
 <input type="hidden" name="wan11_ipaddr_x" value="<% nvram_get("wan11_ipaddr_x"); %>">
 <input type="hidden" name="wan11_netmask_x" value="<% nvram_get("wan11_netmask_x"); %>">
 <input type="hidden" name="wan11_gateway_x" value="<% nvram_get("wan11_gateway_x"); %>">
 <input type="hidden" name="wan11_dns1_x" value="<% nvram_get("wan11_dns1_x"); %>">
 <input type="hidden" name="wan11_dns2_x" value="<% nvram_get("wan11_dns2_x"); %>">
 <input type="hidden" name="wan11_auth_x" value="<% nvram_get("wan11_auth_x"); %>">
-<input type="hidden" name="quagga_enable" value="<% nvram_get("quagga_enable"); %>">
-<input type="hidden" name="mr_altnet_x" value="<% nvram_get("mr_altnet_x"); %>">
 <input type="hidden" name="lacp_enabled" value="<% nvram_get("lacp_enabled"); %>" disabled>
 <input type="hidden" name="switch_stb_x" value="<% nvram_get("switch_stb_x"); %>" disabled>
+<input type="hidden" name="bond_wan" value="<% nvram_get("bond_wan"); %>" disabled>
 
 <!---- connection settings start  ---->
 <div id="connection_settings_table"  class="contentM_connection">
@@ -1353,10 +1451,10 @@ function change_mr_enable(switch_stb_x){
 					<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,17);"><#PPPConnection_x_PPTPOptions_itemname#></a></th>
 					<td>
 						<select name="wan_pptp_options_x_now" class="input_option">
-							<option value="" <% nvram_match("wan_pptp_options_x_now", "","selected"); %>><#Auto#></option>
-							<option value="-mppc" <% nvram_match("wan_pptp_options_x_now", "-mppc","selected"); %>><#No_Encryp#></option>
-							<option value="+mppe-40" <% nvram_match("wan_pptp_options_x_now", "+mppe-40","selected"); %>>MPPE 40</option>
-							<option value="+mppe-128" <% nvram_match("wan_pptp_options_x_now", "+mppe-128","selected"); %>>MPPE 128</option>
+							<option value=""><#Auto#></option>
+							<option value="-mppc"><#No_Encryp#></option>
+							<option value="+mppe-40">MPPE 40</option>
+							<option value="+mppe-128">MPPE 128</option>
 						</select>
 					</td>
 				</tr>
@@ -1404,10 +1502,7 @@ function change_mr_enable(switch_stb_x){
 			<div id="IPTV_desc_DualWAN_BRTAC828" class="formfontdesc" style="display:none;">
 				<#LANHostConfig_displayIPTV_sectiondescBRTAC828#>
 			</div>
-	  
-	  <!-- IPTV & VoIP Setting -->
-	  
-		<!--###HTML_PREP_START###-->
+
 	  <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
 	  	<thead>
 			<tr>
@@ -1424,7 +1519,7 @@ function change_mr_enable(switch_stb_x){
 				<div id="gaming_note_div" style="display: none;"><span id="gaming_note"></span><div>
 			</td>
 			</tr>
-	    	<tr>
+		<tr id="isp_profile_tr">
 		    	<th width="30%"><a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,28);"><#Select_ISPfile#></a></th>
 			<td>
 				<select id="switch_wantag" name="switch_wantag" class="input_option" onChange="ISP_Profile_Selection(this.value)">
@@ -1434,8 +1529,9 @@ function change_mr_enable(switch_stb_x){
 		<tr id="wan_stb_x">
 		<th width="30%"><#Layer3Forwarding_x_STB_itemname#></th>
 		<td align="left">
-		    <select id="switch_stb_x0" name="switch_stb_x0" class="input_option" onchange="control_wans_primary();change_mr_enable(this.value);">
+		    <select id="switch_stb_x0" name="switch_stb_x0" class="input_option" onchange="control_wans_primary(this.value);change_switch_stb(this.value);">
 		    </select>
+			<span id="dsl_vlan_check" style="color:#FFFFFF; display:none;"><input type="checkbox" name="dslx_rmvlan_check" id="dslx_rmvlan_check" value="" onClick="change_rmvlan();"> Remove VLAN TAG from DSL WAN</input></span>
 		</td>
 		</tr>
 		<tr id="tr_wans_primary" style="display:none;">
@@ -1459,21 +1555,21 @@ function change_mr_enable(switch_stb_x){
 			<th width="30%">Bridge Port</th>
 			<td><span id="bridge_port">LAN4</span></td>
 		</tr>
-		<tr id="wan_internet_x">
+		<tr id="wan_internet_x" style="display: none;">
 			<th width="30%"><#Internet#></th>
 			<td>
 				VID&nbsp;<input type="text" name="switch_wan0tagid" class="input_6_table" maxlength="4" value="" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off" disabled>&nbsp;&nbsp;&nbsp;&nbsp;
 				PRIO&nbsp;<input type="text" name="switch_wan0prio" class="input_3_table" maxlength="1" value="0" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off" disabled>
 			</td>
 		</tr>
-		<tr id="wan_iptv_port4_x">
+		<tr id="wan_iptv_port4_x" style="display: none;">
 			<th id="iptv_port4" width="30%">LAN port 4</th>
 			<td>
 				VID&nbsp;<input type="text" name="switch_wan1tagid" class="input_6_table" maxlength="4" value="" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off" disabled>&nbsp;&nbsp;&nbsp;&nbsp;
 				PRIO&nbsp;<input type="text" name="switch_wan1prio" class="input_3_table" maxlength="1" value="0" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off" disabled>
 			</td>
 		</tr>
-		<tr id="wan_voip_port3_x">
+		<tr id="wan_voip_port3_x" style="display: none;">
 			<th id="voip_port3" width="30%">LAN port 3</th>
 			<td>
 				VID&nbsp;<input type="text" name="switch_wan2tagid" class="input_6_table" maxlength="4" value="" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off" disabled>&nbsp;&nbsp;&nbsp;&nbsp;
@@ -1481,60 +1577,7 @@ function change_mr_enable(switch_stb_x){
 			</td>
 		</tr>
 		</table>
-<!--###HTML_PREP_ELSE###-->
-<!--
-[DSL-N55U][DSL-N55U-B]
-{DSL do not support unifw}
-	  <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
-	  	<thead>
-		<tr>
-            	<td colspan="2">Port</td>
-            	</tr>
-		</thead>
-		<tr id="wan_stb_x">
-		<th width="30%"><#Layer3Forwarding_x_STB_itemname#></th>
-		<td align="left">
-		    <select name="switch_stb_x" class="input_option">
-			<option value="0" <% nvram_match( "switch_stb_x", "0", "selected"); %>><#wl_securitylevel_0#></option>
-			<option value="1" <% nvram_match( "switch_stb_x", "1", "selected"); %>>LAN1</option>
-			<option value="2" <% nvram_match( "switch_stb_x", "2", "selected"); %>>LAN2</option>
-			<option value="3" <% nvram_match( "switch_stb_x", "3", "selected"); %>>LAN3</option>
-			<option value="4" <% nvram_match( "switch_stb_x", "4", "selected"); %>>LAN4</option>
-			<option value="5" <% nvram_match( "switch_stb_x", "5", "selected"); %>>LAN1 & LAN2</option>
-			<option value="6" <% nvram_match( "switch_stb_x", "6", "selected"); %>>LAN3 & LAN4</option>
-		    </select>
-		</td>
-		</tr>
-		</table>
-[DSL-AC68U]
-	<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
-		<thead>
-			<tr>
-				<td colspan="2">Port</td>
-			</tr>
-		</thead>
-		<tr id="wan_stb_x">
-			<th width="30%"><#Layer3Forwarding_x_STB_itemname#></th>
-			<td align="left">
-				<select name="switch_stb_x" class="input_option">
-				<option value="0" <% nvram_match( "switch_stb_x", "0", "selected"); %>><#wl_securitylevel_0#></option>
-				<option value="1" <% nvram_match( "switch_stb_x", "1", "selected"); %>>LAN1</option>
-				<option value="2" <% nvram_match( "switch_stb_x", "2", "selected"); %>>LAN2</option>
-				<option value="3" <% nvram_match( "switch_stb_x", "3", "selected"); %>>LAN3</option>
-				<option value="4" <% nvram_match( "switch_stb_x", "4", "selected"); %>>LAN4</option>
-				<option value="5" <% nvram_match( "switch_stb_x", "5", "selected"); %>>LAN1 & LAN2</option>
-				<option value="6" <% nvram_match( "switch_stb_x", "6", "selected"); %>>LAN3 & LAN4</option>
-				</select>
-				<input type="checkbox" name="dslx_rmvlan_check" id="dslx_rmvlan_check" value="" onClick="change_rmvlan();"> Remove VLAN TAG from DSL WAN</input>
-			</td>
-		</tr>
-	</table>
--->
-<!--###HTML_PREP_END###-->	  
-	  
 
-		<!-- End of IPTV & VoIP -->	  
-	  
 		  <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable" style="margin-top:10px;">
 	  	<thead>
 		<tr>
@@ -1553,21 +1596,56 @@ function change_mr_enable(switch_stb_x){
 				</select>
 			</td>
 		</tr>
-		<tr id="mr_enable_field">
-			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(5,11);"><#RouterConfig_GWMulticastEnable_itemname#> (IGMP Proxy)</a></th>
+		<tr style="display:none;">
+			<th>WAN index</th>
 			<td>
-				<select id="mr_enable_x" name="mr_enable_x" class="input_option">
+				<select name="mr_mswan_idx" class="input_option">
+					<option value="0" <% nvram_match("mr_mswan_idx", "0","selected"); %> >0</option>
+				</select>
+			</td>
+		</tr>
+		<tr id="mr_enable_field" style="display:none;">
+			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(5,11);"><#RouterConfig_GWMulticastEnable_itemname#></a></th>
+			<td>
+				<select id="mr_enable_x" name="mr_enable_x" class="input_option" onChange="change_mr_enable(this.value);">
 					<option value="0" <% nvram_match("mr_enable_x", "0","selected"); %> ><#WLANConfig11b_WirelessCtrl_buttonname#></option>
-					<option value="1" <% nvram_match("mr_enable_x", "1","selected"); %> ><#WLANConfig11b_WirelessCtrl_button1name#></option>
+				<!--	<option value="1" <% nvram_match("mr_enable_x", "1","selected"); %> ><#WLANConfig11b_WirelessCtrl_button1name#></option> -->
 				</select>
 				<span id="mr_hint" style="display:none;">( <#RouterConfig_GWMulticastEnable_hint#> )</span>
 				<div id="mr_disable" style="display:none;">
 					<span style="color:#FFF;"><#WLANConfig11b_WirelessCtrl_buttonname#></span>
-					<span style="margin-left: 5px;">(Due to hardware limitation, IGMP proxy cannot co-exist with IPTV function.)</span><!--untranslated-->
+					<span style="margin-left: 5px;"><#RouterConfig_GWMulticastEnable_hint2#></span>
 				</div>
 			</td>
 		</tr>
-
+		<tr style="display:none;">
+			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(5,14);"><#RouterConfig_IGMPver_itemname#></a></th>
+			<td>
+				<select name="mr_igmp_ver" class="input_option">
+					<option value="1" <% nvram_match("mr_igmp_ver", "1","selected"); %> >IGMP v1</option>
+					<option value="2" <% nvram_match("mr_igmp_ver", "2","selected"); %> >IGMP v2</option>
+					<option value="3" <% nvram_match("mr_igmp_ver", "3","selected"); %> >IGMP v3</option>
+				</select>
+			</td>
+		</tr>
+		<tr style="display:none;">
+			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(5,15);"><#RouterConfig_MLDver_itemname#></a></th>
+			<td>
+				<select name="mr_mld_ver" class="input_option">
+					<option value="1" <% nvram_match("mr_mld_ver", "1","selected"); %> >MLD v1</option>
+					<option value="2" <% nvram_match("mr_mld_ver", "2","selected"); %> >MLD v2</option>
+				</select>
+			</td>
+		</tr>
+		<tr style="display:none;">
+			<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(5,16);">Enable Fast Leave</a></th>
+			<td>
+				<select name="mr_qleave_x" class="input_option">
+					<option value="0" <% nvram_match("mr_qleave_x", "0","selected"); %> ><#WLANConfig11b_WirelessCtrl_buttonname#></option>
+					<option value="1" <% nvram_match("mr_qleave_x", "1","selected"); %> ><#WLANConfig11b_WirelessCtrl_button1name#></option>
+				</select>
+			</td>
+		</tr>
 		<tr id="enable_eff_multicast_forward" style="display:none;">
 			<th><#WLANConfig11b_x_Emf_itemname#></th>
 			<td>

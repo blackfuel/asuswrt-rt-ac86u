@@ -24,6 +24,7 @@
 <script type="text/javascript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/calendar/jquery-ui.js"></script> 
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
   #selectable .ui-selecting { background: #FECA40; }
   #selectable .ui-selected { background: #F39814; color: white; }
@@ -219,6 +220,9 @@ info.group = new Array();
 
 function initial(){
 	show_menu();
+	if(hnd_support || based_modelid == "RT-AC1200" || based_modelid == "RT-AC1200_V2" || based_modelid == "RT-AC1200GU" || based_modelid == "RT-N19"){
+		$("#nat_desc").hide();
+	}
 	if(bwdpi_support){
 		//show_inner_tab();
 		document.getElementById('guest_image').style.background = "url(images/New_ui/TimeLimits.png)";
@@ -258,10 +262,14 @@ function initial(){
 	var mac = cookie.get("time_scheduling_mac");
 	if(mac != "" && mac != null) {
 		var idx = MULTIFILTER_MAC_row.indexOf(mac);
-		gen_lantowanTable(idx);
-		window.location.hash = "edit_time_anchor";                   
+		if(idx != -1){
+			gen_lantowanTable(idx);
+			window.location.hash = "edit_time_anchor";
+		}
 		cookie.unset("time_scheduling_mac");
 	}
+	if(isSupport("PC_SCHED_V3") == "2")
+		$("#block_all_device").show();
 }
 
 function device_object(name, mac, type, type_name, description, group_array){
@@ -610,13 +618,13 @@ function gen_lantowanTable(client){
 	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;"><#ParentalCtrl_allow#></div></td>';
 	code_temp += '<td><div style="width:90px;height:20px;background:#9CB2BA;"></div></td>';
 	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0px 30px;"><#ParentalCtrl_deny#></div></td>';
-	code_temp += '<td><div style="width:90px;height:20px;border:solid 1px #000"></div></td>';
+	code_temp += '<td><div style="width:90px;height:20px;border: 1px solid #000000;background:#475A5F;"></div></td>';
 	code_temp += '</tr></table>';
 	document.getElementById('hintBlock').innerHTML = code_temp;
 	document.getElementById('hintBlock').style.marginTop = "10px";
 	document.getElementById('hintBlock').style.display = "";
-	document.getElementById("ctrlBtn").innerHTML = '<input class="button_gen" type="button" onClick="cancel_lantowan('+client+');" value="<#CTL_Cancel#>">';
-	document.getElementById("ctrlBtn").innerHTML += '<input class="button_gen" type="button" onClick="saveto_lantowan('+client+');applyRule();" value="<#CTL_ok#>">';  
+	document.getElementById("ctrlBtn").innerHTML = '<input class="button_gen" type="button" onClick="cancel_lantowan('+client+');" value="<#CTL_Cancel#>" style="margin:0 10px;">';
+	document.getElementById("ctrlBtn").innerHTML += '<input class="button_gen" type="button" onClick="saveto_lantowan('+client+');applyRule();" value="<#CTL_ok#>" style="margin:0 10px;">';  
 	document.getElementById('clock_type_select')[clock_type].selected = true;		// set clock type by cookie
 	
 	document.getElementById("mainTable").style.display = "";
@@ -1096,6 +1104,41 @@ function setGroup(name){
 				</tr>
 			</table>
 			<div style="margin: 0 0 10px 5px" class="splitLine"></div>
+			<div id="block_all_device" style="margin-bottom:6px;display:none;">
+				<div style="font-size:14px;margin-left:6px;margin-bottom:6px;">By enabling Block All Devices, all of the connected devices will be blocked from Internet access.</div>
+				<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
+					<tr>
+						<th>Enable block all device</th>
+						<td>
+							<div align="center" class="left" style="width:94px; float:left; cursor:pointer;" id="radio_block_all"></div>
+							<div class="iphone_switch_container" style="height:32px; width:74px; position: relative; overflow: hidden">
+								<script type="text/javascript">
+									$('#radio_block_all').iphoneSwitch('<% nvram_get("MULTIFILTER_BLOCK_ALL"); %>',
+										function(){
+											httpApi.nvramSet({
+												"action_mode": "apply",
+												"rc_service": "restart_firewall",
+												"MULTIFILTER_BLOCK_ALL": "1"
+											}, function(){
+												showLoading(3);
+											});
+										},
+										function(){
+											httpApi.nvramSet({
+												"action_mode": "apply",
+												"rc_service": "restart_firewall",
+												"MULTIFILTER_BLOCK_ALL": "0"
+											}, function(){
+												showLoading(3);
+											});
+										}
+									);
+								</script>
+							</div>
+						</td>
+					</tr>
+				</table>
+			</div>
 		</div>
 		<div id="PC_desc">
 			<table width="700px" style="margin-left:25px;">
@@ -1104,7 +1147,7 @@ function setGroup(name){
 						<div id="guest_image" style="background: url(images/New_ui/parental-control.png);width: 130px;height: 87px;"></div>
 					</td>
 					<td>&nbsp;&nbsp;</td>
-					<td style="font-style: italic;font-size: 14px;">
+					<td style="font-size: 14px;">
 						<span id="desc_title"><#ParentalCtrl_Desc#></span>
 						<ol>	
 							<li><#ParentalCtrl_Desc1#></li>
@@ -1116,7 +1159,7 @@ function setGroup(name){
 						<span id="desc_note" style="color:#FC0;"><#ADSL_FW_note#></span>
 						<ol style="color:#FC0;margin:-5px 0px 3px -18px;*margin-left:18px;">
 							<li><#ParentalCtrl_default#></li>
-							<li><#ParentalCtrl_disable_NAT#></li>
+							<li id="nat_desc"><#ParentalCtrl_disable_NAT#></li>
 						</ol>	
 					</td>
 				</tr>

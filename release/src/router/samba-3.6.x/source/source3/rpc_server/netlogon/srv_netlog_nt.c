@@ -1508,6 +1508,7 @@ static NTSTATUS _netr_LogonSamLogon_base(struct pipes_struct *p,
 	case NetlogonNetworkTransitiveInformation:
 	{
 		const char *wksname = nt_workstation;
+		const char *workgroup = lp_workgroup();
 
 		status = make_auth_context_fixed(talloc_tos(), &auth_context,
 						 logon->network->challenge);
@@ -1531,6 +1532,14 @@ static NTSTATUS _netr_LogonSamLogon_base(struct pipes_struct *p,
 						     logon->network->nt.data,
 						     logon->network->nt.length)) {
 			status = NT_STATUS_NO_MEMORY;
+		}
+
+		if (NT_STATUS_IS_OK(status)) {
+			status = NTLMv2_RESPONSE_verify_netlogon_creds(
+						user_info->client.account_name,
+						user_info->client.domain_name,
+						user_info->password.response.nt,
+						creds, workgroup);
 		}
 		break;
 	}
@@ -1636,6 +1645,14 @@ static NTSTATUS _netr_LogonSamLogon_base(struct pipes_struct *p,
 						r->out.validation->sam3);
 		break;
 	case 6:
+		/* Only allow this if the pipe is protected. */
+		if (p->auth.auth_level < DCERPC_AUTH_LEVEL_PRIVACY) {
+			DEBUG(0,("netr_Validation6: client %s not using privacy for netlogon\n",
+				get_remote_machine_name()));
+			status = NT_STATUS_INVALID_PARAMETER;
+			break;
+		}
+
 		status = serverinfo_to_SamInfo6(server_info, pipe_session_key, 16,
 						r->out.validation->sam6);
 		break;
@@ -2271,11 +2288,13 @@ NTSTATUS _netr_GetForestTrustInformation(struct pipes_struct *p,
 
 	/* TODO: check server name */
 
-	status = schannel_check_creds_state(p->mem_ctx, lp_private_dir(),
-					    r->in.computer_name,
-					    r->in.credential,
-					    r->out.return_authenticator,
-					    &creds);
+	become_root();
+	status = netr_creds_server_step_check(p, p->mem_ctx,
+					      r->in.computer_name,
+					      r->in.credential,
+					      r->out.return_authenticator,
+					      &creds);
+	unbecome_root();
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
@@ -2371,11 +2390,13 @@ NTSTATUS _netr_ServerGetTrustInfo(struct pipes_struct *p,
 
 	/* TODO: check server name */
 
-	status = schannel_check_creds_state(p->mem_ctx, lp_private_dir(),
-					    r->in.computer_name,
-					    r->in.credential,
-					    r->out.return_authenticator,
-					    &creds);
+	become_root();
+	status = netr_creds_server_step_check(p, p->mem_ctx,
+					      r->in.computer_name,
+					      r->in.credential,
+					      r->out.return_authenticator,
+					      &creds);
+	unbecome_root();
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}

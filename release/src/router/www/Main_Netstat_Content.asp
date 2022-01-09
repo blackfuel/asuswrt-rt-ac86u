@@ -191,7 +191,7 @@ function validForm(){
 }
 </script>
 </head>
-<body onload="init();">
+<body onload="init();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
@@ -276,8 +276,8 @@ function validForm(){
 											<th width="20%"><#NetworkTools_ResolveName#></th>
 											<td>
 												<select id="ResolveName" class="input_option" name="ResolveName">
-													<option value="0">No</option>
-													<option value="1">Yes</option>
+													<option value="0"><#checkbox_No#></option>
+													<option value="1"><#checkbox_Yes#></option>
 												</select>
 											</td>
 										</tr>

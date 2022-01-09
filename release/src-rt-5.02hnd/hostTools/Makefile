@@ -65,6 +65,7 @@ bcmImageBuilder: bcmImageBuilder.c
 	$(CC) $(CFLAGS) -o bcmImageBuilder bcmImageBuilder.c
 version:
 	cp -f ../router/shared/version.h .
+	cp -f ../router/shared/rtconfig.h .
 ifneq ($(wildcard ./prebuilt/addvtoken),)
 addvtoken:
 	@-cp -f ./prebuilt/addvtoken .
@@ -128,7 +129,7 @@ mklzma_cmd: untar_lzma457
 config_xz-5.0.3:
 	if [ ! -e xz-5.0.3 ]; then \
 	echo Untarring xz-5.0.3 source...; \
-	(tar xkfj xz-5.0.3.tar.bz2 2> /dev/null || true); \
+	(tar xkjf xz-5.0.3.tar.bz2 2> /dev/null || true); \
 	fi 
 	if [ ! -e xz-5.0.3/Makefile ]; then \
 	(cd xz-5.0.3; ./configure --enable-shared=no --disable-assembler) ;\
@@ -161,9 +162,14 @@ mkjffs2:
 	$(MAKE) -C $(JFFS2_DIR)
 	mv jffs2/mkfs.jffs2 .
 
+ifneq ($(wildcard ./prebuilt/cmplzma),)
+build_cmplzma: mklzma_cmd
+	cp -f ./prebuilt/cmplzma .
+else
 build_cmplzma: mklzma_cmd cmplzma.cpp
 	g++ $(CFLAGS) -c cmplzma.cpp
 	g++  -o cmplzma cmplzma.o -lm
+endif
 
 untar_lz4hc: 
 	if [ ! -e $(LZ4_DIR) ]; then \
@@ -207,6 +213,7 @@ export FAKEROOT_TAR = fakeroot_1.20.2.orig.tar.bz2
 $(FAKEROOT_DIR)/Makefile:
 	mkdir -p $(FAKEROOT_DIR)
 	(tar -jxf $(FAKEROOT_TAR) --strip 1 -C $(FAKEROOT_DIR) 2> /dev/null || true)
+	(patch -p1 -s -d $(FAKEROOT_DIR) < fakeroot_1.20.2.patch || true)
 	cd $(FAKEROOT_DIR); CFLAGS="$(CFLAGS_NOARCH)" ac_cv_func_capset=0 ./configure --prefix=$(HOSTTOOLS_DIR)/local_install --bindir=$(HOSTTOOLS_DIR)/local_install
 
 fakeroot: $(FAKEROOT_DIR)/Makefile

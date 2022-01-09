@@ -173,6 +173,7 @@ sub fixDyn
 	fixDynDep("pppd", "pptp.so");
 	fixDynDep("pppd", "rp-pppoe.so");
 	fixDynDep("libcrypto.so.1.0.0", "libssl.so.1.0.0");
+	fixDynDep("libcrypto.so.1.1", "libssl.so.1.1");
 
 	fixDynDep("xtables-multi", "libip4tc.so");
 	fixDynDep("xtables-multi", "libip6tc.so");
@@ -195,8 +196,8 @@ sub fixDyn
 	fixDynDep("mod_create_captcha_image.so", "mod_webdav.so");
 
 	fixDynDep("lighttpd", "libpthread.so.0");
-	fixDynDep("lighttpd", "libcrypto.so.1.0.0");
-	fixDynDep("lighttpd", "libssl.so.1.0.0");
+#	fixDynDep("lighttpd", "libcrypto.so.1.0.0");
+#	fixDynDep("lighttpd", "libssl.so.1.0.0");
         fixDynDep("lighttpd", "libpcre.so.0.0.1");
 	fixDynDep("lighttpd", "libshared.so");
 	fixDynDep("lighttpd", "libnvram.so");
@@ -258,7 +259,7 @@ sub fixDyn
 	fixDynDep("libbcm.so", "libc.so.0");
 
 	fixDynDep("libneon.so.27.2.6", "libz.so.1");
-	fixDynDep("libneon.so.27.2.6", "libcrypto.so.1.0.0");
+#	fixDynDep("libneon.so.27.2.6", "libcrypto.so.1.0.0");
 
 	fixDynDep("wimaxd", "libxvi020.so.05.02.93");
 }
@@ -488,6 +489,7 @@ sub genSO
 	my @u = usersOf($name);
 	if ((scalar(@used) == 0) && (scalar(@u) > 0)) {
 		print "$name: WARNING: Library symbol is not used by anything, but linked by (@u). so keep it ...\n";
+		$cmd .= " ". $arc;
 	}
 	elsif (scalar(@used) == 0) {
 		print "$name: WARNING: Library is not used by anything, deleting...\n";
@@ -495,7 +497,9 @@ sub genSO
 #		<>;
 		return 0;
 	}
+	else {
 	$cmd .= " -u " . join(" -u ", @used) . " ". $arc;
+	}
 
 	print LOG "Command: $cmd\n";
 	print LOG "Used: ", join(",", @used), "\n";
@@ -565,8 +569,10 @@ genSO("${root}/lib/libutil.so.0", "${uclibc}/lib/libutil.a", "${stripshared}");
 #  genSO("${root}/lib/libdl.so.0", "${uclibc}/lib/libdl.a", "${stripshared}");
 #  genSO("${root}/lib/libnsl.so.0", "${uclibc}/lib/libnsl.a", "${stripshared}");
 
-genSO("${root}/usr/lib/libcrypto.so.1.0.0", "${router}/openssl/libcrypto.a");
-genSO("${root}/usr/lib/libssl.so.1.0.0", "${router}/openssl/libssl.a", "", "-L${router}/openssl");
+#	genSO("${root}/usr/lib/libcrypto.so.1.0.0", "${router}/openssl-1.0/libcrypto.a");
+#	genSO("${root}/usr/lib/libssl.so.1.0.0", "${router}/openssl-1.0/libssl.a", "", "-L${router}/openssl-1.0");
+#	genSO("${root}/usr/lib/libcrypto.so.1.1", "${router}/openssl-1.1/libcrypto.a");
+#	genSO("${root}/usr/lib/libssl.so.1.1", "${router}/openssl-1.1/libssl.a", "", "-L${router}/openssl-1.1");
 
 genSO("${root}/usr/lib/libzebra.so", "${router}/zebra/lib/libzebra.a");
 genSO("${root}/usr/lib/libz.so.1", "${router}/zlib/libz.a");

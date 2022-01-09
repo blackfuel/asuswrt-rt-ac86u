@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>	//isdigit()
 
 #if IM_MESSGAE_EANBLE
 #include "im_ipc.h" // asusnatnl/natnl
@@ -27,7 +28,11 @@ typedef li_MD5_CTX MD5_CTX;
 #define MD5_Final li_MD5_Final
 #endif
 
+#include "response.h"	//response_header_insert()
+
 #if EMBEDDED_EANBLE
+#include "shared.h"	// check_if_file_exist() in shared/shared.h
+#include "nvram_control.h"
 #ifndef APP_IPKG
 #include "disk_share.h"
 #endif
@@ -36,6 +41,15 @@ typedef li_MD5_CTX MD5_CTX;
 #if defined(HAVE_LIBXML_H) && defined(HAVE_SQLITE3_H)
 #include <sqlite3.h>
 #endif
+
+/* lighttpd-monitor.c */
+extern int pids(char *appname);
+
+/* this smb_auth.c */
+int get_aicloud_permission(const char *const account, const char *const mount_path, const char *const folder, const int is_group);
+int prefix_is(char* source, char* prefix);
+int char_to_ascii_safe(const char *output, const char *input, int outsize);
+int change_port_rule_on_iptable(int toOpen, char* port_number);
 
 #define DBE 0
 #define LIGHTTPD_ARPPING_PID_FILE_PATH	"/tmp/lighttpd/lighttpd-arpping.pid"
@@ -249,46 +263,6 @@ extern int delete_file_or_dir(char *target){
     return ret;
 }
 
-extern char *get_upper_str(const char *const str, char **target){
-	int len, i;
-    char *ptr;
-
-    len = strlen(str);
-    *target = (char *)malloc(sizeof(char)*(len+1));
-    if(*target == NULL){
-    	printf("No memory \"*target\".\n");
-        return NULL;
-    }
-    ptr = *target;
-    for(i = 0; i < len; ++i)
-    	ptr[i] = toupper(str[i]);
-   	ptr[len] = 0;
-
-    return ptr;
-}
-
-extern int upper_strcmp(const char *const str1, const char *const str2){
-    char *upper_str1, *upper_str2;
-    int ret;
-
-    if(str1 == NULL || str2 == NULL)
-    	return -1;
-
-    if(get_upper_str(str1, &upper_str1) == NULL)
-        return -1;
-
-    if(get_upper_str(str2, &upper_str2) == NULL){
-    	free(upper_str1);
-        return -1;
-    }
-
-    ret = strcmp(upper_str1, upper_str2);
-    free(upper_str1);
-    free(upper_str2);
-
-    return ret;
-}
-
 extern int test_if_System_folder(const char *const dirname){
 	const char *const MS_System_folder[] = {"SYSTEM VOLUME INFORMATION", "RECYCLER", "RECYCLED", "$RECYCLE.BIN", NULL};
 	const char *const Linux_System_folder[] = {"lost+found", NULL};
@@ -298,17 +272,17 @@ extern int test_if_System_folder(const char *const dirname){
 	char *ptr;
 
 	for(i = 0; MS_System_folder[i] != NULL; ++i){
-		if(!upper_strcmp(dirname, MS_System_folder[i]))
+		if(strcasecmp(dirname, MS_System_folder[i]) == 0)
 			return 1;
 	}
 
 	for(i = 0; Linux_System_folder[i] != NULL; ++i){
-		if(!upper_strcmp(dirname, Linux_System_folder[i]))
+		if(strcasecmp(dirname, Linux_System_folder[i]) == 0)
 			return 1;
 	}
 
 	for(i = 0; Mac_System_folder[i] != NULL; ++i){
-		if(!upper_strcmp(dirname, Mac_System_folder[i]))
+		if(strcasecmp(dirname, Mac_System_folder[i]) == 0)
 			return 1;
 	}
 
@@ -318,7 +292,7 @@ extern int test_if_System_folder(const char *const dirname){
 		return 1;
 
 	for(i = 0; ASUS_System_folder[i] != NULL; ++i){
-		if(!upper_strncmp(dirname, ASUS_System_folder[i], strlen(ASUS_System_folder[i])))
+		if(strncasecmp(dirname, ASUS_System_folder[i], strlen(ASUS_System_folder[i])) == 0)
 			return 1;
 	}
 
@@ -364,38 +338,6 @@ extern int get_var_file_name(const char *const account, const char *const path, 
 	var_file[len] = 0;
 
 	return 0;
-}
-
-extern char *upper_strstr(const char *const str, const char *const target){
-    char *upper_str, *upper_target;
-    char *ret;
-    int len;
-
-    if(str == NULL || target == NULL)
-    	return NULL;
-
-    if(get_upper_str(str, &upper_str) == NULL)
-    	return NULL;
-
-    if(get_upper_str(target, &upper_target) == NULL){
-    	free(upper_str);
-        return NULL;
-    }
-
-    ret = strstr(upper_str, upper_target);
-    if(ret == NULL){
-    	free(upper_str);
-        free(upper_target);
-        return NULL;
-    }
-
-    if((len = upper_str-ret) < 0)
-    	len = ret-upper_str;
-
-    free(upper_str);
-    free(upper_target);
-
-    return (char *)(str+len);
 }
 
 extern void free_2_dimension_list(int *num, char ***list) {
@@ -679,7 +621,7 @@ retry_get_permission:
 		sprintf(target, "*%s=", f);
 	target[len] = 0;
 
-	follow_info = upper_strstr(var_info, target);
+	follow_info = strcasestr(var_info, target);
 	free(target);
 	if(follow_info == NULL){
 		if(account == NULL)
@@ -1334,11 +1276,11 @@ char *replace_str(char *st, char *orig, char *repl, char* buff) {
 	return buff;
 }
 
-//- §PÂ_¶}©l¨ú­È¦ì¸m 
+//- ï¿½Pï¿½_ï¿½}ï¿½lï¿½ï¿½ï¿½È¦ï¿½m 
 int startposizition( char *str, int start )  
 {  
-	int i=0;            //-¥Î©ó­p¼Æ
-    int posizition=0;   //- ªð¦^¦ì¸m
+	int i=0;            //-ï¿½Î©ï¿½pï¿½ï¿½
+    int posizition=0;   //- ï¿½ï¿½^ï¿½ï¿½m
     int tempposi=start;    
     while(str[tempposi]<0)  
     {  
@@ -1353,11 +1295,11 @@ int startposizition( char *str, int start )
     return posizition;  
 } 
 
-//- §PÂ_¥½ºÝ¨ú­È¦ì¸m
+//- ï¿½Pï¿½_ï¿½ï¿½ï¿½Ý¨ï¿½ï¿½È¦ï¿½m
 int endposizition( char *str, int end )  
 {  
-	int i=0;            //-¥Î©ó­p¼Æ
-	int posizition=0;   //- ªð¦^¦ì¸m
+	int i=0;            //-ï¿½Î©ï¿½pï¿½ï¿½
+	int posizition=0;   //- ï¿½ï¿½^ï¿½ï¿½m
 	int tempposi=end; 
 	while(str[tempposi]<0)  
 	{ 
@@ -1375,21 +1317,14 @@ int endposizition( char *str, int end )
 
 void getStr( char *str, char *substr, int substrlen, int start, int end )  
 {  
-	int  i=0;	
-	char* temp;
-	temp = (char*)malloc(substrlen);
-	memset(temp,0,sizeof(temp));  
-
-	for( start; start<=end; start++ )  
-    {  
-       	temp[i]=str[start];  
-        i++;  
-    }  
-    temp[i]='\0';  
-	strcpy(substr,temp);  
-
-	free(temp); 
-} 
+	int size = end - start + 1;
+	if (size > substrlen)
+		size = substrlen;
+	for (str += start; size > 1 && *str; size--)
+		*substr++ = *str++;
+	if (size > 0)
+		*substr = '\0';
+}
 
 void  getSubStr( char *str, char *substr, int start, int end )  
 {  
@@ -1627,7 +1562,9 @@ smbc_wrapper_lseek(connection* con, int fd, off_t offset, int whence)
 int smbc_wrapper_parse_path(connection* con, char *pWorkgroup, char *pServer, char *pShare, char *pPath){
 	if(con->mode== SMB_BASIC||con->mode== SMB_NTLM){ 
 
-		smbc_parse_path(con->physical.path->ptr, pWorkgroup, pServer, pShare, pPath);
+		if(smbc_parse_path(con->physical.path->ptr, pWorkgroup, pServer, pShare, pPath)!=0){
+			return -1;
+		}
 		
 		//- Jerry add: replace '\\' to '/'
 		do{
@@ -1642,7 +1579,9 @@ int smbc_wrapper_parse_path(connection* con, char *pWorkgroup, char *pServer, ch
 int smbc_wrapper_parse_path2(connection* con, char *pWorkgroup, char *pServer, char *pShare, char *pPath){	 
 	if(con->mode== SMB_BASIC||con->mode== SMB_NTLM){
 
-		smbc_parse_path(con->physical_auth_url->ptr, pWorkgroup, pServer, pShare, pPath);
+		if(smbc_parse_path(con->physical_auth_url->ptr, pWorkgroup, pServer, pShare, pPath)!=0){
+			return -1;
+		}
 
 		int len = strlen(pPath)+1;
 		
@@ -2033,6 +1972,14 @@ int smbc_parser_basic_authentication(server *srv, connection* con, char** userna
 				free(pass);							
 				return 0;
 			}
+
+			if (basic_msg->used>1024){
+				buffer_free(basic_msg);
+                                free(user);
+                                free(pass);
+                                return 0;
+			}
+
 			char *s, bmsg[1024] = {0};
 
 			//fetech the username and password from credential
@@ -2110,9 +2057,11 @@ int generate_sharelink( server* srv,
 #endif
 
 	buffer* buffer_real_url = buffer_init();
-	buffer_copy_buffer(buffer_real_url, con->url.path);
+	// buffer_copy_buffer(buffer_real_url, con->url.path);
+	buffer_copy_string(buffer_real_url, url);
+	
 	if( con->mode != SMB_BASIC && 
-            con->mode != SMB_NTLM && 
+        con->mode != SMB_NTLM && 
 	    prefix_is(buffer_real_url->ptr, usbdisk_path)==1){
 		char buff[2048];
 		char* tmp = replace_str(buffer_real_url->ptr,
@@ -2140,7 +2089,8 @@ int generate_sharelink( server* srv,
 
 			if(con->mode == SMB_BASIC || con->mode == SMB_NTLM){
 				struct stat st;
-				if (-1 == smbc_wrapper_stat(con, buffer_file_path->ptr, &st)) {
+				// if (-1 == smbc_wrapper_stat(con, buffer_file_path->ptr, &st)) {
+				if (-1 == smbc_wrapper_stat(con, con->url.path->ptr, &st)) {
 					buffer_free(buffer_real_url);
 					buffer_free(buffer_file_path);
 
@@ -2152,7 +2102,7 @@ int generate_sharelink( server* srv,
 			}
 			else{
 				struct stat stat_buf;
-    				if (-1 == stat(buffer_file_path->ptr, &stat_buf)) {
+    			if (-1 == stat(buffer_file_path->ptr, &stat_buf)) {
 					buffer_free(buffer_real_url);
 					buffer_free(buffer_file_path);
 
@@ -2378,6 +2328,7 @@ void save_sharelink_list(){
 
 #if EMBEDDED_EANBLE
 	nvram_set_sharelink_str(sharelink_list->ptr);
+	nvram_do_commit();
 #else
 	unlink(g_temp_sharelink_file);
 	FILE* fp = fopen(g_temp_sharelink_file, "w");
@@ -2929,6 +2880,7 @@ void process_share_link_for_router_sync_use(){
 
 #if EMBEDDED_EANBLE
 	nvram_set_share_link_result(return_sharelink->ptr);
+	nvram_do_commit();
 	free(str_sharelink_param);
 #endif
 
@@ -3346,14 +3298,14 @@ int enc_utf8_to_unicode(const unsigned char* pInput, int nMembIn,unsigned long* 
         if ( pOutCur - pOutput >= outSize )
         {
             *nMembOut = pOutCur - pOutput;
-            return 2; // ?¥XªÅ?¤£¨¬
+            return 2; // ?ï¿½Xï¿½ï¿½?ï¿½ï¿½ï¿½ï¿½
         }
 
         ret = enc_utf8_to_unicode_one(pIn, pOutCur);
         if ( ret == 0 )
         {
             *nMembOut = pOutCur - pOutput;
-            return 0; // ?¤Jªº¦r²Å??¤£¬OUTF8
+            return 0; // ?ï¿½Jï¿½ï¿½ï¿½rï¿½ï¿½??ï¿½ï¿½ï¿½OUTF8
         }
 
         i    += ret;
@@ -3586,7 +3538,7 @@ retry_get_permission:
 		sprintf(target, "*%s=", f);
 	target[len] = 0;
 	
-	follow_info = upper_strstr(var_info, target);
+	follow_info = strcasestr(var_info, target);
 	free(target);
 	if (follow_info == NULL) {
 		if(account == NULL)
@@ -3702,7 +3654,7 @@ int set_aicloud_permission(const char *const account,
 	target[len] = 0;
 	
 	// 5. judge if the target is in the var file.
-	follow_info = upper_strstr(var_info, target);
+	follow_info = strcasestr(var_info, target);
 	if (follow_info == NULL) {
 		if(account == NULL)
 			Cdbg(DBE, "No right about \"%s\" with the share mode.", (folder == NULL?"Pool":folder));
@@ -4009,6 +3961,7 @@ void save_aicloud_acc_list(){
 
 #if EMBEDDED_EANBLE
 	nvram_set_aicloud_acc_list(aicloud_acc_list->ptr);
+	nvram_do_commit();
 #else
 	unlink("/tmp/aicloud_acc_list");
 	FILE* fp = fopen("/tmp/aicloud_acc_list", "w");
@@ -4205,6 +4158,7 @@ void save_aicloud_acc_invite_list(){
 
 #if EMBEDDED_EANBLE
 	nvram_set_aicloud_acc_invite_list(aicloud_acc_invite_list->ptr);
+	nvram_do_commit();
 #else
 	unlink("/tmp/aicloud_acc_invite_list");
 	FILE* fp = fopen("/tmp/aicloud_acc_invite_list", "w");

@@ -199,7 +199,7 @@ function addRow_main(upper){
 		return false;
 	}
 
-	if(!check_macaddr(document.form.rule_mac, check_hwaddr_flag(document.form.rule_mac))){
+	if(!check_macaddr(document.form.rule_mac, check_hwaddr_flag(document.form.rule_mac, 'inner'))){
 		document.form.rule_mac.focus();
 		document.form.rule_mac.select();
 		return false;
@@ -313,7 +313,7 @@ function selectRows_main(r){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();" onselectstart="return false;">
+<body onload="initial();" onunload="unload_body();" onselectstart="return false;" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 

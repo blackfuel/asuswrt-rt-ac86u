@@ -8,7 +8,26 @@
 #include <bcmdevs.h>
 #include <shutils.h>
 #include <shared.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#ifdef RTCONFIG_BROOP
+#include <linux/netlink.h>
+#include <rtstate.h>
+#endif
+#include <limits.h>	//PATH_MAX
 
+static char *wantype_str[] = {
+	[WANS_DUALWAN_IF_LAN] = "lan",
+	[WANS_DUALWAN_IF_2G] = "2g",
+	[WANS_DUALWAN_IF_5G] = "5g",
+	[WANS_DUALWAN_IF_USB] = "usb",
+	[WANS_DUALWAN_IF_DSL] = "dsl",
+	[WANS_DUALWAN_IF_WAN] = "wan",
+	[WANS_DUALWAN_IF_WAN2] = "wan2",
+	[WANS_DUALWAN_IF_USB2] = "usb2",
+	[WANS_DUALWAN_IF_SFPP] = "sfp+",
+};
 
 /* keyword for rc_support 	*/
 /* ipv6 mssid update parental 	*/
@@ -119,6 +138,17 @@ char *link_wan_nvname(int unit, char *buf, int size){
 	else
 		snprintf(buf, size, "link_wan%d", unit);
 
+#ifdef RTCONFIG_MULTISERVICE_WAN
+	if (unit > WAN_UNIT_MULTISRV_BASE)
+	{
+		int base_unit = get_ms_base_unit(unit);
+		if (base_unit == WAN_UNIT_FIRST)
+			snprintf(buf, size, "link_wan");
+		else
+			snprintf(buf, size, "link_wan%d", base_unit);
+	}
+#endif
+
 	return buf;
 }
 
@@ -186,6 +216,15 @@ int is_phy_connect(int unit){
 		return get_wanports_status(unit);
 }
 
+int is_phy_connect2(int unit){
+#ifdef RTCONFIG_USB_MODEM
+	if(dualwan_unit__usbif(unit))
+		return 1;
+	else
+#endif
+		return get_wanports_status(unit);
+}
+
 int is_ip_conflict(int unit){
 	int wan_state, wan_sbstate;
 
@@ -228,40 +267,46 @@ int get_wan_unit(char *ifname)
 #else
 int get_wan_unit(char *ifname)
 {
-	char tmp[100], prefix[32]="wanXXXXXX_";
-	int unit = 0;
-	int model = get_model();
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
+	int unit, wan_proto;
 
-	if(ifname == NULL)
+	if (ifname == NULL || *ifname == '\0')
 		return -1;
 
-	for(unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; ++unit){
+#ifdef BLUECAVE
+	/* TODO: unclear, why this workaround is required? */
+	int bluecave = (get_model() == MODEL_BLUECAVE &&
+			strcmp(ifname, "eth1") == 0 && nvram_get_int("switch_stb_x") > 0);
+#endif
+
+	for (unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; unit++) {
 		snprintf(prefix, sizeof(prefix), "wan%d_", unit);
+		wan_proto = get_wan_proto(prefix);
 
-		if(!strncmp(ifname, "ppp", 3) ){
-
-			if(nvram_match(strcat_r(prefix, "pppoe_ifname", tmp), ifname)) {
-				if (model ==  MODEL_RTN65U) {
-					if(!nvram_match(strcat_r(prefix, "proto", tmp), "pppoe") || nvram_match(strcat_r(prefix, "is_usb_modem_ready", tmp), "1"))						
-						return unit;
-				}	
-				else if (nvram_match(strcat_r(prefix, "state_t", tmp), "2") && nvram_match(strcat_r(prefix, "auxstate_t", tmp), "0") && nvram_match(strcat_r(prefix, "gw_ifname", tmp), ifname)) 
-					return unit;				
-			}
-
-				
-		}
-		else if(nvram_match(strcat_r(prefix, "ifname", tmp), ifname)) {
-
-			if (model == MODEL_RTN65U && !nvram_match(strcat_r(prefix, "proto", tmp), "l2tp") && !nvram_match(strcat_r(prefix, "proto", tmp), "pptp"))
-					return unit;
-			
-			if (!nvram_match(strcat_r(prefix, "proto", tmp), "pppoe") && !nvram_match(strcat_r(prefix, "proto", tmp), "l2tp") && !nvram_match(strcat_r(prefix, "proto", tmp), "pptp") && nvram_match(strcat_r(prefix, "gw_ifname", tmp), ifname))
-					return unit;						
-		}
-		else if (model == MODEL_BLUECAVE){
-			if (nvram_get_int("switch_stb_x") > 0 && !strcmp(ifname, "eth1"))
+		switch (wan_proto) {
+		case WAN_PPPOE:
+		case WAN_PPTP:
+		case WAN_L2TP:
+#ifdef RTCONFIG_SOFTWIRE46
+		case WAN_LW4O6:
+		case WAN_MAPE:
+		case WAN_V6PLUS:
+#endif
+			if (nvram_match(strcat_r(prefix, "pppoe_ifname", tmp), ifname))
 				return unit;
+#ifdef RTCONFIG_USB_MODEM
+			if (dualwan_unit__usbif(unit))
+				break;
+#endif
+			/* fall through */
+		default:
+			if (nvram_match(strcat_r(prefix, "ifname", tmp), ifname))
+				return unit;
+#ifdef BLUECAVE
+			if (bluecave)
+				return unit;
+#endif
+			break;
 		}
 	}
 
@@ -284,26 +329,47 @@ char *get_wanx_ifname(int unit)
 // Get wan ifname of working connection
 char *get_wan_ifname(int unit)
 {
-	char *wan_proto, *wan_ifname;
 	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
+	char *wan_ifname;
+	int wan_proto;
 
 	snprintf(prefix, sizeof(prefix), "wan%d_", unit);
-	wan_proto = nvram_safe_get(strcat_r(prefix, "proto", tmp));
+	wan_proto = get_wan_proto(prefix);
 
 #ifdef RTCONFIG_USB_MODEM
 	if (dualwan_unit__usbif(unit)) {
-		if (strcmp(wan_proto, "dhcp") == 0)
-			wan_ifname = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
-		else
-			wan_ifname = nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
+		wan_ifname = (wan_proto == WAN_DHCP) ?
+			nvram_safe_get(strcat_r(prefix, "ifname", tmp)) :
+			nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
 	} else
 #endif
-	if (strcmp(wan_proto, "pppoe") == 0 ||
-	    strcmp(wan_proto, "pptp") == 0 ||
-	    strcmp(wan_proto, "l2tp") == 0) {
+#ifdef RTAX82_XD6
+	if (!strncmp(nvram_safe_get("territory_code"), "CH", 2) &&
+		nvram_match(ipv6_nvname("ipv6_only"), "1"))
+		return nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+	else
+#endif
+	switch (wan_proto) {
+	case WAN_PPPOE:
+	case WAN_PPTP:
+	case WAN_L2TP:
+#ifdef RTCONFIG_SOFTWIRE46
+	case WAN_LW4O6:
+	case WAN_MAPE:
+#endif
 		wan_ifname = nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
-	} else
+		break;
+#ifdef RTCONFIG_SOFTWIRE46
+	case WAN_V6PLUS:
+		if (nvram_get_int("s46_hgw_case") >= S46_CASE_MAP_HGW_OFF) {
+			wan_ifname = nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
+			break;
+		}
+#endif
+	default:
 		wan_ifname = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+		break;
+	}
 
 	return wan_ifname;
 }
@@ -312,8 +378,9 @@ char *get_wan_ifname(int unit)
 #ifdef RTCONFIG_IPV6
 char *get_wan6_ifname(int unit)
 {
-	char *wan_proto, *wan_ifname;
 	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
+	char *wan_ifname;
+	int wan_proto;
 
 	switch (get_ipv6_service_by_unit(unit)) {
 	case IPV6_NATIVE_DHCP:
@@ -322,21 +389,28 @@ char *get_wan6_ifname(int unit)
 	case IPV6_PASSTHROUGH:
 #endif
 		snprintf(prefix, sizeof(prefix), "wan%d_", unit);
-		wan_proto = nvram_safe_get(strcat_r(prefix, "proto", tmp));
+		wan_proto = get_wan_proto(prefix);
 
 #ifdef RTCONFIG_USB_MODEM
 		if (dualwan_unit__usbif(unit)) {
-			if (strcmp(wan_proto, "dhcp") == 0)
-				wan_ifname = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
-			else
-				wan_ifname = nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
+			wan_ifname = (wan_proto == WAN_DHCP) ?
+				nvram_safe_get(strcat_r(prefix, "ifname", tmp)) :
+				nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
 		} else
 #endif
-		if (strcmp(wan_proto, "dhcp") != 0 && strcmp(wan_proto, "static") != 0 &&
-		    nvram_match(ipv6_nvname_by_unit("ipv6_ifdev", unit), "ppp")) {
-			wan_ifname = nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
-		} else
+		switch (wan_proto) {
+		case WAN_PPPOE:
+		case WAN_PPTP:
+		case WAN_L2TP:
+			if (nvram_match(ipv6_nvname_by_unit("ipv6_ifdev", unit), "ppp")) {
+				wan_ifname = nvram_safe_get(strcat_r(prefix, "pppoe_ifname", tmp));
+				break;
+			}
+			/* fall through */
+		default:
 			wan_ifname = nvram_safe_get(strcat_r(prefix, "ifname", tmp));
+			break;
+		}
 		break;
 	case IPV6_6TO4:
 	case IPV6_6IN4:
@@ -380,12 +454,14 @@ int get_wanports_status(int wan_unit)
 		return 0;
 	}
 #ifdef RTCONFIG_DUALWAN
-	if(get_dualwan_by_unit(wan_unit) == WANS_DUALWAN_IF_LAN)
+	if( get_dualwan_by_unit(wan_unit) == WANS_DUALWAN_IF_LAN
+	 || get_dualwan_by_unit(wan_unit) == WANS_DUALWAN_IF_WAN
+	)
 	{
 	#ifdef RTCONFIG_RALINK
 		return rtkswitch_wanPort_phyStatus(wan_unit); //Paul modify 2012/12/4
 	#else
-		return wanport_status(wan_unit);
+		return wanport_status(wan_unit) ? 1 : 0;
 	#endif
 	}
 #endif
@@ -474,7 +550,6 @@ wan_primary_ifunit_ipv6(void)
 	int unit = wan_primary_ifunit();
 
 	if (!strstr(nvram_safe_get("wans_dualwan"), "none")
-	    && !strcmp(nvram_safe_get("wans_mode"), "lb")
 #ifdef RTCONFIG_IPV6
 	    && get_ipv6_service_by_unit(unit) == IPV6_DISABLED
 #endif
@@ -700,23 +775,64 @@ int get_usb_port_host(const char *usb_port)
 #endif
 #endif // RTCONFIG_USB
 
-#if defined(RTCONFIG_DUALWAN)
 void set_wanscap_support(char *feature)
 {
 	nvram_set("wans_cap", feature);
 }
 
+#if defined(RTCONFIG_DUALWAN)
 void add_wanscap_support(char *feature)
 {
 	char features[128];
+	int len;
 
 	strcpy(features, nvram_safe_get("wans_cap"));
 
-	if(strlen(features)==0) nvram_set("wans_cap", feature);
+	if((len = strlen(features))==0)
+		nvram_set("wans_cap", feature);
 	else {
-		sprintf(features, "%s %s", features, feature);
+		len += sprintf(features + len, " %s", feature);
 		nvram_set("wans_cap", features);
 	}
+}
+
+int get_wans_cap(void)
+{
+	char wans_cap[64] = {0};
+	char word[8] = {0};
+	char *next = NULL;
+	int caps = 0;
+
+	strlcpy(wans_cap, nvram_safe_get("wans_cap"), sizeof(wans_cap));
+	foreach(word, wans_cap, next) {
+		if (!strcmp(word,"lan")) caps |= WANSCAP_LAN;
+		if (!strcmp(word,"2g")) caps |= WANSCAP_2G;
+		if (!strcmp(word,"5g")) caps |= WANSCAP_5G;
+		if (!strcmp(word,"usb")) caps |= WANSCAP_USB;
+		if (!strcmp(word,"dsl")) caps |= WANSCAP_DSL;
+		if (!strcmp(word,"wan")) caps |= WANSCAP_WAN;
+		if (!strcmp(word,"wan2")) caps |= WANSCAP_WAN2;
+		if (!strcmp(word,"sfp+")) caps |= WANSCAP_SFPP;
+		if (!strcmp(word,"6g")) caps |= WANSCAP_6G;
+	}
+
+	return caps;
+}
+
+int get_wans_dualwan_str(char *wancaps, int size){
+	snprintf(wancaps, size, "%s", nvram_get("wans_dualwan") ? : (nvram_default_get("wans_dualwan") ? :
+#ifdef RTCONFIG_DSL
+				"dsl"
+#elif defined(RTCONFIG_INTERNAL_GOBI) && defined(RTCONFIG_NO_WANPORT)
+				"usb"
+#else
+				"wan"
+#endif
+				" "DEF_SECOND_WANIF
+				)
+			);
+
+	return 0;
 }
 
 int get_wans_dualwan(void) 
@@ -745,6 +861,8 @@ int get_wans_dualwan(void)
 		if (!strcmp(word,"dsl")) caps |= WANSCAP_DSL;
 		if (!strcmp(word,"wan")) caps |= WANSCAP_WAN;
 		if (!strcmp(word,"wan2")) caps |= WANSCAP_WAN2;
+		if (!strcmp(word,"sfp+")) caps |= WANSCAP_SFPP;
+		if (!strcmp(word,"6g")) caps |= WANSCAP_6G;
 	}
 
 	return caps;
@@ -770,7 +888,11 @@ int get_dualwan_by_unit(int unit)
 
 	i = 0;
 	foreach(word, wans_dualwan, next) {
-		if(i==unit) {
+		if(i==unit
+#ifdef RTCONFIG_MULTISERVICE_WAN
+			|| i == get_ms_base_unit(unit)
+#endif
+		) {
 			if (!strcmp(word,"lan")) return WANS_DUALWAN_IF_LAN;
 			if (!strcmp(word,"2g")) return WANS_DUALWAN_IF_2G;
 			if (!strcmp(word,"5g")) return WANS_DUALWAN_IF_5G;
@@ -781,6 +903,7 @@ int get_dualwan_by_unit(int unit)
 #ifdef RTCONFIG_USB_MULTIMODEM
 			if (!strcmp(word,"usb2")) return WANS_DUALWAN_IF_USB2;
 #endif
+			if (!strcmp(word,"sfp+")) return WANS_DUALWAN_IF_SFPP;
 			return WANS_DUALWAN_IF_NONE;
 		}
 		i++;
@@ -799,6 +922,20 @@ int get_wanunit_by_type(int wan_type){
 	}
 
 	return WAN_UNIT_NONE;
+}
+
+/* Return wan type string of @unit wan_unit.
+ * @return:	pointer to a string.
+ *  NULL:	invalid parameter or unknown wan type.
+ */
+char *get_wantype_str_by_unit(int unit)
+{
+	int type = get_dualwan_by_unit(unit);
+
+	if (unit < 0 || unit > ARRAY_SIZE(wantype_str))
+		return NULL;
+
+	return wantype_str[type];
 }
 
 // imply: unit 0: primary, unit 1: secondary
@@ -913,12 +1050,13 @@ void set_dualwan_type(char *type)
 void add_dualwan_type(char *type)
 {
 	char types[128];
+	int len;
 
 	strcpy(types, nvram_safe_get("wans_dualwan"));
 
-	if(strlen(types)==0) nvram_set("wans_dualwan", type);
+	if((len = strlen(types))==0) nvram_set("wans_dualwan", type);
 	else {
-		sprintf(types, "%s %s", types, type);
+		sprintf(types+len, " %s", type);
 		nvram_set("wans_dualwan", types);
 	}
 }
@@ -937,6 +1075,9 @@ void add_lan_phy(char *phy)
 		return;
 
 	ifnames = nvram_safe_get("lan_ifnames");
+	if(find_word(ifnames, phy) != NULL)
+		return;	/* exist */
+
 	snprintf(phys, sizeof(phys), "%s%s%s", ifnames,
 		(*ifnames && *phy) ? " " : "", phy);
 	nvram_set("lan_ifnames", phys);
@@ -955,6 +1096,9 @@ void add_wan_phy(char *phy)
 		return;
 
 	ifnames = nvram_safe_get("wan_ifnames");
+	if(find_word(ifnames, phy) != NULL)
+		return;	/* exist */
+
 	snprintf(phys, sizeof(phys), "%s%s%s", ifnames,
 		(*ifnames && *phy) ? " " : "", phy);
 	nvram_set("wan_ifnames", phys);
@@ -1048,12 +1192,12 @@ char ssid2[64] = { 0 };
 char *get_default_ssid(int unit, int subunit)
 {
 	int rev3 = 0;
-	const int band_num = num_of_wl_if();
+	const int band_num __attribute__((unused)) = num_of_wl_if();
 	char ssidbase[16], *macp = NULL;
 	unsigned char mac_binary[6];
-	const char *post_5g = "-1", *post_5g2 = "-2", *post_guest = "_Guest";	/* postfix for RTCONFIG_NEWSSID_REV2 case */
+	const char *post_5g __attribute__((unused)) = "-1", *post_5g2 __attribute__((unused))= "-2", *post_guest = "_Guest";	/* postfix for RTCONFIG_NEWSSID_REV2 case */
 
-#ifdef RTCONFIG_NEWSSID_REV2
+#if defined(RTCONFIG_NEWSSID_REV2) || defined(RTCONFIG_NEWSSID_REV4) || defined(RTCONFIG_NEWSSID_REV5) || defined(RTCONFIG_NEWSSID_REV6)
 	rev3 = 1;
 #endif
 
@@ -1063,17 +1207,29 @@ char *get_default_ssid(int unit, int subunit)
 	}
 
 	/* Adjust postfix for different conditions. */
-#ifdef GTAC5300
+#if defined(GTAC5300) || defined(GTAX11000) || defined(GTAX11000_PRO) || defined(GTAXE16000)
 	post_5g = "";
 	post_5g2 = "_Gaming";
-#elif !defined(RTCONFIG_NEWSSID_REV2) && !defined(RTCONFIG_SINGLE_SSID)
+#elif defined(RTCONFIG_NEWSSID_REV6)
+	post_5g = "";
+	post_5g2 = "";
+#elif !defined(RTCONFIG_NEWSSID_REV2) && !defined(RTCONFIG_NEWSSID_REV4) && !defined(RTCONFIG_SINGLE_SSID)
 	post_5g = "";
 #endif
 
+#if defined(RTCONFIG_NEWSSID_REV5)
+#if defined(RTAX56_XD4) || defined(XD4PRO)
+	if (nvram_match("SSIDRULE", "RT-V5")){
+		post_5g = "";
+	}
+#elif defined(ET12) || defined(XT12)
+	post_5g = "";
+	post_5g2 = "";
+#endif
+#endif
 #if defined(RTCONFIG_SINGLE_SSID) && defined(RTCONFIG_SSID_AMAPS)
 	post_guest = "_AMAPS_Guest";
 #endif
-
 
 	memset(ssid, 0x0, sizeof(ssid));
 
@@ -1098,14 +1254,22 @@ char *get_default_ssid(int unit, int subunit)
 	) {
 		macp = get_2g_hwaddr();
 		ether_atoe(macp, mac_binary);
-#if defined(RTAC58U)
+#if defined(RTAC58U) || defined(RTAC59U)
 		if (!strncmp(nvram_safe_get("territory_code"), "SP", 2))
 			sprintf((char *)ssidbase, "Spirit_%02X", mac_binary[5]);
+		else if (!strncmp(nvram_safe_get("territory_code"), "CX/01", 5)
+		      || !strncmp(nvram_safe_get("territory_code"), "CX/05", 5))
+			sprintf((char *)ssidbase, "Stuff-Fibre_%02X", mac_binary[5]);
 		else
 #endif
 #ifdef RTAC68U
 		if (is_dpsta_repeater())
 			sprintf((char *)ssidbase, "%s_RP_%02X", SSID_PREFIX, mac_binary[5]);
+		else
+#endif
+#if defined(DSL_AX82U) && !defined(RTCONFIG_BCM_MFG)
+		if (is_ax5400_i1())
+			sprintf((char *)ssidbase, "OPTUSGR%02X%02X%02X", mac_binary[3], mac_binary[4], mac_binary[5]);
 		else
 #endif
 			sprintf((char *)ssidbase, "%s_%02X", SSID_PREFIX, mac_binary[5]);
@@ -1117,28 +1281,68 @@ char *get_default_ssid(int unit, int subunit)
 #endif
 
 	strlcpy(ssid, ssidbase, sizeof(ssid));
+
+	/* main ssid */
+#ifdef RTCONFIG_NEWSSID_REV4
+	if ((!subunit)) {
+#if defined(RTAC59U)
+		if (strncmp(nvram_safe_get("territory_code"), "CX/01", 5) && strncmp(nvram_safe_get("territory_code"), "CX/05", 5))
+#elif defined(RTAX58U) || defined(RTAX56U)
+		if (strncmp(nvram_safe_get("territory_code"), "CX", 2))
+#elif defined(RTAC59_CD6R) || defined(RTAC59_CD6N)
+		strlcat(ssid, "_CD6", sizeof(ssid));
+#elif defined(PLAX56_XP4)
+		strlcat(ssid, "_XP4", sizeof(ssid));
+#elif defined(RTAX82_XD6)
+		strlcat(ssid, "_XD6", sizeof(ssid));
+#elif defined(DSL_AX82U) && !defined(RTCONFIG_BCM_MFG)
+		if (is_ax5400_i1() && unit == WL_5G_BAND)
+			strlcat(ssid, "_5G", sizeof(ssid));
+#endif
+#if defined(RTCONFIG_NEWSSID_REV5)
+#if defined(RTAX56_XD4) || defined(XD4PRO)
+		if (nvram_match("SSIDRULE", "RT-V5")){
+			strlcat(ssid, "_XD4", sizeof(ssid));
+		}
+#elif defined(ET12) || defined(XT12)
+		strlcat(ssid, "_", sizeof(ssid));
+		strlcat(ssid, nvram_safe_get("model"), sizeof(ssid));
+#endif
+
+#endif
+		return ssid;
+	}
+#endif
+
 #if !defined(RTCONFIG_SINGLE_SSID)	/* including RTCONFIG_NEWSSID_REV2 */
 	switch (unit) {
 	case WL_2G_BAND:
-#if defined(RTCONFIG_NEWSSID_REV2)
+#if defined(RTCONFIG_NEWSSID_REV2) || defined(RTCONFIG_NEWSSID_REV4)
 		if ((band_num > 1)
 #ifdef RTAC68U
 			&& !is_dpsta_repeater()
 #endif
 		)
 #endif
+#if !defined(RTCONFIG_NEWSSID_REV6)
 			strlcat(ssid, "_2G", sizeof(ssid));
+#endif
 		break;
 	case WL_5G_BAND:
+#if !defined(RTCONFIG_NEWSSID_REV6)
 		strlcat(ssid, "_5G", sizeof(ssid));
+#endif
 		if (band_num > 2 &&
 		    nvram_get(wl_nvname("nband", WL_5G_2_BAND, 0)) != NULL)
 		{
 			strlcat(ssid, post_5g, sizeof(ssid));
 		}
+
 		break;
 	case WL_5G_2_BAND:
+#if !defined(RTCONFIG_NEWSSID_REV6)
 		strlcat(ssid, "_5G", sizeof(ssid));
+#endif
 		strlcat(ssid, post_5g2, sizeof(ssid));
 		break;
 	case WL_60G_BAND:
@@ -1165,6 +1369,21 @@ char *get_default_ssid(int unit, int subunit)
 	else
 		strlcat(ssid, post_guest, sizeof(ssid));
 #else
+#if defined(RTCONFIG_NEWSSID_REV6)
+	switch (unit) {
+		case WL_2G_BAND:
+			strlcat(ssid, "_2G", sizeof(ssid));
+			break;
+		case WL_5G_BAND:
+			strlcat(ssid, "_5G", sizeof(ssid));
+			break;
+		case WL_5G_2_BAND:
+#if defined(RTCONFIG_WIFI6E)
+			strlcat(ssid, "_6G", sizeof(ssid));
+#endif
+			break;
+	}
+#endif
 		strlcat(ssid, post_guest, sizeof(ssid));
 #endif
 		if (subunit > 1) {
@@ -1202,3 +1421,163 @@ char *get_userdns_r(const char *prefix, char *buf, size_t buflen)
 	}
 	return buf;
 }
+
+/* brif can be NULL for any bridge */
+int is_bridged(const char *brif, const char *ifname)
+{
+	char path[PATH_MAX];
+
+	if (!ifname)
+		return 0;
+
+	if (brif)
+		snprintf(path, sizeof(path), "/sys/class/net/%s/brif/%s", brif, ifname);
+	else
+		snprintf(path, sizeof(path), "/sys/class/net/%s/brport/bridge", ifname);
+
+	return l_exists(path) || d_exists(path) || f_exists(path);
+}
+
+#ifdef RTCONFIG_BROOP
+
+int broop_state = 0;
+
+#define NETLINK_BROOP	22
+#define MAX_PAYLOAD	16
+
+typedef struct broop_state {
+	char ctrl;
+	int val;
+} broop_st;
+
+enum {
+        GET,
+        SET
+};
+
+int netlink_broop(char ctrl, int val)
+{
+	struct sockaddr_nl src_addr, dest_addr;
+	struct nlmsghdr *nlh = NULL;
+	struct iovec iov;
+	int sock_fd;
+	struct msghdr msg;
+	broop_st bst;
+	int brs;
+	
+	sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_BROOP);
+	if(sock_fd < 0) {
+		printf("invalid sockfd\n");
+		return 1;
+	}
+	memset(&src_addr, 0, sizeof(src_addr));
+	src_addr.nl_family = AF_NETLINK;
+	src_addr.nl_pid = getpid(); 
+	src_addr.nl_groups = 0;  /* not in mcast groups */
+	bind(sock_fd, (struct sockaddr*)&src_addr,sizeof(src_addr));
+
+	memset(&dest_addr, 0, sizeof(dest_addr));
+	dest_addr.nl_family = AF_NETLINK;
+	dest_addr.nl_pid = 0;   /* For Linux Kernel */
+	dest_addr.nl_groups = 0; /* unicast */
+
+	nlh=(struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
+	nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+	nlh->nlmsg_pid = getpid(); 
+	nlh->nlmsg_flags = 0;
+
+	bst.ctrl = ctrl;
+	bst.val = val;
+	memcpy(NLMSG_DATA(nlh), &bst, sizeof(broop_st));
+
+	iov.iov_base = (void *)nlh;
+	iov.iov_len = nlh->nlmsg_len;
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_name = (void *)&dest_addr;
+	msg.msg_namelen = sizeof(dest_addr);
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	if(sendmsg(sock_fd, &msg, 0) < 0)
+		perror("sendmsg error");
+	else
+		printf("sendmsg ok\n");
+	
+ 	if(recvmsg(sock_fd, &msg, 0) < 0) {
+		perror("recvmsg fail:");
+		goto end;
+	}
+ 	
+	memcpy(&brs, NLMSG_DATA(msg.msg_iov->iov_base), 4);
+end:
+	close(sock_fd);
+	return brs;
+}
+
+int detect_broop()
+{
+	int fd, ret = 0;
+
+	switch (broop_state) {
+	case BROOP_IDLE:
+		netlink_broop(SET, 0);
+		broop_state = BROOP_DETECT;
+		
+		break;
+	case BROOP_DETECT:
+		ret = netlink_broop(GET, 0);
+		if (ret == 1)
+			broop_state = BROOP_IDLE;		
+
+		break;
+	default:
+		_dprintf("Illegal broop state.\n");
+		break;
+	}
+
+	return ret;
+}
+
+
+#endif
+
+#ifdef RTCONFIG_MULTISERVICE_WAN
+int get_ms_base_unit(int wan_unit)
+{
+	return (wan_unit > WAN_UNIT_MULTISRV_BASE) ? ((wan_unit - WAN_UNIT_MULTISRV_BASE) / 10) : wan_unit;
+}
+
+/*
+ * base_wan_unit: WAN_UNIT_FIRST, WAN_UNIT_SECOND
+ * idx: 0~9
+ */
+int get_ms_wan_unit(int base_wan_unit, int idx)
+{
+	if (base_wan_unit >= WAN_UNIT_MAX || idx >= WAN_MULTISRV_MAX)
+		return WAN_UNIT_NONE;
+
+	if (idx)
+	{
+		if (base_wan_unit == WAN_UNIT_FIRST)
+			return WAN_UNIT_FIRST_MULTISRV_BASE + idx;
+#if defined(RTCONFIG_DUALWAN) || defined(RTCONFIG_USB_MODEM)
+		else if (base_wan_unit == WAN_UNIT_SECOND)
+			return WAN_UNIT_SECOND_MULTISRV_BASE + idx;
+#endif
+		else
+			return WAN_UNIT_NONE;
+	}
+	else
+		return base_wan_unit;
+}
+
+int get_ms_idx_by_wan_unit(int wan_unit)
+{
+	if (wan_unit < WAN_UNIT_MAX)
+		return 0;
+	else if(wan_unit > WAN_UNIT_MULTISRV_BASE)
+		return wan_unit % 10;
+	else
+		return -1;
+}
+#endif //RTCONFIG_MULTISERVICE_WAN

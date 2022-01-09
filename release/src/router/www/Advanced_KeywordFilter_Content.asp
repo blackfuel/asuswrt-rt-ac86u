@@ -11,6 +11,7 @@
 <title><#Web_Title#> - <#menu5_5_5#></title>
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
+<script type="text/javascript" src="/js/jquery.js"></script>
 <script language="JavaScript" type="text/javascript" src="/state.js"></script>
 <script type="text/javascript" language="JavaScript" src="/help.js"></script>
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
@@ -126,7 +127,7 @@ function done_validating(action){
 }
 </script>
 </head>
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 

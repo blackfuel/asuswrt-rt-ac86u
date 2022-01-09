@@ -1,16 +1,3 @@
-#
-# Linux acsd Makefile
-#
-# Copyright (C) 2012, Broadcom Corporation
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom Corporation;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom Corporation.
-#
-# $Id: Makefile 394886 2013-04-04 02:48:41Z $
-#
 include ../.config
 
 CFLAGS	+= -I. -I$(TOP)/shared -I$(SRCBASE)/include -Wall -Werror
@@ -18,7 +5,7 @@ CFLAGS	+= $(if $(WLAN_ComponentIncPath),$(WLAN_ComponentIncPath),$(addprefix -I,
 #CFLAGS	+= -g -DDEBUG
 #CFLAGS	+= -DACS_DEBUG
 CFLAGS	+= -s -O2
-LDFLAGS += -L$(TOP)/nvram -L$(INSTALLDIR)/nvram/usr/lib -lnvram
+LDFLAGS += -L$(TOP_PLATFORM)/nvram -L$(INSTALLDIR)/nvram/usr/lib -lnvram
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
 LDFLAGS += $(EXTRA_LDFLAGS)
 

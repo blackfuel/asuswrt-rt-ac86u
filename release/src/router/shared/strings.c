@@ -310,8 +310,9 @@ int remove_word(char *buffer, const char *word)
 	p += strlen(word);
 	while (*p == ' ') ++p;
 	while ((q > buffer) && (*(q - 1) == ' ')) --q;
-	if (*q != 0) *q++ = ' ';
-	strcpy(q, p);
+	if (*p != '\0' && q != buffer) *q++ = ' ';		/* add ' ' if have remain string and not in the head of buffer */
+	if(p != q)
+		memmove(q, p, strlen(p)+1);			/* including '\0' */
 
 	return 1;
 }
@@ -327,6 +328,42 @@ void trim_space(char *str)
 		else
 			break;
 	}
+}
+
+void trim_colon(char *str)
+{
+	int i=0, len=0, j=0;
+	if (!str) return;
+	len=strlen(str);
+	for(i=0; i<len; i++)
+	{
+		if(str[i]==':')
+		{
+			for(j=i; j<len; j++)
+			{
+				str[j]=str[j+1];
+			}
+		len--;
+		}
+	}
+}
+
+void trim_char(char *str, char c)
+{
+	int in = 0;
+	int out = 0;
+
+	if (!str)
+		return;
+
+	while (str[in])
+	{
+		if (str[in] != c)
+			str[out++] = str[in];
+		in++;
+	}
+
+	str[out] = '\0';
 }
 
 void toLowerCase(char *str) {

@@ -13,6 +13,7 @@
 <script type="text/javascript" src="/general.js"></script>
 <script type="text/javascript" src="/state.js"></script>
 <script type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <style>
 .cancel{
 	border: 2px solid #898989;
@@ -123,7 +124,7 @@ $(function () {
 			.attr('src', _src)
 			.appendTo('head');
 	};
-	if(parent.amesh_support && (parent.isSwMode("rt") || parent.isSwMode("ap")))
+	if(parent.amesh_support && (parent.isSwMode("rt") || parent.isSwMode("ap")) && parent.ameshRouter_support)
 		dynamic_include_js('/require/modules/amesh.js');
 	if(parent.smart_connect_support && (parent.isSwMode("rt") || parent.isSwMode("ap")))
 		dynamic_include_js('/switcherplugin/jquery.iphone-switch.js');
@@ -376,24 +377,24 @@ function initial(){
 			parent.based_modelid == "RT-AC3200" || 
 			parent.based_modelid == "RT-AC88U" ||
 			parent.based_modelid == "RT-AC86U" ||
-			parent.based_modelid == "AC2900" ||
+			parent.based_modelid == "GT-AC2900" ||
 			parent.based_modelid == "RT-AC3100" ||
 			parent.based_modelid == "BLUECAVE"){
 			var value = new Array();
 			var desc = new Array();
 				
 			if(parent.based_modelid == "RT-AC5300" || parent.based_modelid == "GT-AC5300"){
-				desc = ["none", "Tri-Band Smart Connect", "5GHz Smart Connect"];
+				desc = ["none", "<#smart_connect_tri#>", "5GHz Smart Connect"];
 				value = ["0", "1", "2"];
 				add_options_x2(document.form.smart_connect_t, desc, value, smart_connect_x);
 			}
 			else if(parent.based_modelid == "RT-AC3200"){
-				desc = ["none", "Tri-Band Smart Connect"];
+				desc = ["none", "<#smart_connect_tri#>"];
 				value = ["0", "1"];
 				add_options_x2(document.form.smart_connect_t, desc, value, smart_connect_x);						
 			}
-			else if(parent.based_modelid == "RT-AC88U" || parent.based_modelid == "RT-AC86U" || parent.based_modelid == "AC2900" || parent.based_modelid == "RT-AC3100" || parent.based_modelid == "BLUECAVE"){
-				desc = ["none", "Dual-Band Smart Connect"];
+			else if(parent.based_modelid == "RT-AC88U" || parent.based_modelid == "RT-AC86U" || parent.based_modelid == "GT-AC2900" || parent.based_modelid == "RT-AC3100" || parent.based_modelid == "BLUECAVE"){
+				desc = ["none", "<#smart_connect_dual#>"];
 				value = ["0", "1"];
 				add_options_x2(document.form.smart_connect_t, desc, value, smart_connect_x);						
 			}
@@ -444,16 +445,16 @@ function initial(){
 		wireless_subunit = document.form.wl_subunit.value;
 		var array_idx = (document.form.wl_subunit.value - 1);
 		wireless_profile.wl_bss_enabled = gn_array[array_idx][0];
-		wireless_profile.ssid = gn_array[array_idx][1];
-		wireless_profile.wl_auth_mode_x = gn_array[array_idx][2];
-		wireless_profile.wl_crypto = gn_array[array_idx][3];
-		wireless_profile.wl_wpa_psk = gn_array[array_idx][4];
-		wireless_profile.wl_wep_x = gn_array[array_idx][5];
-		wireless_profile.wl_key = gn_array[array_idx][6];
-		wireless_profile.wl_key1 = gn_array[array_idx][7];
-		wireless_profile.wl_key2 = gn_array[array_idx][8];
-		wireless_profile.wl_key3 = gn_array[array_idx][9];
-		wireless_profile.wl_key4 = gn_array[array_idx][10];
+		wireless_profile.ssid = decodeURIComponent(gn_array[array_idx][1]);
+		wireless_profile.wl_auth_mode_x = decodeURIComponent(gn_array[array_idx][2]);
+		wireless_profile.wl_crypto = decodeURIComponent(gn_array[array_idx][3]);
+		wireless_profile.wl_wpa_psk = decodeURIComponent(gn_array[array_idx][4]);
+		wireless_profile.wl_wep_x = decodeURIComponent(gn_array[array_idx][5]);
+		wireless_profile.wl_key = decodeURIComponent(gn_array[array_idx][6]);
+		wireless_profile.wl_key1 = decodeURIComponent(gn_array[array_idx][7]);
+		wireless_profile.wl_key2 = decodeURIComponent(gn_array[array_idx][8]);
+		wireless_profile.wl_key3 = decodeURIComponent(gn_array[array_idx][9]);
+		wireless_profile.wl_key4 = decodeURIComponent(gn_array[array_idx][10]);
 		//Guestnetwork not need
 		document.form.wl_nmode_x.disabled = true;
 		document.form.wps_enable.disabled = true;
@@ -546,13 +547,13 @@ function initial(){
 		_enable_flag = '<% nvram_get("captive_portal_enable"); %>';
 		if(_enable_flag == "on") {
 			_profile_list = decodeURIComponent('<% nvram_char_to_ascii("","captive_portal"); %>');
-			parse_wl_list(_profile_list, 5, "Free Wi-Fi", captive_portal_used_wl_array);
+			parse_wl_list(_profile_list, 5, "Free WiFi", captive_portal_used_wl_array);
 		}
 		//check captive portal adv
 		_enable_flag = '<% nvram_get("captive_portal_adv_enable"); %>';
 		if(_enable_flag == "on") {
 			_profile_list = decodeURIComponent('<% nvram_char_to_ascii("","captive_portal_adv_profile"); %>');
-			parse_wl_list(_profile_list, 5, "Captive Portal Wi-Fi", captive_portal_used_wl_array);
+			parse_wl_list(_profile_list, 5, "Captive Portal WiFi", captive_portal_used_wl_array);
 		}
 		
 		//check fb wi-fi
@@ -560,18 +561,18 @@ function initial(){
 		if(_enable_flag == "on") {
 			var fbwifi_2g = '<% nvram_get("fbwifi_2g"); %>';
 			if(fbwifi_2g != "off") {
-				captive_portal_used_wl_array[fbwifi_2g] = "Facebook Wi-Fi";
+				captive_portal_used_wl_array[fbwifi_2g] = "Facebook WiFi";
 			}
 			if(wl_info.band5g_support) {
 				var fbwifi_5g = '<% nvram_get("fbwifi_5g"); %>';
 				if(fbwifi_5g != "off") {
-					captive_portal_used_wl_array[fbwifi_5g] = "Facebook Wi-Fi";
+					captive_portal_used_wl_array[fbwifi_5g] = "Facebook WiFi";
 				}
 			}
 			if(wl_info.band5g_2_support) {
 				var fbwifi_5g_2 = '<% nvram_get("fbwifi_5g_2"); %>';
 				if(fbwifi_5g_2 != "off") {
-					captive_portal_used_wl_array[fbwifi_5g_2] = "Facebook Wi-Fi";
+					captive_portal_used_wl_array[fbwifi_5g_2] = "Facebook WiFi";
 				}
 			}
 		}
@@ -977,8 +978,8 @@ function submitForm(){
 	}
 	document.form.wsc_config_state.value = "1";
 
-	if(parent.amesh_support && (parent.isSwMode("rt") || parent.isSwMode("ap"))) {
-		if(!check_wl_auth_support(auth_mode, $("select[name=wl_auth_mode_x] option:selected")))
+	if(parent.amesh_support && (parent.isSwMode("rt") || parent.isSwMode("ap")) && parent.ameshRouter_support) {
+		if(!check_wl_auth_support($("select[name=wl_auth_mode_x] option:selected"), wireless_unit))
 			return false;
 		else {
 			var wl_parameter = {
@@ -1019,10 +1020,10 @@ function submitForm(){
 			document.form.wl_key4.disabled = true;
 			document.form.action_wait.value = 50;
 			switch(captive_portal_used_wl_array[_unit_subunit]) {
-				case "Free Wi-Fi" :
+				case "Free WiFi" :
 					document.form.action_script.value = "overwrite_captive_portal_ssid;restart_wireless;";
 					break;
-				case "Captive Portal Wi-Fi" :
+				case "Captive Portal WiFi" :
 					document.form.action_script.value = "overwrite_captive_portal_adv_ssid;restart_wireless;";
 					break;
 			}
@@ -1089,7 +1090,7 @@ function tab_reset(v){
 	}else if(v == 1){	//Smart Connect
 		if(parent.based_modelid == "RT-AC5300" || parent.based_modelid == "RT-AC3200" || parent.based_modelid == "GT-AC5300")
 			document.getElementById("span0").innerHTML = "2.4GHz, 5GHz-1 and 5GHz-2";
-		else if(parent.based_modelid == "RT-AC88U" || parent.based_modelid == "RT-AC86U" || parent.based_modelid == "AC2900" || parent.based_modelid == "RT-AC3100" || parent.based_modelid == "BLUECAVE")
+		else if(parent.based_modelid == "RT-AC88U" || parent.based_modelid == "RT-AC86U" || parent.based_modelid == "GT-AC2900" || parent.based_modelid == "RT-AC3100" || parent.based_modelid == "BLUECAVE")
 			document.getElementById("span0").innerHTML = "2.4GHz and 5GHz";
 		
 		document.getElementById("t1").style.display = "none";
@@ -1180,7 +1181,16 @@ function limit_auth_method(){
 	if(is_KR_sku){	// MODELDEP by Territory_code
 		auth_array.splice(0, 1); //remove Open System
 	}	
-	
+
+	if(isSupport("amas") && isSupport("amasRouter") && (isSwMode("rt") || isSwMode("ap"))){
+		var re_count = httpApi.hookGet("get_cfg_clientlist", true).length;
+		if(re_count > 1){
+			auth_array = auth_array.filter(function(item){
+				return (item[1] != "wpa2" && item[1] != "wpawpa2");//have re node then hide WPA2-Enterprise, WPA/WPA2-Enterprise
+			});
+		}
+	}
+
 	free_options(document.form.wl_auth_mode_x);
 	for(i = 0; i < auth_array.length; i++){
 		if(auth_method_array  == auth_array[i][1])

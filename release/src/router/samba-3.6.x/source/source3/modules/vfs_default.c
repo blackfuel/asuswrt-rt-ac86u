@@ -940,7 +940,7 @@ static int vfswrap_ftruncate(vfs_handle_struct *handle, files_struct *fsp, SMB_O
 	   ftruncate extend but ext2 can. */
 
 	result = sys_ftruncate(fsp->fh->fd, len);
-	if (result == 0)
+	//if (result == 0)
 		goto done;
 
 	/* According to W. R. Stevens advanced UNIX prog. Pure 4.3 BSD cannot

@@ -718,7 +718,7 @@ void handle_probe_req(struct hostapd_data *hapd,
 	int ret;
 	u16 csa_offs[2];
 	size_t csa_offs_len;
-	char vsie_str[MAX_VSIE_LEN];
+	char vsie_str[MAX_VSIE_LEN] = {0};
 
 	wpa_printf(MSG_DEBUG, "STA " MACSTR " handle_probe_req",
 		MAC2STR(mgmt->sa));
@@ -745,11 +745,12 @@ void handle_probe_req(struct hostapd_data *hapd,
 		return;
 	}
 
-	wpa_snprintf_hex(vsie_str, MAX_VSIE_LEN, elems.vsie, elems.vsie_len);
-	wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_PROBE_REQ "%s", vsie_str);
+	if (elems.vsie_len)
+		wpa_snprintf_hex(vsie_str, MAX_VSIE_LEN, elems.vsie, elems.vsie_len);
+	wpa_msg(hapd->msg_ctx, MSG_INFO, AP_STA_PROBE_REQ MACSTR " %s", MAC2STR(mgmt->sa), vsie_str);
 	if (hapd->msg_ctx_parent &&
 		hapd->msg_ctx_parent != hapd->msg_ctx) {
-		wpa_msg_no_global(hapd->msg_ctx_parent, MSG_INFO, AP_STA_PROBE_REQ "%s", vsie_str);
+		wpa_msg_no_global(hapd->msg_ctx_parent, MSG_INFO, AP_STA_PROBE_REQ MACSTR " %s", MAC2STR(mgmt->sa), vsie_str);
 	}
 
 	if (elems.vsie_len && elems.vsie)

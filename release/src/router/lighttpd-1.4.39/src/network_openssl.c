@@ -14,6 +14,11 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+/* smb_auth.c */
+extern off_t smbc_wrapper_lseek(connection* con, int fd, off_t offset, int whence);
+extern size_t smbc_wrapper_read(connection* con, int fd, void *buf, size_t bufsize);
+extern int smbc_wrapper_close(connection* con, int fd);
+
 #define DBE 0
 
 static int load_next_chunk(server *srv, connection *con, chunkqueue *cq, off_t max_bytes, const char **data, size_t *data_len) {
@@ -111,6 +116,13 @@ static int load_next_chunk(server *srv, connection *con, chunkqueue *cq, off_t m
 				return -1;
 			}
 			
+			// close file
+			if( c->file.length == (offset + toSend)) {
+				smbc_wrapper_close(con, c->file.fd);
+				c->file.fd = -1;
+			}
+
+
 			*data = local_send_buffer;
 			*data_len = toSend;
 		}

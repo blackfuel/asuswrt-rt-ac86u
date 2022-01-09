@@ -13,10 +13,10 @@
 <style>
 body{
 	color:#FFF;
-	font-family: Arial;
+	font-family: Arial, MS UI Gothic, MS P Gothic, Microsoft Yahei UI, sans-serif;
 }
 .wrapper{
-	background:url(images/New_ui/login_bg.png) #283437 no-repeat;
+	background:url(images/New_ui/login_bg.png) #1F1F1F no-repeat;
 	background-size: 1280px 1076px;
 	background-position: center 0%;
 	margin: 0px; 
@@ -218,8 +218,22 @@ li{
 	50% {
 		left: 220px;
 	}
-		100% {
-	left: 30px;
+	100% {
+		left: 30px;
+	}
+}
+
+.model_img{
+	width: 120px;
+	height: 142px;
+	background: url('images/Model_product.png') no-repeat;
+	background-size: 100%;
+}
+.mode_img_COD{
+	width: 120px;
+	height: 142px;
+	background: url('images/Model_product_COD.png') no-repeat;
+	background-size: 100%;
 }
 </style>
 <script type="text/javascript">
@@ -253,13 +267,17 @@ if(wans_dualwan_orig.search(" ") == -1)
 var new_lan_ip = [<% get_next_lanip(); %>][0].next_lanip;
 var header_info = [<% get_header_info(); %>];
 var location_org = header_info[0].protocol + "://" + header_info[0].host + ":" + header_info[0].port;
+var odm_support = ('<% nvram_get("rc_support"); %>'.indexOf(' odm') != -1) ? true : false;
 
 function initial(){
 	var is_logined = [<% is_logined_hook(); %>][0];
 	var html_code = '';
 	var url_flag = "";
-	var html_code_notlogin = "<ul><li>Please check with your network administrator.</li></ul>";	
+	var html_code_notlogin = "<ul><li><#web_redirect_suggestion_admin#></li></ul>";	
 	var showtext = function(obj, str){if(obj)obj.innerHTML=str;}
+	if(odm_support){
+		$('.model_img').attr('class', 'mode_img_COD');
+	}
 
 	if(casenum == 1){
 		$("#page_title").html("<#web_redirect_reason1#>");
@@ -304,7 +322,7 @@ function initial(){
 			//html_code += "</div>";
 			$("#animation_field").show();
 			detect_ppp_connect();
-			$("#page_title").html("Please Wait for Internet Reconnecting");
+			$("#page_title").html("<#web_redirect_reconnecting#>");
 			$("#reason_title").hide();
 			$("#reason_field").hide();
 			$("#suggest_title").hide();
@@ -447,8 +465,8 @@ function initial(){
 	else if(casenum == 9) {
 		$("#page_title").html("<#web_redirect_case8_title#>");
 		html_code += "<ul>";
-		html_code += "<li>Make sure your AiMesh router is power on</li>";
-		html_code += "<li>Reboot AiMesh router and try again.</li>";
+		html_code += "<li><#web_redirect_case9_suggestion1#></li>";
+		html_code += "<li><#web_redirect_case9_suggestion2#></li>";
 		html_code += "</ul>";
 		$("#wanLink").hide();
 		$("#reason_title").hide();
@@ -589,7 +607,7 @@ function detect_ppp_connect(){
 					<div style="display:table">
 						<div style="display:table-row">
 							<div style="display:table-cell">
-								<div style="width:120px;height:142px;background:url('images/Model_product.png') no-repeat;background-size:100%;"></div>
+								<div class="model_img"></div>
 							</div>
 							<div style="display:table-cell;width:300px;vertical-align:middle;position:relative">
 								<div style="width:200px;height:3px;background:#279FD9;margin-left:30px;"></div>

@@ -16,7 +16,7 @@ body{
 	font-family: Arial;
 }
 .wrapper{
-	background:url(images/New_ui/login_bg.png) #283437 no-repeat;
+	background:url(images/New_ui/login_bg.png) #1F1F1F no-repeat;
 	background-size: 1280px 1076px;
 	background-position: center 0%;
 	margin: 0px; 
@@ -224,7 +224,7 @@ li{
 <script type="text/javascript">
 var new_lan_ip = [<% get_next_lanip(); %>][0].next_lanip;
 var header_info = [<% get_header_info(); %>];
-var location_org = header_info[0].protocol + "://" + header_info.host + ":" + header_info.port;
+var location_org = header_info[0].protocol + "://" + header_info[0].host + ":" + header_info[0].port;
 
 function initial(){
 	var html_code = '';

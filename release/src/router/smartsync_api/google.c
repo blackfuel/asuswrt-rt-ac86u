@@ -1,7 +1,7 @@
 #include "google.h"
 #include "data.h"
 #include "cJSON.h"
-
+#include <ctype.h>	//isdigit()
 
 int exit_loop = 0;
 char rootid[64] = {0};
@@ -12,6 +12,17 @@ char delete_id[64] = "\0";
 
 void updata_socket_list(char *temp_name,char *new_name,int i);
 void deal_big_low_conflcit(char *server_conflict_name,char *oldname,char *newname,char *newname_r,int index);
+int api_accout_info();
+int  cJSON_printf_account_info(cJSON *json);
+int is_server_exist(char *path,char *temp_name,char *URL, int index);
+int api_metadata_one(char *parentref, char *phref,cJSON *(*cmd_data)(char *filename), char *URL,int index);
+int get_metadata(char *parentref, char *id, proc_pt cmd_data,CloudFile *FolderTmp, int i);
+int main_batch();
+int api_rename(CloudFile *FolderTmp,char *newname,int index,int is_changed_time,char *newname_r);
+int api_refresh_token();
+int dragfolder(char *dir,int index);
+int dragfolder_old_dir(char *dir,int index,char *old_dir);
+extern int s_move(char *oldname,char *newname,int index,int is_changed_time,char *newname_r,int type);
 /****************list.c******************/
 int test_if_dir(const char *dir){
     DIR *dp = opendir(dir);
@@ -1496,6 +1507,7 @@ char *cJSON_parse_name(cJSON *json)
         }
         q=q->next;
     }
+    return NULL;
 }
 
 /*char *cJSON_parse_name2(cJSON *json)
@@ -1570,7 +1582,7 @@ int cJSON_printf_dir(cJSON *json)
     return 0;
 }
 
-cJSON_printf_new_access_token(cJSON *json)
+int cJSON_printf_new_access_token(cJSON *json)
 {
     DEBUG("cJSON_printf_new_access_token start!\n");
     if(json)
@@ -1719,7 +1731,7 @@ cJSON *dofile(char *filename)
         return NULL;
 }
 
-cJSON_printf_insert(cJSON *json, char *newid)
+void cJSON_printf_insert(cJSON *json, char *newid)
 {
     cJSON *item_id;
     if(json)
@@ -1747,7 +1759,7 @@ int cJSON_printf_one(char *parentref, cJSON *json)
          json_item = cJSON_GetObjectItem( json , "items");
          if(json_item == NULL){
             printf("fail to get item\n");
-            return;
+            return -1;
          }
 
          int iCount = cJSON_GetArraySize(json_item);
@@ -1804,6 +1816,7 @@ int cJSON_printf_one(char *parentref, cJSON *json)
                     FileTail_one->next = NULL;
                 }
     }
+	return 0;
     }
 
 time_t cJSON_batch_printf(char *parentref, cJSON *json,char *string, char *URL, int index)
@@ -2573,7 +2586,7 @@ time_t ne_rfc1123_parse2(const char *date)
 }
 
 
-api_insert(char *folderid, char *name, char *newid)
+int api_insert(char *folderid, char *name, char *newid)
 {
     CURL *curl;
     CURLcode res;
@@ -2823,7 +2836,6 @@ int api_metadata_one(char *parentref, char *phref,cJSON *(*cmd_data)(char *filen
         if(cJSON_printf_one(parentref, json) == -1)
         {
             return -1;
-            cJSON_Delete(json);
         }
         cJSON_Delete(json);
         return 0;
@@ -3760,7 +3772,7 @@ int g_move(char *oldname,char *newname,int index,int is_changed_time,char *newna
     return 0;
 }
 
-api_rename(CloudFile *FolderTmp,char *newname,int index,int is_changed_time,char *newname_r)
+int api_rename(CloudFile *FolderTmp,char *newname,int index,int is_changed_time,char *newname_r)
 {
     DEBUG("api_rename start\n");
     char *newname1 = NULL;
@@ -5460,7 +5472,7 @@ int g_create_folder(char *localpath,char *foldername,char *newfolderid, int inde
     CURLcode res;
     FILE *fp;
 
-    char *postdata[256] = {0};
+    char postdata[256] = {0};
     char *name = strrchr(foldername, '/');
     name ++;
         sprintf(postdata,"\n{\n'title': '%s',\n'parents': [{'id':'%s'}],\n'mimeType': 'application/vnd.google-apps.folder'\n}", name, folderid);

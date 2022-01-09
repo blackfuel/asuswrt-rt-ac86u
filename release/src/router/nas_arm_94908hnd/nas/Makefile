@@ -1,23 +1,10 @@
-#
-# 802.1x Authenticator (Network Access Server) Embedded Linux Build Makefile
-#
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom.
-#
-# $Id: Makefile 403251 2013-05-20 05:15:55Z $
-#
-
 include ../../.config
 
 CFLAGS	+= -I.. -I$(SRCBASE)/include ${WLAN_StdIncPathA} -I$(SRCBASE)/common/include -I$(SRCBASE)/router/shared -Wall 
 CFLAGS	+= $(WLAN_ComponentIncPath)
 
 #CFLAGS	+= -g -DDEBUG
+CFLAGS += -DBCMDBG
 CFLAGS	+= -s
 CFLAGS  += -DNAS_WKSP_BUILD_NAS_AUTH
 CFLAGS  += -DNAS_WKSP_BUILD_NAS_SUPPL
@@ -35,7 +22,7 @@ CFLAGS	+= -I$(SRCBASE)/router/eapd${BCMEX}$(EX7)
 # NAS FBT include path
 CFLAGS += -I$(SRCBASE_ROUTER)/nas${BCMEX}$(EX7)/nas_fbt
 
-LDFLAGS += -L$(TOP)/nvram${BCMEX}${EX7} -L$(INSTALLDIR)/nvram/usr/lib -lnvram ${EXTRA_NV_LDFLAGS}
+LDFLAGS += -L$(TOP_PLATFORM)/nvram${BCMEX}${EX7} -L$(INSTALLDIR)/nvram/usr/lib -lnvram ${EXTRA_NV_LDFLAGS}
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
 LDFLAGS += -L$(TOP)/libbcmcrypto -L$(INSTALLDIR)/libbcmcrypto/usr/lib -lbcmcrypto
 LDFLAGS += -lgcc_s

@@ -7,9 +7,7 @@ apps_ipkg_old=`nvram get apps_ipkg_old`
 APPS_PATH=/opt
 CONF_FILE=$APPS_PATH/etc/ipkg.conf
 ASUS_SERVER=`nvram get apps_ipkg_server`
-wget_timeout=`nvram get apps_wget_timeout`
-#wget_options="-nv -t 2 -T $wget_timeout --dns-timeout=120"
-wget_options="-q -t 2 -T $wget_timeout"
+wget_options="-q -t 2 -T 30"
 download_file=
 apps_from_internet=`nvram get rc_support |grep appnet`
 apps_local_space=`nvram get apps_local_space`
@@ -239,7 +237,7 @@ echo "file_ver4=$file_ver4, list_ver4=$list_ver4."
 			return 1
 		fi
 		i=0
-		while [ $i -lt $wget_timeout ] && [ ! -f "$target" ]; do
+		while [ $i -lt 30 ] && [ ! -f "$target" ]; do
 			i=$((i+1))
 			sleep 1
 		done
@@ -287,7 +285,7 @@ _check__lib_log_message(){
 	if [ "$action" == "Installing" ] || [ "$action" == "Configuring" ]; then
 		target=`echo $got_log |awk '{print $2}'`
 	elif [ "$action" == "Downloading" ]; then
-		target=`echo $got_log |awk '{print $2}' |awk '{FS="/"; print $NF}' |awk '{FS="_"; print $1}'`
+		target=`echo $got_log |awk '{print $2}' |awk 'BEGIN{FS="/"}{print $NF}' |awk 'BEGIN{FS="_"}{print $1}'`
 	elif [ "$action" == "Successfully" ]; then
 		target="terminated"
 	elif [ "$action" == "update-alternatives:" ]; then
@@ -313,7 +311,7 @@ _check__lib_log_message(){
 # $1: package name (all path), $2: ipkg log file.
 _log_lib_ipkg_install(){
 
-	package_deps=`echo "$1"|awk '{FS="/"; print $NF}'|awk '{FS="_";printf $1}'`
+	package_deps=`echo "$1"|awk 'BEGIN{FS="/"}{print $NF}'|awk 'BEGIN{FS="_"}{printf $1}'`
 	nvram set apps_depend_action="$package_deps"
 	nvram set apps_depend_action_target="Installing"
 	
@@ -390,7 +388,7 @@ _download_lib_package(){
 			return 1
 		fi
 		i=0
-		while [ $i -lt $wget_timeout ] && [ ! -f "$target" ]; do
+		while [ $i -lt 30 ] && [ ! -f "$target" ]; do
 			i=$((i+1))
 			sleep 1
 		done
@@ -775,7 +773,7 @@ for file in $target_file; do
 	install_log=$APPS_INSTALL_PATH/ipkg_log.txt
 	#2016.7.5 sherry add install dependent lib{
 	if [ $apps_new_arm -eq 1 ]; then 
-		file_tmp=`echo "$file"|awk '{FS="/"; print $NF}'|awk '{FS="_";printf $1}'`
+		file_tmp=`echo "$file"|awk 'BEGIN{FS="/"}{print $NF}'|awk 'BEGIN{FS="_"}{printf $1}'`
 		base_library=`/usr/sbin/app_get_field.sh $file_tmp Depends 2 |sed 's/,/ /g'`
 		nvram set apps_depend_do="$base_library"
 		lib_install_log=$APPS_INSTALL_PATH/lib_ipkg_log.txt

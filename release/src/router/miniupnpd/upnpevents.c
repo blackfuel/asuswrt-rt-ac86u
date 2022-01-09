@@ -1,7 +1,8 @@
-/* $Id: upnpevents.c,v 1.30 2014/03/14 22:26:07 nanard Exp $ */
-/* MiniUPnP project
+/* $Id: upnpevents.c,v 1.44 2019/09/24 11:47:06 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2008-2014 Thomas Bernard
+ * (c) 2008-2019 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -13,11 +14,18 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include "config.h"
+#if defined(LIB_UUID)
+/* as found on linux */
+#include <uuid/uuid.h>
+#elif defined(BSD_UUID)
+#include <uuid.h>
+#endif /* LIB_UUID / BSD_UUID */
 #include "upnpevents.h"
 #include "miniupnpdpath.h"
 #include "upnpglobalvars.h"
@@ -102,17 +110,76 @@ newSubscriber(const char * eventurl, const char * callback, int callbacklen)
 	else if(strcmp(eventurl, DP_EVENTURL)==0)
 		tmp->service = EDP;
 #endif
+#ifdef ENABLE_AURASYNC
+	else if(strcmp(eventurl, AS_EVENTURL)==0 && GETFLAG(ENABLEAURASYNCMASK))
+		tmp->service = EAS;
+#endif
+#ifdef ENABLE_NVGFN
+	else if(strcmp(eventurl, NVGFN_EVENTURL)==0 && GETFLAG(ENABLENVGFNMASK))
+		tmp->service = ENVGFN;
+#endif
 	else {
 		free(tmp);
 		return NULL;
 	}
+#ifdef ENABLE_AURASYNC
+	if (aura_standalone && (tmp->service != EAS)) {
+		free(tmp);
+		return NULL;
+	}
+#endif
+#ifdef ENABLE_NVGFN
+	if (gfn_only && (tmp->service != ENVGFN)) {
+		free(tmp);
+		return NULL;
+	}
+#endif
 	memcpy(tmp->callback, callback, callbacklen);
 	tmp->callback[callbacklen] = '\0';
+#if defined(LIB_UUID)
+	{
+		uuid_t uuid;
+		uuid_generate(uuid);
+		memcpy(tmp->uuid, "uuid:", 5);
+		uuid_unparse(uuid, tmp->uuid + 5);
+	}
+#elif defined(BSD_UUID)
+	{
+		uuid_t uuid;
+		uint32_t status;
+		uuid_create(&uuid, &status);
+		if(status != uuid_s_ok) {
+			syslog(LOG_ERR, "uuid_create() failed (%u)", status);
+		} else {
+			char * uuid_str;
+			uuid_to_string(&uuid, &uuid_str, &status);
+			if(status != uuid_s_ok) {
+				syslog(LOG_ERR, "uuid_to_string() failed (%u)", status);
+			} else {
+				if(strlen(uuid_str) != 36) {
+					syslog(LOG_ERR, "uuid_to_string() returned %s", uuid_str);
+					status = (uint32_t)-1;
+				} else {
+					memcpy(tmp->uuid, "uuid:", 5);
+					memcpy(tmp->uuid + 5, uuid_str, 36);
+					tmp->uuid[sizeof(tmp->uuid)-1] = '\0';
+				}
+				free(uuid_str);
+			}
+		}
+		if(status != uuid_s_ok) {
+			/* make a dummy uuid */
+			strncpy(tmp->uuid, uuidvalue_igd, sizeof(tmp->uuid));
+			tmp->uuid[sizeof(tmp->uuid)-1] = '\0';
+			snprintf(tmp->uuid+sizeof(tmp->uuid)-5, 5, "%04lx", random() & 0xffff);
+		}
+	}
+#else
 	/* make a dummy uuid */
-	/* TODO: improve that */
 	strncpy(tmp->uuid, uuidvalue_igd, sizeof(tmp->uuid));
 	tmp->uuid[sizeof(tmp->uuid)-1] = '\0';
 	snprintf(tmp->uuid+sizeof(tmp->uuid)-5, 5, "%04lx", random() & 0xffff);
+#endif
 	return tmp;
 }
 
@@ -143,8 +210,8 @@ upnpevents_addSubscriber(const char * eventurl,
 }
 
 /* renew a subscription (update the timeout) */
-int
-renewSubscription(const char * sid, int sidlen, int timeout)
+const char *
+upnpevents_renewSubscription(const char * sid, int sidlen, int timeout)
 {
 	struct subscriber * sub;
 	for(sub = subscriberlist.lh_first; sub != NULL; sub = sub->entries.le_next) {
@@ -155,10 +222,10 @@ renewSubscription(const char * sid, int sidlen, int timeout)
 				continue;
 #endif
 			sub->timeout = (timeout ? upnp_time() + timeout : 0);
-			return 0;
+			return sub->uuid;
 		}
 	}
-	return -1;
+	return NULL;
 }
 
 int
@@ -273,12 +340,15 @@ upnp_event_notify_connect(struct upnp_event_notify * obj)
 	p += 7;	/* http:// */
 #ifdef ENABLE_IPV6
 	if(*p == '[') {	/* ip v6 */
+		obj->addrstr[i++] = '[';
 		p++;
 		obj->ipv6 = 1;
 		while(*p != ']' && i < (sizeof(obj->addrstr)-1))
 			obj->addrstr[i++] = *(p++);
 		if(*p == ']')
 			p++;
+		if(i < (sizeof(obj->addrstr)-1))
+			obj->addrstr[i++] = ']';
 	} else {
 #endif
 		while(*p != '/' && *p != ':' && i < (sizeof(obj->addrstr)-1))
@@ -292,7 +362,7 @@ upnp_event_notify_connect(struct upnp_event_notify * obj)
 		i = 1;
 		p++;
 		port = (unsigned short)atoi(p);
-		while(*p != '/') {
+		while(*p != '\0' && *p != '/') {
 			if(i<7) obj->portstr[i++] = *p;
 			p++;
 		}
@@ -304,9 +374,16 @@ upnp_event_notify_connect(struct upnp_event_notify * obj)
 	obj->path = p;
 #ifdef ENABLE_IPV6
 	if(obj->ipv6) {
+		char addrstr_tmp[48];
 		struct sockaddr_in6 * sa = (struct sockaddr_in6 *)&addr;
 		sa->sin6_family = AF_INET6;
-		inet_pton(AF_INET6, obj->addrstr, &(sa->sin6_addr));
+		i = (int)strlen(obj->addrstr);
+		if(i > 2) {
+			i -= 2;
+			memcpy(addrstr_tmp, obj->addrstr + 1, i);
+			addrstr_tmp[i] = '\0';
+			inet_pton(AF_INET6, addrstr_tmp, &(sa->sin6_addr));
+		}
 		sa->sin6_port = htons(port);
 		addrlen = sizeof(struct sockaddr_in6);
 	} else {
@@ -340,7 +417,11 @@ static void upnp_event_prepare(struct upnp_event_notify * obj)
 	static const char notifymsg[] =
 		"NOTIFY %s HTTP/1.1\r\n"
 		"Host: %s%s\r\n"
-		"Content-Type: text/xml\r\n"
+#if (UPNP_VERSION_MAJOR == 1) && (UPNP_VERSION_MINOR == 0)
+		"Content-Type: text/xml\r\n"	/* UDA v1.0 */
+#else
+		"Content-Type: text/xml; charset=\"utf-8\"\r\n"	/* UDA v1.1 or later */
+#endif
 		"Content-Length: %d\r\n"
 		"NT: upnp:event\r\n"
 		"NTS: upnp:propchange\r\n"
@@ -378,24 +459,50 @@ static void upnp_event_prepare(struct upnp_event_notify * obj)
 		xml = getVarsDP(&l);
 		break;
 #endif
+#ifdef ENABLE_AURASYNC
+	case EAS:
+		xml = getVarsAS(&l);
+		break;
+#endif
+#ifdef ENABLE_NVGFN
+	case ENVGFN:
+		xml = getVarsNVGFN(&l);
+		break;
+#endif
 	default:
 		xml = NULL;
 		l = 0;
 	}
 	obj->buffersize = 1024;
-	obj->buffer = malloc(obj->buffersize);
-	if(!obj->buffer) {
-		syslog(LOG_ERR, "%s: malloc returned NULL", "upnp_event_prepare");
-		if(xml) {
-			free(xml);
+	for (;;) {
+		obj->buffer = malloc(obj->buffersize);
+		if(!obj->buffer) {
+			syslog(LOG_ERR, "%s: malloc returned NULL", "upnp_event_prepare");
+			if(xml) {
+				free(xml);
+			}
+			obj->state = EError;
+			return;
 		}
-		obj->state = EError;
-		return;
+		obj->tosend = snprintf(obj->buffer, obj->buffersize, notifymsg,
+		                       (obj->path[0] != '\0') ? obj->path : "/",
+		                       obj->addrstr, obj->portstr, l+2,
+		                       obj->sub->uuid, obj->sub->seq,
+		                       l, xml);
+		if (obj->tosend < 0) {
+			syslog(LOG_ERR, "%s: snprintf() failed", "upnp_event_prepare");
+			if(xml) {
+				free(xml);
+			}
+			obj->state = EError;
+			return;
+		} else if (obj->tosend < obj->buffersize) {
+			break; /* the buffer was large enough */
+		}
+		/* Try again with a buffer big enough */
+		free(obj->buffer);
+		obj->buffersize = obj->tosend + 1;	/* reserve space for the final 0 */
 	}
-	obj->tosend = snprintf(obj->buffer, obj->buffersize, notifymsg,
-	                       obj->path, obj->addrstr, obj->portstr, l+2,
-	                       obj->sub->uuid, obj->sub->seq,
-	                       l, xml);
 	if(xml) {
 		free(xml);
 		xml = NULL;
@@ -414,7 +521,8 @@ static void upnp_event_send(struct upnp_event_notify * obj)
 	i = send(obj->s, obj->buffer + obj->sent, obj->tosend - obj->sent, 0);
 	if(i<0) {
 		if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-			syslog(LOG_NOTICE, "%s: send(): %m", "upnp_event_send");
+			syslog(LOG_NOTICE, "%s: send(%s%s): %m", "upnp_event_send",
+			       obj->addrstr, obj->portstr);
 			obj->state = EError;
 			return;
 		} else {
@@ -506,6 +614,9 @@ void upnpevents_selectfds(fd_set *readset, fd_set *writeset, int * max_fd)
 				upnp_event_notify_connect(obj);
 				if(obj->state != EConnecting)
 					break;
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+				__attribute__ ((fallthrough));
+#endif
 			case EConnecting:
 			case ESending:
 				FD_SET(obj->s, writeset);
@@ -551,6 +662,8 @@ void upnpevents_processfds(fd_set *readset, fd_set *writeset)
 				obj->sub->notify = NULL;
 			/* remove also the subscriber from the list if there was an error */
 			if(obj->state == EError && obj->sub) {
+				syslog(LOG_ERR, "%s: %p, remove subscriber %s after an ERROR cb: %s",
+				       "upnpevents_processfds", obj, obj->sub->uuid, obj->sub->callback);
 				LIST_REMOVE(obj->sub, entries);
 				free(obj->sub);
 			}

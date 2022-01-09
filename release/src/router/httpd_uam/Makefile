@@ -9,7 +9,7 @@ endif
 
 include $(SRCBASE)/.config
 
-LIBS = -L$(TOP)/nvram${BCMEX} -lnvram -L$(TOP)/shared -lshared
+LIBS = -L$(TOP_PLATFORM)/nvram${BCMEX} -lnvram -L$(TOP)/shared -lshared
 
 ifeq ($(RTCONFIG_FBWIFI),y)
 LIBS += -L$(TOP)/fb_wifi -lfbwifi

@@ -40,8 +40,10 @@
 <% wanlink(); %>
 <% secondary_wanlink(); %>
 window.onresize = function() {
-	if(document.getElementById("edit_sr_block").style.display == "") {
-		cal_panel_block("edit_sr_block");
+	if(document.getElementById("edit_sr_block") != null){
+		if(document.getElementById("edit_sr_block").style.display == "") {
+			cal_panel_block("edit_sr_block");
+		}
 	}
 }
 var pptpd_clientlist_array_ori = '<% nvram_char_to_ascii("","pptpd_clientlist"); %>';
@@ -50,6 +52,7 @@ var pptpd_connected_clients = [];
 var pptpd_sr_rulelist_array_ori = '<% nvram_char_to_ascii("","pptpd_sr_rulelist"); %>';
 var pptpd_sr_rulelist_array = decodeURIComponent(pptpd_sr_rulelist_array_ori);
 var pptpd_sr_edit_username = "";
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=118";
 
 function initial(){
 	var dualwan_mode = '<% nvram_get("wans_mode"); %>';
@@ -60,8 +63,8 @@ function initial(){
 	var pptpd_clients = '<% nvram_get("pptpd_clients"); %>';
 	
 	show_menu();
-	// https://www.asus.com/US/support/FAQ/1033906
-	httpApi.faqURL("1033906", function(url){document.getElementById("faq").href=url;});
+	document.getElementById("faq").href=faq_href;
+	
 	//if support pptpd and openvpnd then show switch button
 	if(pptpd_support && openvpnd_support) {
 		document.getElementById("divSwitchMenu").style.display = "";

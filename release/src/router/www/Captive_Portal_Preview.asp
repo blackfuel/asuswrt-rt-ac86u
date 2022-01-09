@@ -260,7 +260,7 @@ function initial() {
 		code += '<div style="display:table;width:100%;height:100%;border-collapse:collapse;">';
 		code += '<div style="display:table-row;">';
 		code += '<div id="term_service_title" class="term_service_title" style="display:table-cell;vertical-align:middle;font-size:13px;" >';
-		code += 'Free Wi-Fi TERMS OF SERVICE';
+		code += 'Free WiFi TERMS OF SERVICE';
 		code += '</div>';
 		code += '</div>';
 		code += '<div style="display:table-row;height:90%;">';
@@ -425,7 +425,7 @@ function isMobile() {
 }
 </script>
 </head>
-<body onload="initial();" id='splash_body' class='splash_body' >
+<body onload="initial();" id='splash_body' class='splash_body bg' >
 <div id='terms_service' class='terms_service'></div>
 <div id='splash_template_bg' class='splash_template_bg'>
 	<div id='splash_template_content' class='splash_template_content'>

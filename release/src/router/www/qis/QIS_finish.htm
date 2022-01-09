@@ -10,7 +10,7 @@ span{
 	border:0px solid #FFFFFF;
 	color:#FFFFFF;
 	font-size:12px;
-	font-family: Arial, Helvetica, MS UI Gothic, MS P Gothic, sans-serif;
+	font-family: Arial, Helvetica, MS UI Gothic, MS P Gothic, Microsoft Yahei UI, sans-serif;
 	/*width:27px;*/
 	text-align:right;
 	margin:0px auto;
@@ -26,6 +26,7 @@ span{
 <script type="text/javascript" src="/qis/QISMobilePlugin.js"></script>
 <script type="text/JavaScript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/help.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <script>
 /*
 	# restart needed service after loading this page immediately by restartService();
@@ -86,6 +87,7 @@ var webs_state_update = '<% nvram_get("webs_state_update"); %>';
 var webs_state_upgrade = '<% nvram_get("webs_state_upgrade"); %>';
 var webs_state_error = '<% nvram_get("webs_state_error"); %>';
 var webs_state_info = '<% nvram_get("webs_state_info"); %>';
+var webs_state_level = '<% nvram_get("webs_state_level"); %>';
 var PPPOEFAILREASON = "<#qis_fail_desc9#>";
 var delayTimeout = 500;
 
@@ -130,10 +132,11 @@ var timezones = {
 	"UTC4_1":	"(GMT-04:00)",
 	"UTC4DST_2":	"(GMT-04:00)",
 	"NST3.30DST":	"(GMT-03:30)",
-	"EBST3DST_1":	"(GMT-03:00)",
+	"EBST3":	"(GMT-03:00)",	//EBST3DST_1
 	"UTC3":	"(GMT-03:00)",
 	"EBST3DST_2":	"(GMT-03:00)",
 	"UTC2":	"(GMT-02:00)",
+	"UTC2DST": "(GMT-02:00)",
 	"EUT1DST":	"(GMT-01:00)",
 	"UTC1":	"(GMT-01:00)",
 	"GMT0":	"(GMT)",
@@ -158,6 +161,9 @@ var timezones = {
 	"EET-2DST":	"(GMT+02:00)",
 	"UTC-3_1":	"(GMT+03:00)",
 	"UTC-3_2":	"(GMT+03:00)",
+	"UTC-3_3":      "(GMT+03:00)",
+	"UTC-3_4":      "(GMT+03:00)",
+	"UTC-3_5":      "(GMT+03:00)",	//UTC-4_7
 	"IST-3":	"(GMT+03:00)",
 	"UTC-3_6":	"(GMT+03:00)",
 	"UTC-3.30DST":	"(GMT+03:30)",
@@ -196,6 +202,7 @@ var timezones = {
 	"UTC-11_1":	"(GMT+11:00)",
 	"UTC-11_4":	"(GMT+11:00)",
 	"UTC-12":	"(GMT+12:00)",
+	"UTC-12DST":	"(GMT+12:00)",
 	"NZST-12DST":	"(GMT+12:00)",
 	"UTC-13":	"(GMT+13:00)"
 	};
@@ -243,12 +250,12 @@ function doLiveUpdate(_do){
 		document.getElementById("newFWDetected").style.display = "none";
 		document.getElementById("progressBar").style.display = "";
 		document.start_update.action_mode.value="apply";
-		document.start_update.action_script.value="start_webs_upgrade";
+		document.start_update.action_script.value="stop_upgrade;start_webs_upgrade";
 		document.start_update.action_wait.value="300";
 		document.start_update.submit();
 	}
 	else{
-		setTimeout("parent.location.href='/'", 3000);
+		finish_qis();
 	}
 }
 
@@ -283,7 +290,7 @@ function detect_httpd(){
 				progressBar = 100;
 				document.getElementById('progress_bar_no').innerHTML = "100%";
 				document.getElementById("updateProgress").style.width = "100%";
-				document.getElementById("liveUpdateResult").innerHTML = "<#connect_failed#>";
+				document.getElementById("liveUpdateResult").innerHTML = "<#info_failed#>";
 				document.getElementById("newFWgraded").style.display = "";
 				return false;
 			}else if(webs_state_error == "2"){
@@ -440,23 +447,30 @@ function checkIsNewFirmware(){
 		if(parent.new_FW_type==2){
 			document.getElementById("liveUpdate_div_leftbutton").value = "<#CTL_UpgradeNight#>";
 			document.getElementById("liveUpdate_div_rightbutton").value = "<#CTL_UpgradeNow#>";
+			if(parent.forceLevel==1){
+		                document.getElementById("liveUpdate_div_leftbutton").style.display = "none";
+	        	}
 		}
 
 	}
 	else{
-		if(parent.sysReboot || isWLclient())
-			restartService();
-		else if(parent.changeSubnet){
-			document.restartForm.action_wait.value = 10;
-			document.restartForm.action_script.value = "restart_subnet";
-			document.restartForm.submit();
-		}
-		else
-		{
-			setTimeout(function(){
-				parent.location.href = '/';
-			}, delayTimeout);
-		}
+		finish_qis();
+	}
+}
+
+function finish_qis(){
+	if(parent.sysReboot || isWLclient())
+		restartService();
+	else if(parent.changeSubnet){
+		document.restartForm.action_wait.value = 10;
+		document.restartForm.action_script.value = "restart_subnet";
+		document.restartForm.submit();
+	}
+	else
+	{
+		setTimeout(function(){
+			parent.location.href = '/';
+		}, delayTimeout);
 	}
 }
 
@@ -568,7 +582,9 @@ function QKfinish_load_body(){
 	var shown_str;
 
 	// disable click button for low-end HW SPEC
-	if(document.restartForm.productid.value == "RT-AC51U+"){
+	if(document.restartForm.productid.value == "RT-AC51U+"
+	|| document.restartForm.productid.value == "RT-ACRH26"
+	|| document.restartForm.productid.value == "RT-AC85P"){
 		$("#nextButton").hide();
 		$("#loadingIcon").show();
 
@@ -578,14 +594,14 @@ function QKfinish_load_body(){
 		}, 6000);
 	}
 
-	/* MODELDEP */
-	if(document.restartForm.productid.value == "AC2900"){	//MODELDEP: AC2900(RT-AC86U)
-		$("#main_manual")[0].style.display = "none";
-	}
-
 	parent.detect_firmware();
 	document.getElementById("QISmain").style.display = "";
 	parent.document.title = "<#Web_Title#> - <#QKSet_all_title#>";
+
+	var linkInternet = httpApi.isConnected();
+	if(linkInternet){
+		document.getElementById("main_manual").style.display = "";
+	}
 
 	if(gobi_support){
 		$("#freqtitle2")[0].style.display = "none";
@@ -1410,6 +1426,7 @@ var startQuery = function(){
 		}
 	});
 };
+
 </script>
 </head>
 
@@ -1678,7 +1695,7 @@ var startQuery = function(){
 	<div>
 		<div style="width: 720px; *width: 710px; height: 2px;" class="splitLine"></div>
 	</div>
-	<div id="main_manual" style="padding-left:20px;margin-top:10px">
+	<div id="main_manual" style="padding-left:20px;margin-top:10px;display:none;">
 		<span><#ASUS_Registration#></span>
 	</div>	
 </div>

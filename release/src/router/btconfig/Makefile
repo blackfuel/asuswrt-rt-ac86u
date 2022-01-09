@@ -28,7 +28,12 @@ CC=$(CROSS_COMPILER)gcc
 LDFLAGS=-L$(TARGETDIR)/usr/lib/ -L$(TOP)/bluez-5.41/lib/.libs/ -lbluetooth
 CFLAGS=-I$(TOP)/bluez-5.41/lib/
 
+ifeq ($(wildcard $(SRCBASE)/router/btconfig/*.c),)
+all:
+	-cp -f prebuild/btconfig ./
+else
 all: btconfig
+endif
 
 btconfig: btconfig.c
 	$(CC) -Wall -g btconfig.c $(CFLAGS) $(LDFLAGS)  -o btconfig

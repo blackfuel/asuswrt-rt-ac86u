@@ -74,7 +74,7 @@ endif
 # NOTE: make clean from within app does not do a proper job, so wiping out
 # entire directory to ensure consistency.
 clean:
-	rm -f $(INSTALL_DIR)/lib/$(LIB);
+	rm -f $(INSTALL_DIR)/lib/$(LIB) $(APP)/lib/*.o $(APP)/lib/*.d;
 	#rm -rf $(APP) $(INCLUDE_DIR);
 
 # The next line is a hint to our release scripts

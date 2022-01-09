@@ -1498,6 +1498,7 @@ bool lp_map_untrusted_to_domain(void);
 int lp_restrict_anonymous(void);
 bool lp_lanman_auth(void);
 bool lp_ntlm_auth(void);
+bool lp_raw_ntlmv2_auth(void);
 bool lp_client_plaintext_auth(void);
 bool lp_client_lanman_auth(void);
 bool lp_client_ntlmv2_auth(void);

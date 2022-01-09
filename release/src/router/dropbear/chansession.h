@@ -41,6 +41,9 @@ struct ChanSess {
 
 	char * cmd; /* command to exec */
 	pid_t pid; /* child process pid */
+	/* command that was sent by the client, if authorized_keys command= or
+	dropbear -c was used */
+	char *original_command;
 
 	/* pty details */
 	int master; /* the master terminal fd*/
@@ -72,10 +75,6 @@ struct ChanSess {
 	char * agentfile;
 	char * agentdir;
 #endif
-
-#if DROPBEAR_SVR_PUBKEY_OPTIONS_BUILT
-	char *original_command;
-#endif
 };
 
 struct ChildPid {
@@ -94,6 +93,7 @@ void cli_send_netcat_request(void);
 #endif
 
 void svr_chansessinitialise(void);
+void svr_chansess_checksignal(void);
 extern const struct ChanType svrchansess;
 
 struct SigMap {

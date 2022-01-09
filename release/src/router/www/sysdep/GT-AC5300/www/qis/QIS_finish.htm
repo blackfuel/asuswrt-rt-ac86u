@@ -27,6 +27,7 @@ span{
 <script type="text/JavaScript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" src="/form.js"></script>
+<script type="text/JavaScript" src="/js/httpApi.js"></script>
 <script>
 /*
 	# restart needed service after loading this page immediately by restartService();
@@ -123,6 +124,7 @@ var timezones = {
 	"UTC3":	"(GMT-03:00)",
 	"EBST3DST_2":	"(GMT-03:00)",
 	"UTC2":	"(GMT-02:00)",
+	"UTC2DST": "(GMT-02:00)",
 	"EUT1DST":	"(GMT-01:00)",
 	"UTC1":	"(GMT-01:00)",
 	"GMT0":	"(GMT)",
@@ -214,7 +216,7 @@ function doLiveUpdate(_do){
 		document.getElementById("newFWDetected").style.display = "none";
 		document.getElementById("progressBar").style.display = "";
 		document.start_update.action_mode.value="apply";
-		document.start_update.action_script.value="start_webs_upgrade";
+		document.start_update.action_script.value="stop_upgrade;start_webs_upgrade";
 		document.start_update.action_wait.value="300";
 		document.start_update.submit();
 	}
@@ -254,7 +256,7 @@ function detect_httpd(){
 				progressBar = 100;
 				document.getElementById('progress_bar_no').innerHTML = "100%";
 				document.getElementById("updateProgress").style.width = "100%";
-				document.getElementById("liveUpdateResult").innerHTML = "<#connect_failed#>";
+				document.getElementById("liveUpdateResult").innerHTML = "<#info_failed#>";
 				document.getElementById("newFWgraded").style.display = "";
 				return false;
 			}else if(webs_state_error == "2"){
@@ -570,6 +572,11 @@ function QKfinish_load_body(){
 	parent.detect_firmware();
 	document.getElementById("QISmain").style.display = "";
 	parent.document.title = "<#Web_Title#> - <#QKSet_all_title#>";
+
+	var linkInternet = httpApi.isConnected();
+	if(linkInternet){
+		document.getElementById("main_manual").style.display = "";
+	}
 
 	if(gobi_support){
 		$("#freqtitle2")[0].style.display = "none";
@@ -1477,8 +1484,11 @@ var TM_eula_ori = '<% nvram_get("TM_EULA"); %>';
 function show_tm_eula(){
 	$.get("../tm_eula.htm", function(data){
 		document.getElementById('agreement_panel').innerHTML= data;
-		var url = "https://www.asus.com/Microsite/networks/Trend_Micro_EULA/";
-		$("#eula_url").attr("href",url);
+
+		var ui_lang = '<% nvram_get("preferred_lang"); %>';
+		var TM_eula_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=TMeula&lang="+ui_lang+"&kw=&num=";
+		$("#eula_url").attr("href", TM_eula_href);
+		var url = "";
 		url = "https://www.trendmicro.com/en_us/about/legal/privacy-policy-product.html"
 		$("#tm_eula_url").attr("href",url);
 		url = "https://success.trendmicro.com/data-collection-disclosure";
@@ -1773,7 +1783,7 @@ function cancel(){
 
 <div id="AreaHint" style="margin-top:10px; margin-left:5px;">
 	<div style="width: 720px; *width: 710px; height: 2px;" class="splitLine"></div>	
-	<div id="main_manual" style="padding-left:20px;margin-top:10px">
+	<div id="main_manual" style="padding-left:20px;margin-top:10px;display:none;">
 		<span><#ASUS_Registration#></span>
 	</div>
 </div>
@@ -1981,7 +1991,7 @@ function cancel(){
 	<!-- END Stage Bandwidth Utilization  -->
 	<!-- ROG Finish state -->
 	<div id="rog_finish" style="display:none">
-		<div style="font-size: 32px;color:rgb(207,10,44); margin: 60px 0 0 70px;"><#Congratulations#></div>
+		<!-- div style="font-size: 32px;color:rgb(207,10,44); margin: 60px 0 0 70px;"><#Congratulations#></div -->
 		<div style="margin: 5px 0 10px 70px;font-size:18px;"><#ROG_finish_info#></div>
 		<div style="margin: 10px 0 10px 70px;font-size:14px;">
 			<div style="padding: 2px 0">2.4 GHz</div>

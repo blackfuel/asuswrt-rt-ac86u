@@ -19,6 +19,9 @@
 <script type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <style>
+*{
+	box-sizing: content-box;
+}
 .weakness{
 	width:650px;
 	height:590px;
@@ -83,9 +86,9 @@
 
 .alertpreference{
 	width:650px;
-	height:290px;
+	height:330px;
 	position:absolute;
-	background: rgba(0,0,0,0.8);
+	background: rgba(0,0,0,0.9);
 	z-index:10;
 	margin-left:260px;
 	border-radius:10px;
@@ -139,16 +142,17 @@
 <script>
 if(usb_support) addNewScript("/disk_functions.js");
 window.onresize = function() {
-	if(document.getElementById("weakness_div").style.display == "block") {
-		cal_panel_block("weakness_div", 0.25);
+	if(document.getElementById("weakness_div") != null){
+		if(document.getElementById("weakness_div").style.display == "block") {
+			cal_panel_block("weakness_div", 0.25);
+		}
 	}
-	if(document.getElementById("alert_preference").style.display == "block") {
-		cal_panel_block("alert_preference", 0.25);
+	if(document.getElementById("alert_preference") != null){
+		if(document.getElementById("alert_preference").style.display == "block") {
+			cal_panel_block("alert_preference", 0.25);
+		}
 	}
 }
-<% get_AiDisk_status(); %>
-var AM_to_cifs = get_share_management_status("cifs");  // Account Management for Network-Neighborhood
-var AM_to_ftp = get_share_management_status("ftp");  // Account Management for FTP
 
 var ctf_disable = '<% nvram_get("ctf_disable"); %>';
 var ctf_fa_mode = '<% nvram_get("ctf_fa_mode"); %>';
@@ -156,22 +160,25 @@ var danger_count = 0;
 var risk_count = 0;
 var safe_count = 0;
 
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=139";
+
 function initial(){
 	show_menu();
-	//	http://www.asus.com/support/FAQ/1008719/
-	httpApi.faqURL("1008719", function(url){document.getElementById("faq").href=url;});
-	if(lyra_hide_support){
+	document.getElementById("faq").href=faq_href;
+	if(based_modelid == "MAP-AC1750"){
 		$("#scenario_tr").css({"visibility":"hidden"});
 		$("#scenario_img").attr({"height":"0"});
 		$("#security_scan_tr").hide();
 		$(".AiProtection_02").hide();
 		$(".AiProtection_03").hide();
-		$(".line_1").hide();
-		if(!isSupport("dpi_vp")){
-			$("#twoWayIPS_padding").hide();
-			$("#twoWayIPS_field").hide();
-		}
+		$(".line_1").hide();	
 		$("#tm_logo").css("margin-left", "10px");
+	}
+
+	if(!isSupport("dpi_vp")){
+		$("#twoWayIPS_padding").hide();
+		$("#twoWayIPS_field").hide();
+		$("#vp_service_field").hide();
 	}
 
 	if(document.form.wrs_protect_enable.value == '1'){
@@ -186,6 +193,9 @@ function initial(){
 	check_weakness();
 
 	$("#all_security_btn").hide();
+
+	if(!ASUS_EULA.status("tm"))
+		ASUS_EULA.config(eula_confirm, cancel);
 }
 
 function getEventTime(){
@@ -281,19 +291,11 @@ function applyRule(){
 		document.form.action_wait.value = "<% nvram_get("reboot_time"); %>";
 	}
 
-	if(reset_wan_to_fo(document.form, document.form.wrs_protect_enable.value)) {
-		showLoading();
-		document.form.submit();
-	}
-	else {
-		curState = 0;
-		document.form.wrs_protect_enable.value = "0";
-		$('#radio_protection_enable').find('.iphone_switch').animate({backgroundPosition: -37}, "slow");
-		shadeHandle('0');
-		if($('#agreement_panel').css('display') == "block") {
-			refreshpage();
-		}
-	}
+	if(reset_wan_to_fo.change_status)
+		reset_wan_to_fo.change_wan_mode(document.form);
+
+	showLoading();
+	document.form.submit();
 }
 
 function showWeaknessTable(){
@@ -594,8 +596,25 @@ function check_upnp(){
 			document.getElementById('upnp_service').className = "status_yes";
 		}
 		else{
-			risk_count++
-			document.getElementById('upnp_service').innerHTML = "<a href='Advanced_WAN_Content.asp' target='_blank'><#checkbox_No#></a>";
+			risk_count++;
+
+			document.getElementById('upnp_service').onclick = function(){
+				function change_wan_unit(unit){
+					FormActions("apply.cgi", "change_wan_unit", "", "");
+					document.form.wan_unit.value = unit;
+					document.form.wan_unit.disabled = false;
+					document.form.current_page.value="Advanced_WAN_Content.asp";
+					document.form.target = "";
+					document.form.submit();
+				}
+
+				if(wan0_upnp_enable == "1")
+					change_wan_unit(0);
+				else
+					change_wan_unit(1);
+			}
+
+			document.getElementById('upnp_service').innerHTML = "<a><#checkbox_No#></a>";
 			document.getElementById('upnp_service').className = "status_no_risk";
 			document.getElementById('upnp_service').onmouseover = function(){overHint(13);}
 			document.getElementById('upnp_service').onmouseout = function(){nd();}
@@ -791,6 +810,24 @@ function eula_confirm(){
 	document.form.action_wait.value = "15";
 	applyRule();
 }
+function switch_control(_status){
+	if(_status) {
+		if(reset_wan_to_fo.check_status()) {
+			if(ASUS_EULA.check("tm")){
+				document.form.wrs_protect_enable.value = "1";
+				shadeHandle("1");
+				applyRule();
+			}
+		}
+		else
+			cancel();
+	}
+	else {
+		document.form.wrs_protect_enable.value = "0";
+		shadeHandle("0");
+		applyRule();
+	}
+}
 
 function show_alert_preference(){
 	cal_panel_block("alert_preference", 0.25);
@@ -908,7 +945,7 @@ function shadeHandle(flag){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
@@ -1004,7 +1041,7 @@ function shadeHandle(flag){
 								<div id="wrs_service"></div>
 							</td>
 						</tr>
-						<tr>
+						<tr id="vp_service_field">
 							<th><#AiProtection_scan_item13#> -</th>
 							<td>
 								<div id="vp_service"></div>
@@ -1046,7 +1083,7 @@ function shadeHandle(flag){
 			</th>
 		</tr>
 			<td>
-				<div class="formfontdesc" style="font-style: italic;font-size: 14px;"><#AiProtection_HomeDesc1#></div>
+				<div class="formfontdesc" style="font-size: 14px;"><#AiProtection_HomeDesc1#></div>
 			</td>
 		<tr>
 			<td>
@@ -1084,12 +1121,18 @@ function shadeHandle(flag){
 						<th><#Notification_Item#></th>
 						<td>
 							<div>
-								<input type="checkbox" class="" id="mal_website_item" value="">
-								<label><#AiProtection_sites_blocking#></label>
-								<input type="checkbox" class="" id="vp_item" value="">
-								<label><#AiProtection_Vulnerability#></label>
-								<input type="checkbox" class="" id="cc_item" value="">
-								<label><#AiProtection_detection_blocking#></label>
+								<div>
+									<input type="checkbox" id="mal_website_item">
+									<span style="color: #FFF;"><#AiProtection_sites_blocking#></span>
+								</div>
+								<div>
+									<input type="checkbox" id="vp_item">
+									<span style="color: #FFF;"><#AiProtection_two-way_IPS#></span>
+								</div>
+								<div>
+									<input type="checkbox" id="cc_item">
+									<span style="color: #FFF;"><#AiProtection_detection_blocking#></span>
+								</div>
 							</div>
 						</td>
 					</tr>
@@ -1122,6 +1165,7 @@ function shadeHandle(flag){
 <input type="hidden" name="wrs_vp_enable" value="<% nvram_get("wrs_vp_enable"); %>">
 <input type="hidden" name="wan0_upnp_enable" value="<% nvram_get("wan0_upnp_enable"); %>" disabled>
 <input type="hidden" name="wan1_upnp_enable" value="<% nvram_get("wan1_upnp_enable"); %>" disabled>
+<input type="hidden" name="wan_unit" value="<% nvram_get("wan_unit"); %>" disabled>
 <input type="hidden" name="misc_http_x" value="<% nvram_get("misc_http_x"); %>" disabled>
 <input type="hidden" name="misc_ping_x" value="<% nvram_get("misc_ping_x"); %>" disabled>
 <input type="hidden" name="dmz_ip" value="<% nvram_get("dmz_ip"); %>" disabled>
@@ -1180,11 +1224,11 @@ function shadeHandle(flag){
 													<img id="guest_image" src="/images/New_ui/HomeProtection.png">
 												</td>
 												<td>&nbsp;&nbsp;</td>
-												<td style="font-style:italic;font-size:14px;">
+												<td style="font-size:14px;">
 													<table>
 														<tr>
 															<td>
-																<div style="width:430px"><#AiProtection_desc#></div>
+																<div style="width:430px"><#AiProtection_HomeDesc2#></div>
 																<div style="width:430px">
 																	<a id="faq" style="text-decoration:underline;" href="" target="_blank"><#AiProtection_title#> FAQ</a>
 																</div>
@@ -1215,18 +1259,10 @@ function shadeHandle(flag){
 														<script type="text/javascript">
 															$('#radio_protection_enable').iphoneSwitch('<% nvram_get("wrs_protect_enable"); %>',
 																function(){
-																	ASUS_EULA.config(eula_confirm, cancel);
-
-																	if(ASUS_EULA.check("tm")){
-																		document.form.wrs_protect_enable.value = "1";
-																		shadeHandle("1");
-																		applyRule();
-																	}
+																	switch_control(1);
 																},
 																function(){
-																	document.form.wrs_protect_enable.value = "0";
-																	shadeHandle("0");
-																	applyRule();
+																	switch_control(0);
 																}
 															);
 														</script>
@@ -1247,7 +1283,7 @@ function shadeHandle(flag){
 												</td>
 												<td style="padding:10px;">
 													<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_scan#></div>
-													<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_scan_desc#></div>
+													<div style="font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_scan_desc#></div>
 												</td>
 												 <td width="6px">
 													<div class="line_vertical"></div>
@@ -1278,7 +1314,7 @@ function shadeHandle(flag){
 												<td style="padding:10px;cursor:pointer;" onclick="location.href='AiProtection_MaliciousSitesBlocking.asp'">
 													<div>
 														<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_sites_blocking#></div>
-														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_sites_block_desc#></div>
+														<div style="font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_sites_block_desc#></div>
 													</div>
 												</td>
 												 <td width="6px">
@@ -1331,7 +1367,7 @@ function shadeHandle(flag){
 												<td style="padding:10px;cursor:pointer;" onclick="location.href='AiProtection_IntrusionPreventionSystem.asp'">
 													<div>
 														<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_two-way_IPS#></div>
-														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_two-way_IPS_desc#></div>
+														<div style="font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_two-way_IPS_desc#></div>
 													</div>
 												</td>
 												 <td width="6px">
@@ -1382,7 +1418,7 @@ function shadeHandle(flag){
 												</td>
 												<td style="padding:10px;cursor:pointer" onclick="location.href='AiProtection_InfectedDevicePreventBlock.asp'">
 													<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_detection_blocking#></div>
-													<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;;padding-top:5px;"><#AiProtection_detection_block_desc#></div>
+													<div style="font-size: 14px;color:#FC0;height:auto;;padding-top:5px;"><#AiProtection_detection_block_desc#></div>
 												</td>
 												 <td>
 													<div class="line_vertical"></div>
@@ -1428,7 +1464,7 @@ function shadeHandle(flag){
 											<input class="button_gen" type="button" onclick="show_alert_preference();" value="<#AiProtection_alert_pref#>">
 										</div>
 									</div>
-									<div style="width:135px;height:55px;margin: -10px 0 0 600px;background-image:url('images/New_ui/tm_logo_power.png');"></div>
+									<div style="width:96px;height:44px;margin: 10px 0 0 600px;background-image:url('images/New_ui/TrendMirco_logo.svg');background-size: 100%;"></div>
 								</td>
 							</tr>
 							</tbody>

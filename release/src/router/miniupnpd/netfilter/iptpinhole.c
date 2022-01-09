@@ -1,7 +1,7 @@
-/* $Id: iptpinhole.c,v 1.14 2015/02/10 15:01:03 nanard Exp $ */
+/* $Id: iptpinhole.c,v 1.21 2020/05/10 17:49:33 nanard Exp $ */
 /* MiniUPnP project
- * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2012-2015 Thomas Bernard
+ * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
+ * (c) 2012-2020 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -12,11 +12,11 @@
 #include <arpa/inet.h>
 #include <sys/queue.h>
 
-#include "../config.h"
+#include "config.h"
+#include "../macros.h"
 #include "iptpinhole.h"
 #include "../upnpglobalvars.h"
 #include "../upnputils.h"
-
 
 #ifdef ENABLE_UPNPPINHOLE
 
@@ -27,6 +27,8 @@
 #define IP6TC_HANDLE struct ip6tc_handle *
 
 static int next_uid = 1;
+
+static const char * miniupnpd_v6_filter_chain = "UPNP";
 
 static LIST_HEAD(pinhole_list_t, pinhole_t) pinhole_list;
 
@@ -52,7 +54,12 @@ void init_iptpinhole(void)
 
 void shutdown_iptpinhole(void)
 {
-	/* TODO empty list */
+	struct pinhole_t * p;
+	while(pinhole_list.lh_first != NULL) {
+		p = pinhole_list.lh_first;
+		LIST_REMOVE(p, entries);
+		free(p);
+	}
 }
 
 /* return uid */
@@ -181,6 +188,7 @@ ip6tc_init_verify_append(const char * table,
 		syslog(LOG_ERR, "ip6tc_commit() error : %s", ip6tc_strerror(errno));
 		goto error;
 	}
+	ip6tc_free(h);
 	return 0;	/* ok */
 error:
 	ip6tc_free(h);
@@ -217,6 +225,7 @@ int add_pinhole(const char * ifname,
 	if (proto)
 		e->ipv6.flags |= IP6T_F_PROTO;
 
+	/* TODO: check if enforcing USE_IFNAME_IN_RULES is needed */
 	if(ifname)
 		strncpy(e->ipv6.iniface, ifname, IFNAMSIZ);
 	if(rem_host && (rem_host[0] != '\0')) {
@@ -265,6 +274,37 @@ int add_pinhole(const char * ifname,
 }
 
 int
+find_pinhole(const char * ifname,
+             const char * rem_host, unsigned short rem_port,
+             const char * int_client, unsigned short int_port,
+             int proto,
+             char *desc, int desc_len, unsigned int * timestamp)
+{
+	struct pinhole_t * p;
+	struct in6_addr saddr;
+	struct in6_addr daddr;
+	UNUSED(ifname);
+
+	if(rem_host && (rem_host[0] != '\0')) {
+		inet_pton(AF_INET6, rem_host, &saddr);
+	} else {
+		memset(&saddr, 0, sizeof(struct in6_addr));
+	}
+	inet_pton(AF_INET6, int_client, &daddr);
+	for(p = pinhole_list.lh_first; p != NULL; p = p->entries.le_next) {
+		if((proto == p->proto) && (rem_port == p->sport) &&
+		   (0 == memcmp(&saddr, &p->saddr, sizeof(struct in6_addr))) &&
+		   (int_port == p->dport) &&
+		   (0 == memcmp(&daddr, &p->daddr, sizeof(struct in6_addr)))) {
+			if(desc) strncpy(desc, p->desc, desc_len);
+			if(timestamp) *timestamp = p->timestamp;
+			return (int)p->uid;
+		}
+	}
+	return -2;	/* not found */
+}
+
+int
 delete_pinhole(unsigned short uid)
 {
 	struct pinhole_t * p;
@@ -299,7 +339,7 @@ delete_pinhole(unsigned short uid)
 			info = (const struct ip6t_tcp *)&match->data;
 			if((info->spts[0] == p->sport) && (info->dpts[0] == p->dport)) {
 				if(!ip6tc_delete_num_entry(miniupnpd_v6_filter_chain, index, h)) {
-					syslog(LOG_ERR, "ip6tc_delete_num_entry(%s,%d,...): %s",
+					syslog(LOG_ERR, "ip6tc_delete_num_entry(%s,%u,...): %s",
 					       miniupnpd_v6_filter_chain, index, ip6tc_strerror(errno));
 					goto error;
 				}
@@ -317,6 +357,7 @@ delete_pinhole(unsigned short uid)
 	}
 	ip6tc_free(h);
 	syslog(LOG_WARNING, "delete_pinhole() rule with PID=%hu not found", uid);
+	LIST_REMOVE(p, entries);
 	return -2;	/* not found */
 error:
 	ip6tc_free(h);

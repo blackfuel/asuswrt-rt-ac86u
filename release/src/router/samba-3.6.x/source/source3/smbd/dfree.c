@@ -125,14 +125,14 @@ uint64_t sys_disk_free(connection_struct *conn, const char *path, bool small_que
 		} else {
 			DEBUG (0, ("disk_free: sys_popen() failed for command %s. Error was : %s\n",
 				syscmd, strerror(errno) ));
-			if (sys_fsusage(path, dfree, dsize) != 0) {
+			if (sys_fsusage(path, dfree, dsize, bsize) != 0) {
 				DEBUG (0, ("disk_free: sys_fsusage() failed. Error was : %s\n",
 					strerror(errno) ));
 				return (uint64_t)-1;
 			}
 		}
 	} else {
-		if (sys_fsusage(path, dfree, dsize) != 0) {
+		if (sys_fsusage(path, dfree, dsize, bsize) != 0) {
 			DEBUG (0, ("disk_free: sys_fsusage() failed. Error was : %s\n",
 				strerror(errno) ));
 			return (uint64_t)-1;

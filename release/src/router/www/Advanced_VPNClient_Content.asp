@@ -91,6 +91,20 @@
 	font-size: 13px;
 	text-align: center;
 }
+.conn_status_hint{
+	color: #FC0;
+	font-weight: bolder;
+	font-size: 13px;
+	margin-left: 12px;
+	margin-top: -8px;
+	position: absolute;
+	display: none;
+}
+.conn_status_hint > a{
+	color: #33ACFF;
+	text-decoration: underline;
+	cursor: pointer;
+}
 </style>
 <script>
 var subnetIP_support_IPv6 = false;
@@ -112,6 +126,10 @@ var ipsec_profile_client_4_ext = decodeURIComponent('<% nvram_char_to_ascii("","
 var ipsec_profile_client_5_ext = decodeURIComponent('<% nvram_char_to_ascii("","ipsec_profile_client_5_ext"); %>');
 var all_profile_subnet_list = "";
 var control_profile_flag = true;
+var openvpnc_max = 5;
+
+var faq_href1 = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=123";
+var faq_href2 = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=133";
 
 function parseNvramToArray(_oriNvram, _arrayLength) {
 	var parseArray = [];
@@ -180,9 +198,12 @@ function initial(){
 			option.text = wan_type_list[i][1];
 			selectobject.add(option);
 		}
-		$("#ipsec_vpn_type_faq").html("IPSec Net-to-Net FAQ");/*untranslated*/
-		httpApi.faqURL("1033578", function(url){document.getElementById("ipsec_vpn_type_faq").href=url;});
+		$("#ipsec_vpn_type_faq").html("IPSec Net-to-Net FAQ")	/*untranslated*/
+					.attr("href", faq_href1);
 	}
+
+	$("#ip_conflict_hint").html("<#vpn_openvpn_conflict#>: Please change your router LAN subnet, please refer to this <a target='_blank'>FAQ</a> for detail");/* untranslated */
+	$("#ip_conflict_hint a").attr("href", faq_href2);
 }
 var add_profile_flag = false;
 function Add_profile(upper){
@@ -231,31 +252,7 @@ function cancel_add_rule(){
 }
 
 function addRow_Group(upper, flag, idx){
-	document.openvpnManualForm.vpn_crt_client1_ca.disabled = true;
-	document.openvpnManualForm.vpn_crt_client1_crt.disabled = true;
-	document.openvpnManualForm.vpn_crt_client1_key.disabled = true;
-	document.openvpnManualForm.vpn_crt_client1_static.disabled = true;
-	document.openvpnManualForm.vpn_crt_client1_crl.disabled = true;
-	document.openvpnManualForm.vpn_crt_client2_ca.disabled = true;
-	document.openvpnManualForm.vpn_crt_client2_crt.disabled = true;
-	document.openvpnManualForm.vpn_crt_client2_key.disabled = true;
-	document.openvpnManualForm.vpn_crt_client2_static.disabled = true;
-	document.openvpnManualForm.vpn_crt_client2_crl.disabled = true;
-	document.openvpnManualForm.vpn_crt_client3_ca.disabled = true;
-	document.openvpnManualForm.vpn_crt_client3_crt.disabled = true;
-	document.openvpnManualForm.vpn_crt_client3_key.disabled = true;
-	document.openvpnManualForm.vpn_crt_client3_static.disabled = true;
-	document.openvpnManualForm.vpn_crt_client3_crl.disabled = true;
-	document.openvpnManualForm.vpn_crt_client4_ca.disabled = true;
-	document.openvpnManualForm.vpn_crt_client4_crt.disabled = true;
-	document.openvpnManualForm.vpn_crt_client4_key.disabled = true;
-	document.openvpnManualForm.vpn_crt_client4_static.disabled = true;
-	document.openvpnManualForm.vpn_crt_client4_crl.disabled = true;
-	document.openvpnManualForm.vpn_crt_client5_ca.disabled = true;
-	document.openvpnManualForm.vpn_crt_client5_crt.disabled = true;
-	document.openvpnManualForm.vpn_crt_client5_key.disabled = true;
-	document.openvpnManualForm.vpn_crt_client5_static.disabled = true;
-	document.openvpnManualForm.vpn_crt_client5_crl.disabled = true;
+	disableOpenVpnManualformItem();
 	idx = parseInt(idx);
 
 	if(flag == 'PPTP' || flag == 'L2TP') {
@@ -618,7 +615,7 @@ function tabclickhandler(_type){
 		$("#tr_" + _type + "_limit_hint").css("display", "none");
 		$("#openvpnc_setting_" + _type + "").find("input,button,textarea,select").attr("disabled", false);
 	}
-	if (openvpn_arrayLength == 5 && openvpnd_support && add_profile_flag)
+	if (openvpn_arrayLength == openvpnc_max && openvpnd_support && add_profile_flag)
 		set_limit_hint("openvpn", openvpn_arrayLength, "OpenVPN");
 	else
 		reset_limit_hint("openvpn");
@@ -631,7 +628,7 @@ function tabclickhandler(_type){
 
 function update_unit_option(){
 	var vpnc_openvpn_unit_array = [];
-	for(var i = 1; i <= 5; i += 1) {
+	for(var i = 1; i <= openvpnc_max; i += 1) {
 		vpnc_openvpn_unit_array["unit_" + i] = i;
 	}
 	for(var i = 0; i < vpnc_clientlist_array.length; i += 1) {
@@ -659,6 +656,7 @@ function update_unit_option(){
 var ipsec_arrayLength = 0;
 var openvpn_arrayLength = 0;
 function show_vpnc_rulelist(){
+	$("#ip_conflict_hint").hide();
 	all_profile_subnet_list = "";	
 	ipsec_arrayLength = 0;
 	openvpn_arrayLength = 0;
@@ -736,10 +734,14 @@ function show_vpnc_rulelist(){
 							code +="<td width='10%'><img title='<#CTL_Add_enrollee#>' src='/images/InternetScan.gif'></td>";
 						else if(client_state == 2)
 							code +="<td width='10%'><img title='<#Connected#>' src='/images/checked_parentctrl.png' style='width:25px;'></td>";
-						else if(client_errno == 1 || client_errno == 2 || client_errno == 3)
+						else if(client_errno == 1 || client_errno == 2 || client_errno == 3){
 							code +="<td width='10%'><div title='<#vpn_openvpn_conflict#>' class='vpnc_ipconflict_icon'></div></td>";
+							$("#ip_conflict_hint").show();
+						}
 						else if(client_errno == 4 || client_errno == 5 || client_errno == 6)
 							code +="<td width='10%'><img title='<#qis_fail_desc1#>' src='/images/button-close2.png' style='width:25px;'></td>";
+						else if(client_errno == 7)
+							code +="<td width='10%'><img title='Certification Authentication / Server certification / Server Key field error! \nPlease check the Keys and Certification contents on the Manual Setting.' src='/images/button-close2.png' style='width:25px;'></td>";
 						else		//Stop connection
 							code +="<td width='10%'><img title='<#ConnectionFailed#>' src='/images/button-close2.png' style='width:25px;'></td>";
 				}
@@ -753,8 +755,10 @@ function show_vpnc_rulelist(){
 							code +="<td width='10%'><img title='<#Connected#>' src='/images/checked_parentctrl.png' style='width:25px;'></td>";
 						else if(vpnc_state_t == 4 && vpnc_sbstate_t == 2)
 							code +="<td width='10%'><img title='<#qis_fail_desc1#>' src='/images/button-close2.png' style='width:25px;'></td>";
-						else if(vpnc_state_t == 4 && vpnc_sbstate_t == 7)
+						else if(vpnc_state_t == 4 && vpnc_sbstate_t == 7){
 							code +="<td width='10%'><div title='<#vpn_openvpn_conflict#>' class='vpnc_ipconflict_icon'></div></td>";
+							$("#ip_conflict_hint").show();
+						}
 						else // Stop connection
 							code +="<td width='10%'><img title='<#ConnectionFailed#>' src='/images/button-close2.png' style='width:25px;'></td>";
 					}
@@ -862,6 +866,7 @@ function connect_Row(rowdata, flag){
 	var vpnc_openvpn_idx = vpnc_clientlist_array[idx][2];
 	var vpnc_username = vpnc_clientlist_array[idx][3];
 	var vpnc_userpwd = vpnc_clientlist_array[idx][4];
+	document.form.ctf_nonat_force.disabled = true;
 	
 	if(flag == "disconnect"){	//Disconnect the connected rule 
 		
@@ -906,6 +911,36 @@ function connect_Row(rowdata, flag){
 		}			
 	}
 	else{		//"vpnc" making connection
+		if(isSupport("sdk7114")) {
+			var pppoe_flag = false;
+			var wanMax = isSupport("wanMax");
+			for(var i = 0; i < wanMax; i += 1) {
+				var wan_proto = httpApi.nvramGet(["wan" + i + "_proto"], true)["wan" + i + "_proto"];
+				if(wan_proto == "pppoe") {
+					pppoe_flag = true;
+					break;
+				}
+			}
+			var ctf_disable = httpApi.nvramGet(["ctf_disable"], true).ctf_disable;
+			if(pppoe_flag && ctf_disable == "0") {
+				var vpncoppp = httpApi.nvramGet(["vpncoppp"], true).vpncoppp;
+				if(vpncoppp == "" || vpncoppp == "0") {
+					if(confirm("<#vpnc_pppoe_dis_nat_confirm#>")) {
+						document.form.ctf_nonat_force.disabled = false;
+						document.form.ctf_nonat_force.value = "1";
+						document.form.flag.value = "";
+						document.form.action_script.value = "reboot";
+						document.form.action_wait.value = httpApi.hookGet("get_default_reboot_time");
+					}
+					else
+						return false;
+				}
+				else if(vpncoppp == "1") {
+					document.form.ctf_nonat_force.disabled = false;
+					document.form.ctf_nonat_force.value = "1";
+				}
+			}
+		}
 		document.form.vpnc_des_edit.value = vpnc_desc;
 
 		if(vpnc_proto == "PPTP")
@@ -1276,7 +1311,22 @@ function cancel_Key_panel(){
 	document.getElementById("manualFiled_panel").style.display = "none";
 }
 
+function disableOpenVpnManualformItem(){
+	for(var i = 1; i <= openvpnc_max; i += 1){
+		if(document.openvpnManualForm["vpn_crt_client" + i + "_ca"] != undefined)
+			document.openvpnManualForm["vpn_crt_client" + i + "_ca"].disabled = true;
+		if(document.openvpnManualForm["vpn_crt_client" + i + "_crt"] != undefined)
+			document.openvpnManualForm["vpn_crt_client" + i + "_crt"].disabled = true;
+		if(document.openvpnManualForm["vpn_crt_client" + i + "_key"] != undefined)
+			document.openvpnManualForm["vpn_crt_client" + i + "_key"].disabled = true;
+		if(document.openvpnManualForm["vpn_crt_client" + i + "_static"] != undefined)
+			document.openvpnManualForm["vpn_crt_client" + i + "_static"].disabled = true;
+		if(document.openvpnManualForm["vpn_crt_client" + i + "_crl"] != undefined)
+			document.openvpnManualForm["vpn_crt_client" + i + "_crl"].disabled = true;
+	}
+}
 function saveManual(unit){
+	disableOpenVpnManualformItem();
 	switch (unit) {
 		case "1" :
 			document.openvpnManualForm.vpn_crt_client1_ca.value = document.getElementById('edit_vpn_crt_client_ca').value;
@@ -1548,6 +1598,9 @@ function initialIPSecProfile() {
 	$('input:checkbox[name=ipsec_dh_group_p1]').prop("checked", true);
 	$('input:checkbox[name=ipsec_encryption_p2]').prop("checked", true);
 	$('input:checkbox[name=ipsec_hash_p2]').prop("checked", true);
+	settingRadioItemCheck(document.ipsec_form.ipsec_pfs, "1");
+	changePFS();
+	$('input:checkbox[name=ipsec_pfs_group]').prop("checked", true);
 }
 function editIPSecProfile(mode) {
 	add_profile_flag = false;
@@ -1734,6 +1787,7 @@ function UpdatePSecProfile(array, array_ext) {
 	$('input:checkbox[name=ipsec_dh_group_p1]').prop("checked", false);
 	$('input:checkbox[name=ipsec_encryption_p2]').prop("checked", false);
 	$('input:checkbox[name=ipsec_hash_p2]').prop("checked", false);
+	$('input:checkbox[name=ipsec_pfs_group]').prop("checked", false);
 	var set_checkboxlist = function(_objName, _value) {
 		var binary = parseInt(_value).toString(2);
 		var binary_length = binary.length;
@@ -1750,6 +1804,19 @@ function UpdatePSecProfile(array, array_ext) {
 	set_checkboxlist("ipsec_dh_group_p1", array_ext[2]);
 	set_checkboxlist("ipsec_encryption_p2", array_ext[3]);
 	set_checkboxlist("ipsec_hash_p2", array_ext[4]);
+	if(array_ext[5] == undefined) {
+		settingRadioItemCheck(document.ipsec_form.ipsec_pfs, "1");
+		$('input:checkbox[name=ipsec_pfs_group]').prop("checked", true);
+	}
+	else {
+		if(array_ext[5] == "0")
+			settingRadioItemCheck(document.ipsec_form.ipsec_pfs, "0");
+		else {
+			settingRadioItemCheck(document.ipsec_form.ipsec_pfs, "1");
+			set_checkboxlist("ipsec_pfs_group", array_ext[5]);
+		}
+	}
+	changePFS();
 }
 function getRadioItemCheck(obj) {
 	var checkValue = "";
@@ -2020,6 +2087,13 @@ function save_ipsec_profile_panel() {
 			return false;
 		}
 
+		if(getRadioItemCheck(document.ipsec_form.ipsec_pfs) == "1") {
+			if($('input:checkbox[name=ipsec_pfs_group]:checked').length == 0) {
+				alert("Please choose at least one PFS Groups.");/*untranslated*/
+				return false;
+			}
+		}
+
 		return true;
 	}
 
@@ -2125,7 +2199,7 @@ function save_ipsec_profile_panel() {
 				profile_array[37] + ">" + profile_array[38];
 		
 		/* data structure ext
-		1 encryption_p1, hash_p1, DHGroup, encryption_p2, hash_p2
+		1 encryption_p1, hash_p1, DHGroup, encryption_p2, hash_p2, PFS
 		*/
 		var result_ext = "";
 		var encryption_p1 = 0;
@@ -2133,6 +2207,7 @@ function save_ipsec_profile_panel() {
 		var dh_group = 0;
 		var encryption_p2 = 0;
 		var hash_p2 = 0;
+		var pfs_group = 0;
 		var get_checkboxlist = function(_objName) {
 			var value = 0;
 			$('input:checkbox[name=' + _objName + ']:checked').map(function() {
@@ -2145,7 +2220,9 @@ function save_ipsec_profile_panel() {
 		dh_group = get_checkboxlist("ipsec_dh_group_p1");
 		encryption_p2 = get_checkboxlist("ipsec_encryption_p2");
 		hash_p2 = get_checkboxlist("ipsec_hash_p2");
-		var profile_ext_array = [encryption_p1, hash_p1, dh_group, encryption_p2, hash_p2];
+		if(getRadioItemCheck(document.ipsec_form.ipsec_pfs) == "1")
+			pfs_group = get_checkboxlist("ipsec_pfs_group");
+		var profile_ext_array = [encryption_p1, hash_p1, dh_group, encryption_p2, hash_p2, pfs_group];
 		result_ext = profile_ext_array.join(">");
 
 		document.getElementById(document.ipsec_form.ipsec_profile_item.value).value = result;
@@ -2380,10 +2457,17 @@ function controlSubnetStatus(_ikeVersion, _type) {
 			break;
 	}
 }
+function changePFS() {
+	var clickItem = getRadioItemCheck(document.ipsec_form.ipsec_pfs);
+	if(clickItem == "0")
+		$("#tr_adv_pfs_group").hide();
+	else
+		$("#tr_adv_pfs_group").show();
+}
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <iframe name="hidden_frame" id="hidden_frame" width="0" height="0" frameborder="0"></iframe>
@@ -2419,6 +2503,7 @@ function controlSubnetStatus(_ikeVersion, _type) {
 <input type="hidden" name="vpn_clientx_eas" value="<% nvram_get("vpn_clientx_eas"); %>">
 <input type="hidden" name="vpnc_pptp_options_x" value="<% nvram_get("vpnc_pptp_options_x"); %>">
 <input type="hidden" name="vpnc_pptp_options_x_list" value="<% nvram_get("vpnc_pptp_options_x_list"); %>">
+<input type="hidden" name="ctf_nonat_force" value="<% nvram_get("ctf_nonat_force"); %>" disabled>
 <div id="openvpnc_setting"  class="contentM_qis pop_div_bg" style="box-shadow: 1px 5px 10px #000;">
 	<table class="QISform_wireless" border=0 align="center" cellpadding="5" cellspacing="0">
 		<tr style="height:32px;">
@@ -2514,6 +2599,7 @@ function controlSubnetStatus(_ikeVersion, _type) {
 									<li><#vpnc_step3#>
 								</ol>
 							</div>
+							<div id="ip_conflict_hint" class="conn_status_hint"></div>
 						</td>		
         			</tr>						
         			<tr>
@@ -2853,6 +2939,26 @@ function controlSubnetStatus(_ikeVersion, _type) {
 								<label><input type="checkbox" name="ipsec_hash_p2" value="4">SHA256</label>
 								<!--label><input type="checkbox" name="ipsec_hash_p2" value="8">SHA384</label>
 								<label><input type="checkbox" name="ipsec_hash_p2" value="16">SHA512</label-->
+							</td>
+						</tr>
+						<tr id="tr_adv_pfs">
+							<th>Perfect Forward Secrecy (PFS)</th><!-- untranslated -->
+							<td>
+								<label><input type="radio" name="ipsec_pfs" class="input" value="1" onchange="changePFS();"><#WLANConfig11b_WirelessCtrl_button1name#></label>
+								<label><input type="radio" name="ipsec_pfs" class="input" value="0" onchange="changePFS();"><#WLANConfig11b_WirelessCtrl_buttonname#></label>
+							</td>
+						</tr>
+						<tr id="tr_adv_pfs_group">
+							<th>PFS Groups</th><!-- untranslated -->
+							<td>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="1">1</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="2">2</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="4">5</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="8">14</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="16">15</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="32">16</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="64">17</label>
+								<label><input type="checkbox" name="ipsec_pfs_group" value="128">18</label>
 							</td>
 						</tr>
 						<tr id="tr_adv_keylife_time_p2">

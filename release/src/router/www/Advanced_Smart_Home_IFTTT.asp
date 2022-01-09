@@ -122,10 +122,10 @@ var realip_state = "";
 
 var StatusList = {
 	"NoInetrnet": "<#Alexa_Status_Disconnect#>",
-	"SvrFail": "Server connection failed",
+	"SvrFail": "<#Alexa_Server_Failed#>",
 	"StepAccount": "<#Alexa_Status_Account#>",
 	"EnableRemoteCtrl": "<#Alexa_Register1#>",
-	"Success": "IFTTT account is registered"
+	"Success": "<#IFTTT_Registered#>"
 }
 
 var AccLinkStatus = {
@@ -253,7 +253,6 @@ function get_activation_code(){
 	ASUS_EULA.config(get_activation_code, function(){});
 	if(ASUS_EULA.check("asus")){
 		detcet_aae_state();
-		gen_new_pincode();
 	}
 }
 
@@ -353,7 +352,7 @@ function show_account_state(){
 
 	var RetDDNSstatus = function(){
 
-		if(AccLinkStatus.RemoteStatus.ddns_enable_x == '0' || AccLinkStatus.RemoteStatus.ddns_hostname_x == '' || AccLinkStatus.RemoteStatus.misc_http_x == '0')
+		if(!check_ddns_status() || AccLinkStatus.RemoteStatus.misc_http_x == '0')
 			return false;
 		else
 			return true;
@@ -389,7 +388,7 @@ function show_account_state(){
 }
 </script>
 </head>
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 
@@ -424,7 +423,7 @@ function show_account_state(){
 								<td bgcolor="#4D595D" valign="top">
 									<div>&nbsp;</div>
 									<div id="formfonttitle" class="formfonttitle">Alexa & IFTTT - IFTTT</div>
-									<div id="divSwitchMenu" style="margin-top:-40px;float:right;"><div style="width:110px;height:30px;float:left;border-top-left-radius:8px;border-bottom-left-radius:8px;" class="block_filter"><a href="Advanced_Smart_Home_Alexa.asp"><div class="block_filter_name">Amazon Alexa</div></a></div><div style="width:110px;height:30px;float:left;border-top-right-radius:8px;border-bottom-right-radius:8px;" class="block_filter_pressed"><div class="tab_font_color" style="text-align:center;padding-top:5px;font-size:14px">IFTTT</div></div></div>
+									<div id="divSwitchMenu" style="margin-top:-40px;float:right;"><div style="width:150px;height:30px;float:left;border-top-left-radius:8px;border-bottom-left-radius:8px;" class="block_filter"><a href="Advanced_Smart_Home_Alexa.asp"><div class="block_filter_name"><#Alexa_Title#></div></a></div><div style="width:110px;height:30px;float:left;border-top-right-radius:8px;border-bottom-right-radius:8px;" class="block_filter_pressed"><div class="tab_font_color" style="text-align:center;padding-top:5px;font-size:14px">IFTTT</div></div></div>
 									<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 									<div class="div_table">
 											<div class="div_tr">
@@ -439,7 +438,7 @@ function show_account_state(){
 														<a style="font-size:13px;padding-top: 2px;padding-left: 20px;font-style:italic;text-decoration: underline;cursor:pointer;" href="https://ifttt.com/asusrouter" target="_blank"><#IFTTT_more_applets#></a>
 													</div>
 													<div style="text-align:center;padding-top:60px;font-family:Arial, Helvetica, sans-serif;font-style:italic;font-weight:lighter;font-size:18px;"><#IFTTT_start0#></div>
-													<div id="acc_link_status" style="text-align:center;padding-top:10px;font-size:15px;color:#FFCC00;font-weight:bolder;"></div> <!-- id="remote_control_here" -->
+													<div id="acc_link_status" class="hint-color" style="text-align:center;padding-top:10px;font-size:15px;font-weight:bolder;"></div> <!-- id="remote_control_here" -->
 													<div class="div_img">
 														<table style="width:99%">
 															<div style="font-size:20px;color:#c0c0c0;padding-bottom:20px;"><#IFTTT_start1#></div>
@@ -477,7 +476,7 @@ function show_account_state(){
 																		<div class="step_3"></div>
 																	</div>
 																	<div class="div_td" style="font-size:16px;padding:5px 0px 0px 10px;">
-																		<div><span style="color:#FFCC00;text-decoration:underline;cursor:pointer;" onclick="get_activation_code();"><#Get_Activation_Code#></span> ,<#Link_IFTTT_and_Router#></div>
+																		<div><span class="hint-color" style="text-decoration:underline;cursor:pointer;" onclick="get_activation_code();"><#Get_Activation_Code#></span> ,<#Link_IFTTT_and_Router#></div>
 																	</div>
 																</div>
 																<div style="font-weight:bolder;font-size:20px;color:#c0c0c0;padding-top:57px;padding-left:15px;"><#IFTTT_and#></div>

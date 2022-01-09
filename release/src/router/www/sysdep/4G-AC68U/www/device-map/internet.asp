@@ -643,7 +643,7 @@ function cancel_action(){
 
 function confirm_action(){
 	document.internetForm.wans_dualwan.value = document.internetForm.wans_primary.value +" "+ document.internetForm.wans_second.value;
-	if(!dsl_support && !noWAN_support && (document.internetForm.wans_dualwan.value == "usb lan" || document.internetForm.wans_dualwan.value == "lan usb")){
+	if(!dsl_support && !noWAN_support && based_modelid != "BRT-AC828" && (document.internetForm.wans_dualwan.value == "usb lan" || document.internetForm.wans_dualwan.value == "lan usb")){
 		alert("WAN port should be selected in Dual WAN.");
 		document.internetForm.wans_primary.focus();
 		return;

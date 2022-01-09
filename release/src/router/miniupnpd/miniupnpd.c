@@ -1,7 +1,8 @@
-/* $Id: miniupnpd.c,v 1.206 2015/01/17 11:26:04 nanard Exp $ */
-/* MiniUPnP project
- * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2006-2015 Thomas Bernard
+/* $Id: miniupnpd.c,v 1.243 2020/04/12 17:43:13 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
+ * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
+ * (c) 2006-2020 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -43,10 +44,19 @@
 /* for BSD's sysctl */
 #include <sys/sysctl.h>
 #endif
+#ifdef HAS_LIBCAP
+#include <sys/capability.h>
+#endif
+#ifdef HAS_LIBCAP_NG
+#include <cap-ng.h>
+#endif
 
 /* unix sockets */
 #ifdef USE_MINIUPNPDCTL
 #include <sys/un.h>
+#endif
+#ifdef ENABLE_HTTPS
+#include <openssl/crypto.h>
 #endif
 
 #ifdef TOMATO
@@ -63,6 +73,7 @@
 #include "minissdp.h"
 #include "upnpredirect.h"
 #include "upnppinhole.h"
+#include "upnpstun.h"
 #include "miniupnpdtypes.h"
 #include "daemonize.h"
 #include "upnpevents.h"
@@ -150,14 +161,14 @@ tomato_save(const char *fname)
 			n = 0;
 			while (upnp_get_redirection_infos_by_index(n, &eport, proto, &iport, iaddr, sizeof(iaddr), desc, sizeof(desc), rhost, sizeof(rhost), &leaseduration) == 0)
 			{
-				timestamp = (leaseduration > 0) ? upnp_time() + leaseduration : 0;
+				timestamp = (leaseduration > 0) ? time(NULL) + leaseduration : 0;
 				fprintf(f, "%s %u %s %u [%s] %u\n", proto, eport, iaddr, iport, desc, timestamp);
 				++n;
 			}
 			fclose(f);
 			rename(tmp, fname);
 		}
-		else 
+		else
 		{
 			close(t);
 		}
@@ -182,17 +193,17 @@ tomato_load(void)
 
 	if ((f = fopen("/etc/upnp/data", "r")) != NULL)
 	{
-		current_time = upnp_time();
+		current_time = time(NULL);
 		s[sizeof(s) - 1] = 0;
 		while (fgets(s, sizeof(s) - 1, f)) {
-			if (sscanf(s, "%3s %hu %31s %hu [%*s] %u", proto, &eport, iaddr, &iport, &timestamp) >= 4)
+			if (sscanf(s, "%3s %hu %31s %hu [%*[^]]] %u", proto, &eport, iaddr, &iport, &timestamp) >= 4)
 			{
 				if (((a = strchr(s, '[')) != NULL) && ((b = strrchr(a, ']')) != NULL))
 				{
 					if (timestamp > 0)
 					{
 						if (timestamp > current_time)
-							leaseduration = current_time - timestamp;
+							leaseduration = timestamp - current_time;
 						else
 							continue;
 					}
@@ -202,6 +213,8 @@ tomato_load(void)
 					}
 					*b = 0;
 					rhost = NULL;
+					syslog(LOG_DEBUG, "Read redirection [%s] from file: %s port %hu to %s port %hu, timestamp: %u (%u)",
+						a + 1, proto, eport, iaddr, iport, timestamp, leaseduration);
 					upnp_redirect(rhost, eport, iaddr, iport, proto, a + 1, leaseduration);
 				}
 			}
@@ -264,7 +277,7 @@ static void
 tomato_helper(void)
 {
 	struct stat st;
-	
+
 	if (stat("/etc/upnp/delete", &st) == 0)
 	{
 		tomato_delete();
@@ -323,6 +336,7 @@ OpenAndConfHTTPSocket(unsigned short * port)
 		syslog(LOG_WARNING, "socket(PF_INET6, ...) failed with EAFNOSUPPORT, disabling IPv6");
 		SETFLAG(IPV6DISABLEDMASK);
 		ipv6 = 0;
+		/* Try again with IPv4 */
 		s = socket(PF_INET, SOCK_STREAM, 0);
 	}
 #endif
@@ -372,6 +386,19 @@ OpenAndConfHTTPSocket(unsigned short * port)
 	listenname.sin_addr.s_addr = htonl(INADDR_ANY);
 	listenname_len =  sizeof(struct sockaddr_in);
 #endif
+
+#if defined(SO_BINDTODEVICE) && !defined(MULTIPLE_EXTERNAL_IP)
+	/* One and only one LAN interface */
+	if(lan_addrs.lh_first != NULL && lan_addrs.lh_first->list.le_next == NULL
+	   && lan_addrs.lh_first->ifname[0] != '\0')
+	{
+		if(setsockopt(s, SOL_SOCKET, SO_BINDTODEVICE,
+		              lan_addrs.lh_first->ifname,
+		              strlen(lan_addrs.lh_first->ifname)) < 0)
+			syslog(LOG_WARNING, "setsockopt(http, SO_BINDTODEVICE, %s): %m",
+			       lan_addrs.lh_first->ifname);
+	}
+#endif /* defined(SO_BINDTODEVICE) && !defined(MULTIPLE_EXTERNAL_IP) */
 
 #ifdef ENABLE_IPV6
 	if(bind(s,
@@ -444,11 +471,13 @@ ProcessIncomingHTTP(int shttpl, const char * protocol)
 		char addr_str[64];
 
 		sockaddr_to_string((struct sockaddr *)&clientname, addr_str, sizeof(addr_str));
-		syslog(LOG_INFO, "%s connection from %s", protocol, addr_str);
+#ifdef DEBUG
+		syslog(LOG_DEBUG, "%s connection from %s", protocol, addr_str);
+#endif /* DEBUG */
 		if(get_lan_for_peer((struct sockaddr *)&clientname) == NULL)
 		{
 			/* The peer is not a LAN ! */
-			syslog(LOG_INFO,
+			syslog(LOG_WARNING,
 			       "%s peer %s is not from a LAN, closing the connection",
 			       protocol, addr_str);
 			close(shttp);
@@ -485,6 +514,7 @@ ProcessIncomingHTTP(int shttpl, const char * protocol)
 #else
 				tmp->clientaddr = clientname.sin_addr;
 #endif
+				memcpy(tmp->clientaddr_str, addr_str, sizeof(tmp->clientaddr_str));
 				return tmp;
 			}
 			else
@@ -615,7 +645,7 @@ static int nfqueue_cb(
 
 					/* printf("pkt found %s\n",dd);*/
 					ProcessSSDPData (sudp, dd, size - x,
-					                 &sendername, (unsigned short) 5555);
+					                 &sendername, -1, (unsigned short) 5555);
 				}
 			}
 		}
@@ -888,7 +918,7 @@ static int
 parselanaddr(struct lan_addr_s * lan_addr, const char * str)
 {
 	const char * p;
-	int n;
+	unsigned int n;
 	char tmp[16];
 
 	memset(lan_addr, 0, sizeof(struct lan_addr_s));
@@ -934,7 +964,7 @@ parselanaddr(struct lan_addr_s * lan_addr, const char * str)
 			while(*p && (*p=='.' || isdigit(*p)))
 				p++;
 			n = p - q;
-			if(n>15)
+			if(n >= sizeof(tmp))
 				goto parselan_error;
 			memcpy(tmp, q, n);
 			tmp[n] = '\0';
@@ -970,18 +1000,53 @@ parselanaddr(struct lan_addr_s * lan_addr, const char * str)
 			if(!inet_aton(lan_addr->ext_ip_str, &lan_addr->ext_ip_addr)) {
 				/* error */
 				fprintf(stderr, "Error parsing address : %s\n", lan_addr->ext_ip_str);
+				return -1;
 			}
+#if 0
+			if(addr_is_reserved(&lan_addr->ext_ip_addr)) {
+				/* error */
+				fprintf(stderr, "Error: option ext_ip address contains reserved / private address : %s\n", lan_addr->ext_ip_str);
+				return -1;
+			}
+#endif
+		}
+	}
+#else
+	while(*p) {
+		/* skip spaces */
+		while(*p && isspace(*p))
+			p++;
+		if(*p) {
+			unsigned int index;
+			n = 0;
+			while(p[n] && !isspace(p[n]) && n < sizeof(tmp)) {
+				tmp[n] = p[n];
+				n++;
+			}
+			if(n >= sizeof(tmp)) {
+				fprintf(stderr, "Cannot parse '%s'\n", p);
+				break;
+			}
+			tmp[n] = '\0';
+			index = if_nametoindex(tmp);
+			if(index == 0) {
+				fprintf(stderr, "Cannot get index for network interface %s\n",
+				        tmp);
+			} else {
+				lan_addr->add_indexes |= (1UL << (index - 1));
+			}
+			p += n;
 		}
 	}
 #endif
-#ifdef ENABLE_IPV6
 	if(lan_addr->ifname[0] != '\0')
 	{
 		lan_addr->index = if_nametoindex(lan_addr->ifname);
 		if(lan_addr->index == 0)
-			fprintf(stderr, "Cannot get index for network interface %s",
+			fprintf(stderr, "Cannot get index for network interface %s\n",
 			        lan_addr->ifname);
 	}
+#ifdef ENABLE_IPV6
 	else
 	{
 		fprintf(stderr,
@@ -989,12 +1054,56 @@ parselanaddr(struct lan_addr_s * lan_addr, const char * str)
 		        str);
 		return -1;
 	}
+#else
+	else
+	{
+		syslog(LOG_NOTICE, "it is advised to use network interface name instead of %s", str);
+	}
 #endif
 	return 0;
 parselan_error:
 	fprintf(stderr, "Error parsing address/mask (or interface name) : %s\n",
 	        str);
 	return -1;
+}
+
+static char ext_addr_str[INET_ADDRSTRLEN];
+
+int update_ext_ip_addr_from_stun(int init)
+{
+	struct in_addr if_addr, ext_addr;
+	int restrictive_nat;
+	char if_addr_str[INET_ADDRSTRLEN];
+
+	syslog(LOG_INFO, "STUN: Performing with host=%s and port=%u ...", ext_stun_host, (unsigned)ext_stun_port);
+
+	if (getifaddr(ext_if_name, if_addr_str, INET_ADDRSTRLEN, &if_addr, NULL) < 0) {
+		syslog(LOG_ERR, "STUN: Cannot get IP address for ext interface %s", ext_if_name);
+		return 1;
+	}
+	if (perform_stun(ext_if_name, if_addr_str, ext_stun_host, ext_stun_port, &ext_addr, &restrictive_nat) != 0) {
+		syslog(LOG_ERR, "STUN: Performing STUN failed: %s", strerror(errno));
+		return 1;
+	}
+	if (!inet_ntop(AF_INET, &ext_addr, ext_addr_str, sizeof(ext_addr_str))) {
+		syslog(LOG_ERR, "STUN: Function inet_ntop for IP address returned by STUN failed: %s", strerror(errno));
+		return 1;
+	}
+
+	if ((init || disable_port_forwarding) && !restrictive_nat) {
+		if (addr_is_reserved(&if_addr))
+			syslog(LOG_INFO, "STUN: ext interface %s with IP address %s is now behind unrestricted NAT 1:1 with public IP address %s: Port forwarding is now enabled", ext_if_name, if_addr_str, ext_addr_str);
+		else
+			syslog(LOG_INFO, "STUN: ext interface %s has now public IP address %s: Port forwarding is now enabled", ext_if_name, if_addr_str);
+	} else if ((init || !disable_port_forwarding) && restrictive_nat) {
+		syslog(LOG_WARNING, "STUN: ext interface %s with IP address %s is now behind restrictive NAT with public IP address %s: Port forwarding might not work properly", ext_if_name, if_addr_str, ext_addr_str);
+	} else {
+		syslog(LOG_INFO, "STUN: ... done");
+	}
+
+	use_ext_ip_addr = ext_addr_str;
+	disable_port_forwarding = restrictive_nat;
+	return 0;
 }
 
 /* fill uuidvalue_wan and uuidvalue_wcd based on uuidvalue_igd */
@@ -1042,9 +1151,13 @@ static int
 init(int argc, char * * argv, struct runtime_vars * v)
 {
 	int i;
+#ifndef NO_BACKGROUND_NO_PIDFILE
 	int pid;
+#endif
 	int debug_flag = 0;
+	int verbosity_level = 0;	/* for determining setlogmask() */
 	int openlog_option;
+	struct in_addr addr;
 	struct sigaction sa;
 	/*const char * logfilename = 0;*/
 	const char * presurl = 0;
@@ -1058,7 +1171,7 @@ init(int argc, char * * argv, struct runtime_vars * v)
 	/* only print usage if -h is used */
 	for(i=1; i<argc; i++)
 	{
-		if(0 == strcmp(argv[i], "-h"))
+		if(0 == strcmp(argv[i], "-h") || 0 == strcmp(argv[i], "--help"))
 			goto print_usage;
 	}
 #ifndef DISABLE_CONFIG_FILE
@@ -1106,8 +1219,23 @@ init(int argc, char * * argv, struct runtime_vars * v)
 			case UPNPEXT_IFNAME:
 				ext_if_name = ary_options[i].value;
 				break;
+#ifdef ENABLE_IPV6
+			case UPNPEXT_IFNAME6:
+				ext_if_name6 = ary_options[i].value;
+				break;
+#endif
 			case UPNPEXT_IP:
 				use_ext_ip_addr = ary_options[i].value;
+				break;
+			case UPNPEXT_PERFORM_STUN:
+				if(strcmp(ary_options[i].value, "yes") == 0)
+					SETFLAG(PERFORMSTUNMASK);
+				break;
+			case UPNPEXT_STUN_HOST:
+				ext_stun_host = ary_options[i].value;
+				break;
+			case UPNPEXT_STUN_PORT:
+				ext_stun_port = atoi(ary_options[i].value);
 				break;
 			case UPNPLISTENING_IP:
 				lan_addr = (struct lan_addr_s *) malloc(sizeof(struct lan_addr_s));
@@ -1134,6 +1262,10 @@ init(int argc, char * * argv, struct runtime_vars * v)
 				{
 					fprintf(stderr, "can't parse \"%s\" as valid IPv6 listening address", ary_options[i].value);
 				}
+				break;
+			case UPNPIPV6_DISABLE:
+				if(strcmp(ary_options[i].value, "yes") == 0)
+					SETFLAG(IPV6DISABLEDMASK);
 				break;
 #endif /* ENABLE_IPV6 */
 			case UPNPPORT:
@@ -1181,12 +1313,15 @@ init(int argc, char * * argv, struct runtime_vars * v)
 #endif	/* ENABLE_MANUFACTURER_INFO_CONFIGURATION */
 #ifdef USE_NETFILTER
 			case UPNPFORWARDCHAIN:
-				miniupnpd_forward_chain = ary_options[i].value;
+				set_rdr_name(RDR_FORWARD_CHAIN_NAME, ary_options[i].value);
 				break;
 			case UPNPNATCHAIN:
-				miniupnpd_nat_chain = ary_options[i].value;
+				set_rdr_name(RDR_NAT_PREROUTING_CHAIN_NAME, ary_options[i].value);
 				break;
-#endif	/* USE_NETFILTER */
+			case UPNPNATPOSTCHAIN:
+				set_rdr_name(RDR_NAT_POSTROUTING_CHAIN_NAME, ary_options[i].value);
+				break;
+#endif    /* USE_NETFILTER */
 			case UPNPNOTIFY_INTERVAL:
 				v->notify_interval = atoi(ary_options[i].value);
 				break;
@@ -1240,6 +1375,26 @@ init(int argc, char * * argv, struct runtime_vars * v)
 					/*enablenatpmp = atoi(ary_options[i].value);*/
 				break;
 #endif	/* ENABLE_NATPMP */
+#ifdef ENABLE_AURASYNC
+			case UPNPENABLEAURASYNC:
+				if(strcmp(ary_options[i].value, "yes") == 0)
+					SETFLAG(ENABLEAURASYNCMASK);	/*enableaurasync = 1;*/
+				else if(strcmp(ary_options[i].value, "standalone") == 0) {
+					SETFLAG(ENABLEAURASYNCMASK);
+					aura_standalone = 1;
+				}
+				break;
+#endif	/* ENABLE_AURASYNC */
+#ifdef ENABLE_NVGFN
+			case UPNPENABLENVGFN:
+				if(strcmp(ary_options[i].value, "yes") == 0)
+					SETFLAG(ENABLENVGFNMASK);	/*enablenvgfn = 1;*/
+				else if(strcmp(ary_options[i].value, "gfn_only") == 0) {
+					SETFLAG(ENABLENVGFNMASK);
+					gfn_only = 1;
+				}
+				break;
+#endif	/* ENABLE_NVGFN */
 #ifdef ENABLE_PCP
 			case UPNPPCPMINLIFETIME:
 					min_lifetime = atoi(ary_options[i].value);
@@ -1280,6 +1435,15 @@ init(int argc, char * * argv, struct runtime_vars * v)
 			case UPNPMINISSDPDSOCKET:
 				minissdpdsocketpath = ary_options[i].value;
 				break;
+#ifdef IGD_V2
+			case UPNPFORCEIGDDESCV1:
+				if (strcmp(ary_options[i].value, "yes") == 0)
+					SETFLAG(FORCEIGDDESCV1MASK);
+				else if (strcmp(ary_options[i].value, "no") != 0 ) {
+					fprintf(stderr, "force_igd_desc_v1 can only be yes or no\n");
+				}
+				break;
+#endif
 			default:
 				fprintf(stderr, "Unknown option in file %s\n",
 				        optionsfile);
@@ -1293,6 +1457,10 @@ init(int argc, char * * argv, struct runtime_vars * v)
 			return 1;
 		}
 #endif	/* ENABLE_PCP */
+		if (GETFLAG(PERFORMSTUNMASK) && !ext_stun_host) {
+			fprintf(stderr, "You must specify ext_stun_host= when ext_perform_stun=yes\n");
+			return 1;
+		}
 	}
 #endif /* DISABLE_CONFIG_FILE */
 
@@ -1305,6 +1473,23 @@ init(int argc, char * * argv, struct runtime_vars * v)
 		}
 		else switch(argv[i][1])
 		{
+		case 'v':
+			{
+				int j;
+				for (j = 1; argv[i][j] != '\0'; j++)
+					verbosity_level++;
+			}
+			break;
+#ifdef ENABLE_IPV6
+		case '4':
+			SETFLAG(IPV6DISABLEDMASK);
+			break;
+#endif
+#ifdef IGD_V2
+		case '1':
+			SETFLAG(FORCEIGDDESCV1MASK);
+			break;
+#endif
 		case 'b':
 			if(i+1 < argc) {
 				upnp_bootid = (unsigned int)strtoul(argv[++i], NULL, 10);
@@ -1312,9 +1497,20 @@ init(int argc, char * * argv, struct runtime_vars * v)
 				fprintf(stderr, "Option -%c takes one argument.\n", argv[i][1]);
 			break;
 		case 'o':
-			if(i+1 < argc)
-				use_ext_ip_addr = argv[++i];
-			else
+			if(i+1 < argc) {
+				i++;
+				if (0 == strncasecmp(argv[i], "STUN:", 5)) {
+					char *ptr;
+					SETFLAG(PERFORMSTUNMASK);
+					ext_stun_host = argv[i] + 5;
+					ptr = strchr(ext_stun_host, ':');
+					if (ptr) {
+						ext_stun_port = atoi(ptr+1);
+						*ptr = 0;
+					}
+				} else
+					use_ext_ip_addr = argv[i];
+			} else
 				fprintf(stderr, "Option -%c takes one argument.\n", argv[i][1]);
 			break;
 		case 't':
@@ -1387,6 +1583,14 @@ init(int argc, char * * argv, struct runtime_vars * v)
 			else
 				fprintf(stderr, "Option -%c takes one argument.\n", argv[i][1]);
 			break;
+#ifdef ENABLE_IPV6
+		case 'I':
+			if(i+1 < argc)
+				ext_if_name6 = argv[++i];
+			else
+				fprintf(stderr, "Option -%c takes one argument.\n", argv[i][1]);
+			break;
+#endif
 #ifdef USE_PF
 		case 'q':
 			if(i+1 < argc)
@@ -1437,12 +1641,14 @@ init(int argc, char * * argv, struct runtime_vars * v)
 			}
 			break;
 #endif	/* ENABLE_NFQUEUE */
+#ifndef NO_BACKGROUND_NO_PIDFILE
 		case 'P':
 			if(i+1 < argc)
 				pidfilename = argv[++i];
 			else
 				fprintf(stderr, "Option -%c takes one argument.\n", argv[i][1]);
 			break;
+#endif
 		case 'd':
 			debug_flag = 1;
 			break;
@@ -1558,12 +1764,36 @@ init(int argc, char * * argv, struct runtime_vars * v)
 			fprintf(stderr, "Unknown option: %s\n", argv[i]);
 		}
 	}
-	if(!ext_if_name || !lan_addrs.lh_first)
-	{
+	if(!ext_if_name || !lan_addrs.lh_first) {
 		/* bad configuration */
 		goto print_usage;
 	}
 
+	/* IPv6 ifname is defaulted to same as IPv4 */
+#ifdef ENABLE_IPV6
+	if(!ext_if_name6)
+		ext_if_name6 = ext_if_name;
+#endif
+
+	if (use_ext_ip_addr && GETFLAG(PERFORMSTUNMASK)) {
+		fprintf(stderr, "Error: options ext_ip= and ext_perform_stun=yes cannot be specified together\n");
+		return 1;
+	}
+
+	if (use_ext_ip_addr) {
+		if (inet_pton(AF_INET, use_ext_ip_addr, &addr) != 1) {
+			fprintf(stderr, "Error: option ext_ip contains invalid address %s\n", use_ext_ip_addr);
+			return 1;
+		}
+#if 0
+		if (addr_is_reserved(&addr)) {
+			fprintf(stderr, "Error: option ext_ip contains reserved / private address %s, not public routable\n", use_ext_ip_addr);
+			return 1;
+		}
+#endif
+	}
+
+#ifndef NO_BACKGROUND_NO_PIDFILE
 	if(debug_flag)
 	{
 		pid = getpid();
@@ -1579,6 +1809,7 @@ init(int argc, char * * argv, struct runtime_vars * v)
 		pid = daemonize();
 #endif
 	}
+#endif
 
 	openlog_option = LOG_PID|LOG_CONS;
 	if(debug_flag)
@@ -1590,17 +1821,32 @@ init(int argc, char * * argv, struct runtime_vars * v)
 
 	if(!debug_flag)
 	{
-		/* speed things up and ignore LOG_INFO and LOG_DEBUG */
-		setlogmask(LOG_UPTO(LOG_NOTICE));
+		switch (verbosity_level)
+		{
+		case 0:
+			/* speed things up and ignore LOG_INFO and LOG_DEBUG */
+			setlogmask(LOG_UPTO(LOG_NOTICE));
+			break;
+		case 1:
+			/* ignore LOG_DEBUG */
+			setlogmask(LOG_UPTO(LOG_INFO));
+			break;
+		case 2:
+			setlogmask(LOG_UPTO(LOG_DEBUG));
+		}
 	}
 
+#ifndef NO_BACKGROUND_NO_PIDFILE
 	if(checkforrunning(pidfilename) < 0)
 	{
 		syslog(LOG_ERR, "MiniUPnPd is already running. EXITING");
 		return 1;
 	}
-	
+#endif
+
+#ifdef TOMATO
 	syslog(LOG_NOTICE, "version " MINIUPNPD_VERSION " started");
+#endif /* TOMATO */
 
 	set_startup_time();
 
@@ -1657,6 +1903,9 @@ init(int argc, char * * argv, struct runtime_vars * v)
 
 	/* initialize random number generator */
 	srandom((unsigned int)time(NULL));
+#ifdef RANDOMIZE_URLS
+	snprintf(random_url, RANDOM_URL_MAX_LEN, "%08lx", random());
+#endif /* RANDOMIZE_URLS */
 
 	/* initialize redirection engine (and pinholes) */
 	if(init_redirect() < 0)
@@ -1670,8 +1919,10 @@ init(int argc, char * * argv, struct runtime_vars * v)
 #endif
 #endif
 
+#ifndef NO_BACKGROUND_NO_PIDFILE
 	if(writepidfile(pidfilename, pid) < 0)
 		pidfilename = NULL;
+#endif
 
 #ifdef ENABLE_LEASEFILE
 	/*remove(lease_file);*/
@@ -1686,11 +1937,17 @@ init(int argc, char * * argv, struct runtime_vars * v)
 	return 0;
 print_usage:
 	fprintf(stderr, "Usage:\n\t"
+	        "%s --version\n\t"
+	        "%s --help\n\t"
 	        "%s "
 #ifndef DISABLE_CONFIG_FILE
 			"[-f config_file] "
 #endif
-			"[-i ext_ifname] [-o ext_ip]\n"
+			"[-i ext_ifname] "
+#ifdef ENABLE_IPV6
+			"[-I ext_ifname6] [-4] "
+#endif
+			"[-o ext_ip]\n"
 #ifndef MULTIPLE_EXTERNAL_IP
 			"\t\t[-a listening_ip]"
 #else
@@ -1699,7 +1956,7 @@ print_usage:
 #ifdef ENABLE_HTTPS
 			" [-H https_port]"
 #endif
-			" [-p port] [-d]"
+			" [-p port] [-d] [-v]"
 #if defined(USE_PF) || defined(USE_IPF)
 			" [-L]"
 #endif
@@ -1710,7 +1967,10 @@ print_usage:
 			"\n"
 			/*"[-l logfile] " not functionnal */
 			"\t\t[-u uuid] [-s serial] [-m model_number] \n"
-			"\t\t[-t notify_interval] [-P pid_filename] "
+			"\t\t[-t notify_interval] "
+#ifndef NO_BACKGROUND_NO_PIDFILE
+			"[-P pid_filename] "
+#endif
 #ifdef ENABLE_MANUFACTURER_INFO_CONFIGURATION
 			"[-z fiendly_name]"
 #endif
@@ -1721,12 +1981,22 @@ print_usage:
 #ifdef ENABLE_NFQUEUE
                         "\t\t[-Q queue] [-n name]\n"
 #endif
-			"\t\t[-A \"permission rule\"] [-b BOOTID]\n"
+			"\t\t[-A \"permission rule\"] [-b BOOTID]"
+#ifdef IGD_V2
+			" [-1]"
+#endif
+			"\n"
 	        "\nNotes:\n\tThere can be one or several listening_ips.\n"
 	        "\tNotify interval is in seconds. Default is 30 seconds.\n"
+#ifndef NO_BACKGROUND_NO_PIDFILE
 			"\tDefault pid file is '%s'.\n"
+#endif
 			"\tDefault config file is '%s'.\n"
 			"\tWith -d miniupnpd will run as a standard program.\n"
+			"\t-o argument is either an IPv4 address or \"STUN:host[:port]\".\n"
+#ifdef ENABLE_IPV6
+			"\t-4 disable IPv6\n"
+#endif
 #if defined(USE_PF) || defined(USE_IPF)
 			"\t-L sets packet log in pf and ipf on.\n"
 #endif
@@ -1752,8 +2022,16 @@ print_usage:
 			"\t  \"allow 1024-65535 192.168.1.0/24 1024-65535\"\n"
 			"\t  \"deny 0-65535 0.0.0.0/0 0-65535\"\n"
 			"\t-b sets the value of BOOTID.UPNP.ORG SSDP header\n"
-			"\t-h prints this help and quits.\n"
-	        "", argv[0], pidfilename, DEFAULT_CONFIG);
+#ifdef IGD_V2
+			"\t-1 force reporting IGDv1 in rootDesc *use with care*\n"
+#endif
+			"\t-v enables LOG_INFO messages, -vv LOG_DEBUG as well (default with -d)\n"
+			"\t-h / --help prints this help and quits.\n"
+	        "", argv[0], argv[0], argv[0],
+#ifndef NO_BACKGROUND_NO_PIDFILE
+			pidfilename,
+#endif
+			DEFAULT_CONFIG);
 	return 1;
 }
 
@@ -1814,6 +2092,39 @@ main(int argc, char * * argv)
 	unsigned int next_pinhole_ts;
 #endif
 
+	for(i = 0; i < argc; i++) {
+		if(strcmp(argv[i], "version") == 0 || strcmp(argv[i], "--version") == 0) {
+			puts("miniupnpd " MINIUPNPD_VERSION
+#ifdef MINIUPNPD_GIT_REF
+			     " " MINIUPNPD_GIT_REF
+#endif
+			     " " __DATE__ );
+#ifdef USE_PF
+			puts("using pf backend");
+#endif
+#ifdef USE_IPF
+			puts("using ipf backend");
+#endif
+#ifdef USE_IPFW
+			puts("using ipfw backend");
+#endif
+#ifdef USE_IPTABLES
+			puts("using netfilter(iptables) backend");
+#endif
+#ifdef USE_NFTABLES
+			puts("using netfilter(nftables) backend");
+#endif
+#ifdef ENABLE_HTTPS
+#ifdef OPENSSL_VERSION
+			puts(OpenSSL_version(OPENSSL_VERSION));
+#else
+			puts(SSLeay_version(SSLEAY_VERSION));
+#endif
+#endif
+			return 0;
+		}
+	}
+	memset(&v, 0, sizeof(v));
 	if(init(argc, argv, &v) != 0)
 		return 1;
 #ifdef ENABLE_HTTPS
@@ -1846,10 +2157,15 @@ main(int argc, char * * argv)
 #endif
 
 	if(
-#ifdef ENABLE_NATPMP
-        !GETFLAG(ENABLENATPMPMASK) &&
+#ifdef ENABLE_AURASYNC
+        !GETFLAG(ENABLEAURASYNCMASK) &&
 #endif
-        !GETFLAG(ENABLEUPNPMASK) ) {
+#ifdef ENABLE_NATPMP
+	   !GETFLAG(ENABLENATPMPMASK) && !GETFLAG(ENABLEUPNPMASK)
+#else
+	   !GETFLAG(ENABLEUPNPMASK)
+#endif
+	   ) {
 		syslog(LOG_ERR, "Why did you run me anyway?");
 		return 0;
 	}
@@ -1866,6 +2182,32 @@ main(int argc, char * * argv)
 #endif
 	       GETFLAG(ENABLEUPNPMASK) ? "UPnP-IGD " : "",
 	       ext_if_name, upnp_bootid);
+#ifdef ENABLE_IPV6
+	if (ext_if_name6 != ext_if_name) {
+		syslog(LOG_INFO, "specific IPv6 ext if %s", ext_if_name6);
+	}
+#endif
+
+	if(GETFLAG(PERFORMSTUNMASK))
+	{
+		if (update_ext_ip_addr_from_stun(1) != 0) {
+			syslog(LOG_ERR, "Performing STUN failed. EXITING");
+			return 1;
+		}
+	}
+	else if (!use_ext_ip_addr)
+	{
+		char if_addr[INET_ADDRSTRLEN];
+		struct in_addr addr;
+		if (getifaddr(ext_if_name, if_addr, INET_ADDRSTRLEN, &addr, NULL) < 0) {
+			syslog(LOG_WARNING, "Cannot get IP address for ext interface %s. Network is down", ext_if_name);
+		} else if (addr_is_reserved(&addr)) {
+			syslog(LOG_INFO, "Reserved / private IP address %s on ext interface %s: Port forwarding might not work properly", if_addr, ext_if_name);
+//			syslog(LOG_INFO, "You are probably behind NAT, enable option ext_perform_stun=yes to detect public IP address");
+//			syslog(LOG_INFO, "Or use ext_ip= / -o option to declare public IP address");
+//			disable_port_forwarding = 1;
+		}
+	}
 
 	if(GETFLAG(ENABLEUPNPMASK))
 	{
@@ -1873,7 +2215,7 @@ main(int argc, char * * argv)
 		listen_port = (v.port > 0) ? v.port : 0;
 		/* open socket for HTTP connections. Listen on the 1st LAN address */
 #ifdef ENABLE_IPV6
-		shttpl = OpenAndConfHTTPSocket(&listen_port, 1);
+		shttpl = OpenAndConfHTTPSocket(&listen_port, !GETFLAG(IPV6DISABLEDMASK));
 #else /* ENABLE_IPV6 */
 		shttpl = OpenAndConfHTTPSocket(&listen_port);
 #endif /* ENABLE_IPV6 */
@@ -1890,7 +2232,7 @@ main(int argc, char * * argv)
 			shttpl_v4 =  OpenAndConfHTTPSocket(&listen_port, 0);
 			if(shttpl_v4 < 0)
 			{
-				syslog(LOG_ERR, "Failed to open socket for HTTP on port %hu (IPv4). EXITING", v.port);
+				syslog(LOG_ERR, "Failed to open socket for HTTP on port %d (IPv4). EXITING", v.port);
 				return 1;
 			}
 		}
@@ -1899,11 +2241,11 @@ main(int argc, char * * argv)
 		/* https */
 		listen_port = (v.https_port > 0) ? v.https_port : 0;
 #ifdef ENABLE_IPV6
-		shttpsl = OpenAndConfHTTPSocket(&listen_port, 1);
+		shttpsl = OpenAndConfHTTPSocket(&listen_port, !GETFLAG(IPV6DISABLEDMASK));
 #else /* ENABLE_IPV6 */
 		shttpsl = OpenAndConfHTTPSocket(&listen_port);
 #endif /* ENABLE_IPV6 */
-		if(shttpl < 0)
+		if(shttpsl < 0)
 		{
 			syslog(LOG_ERR, "Failed to open socket for HTTPS. EXITING");
 			return 1;
@@ -1914,21 +2256,24 @@ main(int argc, char * * argv)
 		shttpsl_v4 =  OpenAndConfHTTPSocket(&listen_port, 0);
 		if(shttpsl_v4 < 0)
 		{
-			syslog(LOG_ERR, "Failed to open socket for HTTPS on port %hu (IPv4). EXITING", v.https_port);
+			syslog(LOG_ERR, "Failed to open socket for HTTPS on port %d (IPv4). EXITING", v.https_port);
 			return 1;
 		}
 #endif /* V6SOCKETS_ARE_V6ONLY */
 #endif /* ENABLE_HTTPS */
 #ifdef ENABLE_IPV6
-		if(find_ipv6_addr(NULL, ipv6_addr_for_http_with_brackets, sizeof(ipv6_addr_for_http_with_brackets)) > 0) {
-			syslog(LOG_NOTICE, "HTTP IPv6 address given to control points : %s",
-			       ipv6_addr_for_http_with_brackets);
-		} else {
-			memcpy(ipv6_addr_for_http_with_brackets, "[::1]", 6);
-			syslog(LOG_WARNING, "no HTTP IPv6 address, disabling IPv6");
-			SETFLAG(IPV6DISABLEDMASK);
+		if(!GETFLAG(IPV6DISABLEDMASK)) {
+			if(find_ipv6_addr(lan_addrs.lh_first ? lan_addrs.lh_first->ifname : NULL,
+			                  ipv6_addr_for_http_with_brackets, sizeof(ipv6_addr_for_http_with_brackets)) > 0) {
+				syslog(LOG_NOTICE, "HTTP IPv6 address given to control points : %s",
+				       ipv6_addr_for_http_with_brackets);
+			} else {
+				memcpy(ipv6_addr_for_http_with_brackets, "[::1]", 6);
+				syslog(LOG_WARNING, "no HTTP IPv6 address, disabling IPv6");
+				SETFLAG(IPV6DISABLEDMASK);
+			}
 		}
-#endif
+#endif	/* ENABLE_IPV6 */
 
 		/* open socket for SSDP connections */
 		sudp = OpenAndConfSSDPReceiveSocket(0);
@@ -1996,7 +2341,9 @@ main(int argc, char * * argv)
 #endif
 
 #if defined(ENABLE_IPV6) && defined(ENABLE_PCP)
-	spcp_v6 = OpenAndConfPCPv6Socket();
+	if(!GETFLAG(IPV6DISABLEDMASK)) {
+		spcp_v6 = OpenAndConfPCPv6Socket();
+	}
 #endif
 
 	/* for miniupnpdctl */
@@ -2020,6 +2367,81 @@ main(int argc, char * * argv)
 	tomato_helper();
 #endif
 
+#ifdef ENABLE_PCP
+	if(GETFLAG(ENABLENATPMPMASK))
+	{
+		/* Send PCP startup announcements */
+#ifdef ENABLE_IPV6
+		PCPSendUnsolicitedAnnounce(snatpmp, addr_count, spcp_v6);
+#else /* IPv4 only */
+		PCPSendUnsolicitedAnnounce(snatpmp, addr_count);
+#endif
+	}
+#endif
+
+	/* drop privileges */
+#ifdef HAS_PLEDGE
+	/* mcast ? unix ? */
+	if (pledge("stdio inet pf", NULL) < 0) {
+		syslog(LOG_ERR, "pledge(): %m");
+		return 1;
+	}
+#endif /* HAS_PLEDGE */
+#ifdef HAS_LIBCAP
+	{
+		cap_t caps = cap_get_proc();
+		if (caps == NULL) {
+			syslog(LOG_ERR, "cap_get_proc(): %m");
+		} else {
+			static const cap_value_t cap_list[3] = { CAP_NET_BROADCAST, CAP_NET_ADMIN, CAP_NET_RAW };
+			char * txt_caps = cap_to_text(caps, NULL);
+			if (txt_caps == NULL) {
+				syslog(LOG_ERR, "cap_to_text(): %m");
+			} else {
+				syslog(LOG_DEBUG, "capabilities %s", txt_caps);
+				if (cap_free(txt_caps) < 0) {
+					syslog(LOG_ERR, "cap_free(): %m");
+				}
+			}
+			if (cap_clear(caps) < 0) {
+				syslog(LOG_ERR, "cap_clear(): %m");
+			}
+			if (cap_set_flag(caps, CAP_PERMITTED, sizeof(cap_list)/sizeof(cap_list[0]), cap_list, CAP_SET) < 0) {
+				syslog(LOG_ERR, "cap_set_flag(): %m");
+			}
+			if (cap_set_flag(caps, CAP_EFFECTIVE, sizeof(cap_list)/sizeof(cap_list[0]), cap_list, CAP_SET) < 0) {
+				syslog(LOG_ERR, "cap_set_flag(): %m");
+			}
+			txt_caps = cap_to_text(caps, NULL);
+			if (txt_caps == NULL) {
+				syslog(LOG_ERR, "cap_to_text(): %m");
+			} else {
+				syslog(LOG_DEBUG, "capabilities %s", txt_caps);
+				if (cap_free(txt_caps) < 0) {
+					syslog(LOG_ERR, "cap_free(): %m");
+				}
+			}
+			if (cap_set_proc(caps) < 0) {
+				syslog(LOG_ERR, "cap_set_proc(): %m");
+			}
+			if (cap_free(caps) < 0) {
+				syslog(LOG_ERR, "cap_free(): %m");
+			}
+		}
+	}
+#endif /* HAS_LIBCAP */
+#ifdef HAS_LIBCAP_NG
+	capng_setpid(getpid());
+	capng_clear(CAPNG_SELECT_BOTH);
+	if (capng_updatev(CAPNG_ADD, CAPNG_EFFECTIVE|CAPNG_PERMITTED, CAP_NET_BROADCAST, CAP_NET_ADMIN, CAP_NET_RAW, -1) < 0) {
+		syslog(LOG_ERR, "capng_updatev() failed");
+	} else {
+		if (capng_apply(CAPNG_SELECT_BOTH) < 0) {
+			syslog(LOG_ERR, "capng_apply() failed");
+		}
+	}
+#endif /* HAS_LIBCAP_NG */
+
 	/* main loop */
 	while(!quitting)
 	{
@@ -2041,6 +2463,23 @@ main(int argc, char * * argv)
 		if(should_send_public_address_change_notif)
 		{
 			syslog(LOG_INFO, "should send external iface address change notification(s)");
+			if(GETFLAG(PERFORMSTUNMASK))
+				update_ext_ip_addr_from_stun(0);
+			if (!use_ext_ip_addr)
+			{
+				char if_addr[INET_ADDRSTRLEN];
+				struct in_addr addr;
+				if (getifaddr(ext_if_name, if_addr, INET_ADDRSTRLEN, &addr, NULL) == 0) {
+					int reserved = addr_is_reserved(&addr);
+					if (disable_port_forwarding && !reserved) {
+						syslog(LOG_INFO, "Public IP address %s on ext interface %s: Port forwarding is enabled", if_addr, ext_if_name);
+					} else if (!disable_port_forwarding && reserved) {
+						syslog(LOG_INFO, "Reserved / private IP address %s on ext interface %s: Port forwarding might not be working properly", if_addr, ext_if_name);
+//						syslog(LOG_INFO, "You are probably behind NAT, enable option ext_perform_stun=yes to detect public IP address");
+					}
+//					disable_port_forwarding = reserved;
+				}
+			}
 #ifdef ENABLE_NATPMP
 			if(GETFLAG(ENABLENATPMPMASK))
 				SendNATPMPPublicAddressChangeNotification(snatpmp, addr_count);
@@ -2051,10 +2490,17 @@ main(int argc, char * * argv)
 				upnp_event_var_change_notify(EWanIPC);
 			}
 #endif
-			should_send_public_address_change_notif = 0;
-#ifdef ENABLE_LEASEFILE
-			reload_from_lease_file();
+#ifdef ENABLE_PCP
+			if(GETFLAG(ENABLENATPMPMASK))
+			{
+#ifdef ENABLE_IPV6
+				PCPPublicAddressChanged(snatpmp, addr_count, spcp_v6);
+#else /* IPv4 only */
+				PCPPublicAddressChanged(snatpmp, addr_count);
 #endif
+			}
+#endif
+			should_send_public_address_change_notif = 0;
 		}
 		/* Check if we need to send SSDP NOTIFY messages and do it if
 		 * needed */
@@ -2401,7 +2847,7 @@ main(int argc, char * * argv)
 					if(lan_addr == NULL) {
 						char sender_str[64];
 						sockaddr_to_string((struct sockaddr *)&senderaddr, sender_str, sizeof(sender_str));
-						syslog(LOG_INFO, "NAT-PMP packet sender %s not from a LAN, ignoring",
+						syslog(LOG_WARNING, "NAT-PMP packet sender %s not from a LAN, ignoring",
 						       sender_str);
 						continue;
 					}
@@ -2424,7 +2870,7 @@ main(int argc, char * * argv)
 				if(lan_addr == NULL) {
 					char sender_str[64];
 					sockaddr_to_string((struct sockaddr *)&senderaddr, sender_str, sizeof(sender_str));
-					syslog(LOG_INFO, "NAT-PMP packet sender %s not from a LAN, ignoring",
+					syslog(LOG_WARNING, "NAT-PMP packet sender %s not from a LAN, ignoring",
 					       sender_str);
 					continue;
 				}
@@ -2643,10 +3089,12 @@ shutdown:
 	}
 
 	/* remove pidfile */
+#ifndef NO_BACKGROUND_NO_PIDFILE
 	if(pidfilename && (unlink(pidfilename) < 0))
 	{
 		syslog(LOG_ERR, "Failed to remove pidfile %s: %m", pidfilename);
 	}
+#endif
 
 	/* delete lists */
 	while(lan_addrs.lh_first != NULL)
@@ -2663,11 +3111,14 @@ shutdown:
 	free(snatpmp);
 #endif
 	free(snotify);
-	closelog();
+
+	shutdown_redirect();
+
 #ifndef DISABLE_CONFIG_FILE
+	/* in some case shutdown_redirect() may need the option values */
 	freeoptions();
 #endif
-
+	closelog();
 	return 0;
 }
 

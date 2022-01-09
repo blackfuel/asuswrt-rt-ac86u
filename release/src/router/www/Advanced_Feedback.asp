@@ -18,13 +18,12 @@
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
 <script language="JavaScript" type="text/javascript" src="/popup.js"></script>
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
-<script language="JavaScript" type="text/javascript" src="merlin.js"></script>
+<script language="JavaScript" type="text/javascript" src="/validator.js"></script>
 <script language="JavaScript" type="text/javascript" src="js/jquery.js"></script>
 <script type="text/javascript" src="js/oauth.js"></script>
 <script type="text/javascript" src="js/httpApi.js"></script>
 <style>
 .noUSBHint, .storeUSBHint {
-	color: #FC0;
 	margin-left: 10px;
 	display: none;
 }
@@ -46,13 +45,21 @@ var fb_trans_id = '<% generate_trans_id(); %>';
 var default_provider = '<% get_parameter("provider"); %>';
 var reload_data = parseInt('<% get_parameter("reload"); %>');
 var dblog_trans_id = '<% generate_trans_id(); %>';
+var fb_total_size;
+var is_CN_sku = in_territory_code("CN");
+var reboot_schedule_enable_orig = httpApi.nvramGet(["reboot_schedule_enable"], true).reboot_schedule_enable;
+var wl0_radio_orig = httpApi.nvramGet(["wl0_radio"], true).wl0_radio;
+var wl1_radio_orig = httpApi.nvramGet(["wl1_radio"], true).wl1_radio;
+var wl2_radio_orig = httpApi.nvramGet(["wl2_radio"], true).wl2_radio;
+var wl0_timesched_orig = httpApi.nvramGet(["wl0_timesched"], true).wl0_timesched;
+var wl1_timesched_orig = httpApi.nvramGet(["wl1_timesched"], true).wl1_timesched;
+var wl2_timesched_orig = httpApi.nvramGet(["wl2_timesched"], true).wl2_timesched;
+
 function initial(){
 	show_menu();
 	if(dsl_support){
 		change_dsl_diag_enable(0);
 		document.getElementById("fb_desc1").style.display = "";
-		inputCtrl(document.form.fb_ptype, 0);
-		inputCtrl(document.form.fb_pdesc, 0);
 		
 	}
 	else{
@@ -70,11 +77,20 @@ function initial(){
 		inputCtrl(document.form.dslx_diag_duration, 0);
 		inputCtrl(document.form.fb_availability, 0);
 		
-		gen_ptype_list(orig_page);
-		Reload_pdesc(document.form.fb_ptype,orig_page);
-	}		
+	}
 
-	if(modem_support == -1 || nomodem_support){
+	gen_ptype_list(orig_page);
+	Reload_pdesc(document.form.fb_ptype,orig_page);
+
+	if(is_CN_sku){
+		inputCtrl(document.form.fb_phone, 1);
+		gen_contact_sel();
+	}
+	else{
+		inputCtrl(document.form.fb_phone, 0);
+	}
+
+	if(!modem_support || nomodem_support){
 		document.form.attach_modemlog.checked = false;
 		document.getElementById("attach_modem_span").style.display = "none";
 	}
@@ -88,14 +104,40 @@ function initial(){
 		$(".dblog_support_class").remove();
 	}
 
-	var fb_email_provider = '<% nvram_get("fb_email_provider"); %>';
-	if(fb_email_provider=="" && default_provider!=""){
-		document.form.fb_email_provider.value = default_provider;	
+	if(false){
+		$("#fb_email_provider_field").show();
+		var fb_email_provider = '<% nvram_get("fb_email_provider"); %>';
+		if(fb_email_provider=="" && default_provider!=""){
+			document.form.fb_email_provider.value = default_provider;	
+		}
+		else{
+			document.form.fb_email_provider.value = fb_email_provider;
+		}
+		change_fb_email_provider();
+
+		$("#oauth_google_btn").click(
+			function() {
+				oauth.google(onGoogleLogin);
+			}
+		);
+
+		//init check google token_status
+		if(document.form.fb_email_provider.value == "google") {
+			$(".oauth_google_status").hide();
+			if(httpApi.nvramGet(["oauth_google_refresh_token"], true).oauth_google_refresh_token != "") {
+				$("#oauth_google_loading").show();
+				document.form.fb_email.value = "";
+				check_refresh_token_valid(
+					function(_callBackValue) {
+						$("#oauth_google_loading").hide();
+						show_google_auth_status(_callBackValue);
+					}
+				);
+			}
+			else
+				show_google_auth_status();
+		}
 	}
-	else{
-		document.form.fb_email_provider.value = fb_email_provider;
-	}
-	change_fb_email_provider();
 
 	if(reload_data==1){
 		document.form.fb_country.value = decodeURIComponent('<% nvram_char_to_ascii("", "fb_country"); %>');
@@ -105,75 +147,62 @@ function initial(){
 		document.form.fb_comment.value = decodeURIComponent('<% nvram_char_to_ascii("", "fb_comment"); %>');
 	}
 
-	$("#oauth_google_btn").click(
-		function() {
-			oauth.google(onGoogleLogin);
-		}
-	);
+	var policy_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Policy&lang="+ui_lang+"&kw=&num=";
+	$("#eula_content").find($("a")).attr({"href": policy_href});
+	var call_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Call&lang="+ui_lang+"&kw=&num=";
+	$("#call_link").attr({"href": call_href});
+}
 
-	httpApi.nvramGetAsync({
-		data: ["preferred_lang"],
-		success: function(resp){
-			var preferredLang = resp.preferred_lang;
-			lang_str = (preferredLang == "EN" || preferredLang == "SL") ? "" : (preferredLang.toLowerCase() + '/');
+function gen_contact_sel(){
+	infolist = new Array();
+	infolist.push(["<#Select_menu_default#> ...","No_selected"]);
+	infolist.push(["<#feedback_phone#>","phone"]);
+	infolist.push(["QQ","qq"]);
+	infolist.push(["<#wechat#>","wechat"]);
 
-			if(preferredLang == "CN")
-				url = "https://www.asus.com.cn/Terms_of_Use_Notice_Privacy_Policy/Privacy_Policy";
-			else{
-				if(preferredLang == "SV")
-					lang_str = "se/";
-				else if(preferredLang == "UK")
-					lang_str = "ua-ua/";
-				else if(preferredLang == "MS")
-					lang_str = "my/";
-				else if(preferredLang == "DA")
-					lang_str = "dk/";
-
-				url = "https://www.asus.com/" + lang_str +"Terms_of_Use_Notice_Privacy_Policy/Privacy_Policy";
-			}
-
-			$("#eula_content").find($("a")).attr({
-				"href": url
-			})
-		}
-	})
+	for(var i = 0; i < infolist.length; i++){
+		document.form.fb_contact_type.options[i] = new Option(infolist[i][0], infolist[i][1]);
+	}
 }
 
 function check_wan_state(){
 	
 	if(sw_mode != 3 && document.getElementById("connect_status").className == "connectstatusoff"){
 		document.getElementById("fb_desc_disconnect").style.display = "";
-		document.form.fb_country.disabled = "true";
-		document.form.fb_email.disabled = "true";
-		document.form.attach_syslog.disabled = "true";
-		document.form.attach_cfgfile.disabled = "true";
-		document.form.attach_modemlog.disabled = "true";
-		document.form.attach_wlanlog.disabled = "true";
-		document.form.fb_comment.disabled = "true";
-		document.form.btn_send.disabled = "true";
+		document.form.fb_country.disabled = true;
+		document.form.fb_email.disabled = true;
+		document.form.fb_serviceno.disabled = true;
+		document.form.attach_syslog.disabled = true;
+		document.form.attach_cfgfile.disabled = true;
+		document.form.attach_modemlog.disabled = true;
+		document.form.attach_wlanlog.disabled = true;
+		document.form.fb_ptype.disabled = true;
+		document.form.fb_pdesc.disabled = true;
+		document.form.fb_comment.disabled = true;
+		document.form.btn_send.disabled = true;
 		if(dsl_support){
-			document.form.fb_ISP.disabled = "true";
-			document.form.fb_Subscribed_Info.disabled = "true";
-			document.form.attach_iptables.disabled = "true";
-			document.form.dslx_diag_enable[0].disabled = "true";
-			document.form.dslx_diag_enable[1].disabled = "true";
-			document.form.dslx_diag_duration.disabled = "true";
-			document.form.fb_availability.disabled = "true";
+			document.form.fb_ISP.disabled = true;
+			document.form.fb_Subscribed_Info.disabled = true;
+			document.form.attach_iptables.disabled = true;
+			document.form.dslx_diag_enable[0].disabled = true;
+			document.form.dslx_diag_enable[1].disabled = true;
+			document.form.dslx_diag_duration.disabled = true;
+			document.form.fb_availability.disabled = true;
 			
 		}
-		else{
-			document.form.fb_ptype.disabled = "true";
-			document.form.fb_pdesc.disabled = "true";
-		}		
+
 	}
 	else{
 		document.getElementById("fb_desc_disconnect").style.display = "none";
 		document.form.fb_country.disabled = "";
 		document.form.fb_email.disabled = "";
+		document.form.fb_serviceno.disabled = "";
 		document.form.attach_syslog.disabled = "";
 		document.form.attach_modemlog.disabled = "";
 		document.form.attach_wlanlog.disabled = "";
 		document.form.attach_cfgfile.disabled = "";
+		document.form.fb_ptype.disabled = "";
+		document.form.fb_pdesc.disabled = "";
 		document.form.fb_comment.disabled = "";
 		document.form.btn_send.disabled = "";
 		if(dsl_support){
@@ -186,10 +215,6 @@ function check_wan_state(){
 			document.form.fb_availability.disabled = "";
 			
 		}
-		else{
-			document.form.fb_ptype.disabled = "";
-			document.form.fb_pdesc.disabled = "";
-		}
 	}		
 		
 	setTimeout("check_wan_state();", 3000);
@@ -201,7 +226,8 @@ function gen_ptype_list(url){
 	ptypelist.push(["<#feedback_setting_problem#>", "Setting_Problem"]);	
 	ptypelist.push(["<#feedback_conn_problem#>", "Connection_or_Speed_Problem"]);
 	ptypelist.push(["<#feedback_compat_problem#>", "Compatibility_Problem"]);
-	ptypelist.push(["<#feedback_translation#>", "Translated_Suggestion"]);
+	ptypelist.push(["<#feedback_suggestion#>", "Suggestion"]);
+	ptypelist.push(["<#feedback_tech_support#>", "Technical_Support"]);
 	ptypelist.push(["<#Adaptive_Others#>", "Other_Problem"]);
 	free_options(document.form.fb_ptype);
 	document.form.fb_ptype.options.length = ptypelist.length;
@@ -218,6 +244,7 @@ function Reload_pdesc(obj, url){
 	var ptype = obj.value;
 	desclist = new Array();
 	url_group = new Array();
+	timelist = new Array();
 	desclist.push(["<#Select_menu_default#> ...","No_selected"]);
 	url_group.push(["select"]);//false value
 	if(ptype == "Setting_Problem"){
@@ -239,17 +266,23 @@ function Reload_pdesc(obj, url){
 		desclist.push(["<#EzQoS_type_traditional#>","Traditional QoS"]);
 		url_group.push(["AiProtection"]);
 
-		desclist.push(["<#Menu_TrafficManager#>","<#Traffic_Analyzer#>"]);
+		desclist.push(["<#Adaptive_Game#>","Gaming"]);
+		url_group.push(["GameBoost"]);
+
+		desclist.push(["<#Traffic_Analyzer#>/<#Menu_TrafficManager#>","Traffic Analyzer/Manager"]);
 		url_group.push(["TrafficMonitor"]);
 
 		desclist.push(["<#Parental_Control#>","Parental Ctrl"]);
 		url_group.push(["ParentalControl"]);
 
-		desclist.push(["<#Menu_usb_application#>","USB Application"]);
+		desclist.push(["<#Menu_usb_application#>","USB Application"]);		//10
 		url_group.push(["APP_", "AiDisk", "aidisk", "mediaserver", "PrinterServer", "TimeMachine"]);
 
-		desclist.push(["AiCloud","AiCloud"]);	//10
+		desclist.push(["AiCloud","AiCloud"]);
 		url_group.push(["cloud"]);
+
+		desclist.push(["AiMesh","AiMesh"]);
+		url_group.push(["AiMesh"]);
 
 		desclist.push(["<#menu5_1#>","Wireless"]);
 		url_group.push(["ACL", "WAdvanced", "Wireless", "WMode", "WSecurity", "WWPS"]);
@@ -257,13 +290,13 @@ function Reload_pdesc(obj, url){
 		desclist.push(["<#menu5_3#>","WAN"]);
 		url_group.push(["WAN_", "PortTrigger", "VirtualServer", "Exposed", "NATPassThrough"]);
 
-		desclist.push(["<#dualwan#>","Dual WAN"]);
+		desclist.push(["<#dualwan#>","Dual WAN"]);		//15
 		url_group.push(["WANPort"]);
 
 		desclist.push(["<#menu5_2#>","LAN"]);
 		url_group.push(["LAN", "DHCP", "GWStaticRoute", "IPTV", "SwitchCtrl"]);
 
-		desclist.push(["<#menu5_4_4#>","USB dongle"]);	//15
+		desclist.push(["<#menu5_4_4#>","USB dongle"]);
 		url_group.push(["Modem"]);
 
 		desclist.push(["<#DM_title#>","DM"]);
@@ -272,35 +305,40 @@ function Reload_pdesc(obj, url){
 		desclist.push(["<#menu5_3_6#>","DDNS"]);
 		url_group.push(["DDNS"]);
 
-		desclist.push(["IPv6","IPv6"]);
+		desclist.push(["IPv6","IPv6"]);		//20
 		url_group.push(["IPv6"]);
 
 		desclist.push(["VPN","VPN"]);
 		url_group.push(["VPN"]);
 
-		desclist.push(["<#menu5_5#>","Firewall"]);	//20
+		desclist.push(["<#menu5_5#>","Firewall"]);
 		url_group.push(["Firewall", "KeywordFilter", "URLFilter"]);
 
 		desclist.push(["<#menu5_6#>","Administration"]);
 		url_group.push(["OperationMode", "System", "SettingBackup"]);
 
 		desclist.push(["<#System_Log#>","System Log"]);
-		url_group.push(["VPN"]);
+		url_group.push(["System"]);
 
-		desclist.push(["<#Network_Tools#>","Network Tools"]);
+		desclist.push(["<#Network_Tools#>","Network Tools"]);		//25
 		url_group.push(["Status_"]);
 
-		desclist.push(["Rescue Mode","Rescue"]);
+		desclist.push(["<#Rescue_Mode#>","Rescue"]);
 		url_group.push(["Rescue"]);//false value
 
-		desclist.push(["<#feedback_compat_wond#>","Other Devices"]);	//25
+		desclist.push(["<#feedback_compat_wond#>","Other Devices"]);
 		url_group.push(["Other_Device"]);//false value
 
-		desclist.push(["Cannot access firmware page","Fail to access"]);
+		desclist.push(["<#WebGUI_issue#>","Fail to access"]);
 		url_group.push(["GUI"]);//false value
 
 		desclist.push(["<#menu5_6_3#>","FW update"]);
 		url_group.push(["FirmwareUpgrade"]);
+
+		if(isSupport("Instant_Guard")){
+			desclist.push(["<#Instant_Guard_title#>","Instant Guard"]);	//30 //Untranslated
+			url_group.push(["Instant_Guard"]);
+		}
 
 	}
 	else if(ptype == "Connection_or_Speed_Problem"){
@@ -309,6 +347,7 @@ function Reload_pdesc(obj, url){
 		desclist.push(["<#feedback_conn_sws#>","Wired speed"]);
 		desclist.push(["<#feedback_conn_ucp#>","Unstable connection"]);
 		desclist.push(["<#feedback_conn_rra#>","Router reboot"]);
+		desclist.push(["<#feedback_conn_wdc#>","Wireless disconnected"]);
 		
 	}
 	else if(ptype == "Compatibility_Problem"){
@@ -322,10 +361,21 @@ function Reload_pdesc(obj, url){
 		desclist.push(["<#feedback_compat_wond#>","network devices"]);
 
 	}
-	else if(ptype == "Translated_Suggestion"){
+	else if(ptype == "Suggestion"){
 		
 		desclist.splice(0,1);
-		desclist.push(["<#feedback_translation_ts#>","Translation"]);		
+		desclist.push(["<#feedback_suggestion_ts#>","Translation"]);
+		desclist.push(["<#feedback_suggestion_ux#>","UI/UX"]);
+		desclist.push(["<#feedback_suggestion_cf#>","Current Feature"]);
+		desclist.push(["<#feedback_suggestion_nfr#>","New Feature Request"]);
+	}
+	else if(ptype == "Technical_Support"){
+		
+		desclist.splice(0,1);
+		desclist.push(["<#feedback_tech_asus#>","tech_ASUS"]);
+		desclist.push(["<#feedback_tech_amazon#>","tech_Amazon"]);
+		desclist.push(["<#feedback_tech_iOS#>","tech_iOS"]);
+		desclist.push(["<#feedback_tech_Android#>","tech_Android"]);		
 	}
 	else{	//Other_Problem
 		
@@ -333,8 +383,7 @@ function Reload_pdesc(obj, url){
 		desclist.push(["<#Adaptive_Others#>","others"]);
 	}
 
-	document.form.fb_pdesc.options.length = desclist.length;
-	if(obj.value == "Setting_Problem" && url){
+	if(ptype == "Setting_Problem" && url){
 		for(var i = 0; i < url_group.length; i++){	
 			document.form.fb_pdesc.options[i] = new Option(desclist[i][0], desclist[i][1]);
 			//with url : Find pdesc in Setting Problem
@@ -348,7 +397,140 @@ function Reload_pdesc(obj, url){
 	else{
 		for(var i = 0; i < desclist.length; i++){
 			document.form.fb_pdesc.options[i] = new Option(desclist[i][0], desclist[i][1]);
-		}	
+		}
+	}
+	Change_pdesc(document.form.fb_pdesc);
+
+
+	free_options(document.form.fb_when_occur);
+	$(".when_occur_tr").css("display", "none");
+	if(ptype == "Setting_Problem" || ptype == "Compatibility_Problem"){
+		$(".when_occur_tr").css("display", "");
+		timelist.push(["<#Select_menu_default#> ...","No_selected"]);
+		timelist.push(["Just Now","Just Now"]);
+		timelist.push(["Within 1 hour","Within 1 hour"]);
+		timelist.push(["1 - 3 hour(s) ago","1 - 3 hour(s) ago"]);
+		timelist.push(["3 - 12 hours ago","3 - 12 hours ago"]);
+		timelist.push(["Today","Today"]);
+		timelist.push(["Recently","Recently"]);
+		timelist.push(["I don’t recall","I don’t recall"]);
+
+		for(var i = 0; i < timelist.length; i++){
+			document.form.fb_when_occur.options[i] = new Option(timelist[i][0], timelist[i][1]);
+		}
+	}
+}
+
+function Change_pdesc(obj){
+	timelist = new Array();
+	bandlist = new Array();
+	unstablelist = new Array();
+
+	if(document.form.fb_ptype.value != "Setting_Problem" && document.form.fb_ptype.value != "Compatibility_Problem"){
+		free_options(document.form.fb_when_occur);
+		$(".when_occur_tr").css("display", "none");
+		if(obj.value == "Wireless speed" || obj.value == "Wired speed" || obj.value == "Unstable connection" || obj.value == "Router reboot" || obj.value == "Wireless disconnected"){
+			$(".when_occur_tr").css("display", "");
+			timelist.push(["<#Select_menu_default#> ...","No_selected"]);
+			timelist.push(["Just Now","Just Now"]);
+			timelist.push(["Within 1 hour","Within 1 hour"]);
+			timelist.push(["1 - 3 hour(s) ago","1 - 3 hour(s) ago"]);
+			timelist.push(["3 - 12 hours ago","3 - 12 hours ago"]);
+			timelist.push(["Today","Today"]);
+			timelist.push(["Recently","Recently"]);
+			timelist.push(["I don’t recall","I don’t recall."]);
+
+			for(var i = 0; i < timelist.length; i++){
+				document.form.fb_when_occur.options[i] = new Option(timelist[i][0], timelist[i][1]);
+			}
+		}
+	}
+
+	free_options(document.form.fb_which_band);
+	$(".which_band_tr").css("display", "none");
+	if(obj.value == "Wireless speed" || obj.value == "Wireless disconnected"){
+		$(".which_band_tr").css("display", "");
+		bandlist.push(["<#Select_menu_default#> ...","No_selected"]);
+		bandlist.push(["2.4GHz","2.4GHz"]);
+		bandlist.push(["5GHz","5GHz"]);
+		bandlist.push(["5GHz-1","5GHz-1"]);
+		bandlist.push(["5GHz-2","5GHz-2"]);
+		bandlist.push(["6GHz","6GHz"]);
+		bandlist.push(["All","All"]);
+		bandlist.push(["I am not sure","I am not sure"]);
+		bandlist.push(["Issue with the main router","Issue with the main router"]);
+		bandlist.push(["Issue with node(s)","Issue with node(s)"]);
+
+		for(var i = 0; i < bandlist.length; i++){
+			document.form.fb_which_band.options[i] = new Option(bandlist[i][0], bandlist[i][1]);
+		}
+	}
+
+	free_options(document.form.fb_unstable_conn);
+	$(".unstable_conn_tr").css("display", "none");
+	if(obj.value == "Unstable connection"){
+		$(".unstable_conn_tr").css("display", "");
+		unstablelist.push(["<#Select_menu_default#> ...","No_selected"]);
+		unstablelist.push(["All WiFi","All WiFi"]);
+		unstablelist.push(["2.4GHz","2.4GHz"]);
+		unstablelist.push(["5GHz","5GHz"]);
+		unstablelist.push(["5GHz-1","5GHz-1"]);
+		unstablelist.push(["5GHz-2","5GHz-2"]);
+		unstablelist.push(["6GHz","6GHz"]);
+		unstablelist.push(["WAN","WAN"]);
+		unstablelist.push(["Both WiFi and WAN","Both WiFi and WAN"]);
+		unstablelist.push(["I am not sure","I am not sure"]);
+		unstablelist.push(["Issue with the main router","Issue with the main router"]);
+		unstablelist.push(["Issue with node(s)","Issue with node(s)"]);
+
+		for(var j = 0; j < unstablelist.length; j++){
+			document.form.fb_unstable_conn.options[j] = new Option(unstablelist[j][0], unstablelist[j][1]);
+		}
+	}
+
+	if(obj.value == "Router reboot" && reboot_schedule_enable_orig == 1){
+		$("#occur_hint").show()
+						.css("text-decoration", "underline")
+						.css("cursor", "pointer")
+						.html("<br>- Reboot Scheduler currently enabled, please check scheduler setting")
+						.click( function(){ redirect_page("reboot_schedule_enable_x"); } );
+		$("#occur_hint2").hide();
+	}
+	else if(obj.value == "Wireless disconnected"){
+
+		if(wl0_timesched_orig == 1 || wl1_timesched_orig == 1 || wl2_timesched_orig == 1){
+			$("#occur_hint").show()
+							.css("text-decoration", "underline")
+							.css("cursor", "pointer")
+							.html("<br>- Wireless Scheduler currently enabled, please check scheduler setting")
+							.click( function(){ redirect_page("wl_timesched"); } );
+		}
+		if(wl0_radio_orig == 0 || wl1_radio_orig == 0 || wl2_radio_orig == 0){
+			$("#occur_hint2").show()
+							.css("text-decoration", "underline")
+							.css("cursor", "pointer")
+							.html("<br>- 2.4GHz or 5GHz or 5GHz-1 or 5GHz-2(or 2.4GHz and 5GHz-2 and so on) or All bands currently disabled, please check WiFi radio setting.")
+							.click( function(){ redirect_page("wl_radio"); } );	
+		}
+	}
+	else{
+		$("#occur_hint").hide();
+		$("#occur_hint2").hide();
+	}
+
+	if(obj.value == "tech_ASUS"){
+		inputCtrl(document.form.fb_serviceno, 1);
+		inputCtrl(document.form.fb_tech_account, 0);
+
+	}
+	else if(obj.value == "tech_Amazon" || obj.value == "tech_iOS" || obj.value == "tech_Android"){
+		inputCtrl(document.form.fb_serviceno, 0);
+		inputCtrl(document.form.fb_tech_account, 1);
+
+	}
+	else{
+		inputCtrl(document.form.fb_serviceno, 0);
+		inputCtrl(document.form.fb_tech_account, 0);
 	}
 }
 
@@ -360,6 +542,21 @@ function updateUSBStatus(){
 	else{		
 		document.getElementById("storage_ready").style.display = "";
 		document.getElementById("be_lack_storage").style.display = "none";
+	}
+}
+
+function redirect_page(flag){
+
+	switch(flag) {
+		case "reboot_schedule_enable_x" :
+			document.location.href = "Advanced_System_Content.asp?af=reboot_schedule_enable_x";
+			break;
+		case "wl_radio" :
+			document.location.href = "Advanced_WAdvanced_Content.asp?af=wl_radio";
+			break;
+		case "wl_timesched" :
+			document.location.href = "Advanced_WAdvanced_Content.asp?af=wl_timesched";
+			break;
 	}
 }
 
@@ -378,27 +575,33 @@ function applyRule(){
 				return false;
 		}*/
 		if(document.form.attach_syslog.checked == true)
-			document.form.PM_attach_syslog.value = 1;
+			document.form.fb_attach_syslog.value = 1;
 		else
-			document.form.PM_attach_syslog.value = 0;
+			document.form.fb_attach_syslog.value = 0;
+
 		if(document.form.attach_cfgfile.checked == true)
-			document.form.PM_attach_cfgfile.value = 1;
+			document.form.fb_attach_cfgfile.value = 1;
 		else
-			document.form.PM_attach_cfgfile.value = 0;
+			document.form.fb_attach_cfgfile.value = 0;
+
 		if(document.form.attach_modemlog.checked == true)
-			document.form.PM_attach_modemlog.value = 1;
+			document.form.fb_attach_modemlog.value = 1;
 		else
-			document.form.PM_attach_modemlog.value = 0;
+			document.form.fb_attach_modemlog.value = 0;
+
 		if(document.form.attach_wlanlog.checked == true)
-			document.form.PM_attach_wlanlog.value = 1;
+			document.form.fb_attach_wlanlog.value = 1;
 		else
-			document.form.PM_attach_wlanlog.value = 0;
+			document.form.fb_attach_wlanlog.value = 0;
+
 		if(dsl_support){
 			if(document.form.attach_iptables.checked == true)
-				document.form.PM_attach_iptables.value = 1;
+				document.form.fb_attach_iptables.value = 1;
 			else
-				document.form.PM_attach_iptables.value = 0;
-		}	
+				document.form.fb_attach_iptables.value = 0;
+
+			document.form.fb_availability.value = (document.form.fb_availability.value=="No_selected")?"":document.form.fb_availability.value;
+		}
                 
 		if(document.form.fb_email.value == ""){
 			if(!confirm("<#feedback_email_confirm#>")){
@@ -413,16 +616,105 @@ function applyRule(){
 				return false;
 			}
 		}
+		
+		//validate contact info
+		if(is_CN_sku){
+			if(document.form.fb_contact_type.value != "No_selected" && document.form.fb_phone.value.length == 0){
+				alert("<#JS_fieldblank#>");
+				document.form.fb_phone.focus();
+				return false;
+			}
 
+			if(document.form.fb_contact_type.value == "phone"){
+				if(!validator.phone_CN(document.form.fb_phone, "both"))
+				{
+					alert("<#feedback_phone_alert#>");
+					document.form.fb_phone.focus();
+					return false;
+				}
+			}
+			else if(document.form.fb_contact_type.value == "qq"){
+				if(!validator.qq(document.form.fb_phone))
+				{
+					alert("<#feedback_format_alert#>");
+					document.form.fb_phone.focus();
+					return false;
+				}
+			}
+			else{
+				if(!validator.string(document.form.fb_phone)){
+					document.form.fb_phone.focus();
+					return false;
+				}
+			}
+			document.form.fb_contact_type.value = (document.form.fb_contact_type.value=="No_selected")?"":document.form.fb_contact_type.value;
+		}
+
+		if(document.form.fb_pdesc.value == "tech_ASUS"){
+
+			var re_asus = new RegExp("^[a-zA-Z][0-9]{8,11}","gi");
+			var re_crs = new RegExp("^[0-9]{5}","gi");
+			var re_valid = 0;
+			document.form.fb_tech_account.disabled = "";
+			document.form.fb_tech_account.value = "";
+			if(document.form.fb_serviceno.value == "" || document.form.fb_serviceno.value.length == 0){
+				alert("<#JS_fieldblank#>");
+				document.form.fb_serviceno.focus();
+				return false;
+			}
+			if(document.form.fb_serviceno.value != ""){
+				if(!re_asus.test(document.form.fb_serviceno.value)){
+					re_valid++;				
+				}
+				if(document.form.fb_serviceno.value.length != 5 || !re_crs.test(document.form.fb_serviceno.value)){
+					re_valid++;				
+				}
+
+				if(re_valid == 2){
+					alert("<#JS_validchar#>");
+					document.form.fb_serviceno.focus();
+					return false;
+				}
+			}
+		}
+		else if(document.form.fb_pdesc.value == "tech_Amazon" || document.form.fb_pdesc.value == "tech_iOS" || document.form.fb_pdesc.value == "tech_Android"){
+
+			document.form.fb_serviceno.disabled = "";
+			document.form.fb_serviceno.value = "";
+			if(document.form.fb_tech_account.value == "" || document.form.fb_tech_account.value.length == 0){
+				alert("<#JS_fieldblank#>");
+				document.form.fb_tech_account.focus();
+				return false;
+			}
+
+		}
+		else{
+			document.form.fb_serviceno.disabled = "";
+			document.form.fb_serviceno.value = "";
+			document.form.fb_tech_account.disabled = "";
+			document.form.fb_tech_account.value = "";
+		}
+		
 		if(fb_trans_id != "")
 		{
 			document.form.fb_transid.value = fb_trans_id;
 		}
 
+		document.form.fb_ptype.value = (document.form.fb_ptype.value=="No_selected")?"":document.form.fb_ptype.value;
+		document.form.fb_pdesc.value = (document.form.fb_pdesc.value=="No_selected")?"":document.form.fb_pdesc.value;	
+		document.form.fb_which_band.value = (document.form.fb_which_band.value=="No_selected")?"":document.form.fb_which_band.value;
+		document.form.fb_when_occur.value = (document.form.fb_when_occur.value=="No_selected")?"":document.form.fb_when_occur.value;
+		document.form.fb_unstable_conn.value = (document.form.fb_unstable_conn.value=="No_selected")?"":document.form.fb_unstable_conn.value;
+
 		//check Diagnostic
 		if(dblog_support) {
+			document.form.dblog_tousb.disabled = true;
+			document.form.dblog_service.disabled = true;
+			document.form.dblog_duration.disabled = true;
+			document.form.dblog_transid.disabled = true;
+			var dblog_enable_status = httpApi.nvramGet(["dblog_enable"], true).dblog_enable;
 			var dblog_enable = getRadioValue($('form[name="form"]').children().find('input[name=dblog_enable]'));
-			if(dblog_enable == "1") {
+			if(dblog_enable_status == "0" && dblog_enable == "1") {
 				var service_list_checked = $("input:checkbox[name=dblog_service_list]:checked").map(function() {
 					return $(this).val();
 				}).get();
@@ -452,27 +744,13 @@ function applyRule(){
 				if(dblog_trans_id != "")
 					document.form.dblog_transid.value = dblog_trans_id;
 			}
-			else {
-				document.form.dblog_tousb.disabled = true;
-				document.form.dblog_service.disabled = true;
-				document.form.dblog_duration.disabled = true;
-				document.form.dblog_transid.disabled = true;
-			}
 		}
 
-		if(document.form.PM_attach_wlanlog.value == "1")
+		if(document.form.fb_attach_wlanlog.value == "1")
 			httpApi.update_wlanlog();
 
 		document.form.fb_browserInfo.value = navigator.userAgent;
-		if(dsl_support){
-			if(document.form.dslx_diag_enable[0].checked == true){
-				document.form.action_wait.value="120";
-				showLoading(120);
-			}else	
-				showLoading(60);
-		}
-		else
-			showLoading(60);
+		startLogPrep();
 		document.form.submit();
 }
 
@@ -508,14 +786,14 @@ function change_dsl_diag_enable(value) {
 }
 function init_diag_feature() {
 	var dblog_enable = '<% nvram_get("dblog_enable"); %>';
+	var dblog_remaining = parseInt('<% nvram_get("dblog_remaining"); %>');
 	setRadioValue($('form[name="form"]').children().find('input[name=dblog_enable]'), dblog_enable);
 
-	if(dblog_enable == "1") {
+	if(dblog_enable == "1" && dblog_remaining > 0) {
 		$(".dblog_disabled_status").find("input, textarea, button, select").attr("disabled", true);
 		$(".dblog_disabled_status").css("display", "none");
 		$(".dblog_enabled_status").css("display", "inline");
 
-		var dblog_remaining = parseInt('<% nvram_get("dblog_remaining"); %>');
 		var transformTime = function(_sec) {
 			var days = Math.floor(dblog_remaining / 60 / 60 / 24);
 			var hours = Math.floor(dblog_remaining / 60 / 60 % 24);
@@ -524,7 +802,7 @@ function init_diag_feature() {
 			var remaining_time_str = "<#mssid_time_remaining#> : ";
 
 			if(dblog_remaining == 0) {
-				remaining_time_str += "0" + " " + "(Prepare data...)";/* untranslated */
+				remaining_time_str += "0" + " " + "(Prepare data...)";	//Untranslated
 				return remaining_time_str;
 			}
 
@@ -549,7 +827,7 @@ function init_diag_feature() {
 		}, 1000);
 
 		var dblog_service = parseInt('<% nvram_get("dblog_service"); %>');
-		var dblog_service_mapping = ["", "Wi-Fi", "<#DM_title#>", "<#UPnPMediaServer#>", "AiMesh"];
+		var dblog_service_mapping = ["", "WiFi", "<#DM_title#>", "<#UPnPMediaServer#>", "AiMesh"];
 		var dblog_service_text = "";
 		for(var i = 1; dblog_service != 0 && i <= 4; i++) {
 			if(dblog_service & 1) {
@@ -653,13 +931,19 @@ function diag_create_duration_option() {
 		sec = _hours*60*60;
 		return sec;
 	};
-	var selectOption = "";
+	var selectOption = {};
+	var baseOption = {};
+	if(hnd_ax_675x_support) {
+		selectOption = {"1 <#Hour#>" : hour_to_sec(1)};
+	}
 	if(usb_support && $("input[name=dblog_tousb_cb]").prop("checked")) {
-		selectOption = { "12 <#Hour#>" : hour_to_sec(12), "1 <#Day#>" : hour_to_sec(24), "2 <#Day#>" : hour_to_sec(48), "3 <#Day#>" : hour_to_sec(72) };
+		baseOption = { "12 <#Hour#>" : hour_to_sec(12), "1 <#Day#>" : hour_to_sec(24), "2 <#Day#>" : hour_to_sec(48), "3 <#Day#>" : hour_to_sec(72) };
 	}
 	else {
-		selectOption = { "6 <#Hour#>" : hour_to_sec(6), "12 <#Hour#>" : hour_to_sec(12), "24 <#Hour#>" : hour_to_sec(24) };
+		baseOption = { "6 <#Hour#>" : hour_to_sec(6), "12 <#Hour#>" : hour_to_sec(12), "24 <#Hour#>" : hour_to_sec(24) };
 	}
+
+	Object.assign(selectOption, baseOption);
 
 	$.each(selectOption, function(item, value) {
 		$("select[name=dblog_duration]")
@@ -669,11 +953,48 @@ function diag_create_duration_option() {
 	});
 }
 function diag_change_service_list_all() {
+	var gen_appendix_option = function(_value, _text, _class) {
+		var $labelHtml2 = $("<label>");
+		$labelHtml2.addClass("dblog_service_item");
+		$labelHtml2.addClass(_class);
+
+		var $inputHtml2 = $('<input/>');
+		$inputHtml2.attr({"type" : "checkbox"});
+		$inputHtml2.attr({"name" : "dblog_service_list"});
+		$inputHtml2.val(_value);
+		$inputHtml2.click(function() {
+			if(this.checked) {
+				if(!confirm("This WiFi DHD Log capture requires system reboot after the feedback is sent, would you like to continue?")){	//Untranslated
+					$(".dblog_service_item.dhd").children().prop("checked", false);
+				}
+				diag_change_service_list();
+			}
+		});
+
+		$labelHtml2.append($inputHtml2);
+		$labelHtml2.append(_text);
+
+		return $labelHtml2;
+	};
+
 	if($("input[name=dblog_service_list_all]").prop("checked")) {
+		if(dhdlog_support && $(".dblog_service_item.wifi").length > 0 && $(".dblog_service_item.dhd").length == 0){
+			$(".dblog_service_item.wifi").after(gen_appendix_option(16, "Additional WiFi DHD Log", "dhd"));		//Untranslated
+		}
 		$("input[name=dblog_service_list]").prop("checked", true);
+
+		if(dhdlog_support && $(".dblog_service_item.dhd").children().prop("checked")) {
+			if(!confirm("This WiFi DHD Log capture requires system reboot after the feedback is sent, would you like to continue?")){	//Untranslated
+				$(".dblog_service_item.all").children().prop("checked", false);
+				$(".dblog_service_item.dhd").children().prop("checked", false);
+			}
+		}
 	}
 	else {
 		$("input[name=dblog_service_list]").prop("checked", false);
+		if(dhdlog_support && $(".dblog_service_item.dhd").length > 0)
+			$(".dblog_service_item.dhd").remove();
+
 	}
 }
 function diag_change_service_list() {
@@ -695,14 +1016,47 @@ function diag_tune_service_option() {
 		$inputHtml.attr({"name" : "dblog_service_list"});
 		$inputHtml.val(_value);
 		$inputHtml.click(function() {
+			if(dhdlog_support && _text=="WiFi"){
+				if(this.checked) {
+					$(".dblog_service_item.wifi").after(gen_appendix_option(16, "Additional WiFi DHD Log", "dhd"));		//Untranslated
+				}else{
+					$(".dblog_service_item.dhd").remove();
+				}
+			}
 			diag_change_service_list();
 		});
+
 		$labelHtml.append($inputHtml);
 		$labelHtml.append(_text);
 
 		return $labelHtml;
 	};
-	if(amesh_support && (isSwMode("rt") || isSwMode("ap"))) {
+
+	var gen_appendix_option = function(_value, _text, _class) {
+		var $labelHtml2 = $("<label>");
+		$labelHtml2.addClass("dblog_service_item");
+		$labelHtml2.addClass(_class);
+
+		var $inputHtml2 = $('<input/>');
+		$inputHtml2.attr({"type" : "checkbox"});
+		$inputHtml2.attr({"name" : "dblog_service_list"});
+		$inputHtml2.val(_value);
+		$inputHtml2.click(function() {
+			if(this.checked) {
+				if(!confirm("This WiFi DHD Log capture requires system reboot after the feedback is sent, would you like to continue?")){	//Untranslated
+					$(".dblog_service_item.dhd").children().prop("checked", false);
+				}
+			}
+			diag_change_service_list();
+		});
+
+		$labelHtml2.append($inputHtml2);
+		$labelHtml2.append(_text);
+
+		return $labelHtml2;
+	};
+
+	if(amesh_support && (isSwMode("rt") || isSwMode("ap")) && ameshRouter_support) {
 		if($(".dblog_service_item.AiMesh").length == 0)
 			$(".dblog_service_item.all").after(gen_service_option(8, "AiMesh", "AiMesh"));
 	}
@@ -719,7 +1073,7 @@ function diag_tune_service_option() {
 	}
 
 	if($(".dblog_service_item.wifi").length == 0)
-		$(".dblog_service_item.all").after(gen_service_option(1, "Wi-Fi", "wifi"));
+		$(".dblog_service_item.all").after(gen_service_option(1, "WiFi", "wifi"));
 }
 function dblog_stop() {
 	showLoading(3);
@@ -727,44 +1081,31 @@ function dblog_stop() {
 }
 
 function check_refresh_token() {
-	$("#oauth_google_hint").html("");
-	var oauth_google_refresh_token_ori = httpApi.nvramGet(["oauth_google_refresh_token"]).oauth_google_refresh_token;
-	$.ajax({
-		url: '/ajax_oauth.asp',
-		dataType: 'script',
-		error: function(xhr) {
-			setTimeout("check_refresh_token();", 1000);
-		},
-		success: function(response){			
-			if(oauth_google_refresh_token != "" && oauth_google_refresh_token != oauth_google_refresh_token_ori) {
-				//$("#oauth_google_btn").val("Reauthenticate");/*untranslated*/
-				$("#oauth_google_hint").html("Authenticated!");/*untranslated*/
-				$("#oauth_google_btn").css("display", "");
-				$("#oauth_google_loading").css("display", "none");
-				
-				window.location.reload();
-			}
-			else {
-				if(check_refresh_token_retry > 5) {
-					//$("#oauth_google_btn").val("Authenticate");/*untranslated*/
-					$("#oauth_google_hint").html("<#qis_fail_desc1#>");
-					$("#oauth_google_btn").css("display", "");
-					$("#oauth_google_loading").css("display", "none");
-				}
-				else {
-					setTimeout("check_refresh_token();", 2000);
-				}
-				check_refresh_token_retry++;
-			}
+	var interval_retry = 0;
+	interval_status = setInterval(function(){
+		var refresh_token = httpApi.nvramGet(["oauth_google_refresh_token"], true).oauth_google_refresh_token;
+		if(refresh_token == "" && interval_retry == 5) {
+			show_google_auth_status("0");
+			$("#oauth_google_loading").hide();
+			clearInterval(interval_status);
 		}
-	});
+		else if(refresh_token != "") {
+			clearInterval(interval_status);
+			check_refresh_token_valid(
+				function(_callBackValue) {
+					$("#oauth_google_loading").hide();
+					show_google_auth_status(_callBackValue);
+				}
+			);
+		}
+		interval_retry++;
+	}, 1000);
 }
-var check_refresh_token_retry = 0;
 function onGoogleLogin(_parm) {
-	if(_parm.code != "error") {		
-		check_refresh_token_retry = 0;
-		$("#oauth_google_btn").css("display", "none");
-		$("#oauth_google_loading").css("display", "");
+	if(_parm.code != "error") {
+		$("#oauth_google_hint").hide();
+		$("#oauth_google_loading").show();
+		document.form.fb_email.value = "";
 		httpApi.nvramSet({
 			"oauth_google_auth_code" : _parm.code,
 			"fb_email_provider" : "google",
@@ -773,46 +1114,97 @@ function onGoogleLogin(_parm) {
 			}, check_refresh_token);
 	}
 }
-function change_fb_email_provider(obj){	
-	if(document.form.fb_email_provider.value=="google"){
+function change_fb_email_provider(obj){
+	if(document.form.fb_email_provider.value == "google") {
 		$("#option_google").show();
-
-		var googleTokenStatus = httpApi.nvramGet(["oauth_google_refresh_token"]);
-		if(googleTokenStatus.oauth_google_refresh_token == "") {
-			//$("#oauth_google_btn").val("Authenticate");/*untranslated*/
-			$("#oauth_google_hint").css("display", "none");
-		}
-		else {		
-			//$("#oauth_google_btn").val("Reauthenticate");/*untranslated*/
-			$("#oauth_google_hint").css("display", "");
-			$("#oauth_google_hint").html("Authenticated!");/*untranslated*/
-
-			var googleAuthInfo = httpApi.nvramGet(["oauth_google_user_email"]);
-			document.form.fb_email.value = googleAuthInfo.oauth_google_user_email;
-		}
-
+		document.form.fb_email.value = httpApi.nvramGet(["oauth_google_user_email"], true).oauth_google_user_email;
 		document.form.fb_email.readOnly = true;
 	}
-	else{
+	else {
 		$("#option_google").hide();
 		document.form.fb_email.value = "";
 		document.form.fb_email.readOnly = false;
 	}
 }
+function check_refresh_token_valid(callBackFun) {
+	httpApi.nvramSet({
+		"action_mode": "apply",
+		"rc_service": "oauth_google_check_token_status"
+		},
+		function(){
+			var interval_retry = 0;
+			interval_status = setInterval(function(){
+				var token_status = httpApi.nvramGet(["oauth_google_token_status"], true).oauth_google_token_status;
+				if(token_status == "" && interval_retry >= 5) {
+					callBackFun("0");
+					clearInterval(interval_status);
+				}
+				else if(token_status != "") {
+					callBackFun(token_status);
+					clearInterval(interval_status);
+				}
+				interval_retry++;
+			}, 1000);
+		}
+	);
+}
+function show_google_auth_status(_status) {
+	$("#oauth_google_hint").show();
+	var auth_status_hint = "<#Authenticated_non#>";
+	document.form.fb_email.value = "";
+	switch(_status) {
+		case "0" :
+			auth_status_hint = "<#qis_fail_desc1#>";
+			break;
+		case "1" :
+			auth_status_hint = "<#Authenticated#>";
+			var googleAuthInfo = httpApi.nvramGet(["oauth_google_user_email"], true);
+			document.form.fb_email.value = googleAuthInfo.oauth_google_user_email;
+			break;
+	}
+	$("#oauth_google_hint").html(auth_status_hint);
+}
+
+function startLogPrep(){
+	dr_advise();
+}
+
+var redirect_info = 0;
+function CheckFBSize(){
+	$.ajax({
+		url: '/ajax_fb_size.asp',
+		dataType: 'script',
+		timeout: 1500,
+		error: function(xhr){
+				redirect_info++;
+				if(redirect_info < 10){
+					setTimeout("CheckFBSize();", 1000);
+				}
+				else{
+					showLoading(35);
+					setTimeout("redirect()", 35000);
+				}
+		},
+		success: function(){
+				if(fb_state == 0)
+					setTimeout("CheckFBSize()", 3000);
+				else
+					setTimeout("redirect()", 1000);
+		}
+	});
+}
 </script>
 </head>
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="hiddenMask" class="popup_bg">
 <table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center">
 <tr>
 <td>
-<div class="drword" id="drword" style="height:110px;"><#Main_alert_proceeding_desc4#> <#Main_alert_proceeding_desc1#>...
+<div class="drword" id="drword" style="height:110px;"><#Main_alert_proceeding_desc4#> <#QKSet_detect_waitdesc1#>...
 <br/>
 <br/>
 </div>
-<div class="drImg"><img src="/images/alertImg.png"></div>
-<div style="height:70px;"></div>
 </td>
 </tr>
 </table>
@@ -831,13 +1223,13 @@ function change_fb_email_provider(obj){
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 <input type="hidden" name="current_page" value="Advanced_Feedback.asp">
 <input type="hidden" name="action_mode" value="apply">
-<input type="hidden" name="action_script" value="restart_sendmail">
+<input type="hidden" name="action_script" value="restart_sendfeedback">
 <input type="hidden" name="action_wait" value="60">
-<input type="hidden" name="PM_attach_syslog" value="">
-<input type="hidden" name="PM_attach_cfgfile" value="">
-<input type="hidden" name="PM_attach_iptables" value="">	
-<input type="hidden" name="PM_attach_modemlog" value="">
-<input type="hidden" name="PM_attach_wlanlog" value="">
+<input type="hidden" name="fb_attach_syslog" value="">
+<input type="hidden" name="fb_attach_cfgfile" value="">
+<input type="hidden" name="fb_attach_iptables" value="">	
+<input type="hidden" name="fb_attach_modemlog" value="">
+<input type="hidden" name="fb_attach_wlanlog" value="">
 <input type="hidden" name="feedbackresponse" value="<% nvram_get("feedbackresponse"); %>">
 <input type="hidden" name="fb_experience" value="<% nvram_get("fb_experience"); %>">
 <input type="hidden" name="fb_browserInfo" value="">
@@ -867,7 +1259,7 @@ function change_fb_email_provider(obj){
 <div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 <div id="fb_desc0" class="formfontdesc" style="display:none;"><#Feedback_desc0#></div>
 <div id="fb_desc1" class="formfontdesc" style="display:none;"><#Feedback_desc1#></div>
-<div id="fb_desc_disconnect" class="formfontdesc" style="display:none;color:#FC0;"><#Feedback_desc_disconnect#> <a href="mailto:router_feedback@asus.com?Subject=<%nvram_get("productid");%>" target="_top" style="color:#FFCC00;">router_feedback@asus.com</a></div>
+<div id="fb_desc_disconnect" class="formfontdesc hint-color" style="display:none;"><#Feedback_desc_disconnect#> <a class="hint-color" href="mailto:router_feedback@asus.com?Subject=<%nvram_get("productid");%>" target="_top">router_feedback@asus.com</a></div>
 <table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
 <tr>
 <th width="30%"><#feedback_country#> *</th>
@@ -887,18 +1279,20 @@ function change_fb_email_provider(obj){
 	<input type="text" name="fb_Subscribed_Info" maxlength="50" class="input_25_table" value="" autocorrect="off" autocapitalize="off">
 </td>
 </tr>
-<tr>
-	<th>Provider</th>
+<tr id="fb_email_provider_field" style="display: none;">
+	<th><#Provider#></th>
 	<td>
-		<select class="input_option" name="fb_email_provider" onChange="change_fb_email_provider(this);">
-			<option value="">ASUS</option>
-			<option value="google">Google</option>
-		</select>
-		<span id="option_google">
-			<input id="oauth_google_btn" class="button_gen oauth_google" type="button" value="">
-			<img id="oauth_google_loading" style="margin-left:5px;display:none;" src="/images/InternetScan.gif">
-			<span id="oauth_google_hint" class="oauth_google" style="color:#FC0;display:none"></span>
-		</span>
+		<div style="float:left;">
+			<select class="input_option" name="fb_email_provider" onChange="change_fb_email_provider(this);">
+				<option value="">ASUS</option>
+				<option value="google">Google</option>
+			</select>
+		</div>
+		<div id="option_google" style="float:left;">
+			<div id="oauth_google_btn" class="oauth_google_btn"></div>
+			<img id="oauth_google_loading" src="/images/InternetScan.gif" class="oauth_google_status">
+			<span id="oauth_google_hint" class="oauth_google_status"></span>
+		</div>
 	</td>
 	</tr>
 <tr>
@@ -908,6 +1302,12 @@ function change_fb_email_provider(obj){
 </td>
 </tr>
 
+<th><#feedback_contact_info#> *</th>
+<td>
+	<select class="input_option" name="fb_contact_type"></select>
+	<input type="text" name="fb_phone" maxlength="50" class="input_25_table" value="" autocorrect="off" autocapitalize="off">	
+</td>
+</tr>
 <tr>
 <th><#feedback_extra_info#> *</th>
 <td>
@@ -925,20 +1325,21 @@ function change_fb_email_provider(obj){
 		<input type="radio" name="dslx_diag_enable" class="input" value="1" onclick="change_dsl_diag_enable(1);"><#checkbox_Yes#>
 		<input type="radio" name="dslx_diag_enable" class="input" value="0" onclick="change_dsl_diag_enable(0);" checked><#checkbox_No#>
 		<br>	
-		<span id="storage_ready" style="display:none;color:#FC0">* <#USB_ready#></span>
-		<span id="be_lack_storage" style="display:none;color:#FC0">* <#no_usb_found#></span>
+		<span id="storage_ready" class="hint-color" style="display:none;">* <#USB_ready#></span>
+		<span id="be_lack_storage" class="hint-color" style="display:none;">* <#no_usb_found#></span>
 	</td>
 </tr>
 
 <tr id="dslx_diag_duration">
 	<th><#feedback_capturing_duration#> *</th>
 	<td>
-		<select id="" class="input_option" name="dslx_diag_duration">
+		<select class="input_option" name="dslx_diag_duration">
 			<option value="0" selected><#Auto#></option>
 			<option value="3600">1 <#Hour#></option>
 			<option value="18000">5 <#Hour#></option>
 			<option value="43200">12 <#Hour#></option>
 			<option value="86400">24 <#Hour#></option>
+			<option value="172800">48 <#Hour#></option>
 		</select>
 	</td>
 </tr>
@@ -949,8 +1350,8 @@ function change_fb_email_provider(obj){
 		<div class="dblog_disabled_status">
 			<input type='radio' name='dblog_enable' id='dblog_status_en' value="1" onclick="diag_change_dblog_status();"><label for='dblog_status_en'><#checkbox_Yes#></label>
 			<input type='radio' name='dblog_enable' id='dblog_status_dis' value="0" onclick="diag_change_dblog_status();" checked><label for='dblog_status_dis'><#checkbox_No#></label>
-			<label class="storeUSBHint"><input type="checkbox" name="dblog_tousb_cb" value="1" onclick="diag_change_storeUSB();" checked><#feedback_debug_log_inDisk#></label>
-			<span class="noUSBHint">* <#no_usb_found#></span>
+			<label class="storeUSBHint hint-color"><input type="checkbox" name="dblog_tousb_cb" value="1" onclick="diag_change_storeUSB();" checked><#feedback_debug_log_inDisk#></label>
+			<span class="noUSBHint hint-color">* <#no_usb_found#></span>
 		</div>
 		<div class="dblog_enabled_status">
 			<span>* <#feedback_current_capturing#></span>
@@ -986,7 +1387,7 @@ function change_fb_email_provider(obj){
 <th><#feedback_connection_type#></th>
 <td>
 	<select class="input_option" name="fb_availability">
-		<option value="Not_selected"><#Select_menu_default#> ...</option>
+		<option value="No_selected"><#Select_menu_default#> ...</option>
 		<option value="Stable_connection"><#feedback_stable#></option>
 		<option value="Occasional_interruptions"><#feedback_Occasion_interrupt#></option>
 		<option value="Frequent_interruptions"><#feedback_Frequent_interrupt#></option>
@@ -1007,9 +1408,52 @@ function change_fb_email_provider(obj){
 <tr>
 <th><#feedback_problem_desc#></th>
 <td>
-	<select class="input_option" name="fb_pdesc">
+	<select class="input_option" name="fb_pdesc" onChange="Change_pdesc(this);">
 		
 	</select>
+</td>
+</tr>
+
+<tr class="which_band_tr" style="display:none;">
+<th><a class="hintstyle" href="javascript:void(0);" onClick="">Which band(s)?</a></th> <!-- Untranslated -->
+<td>
+	<select class="input_option" name="fb_which_band" onChange="">
+		
+	</select>
+</td>
+</tr>
+
+<tr class="when_occur_tr" style="display:none;">
+<th><a class="hintstyle" href="javascript:void(0);" onClick="">When did it occur?</a></th> <!-- Untranslated -->
+<td>
+	<select class="input_option" name="fb_when_occur" onChange="">
+		
+	</select>
+	<span id="occur_hint" class="hint-color" style="display:none;"></span>
+	<span id="occur_hint2" class="hint-color" style="display:none;"></span>
+</td>
+</tr>
+
+<tr class="unstable_conn_tr" style="display:none;">
+<th><a class="hintstyle" href="javascript:void(0);" onClick="">Issue specifically with WiFi or WAN?</a></th> <!-- Untranslated -->
+<td>
+	<select class="input_option" name="fb_unstable_conn" onChange="">
+		
+	</select>
+</td>
+</tr>
+
+<tr style="display:none;">
+<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(34,2);"><#ASUS_Service_No#></a></th>
+<td>
+	<input type="text" name="fb_serviceno" maxlength="11" class="input_15_table" value="" autocorrect="off" autocapitalize="off">
+</td>
+</tr>
+
+<tr style="display:none;">
+<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(34,3);"><#feedback_tech_account_id#></a></th>
+<td>
+	<input type="text" name="fb_tech_account" maxlength="64" class="input_32_table" value="" autocorrect="off" autocapitalize="off">
 </td>
 </tr>
 
@@ -1019,7 +1463,7 @@ function change_fb_email_provider(obj){
 	</th>
 	<td>
 		<textarea name="fb_comment" maxlength="2000" cols="55" rows="8" class="textarea_ssh_table" style="font-family:'Courier New', Courier, mono; font-size:13px;" onKeyDown="textCounter(this,document.form.msglength,2000);" onKeyUp="textCounter(this,document.form.msglength,2000)"></textarea>
-		<span style="color:#FC0"><#feedback_max_counts#> : </span>
+		<span class="hint-color"><#feedback_max_counts#> : </span>
 		<input type="text" class="input_6_table" name="msglength" id="msglength" maxlength="4" value="2000" autocorrect="off" autocapitalize="off" readonly>
 	</td>
 </tr>
@@ -1038,7 +1482,7 @@ function change_fb_email_provider(obj){
 	<td colspan="2">
 		<strong><#FW_note#></strong>
 		<ul>
-			<li><#feedback_note4#></li>
+			<li><#feedback_note4#><br><a id="call_link" style="font-weight: bolder;text-decoration:underline;cursor:pointer;" href="" target="_blank">https://www.asus.com/support/CallUs/</a></li>
 		</ul>
 	</td>
 </tr>	

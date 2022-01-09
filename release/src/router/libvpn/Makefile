@@ -10,25 +10,24 @@ endif
 ifeq ($(RTCONFIG_BCMARM),y)
 CFLAGS += -I$(SRCBASE)/shared/bcmwifi/include -DTYPEDEF_FLOAT_T
 endif
-LDFLAGS += $(EXTRALDFLAGS) -L$(TOP)/nvram${BCMEX}${EX7} -lnvram -L$(TOP)/shared -lshared
+LDFLAGS += $(EXTRALDFLAGS) -L$(TOP_PLATFORM)/nvram${BCMEX}${EX7} -lnvram -L$(TOP)/shared -lshared
 LDFLAGS += -lcrypt
 LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
 
 INSTALL = install
 
-OBJS = openvpn_config.o openvpn_control.o
+OBJS = openvpn_config.o openvpn_control.o openvpn_utils.o openvpn_options.o
 
-ifeq ($(wildcard ./*.c),)
+ifneq ($(wildcard ./prebuild/libvpn.so),)
 all:
 	cp -f ./prebuild/libvpn.so .
 else
 all: libvpn.so
-endif
 
 libvpn.so: $(OBJS)
 	@echo " [libvpn] LD $@"
 	@$(CC) $(LDFLAGS) -shared -o $@ $^
-
+endif
 
 install: all
 	@echo " [libvpn] Installing as $(INSTALLDIR)/usr/lib/libvpn.so"

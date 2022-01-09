@@ -1,7 +1,8 @@
-/* $Id: upnpglobalvars.c,v 1.39 2014/12/10 09:49:22 nanard Exp $ */
-/* MiniUPnP project
- * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2006-2014 Thomas Bernard
+/* $Id: upnpglobalvars.c,v 1.45 2019/10/02 22:02:58 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
+ * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
+ * (c) 2006-2020 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -15,6 +16,15 @@
 /* network interface for internet */
 const char * ext_if_name = 0;
 
+#ifdef ENABLE_IPV6
+/* network interface for internet - IPv6 */
+const char * ext_if_name6 = 0;
+#endif
+
+/* stun host/port configuration */
+const char * ext_stun_host = 0;
+uint16_t ext_stun_port = 0;
+
 /* file to store leases */
 #ifdef ENABLE_LEASEFILE
 const char* lease_file = 0;
@@ -24,11 +34,20 @@ const char* lease_file = 0;
  * when NULL, getifaddr() is used */
 const char * use_ext_ip_addr = 0;
 
+/* disallow all port forwarding requests when
+ * we are behind restrictive nat */
+int disable_port_forwarding = 0;
+
 unsigned long downstream_bitrate = 0;
 unsigned long upstream_bitrate = 0;
 
 /* startup time */
 time_t startup_time = 0;
+
+#if defined(ENABLE_NATPMP) || defined(ENABLE_PCP)
+/* origin for "epoch time" sent into NATPMP and PCP responses */
+time_t epoch_origin = 0;
+#endif /*  defined(ENABLE_NATPMP) || defined(ENABLE_PCP) */
 
 #ifdef ENABLE_PCP
 /* for PCP */
@@ -53,7 +72,7 @@ char presentationurl[PRESENTATIONURL_MAX_LEN];
 
 #ifdef ENABLE_MANUFACTURER_INFO_CONFIGURATION
 /* friendly name for root devices in XML description */
-char friendly_name[FRIENDLY_NAME_MAX_LEN] = ROOTDEV_FRIENDLYNAME;
+char friendly_name[FRIENDLY_NAME_MAX_LEN] = OS_NAME " router";
 
 /* manufacturer name for root devices in XML description */
 char manufacturer_name[MANUFACTURER_NAME_MAX_LEN] = ROOTDEV_MANUFACTURER;
@@ -84,27 +103,18 @@ unsigned int num_dscp_values = 0;
 unsigned int nextruletoclean_timestamp = 0;
 
 #ifdef USE_PF
+/* "rdr-anchor miniupnpd" or/and "anchor miniupnpd" in pf.conf */
 const char * anchor_name = "miniupnpd";
 const char * queue = 0;
 const char * tag = 0;
 #endif
 
-#ifdef USE_NETFILTER
-/* chain name to use, both in the nat table
- * and the filter table */
-const char * miniupnpd_nat_chain = "MINIUPNPD";
-const char * miniupnpd_peer_chain = "MINIUPNPD-PCP-PEER";
-const char * miniupnpd_forward_chain = "MINIUPNPD";
-#ifdef ENABLE_UPNPPINHOLE
-const char * miniupnpd_v6_filter_chain = "MINIUPNPD";
-#endif
-
-#endif
 #ifdef ENABLE_NFQUEUE
 int nfqueue = -1;
 int n_nfqix = 0;
 unsigned nfqix[MAX_LAN_ADDR];
-#endif
+#endif /* ENABLE_NFQUEUE */
+
 struct lan_addr_list lan_addrs;
 
 #ifdef ENABLE_IPV6
@@ -144,3 +154,6 @@ unsigned int upnp_bootid = 1;      /* BOOTID.UPNP.ORG */
  * SCPD = Service Control Protocol Description */
 unsigned int upnp_configid = 1337; /* CONFIGID.UPNP.ORG */
 
+#ifdef RANDOMIZE_URLS
+char random_url[RANDOM_URL_MAX_LEN] = "random";
+#endif /* RANDOMIZE_URLS */

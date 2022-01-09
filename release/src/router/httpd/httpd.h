@@ -24,30 +24,28 @@
 #ifndef _httpd_h_
 #define _httpd_h_
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
+#include <time.h>
 
 #include <arpa/inet.h>
+#include <errno.h>
 #if defined(DEBUG) && defined(DMALLOC)
 #include <dmalloc.h>
 #endif
 #include <rtconfig.h>
 
-/* DEBUG DEFINE */
-#define HTTPD_DEBUG             "/tmp/HTTPD_DEBUG"
-
-/* DEBUG FUNCTION */
-
-#define HTTPD_DBG(fmt,args...) \
-        if(f_exists(HTTPD_DEBUG) > 0) { \
-                char info[1024]; \
-                snprintf(info, sizeof(info), "echo \"[HTTPD][%s:(%d)]"fmt"\" >> /tmp/HTTPD_DEBUG.log", __FUNCTION__, __LINE__, ##args); \
-                system(info); \
-        }
-
 /* Basic authorization userid and passwd limit */
 #define AUTH_MAX 64
 
 #define DEFAULT_LOGIN_MAX_NUM	5
+
+#ifdef RTCONFIG_CAPTCHA
+/* Limit of login failure. If the number of login failure excceds this limit, captcha will show. */
+#define CAPTCHA_MAX_LOGIN_NUM   2
+#endif
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
@@ -64,6 +62,13 @@ struct mime_handler {
 };
 
 extern struct mime_handler mime_handlers[];
+
+struct log_pass_url_list {
+        char *pattern;
+        char *mime_type;
+};
+
+extern struct log_pass_url_list log_pass_handlers[];
 
 struct useful_redirect_list {
 	char *pattern;
@@ -121,9 +126,10 @@ struct iptv_profile {
 };
 
 #ifdef RTCONFIG_ODMPID
-struct REPLACE_ODMPID_S {
+struct REPLACE_PRODUCTID_S {
         char *org_name;
         char *replace_name;
+        char *p_lang;
 };
 #endif
 
@@ -131,6 +137,7 @@ struct REPLACE_ODMPID_S {
 #define MIME_EXCEPTION_NOAUTH_FIRST	1<<1
 #define MIME_EXCEPTION_NORESETTIME	1<<2
 #define MIME_EXCEPTION_MAINPAGE 	1<<3
+#define MIME_EXCEPTION_NOPASS           1<<4
 #define CHECK_REFERER	1
 
 #define SERVER_NAME "httpd/2.0"
@@ -148,6 +155,9 @@ struct REPLACE_ODMPID_S {
 #define LOGINLOCK	7
 #define ISLOGOUT	8
 #define NOLOGIN		9
+#ifdef RTCONFIG_CAPTCHA
+#define WRONGCAPTCHA   10
+#endif
 
 #define LOCKTIME 60*5
 
@@ -163,11 +173,42 @@ struct REPLACE_ODMPID_S {
 #define NOLOGINTRY   0
 #define LOGINTRY   1
 
-#if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA)
+#if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA) || defined(RTCONFIG_GOOGLE_ASST)
 #define IFTTTUSERAGENT  "asusrouter-Windows-IFTTT-1.0"
 #define GETIFTTTCGI     "get_IFTTTPincode.cgi"
 #define GETIFTTTOKEN "get_IFTTTtoken.cgi"
 #endif
+
+/* networkmap offline clientlist path */
+#if (defined(RTCONFIG_JFFS2) || defined(RTCONFIG_JFFSV1) || defined(RTCONFIG_BRCM_NAND_JFFS2) || defined(RTCONFIG_UBIFS))
+#define NMP_CL_JSON_FILE                "/jffs/nmp_cl_json.js"
+#else
+#define NMP_CL_JSON_FILE                "/tmp/nmp_cl_json.js"
+#endif
+
+enum {
+	HTTP_OK = 200,
+	HTTP_FAIL = 400,
+        HTTP_CHPASS_FAIL,
+        HTTP_CHPASS_FAIL_MAX,
+	HTTP_RULE_ADD_SUCCESS = 2001,
+	HTTP_RULE_DEL_SUCCESS,
+	HTTP_NORULE_DEL,
+        HTTP_RULE_MODIFY_SUCCESS,
+	HTTP_OVER_MAX_RULE_LIMIT = 4000,
+	HTTP_INVALID_ACTION,
+	HTTP_INVALID_MAC,
+	HTTP_INVALID_ENABLE_OPT,
+	HTTP_INVALID_NAME,
+	HTTP_INVALID_EMAIL,
+	HTTP_INVALID_INPUT,
+	HTTP_INVALID_IPADDR,
+	HTTP_INVALID_TS,
+	HTTP_INVALID_FILE,
+        HTTP_INVALID_SUPPORT,
+	HTTP_SHMGET_FAIL = 5000,
+	HTTP_FB_SVR_FAIL
+};
 
 /* Exception MIME handler */
 struct except_mime_handler {
@@ -284,6 +325,7 @@ typedef char char_t;
 #define websDefaultHandler(wp, urlPrefix, webDir, arg, url, path, query) ({ do_ej(path, wp); fflush(wp); 1; })
 #define websWriteData(wp, buf, nChars) ({ int TMPVAR = fwrite(buf, 1, nChars, wp); fflush(wp); TMPVAR; })
 #define websWriteDataNonBlock websWriteData
+#define nvram_default_safe_get(name) (nvram_default_get(name) ? : "")
 
 extern int ejArgs(int argc, char_t **argv, char_t *fmt, ...);
 
@@ -298,6 +340,13 @@ extern struct ej_handler ej_handlers[];
 #define MAX_LOGIN_BLOCK_TIME	300
 #define LOCK_LOGIN_LAN 	0x01
 #define LOCK_LOGIN_WAN 	0x02
+
+#if defined(RTAX82U) || defined(DSL_AX82U) || defined(GSAX3000) || defined(GSAX5400) || defined(TUFAX5400)
+enum {
+        LEDG_QIS_RUN = 1,
+        LEDG_QIS_FINISH
+};
+#endif
 
 #ifdef vxworks
 #define fopen(path, mode)	tar_fopen((path), (mode))
@@ -333,13 +382,20 @@ extern void do_f(char *path, webs_t wp);
 
 /* cgi.c */
 extern int web_read(void *buffer, int len);
+extern void unescape(char *s);
+extern char *get_cgi(char *name);
 extern void set_cgi(char *name, char *value);
+extern void init_cgi(char *query);
+extern char *webcgi_get(const char *name);
+extern void webcgi_set(char *name, char *value);
+extern void webcgi_init(char *query);
+extern int web_read(void *buffer, int len);
 
 /* httpd.c */
 extern int json_support;
-extern void start_ssl(void);
+extern int amas_support;
+extern void start_ssl(int http_port);
 extern char *gethost(void);
-extern void http_logout(unsigned int ip, char *cookies, int fromapp_flag);
 extern int is_auth(void);
 extern int is_firsttime(void);
 extern char *generate_token(char *token_buf, size_t length);
@@ -348,12 +404,36 @@ extern int match_one( const char* pattern, int patternlen, const char* string );
 extern void send_page( int status, char* title, char* extra_header, char* text , int fromapp);
 extern void send_content_page( int status, char* title, char* extra_header, char* text , int fromapp);
 extern char *get_referrer(char *referer, char *auth_referer, size_t length);
+extern int save_ui_support_to_file(void);
+extern int save_iptvSettings_to_file(void);
+
+struct usockaddr;
+typedef struct usockaddr usockaddr;
+typedef struct uaddr {
+	int family;
+	union {
+		struct in_addr in;
+#ifdef RTCONFIG_IPV6
+		struct in6_addr in6;
+#endif
+	};
+} uaddr;
+extern uaddr *uaddr_ston(const usockaddr *u, uaddr *uip);
+extern uaddr *uaddr_pton(const char *src, uaddr *uip);
+extern char *uaddr_ntop(const uaddr *uip, char *dst, size_t cnt);
+extern unsigned int uaddr_addr(uaddr *uip);
+extern int uaddr_is_unspecified(uaddr *uip);
+extern int uaddr_is_localhost(uaddr *uip);
+extern int uaddr_is_equal(uaddr *a, uaddr *b);
+extern uaddr *uaddr_getpeer(webs_t wp, uaddr *uip);
 
 /* web.c */
 extern int ej_lan_leases(int eid, webs_t wp, int argc, char_t **argv);
 extern int get_nat_vserver_table(int eid, webs_t wp, int argc, char_t **argv);
 extern int ej_route_table(int eid, webs_t wp, int argc, char_t **argv);
 extern void copy_index_to_unindex(char *prefix, int unit, int subunit);
+extern void json_unescape(char *s);
+extern void decode_json_buffer(char *query);
 extern void logmessage(char *logheader, char *fmt, ...);
 extern int is_private_subnet(const char *ip);
 extern char* INET6_rresolve(struct sockaddr_in6 *sin6, int numeric);
@@ -372,21 +452,30 @@ extern char* reverse_str( char *str );
 #ifdef RTCONFIG_AMAS
 extern int check_AiMesh_whitelist(char *page);
 #endif
+extern int check_cmd_injection_blacklist(char *para);
 
 /* web-*.c */
 extern int ej_wl_status(int eid, webs_t wp, int argc, char_t **argv, int unit);
 extern int ej_wl_status_2g(int eid, webs_t wp, int argc, char_t **argv);
 extern int ej_wps_info_2g(int eid, webs_t wp, int argc, char_t **argv);
 extern int ej_wps_info(int eid, webs_t wp, int argc, char_t **argv);
+extern const char *syslog_msg_filter[];
 
 /* web.c/web-*.c */
 extern char referer_host[64];
 extern char host_name[64];
 extern char user_agent[1024];
 extern char gen_token[32];
-extern unsigned int login_ip_tmp;
+extern char indexpage[128];
+extern char url[128];
+extern unsigned int login_ip; // the logined ip
+extern unsigned int app_login_ip; // the app logined ip
+extern char cookies_buf[4096];
+extern unsigned int login_ip_tmp; /* IPv6 compat */
+extern uaddr login_uip_tmp;
+extern time_t login_timestamp_cache;
 extern int check_user_agent(char* user_agent);
-#if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA)
+#if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA) || defined(RTCONFIG_GOOGLE_ASST)
 extern void add_ifttt_flag(void);
 #endif
 
@@ -396,7 +485,7 @@ extern int check_model_name(void);
 extern char *pwenc(char *input, char *output, int len);
 #endif
 
-#if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA)
+#if defined(RTCONFIG_IFTTT) || defined(RTCONFIG_ALEXA) || defined(RTCONFIG_GOOGLE_ASST)
 extern char ifttt_stoken[128];
 extern char ifttt_query_string[2048];
 extern time_t ifttt_timestamp;
@@ -417,14 +506,14 @@ extern unsigned int login_try;
 extern unsigned int login_try_wan;
 extern time_t auth_check_dt;
 extern int lock_flag;
+extern int max_lock_time;
 extern int add_try;
-extern char auth_passwd[AUTH_MAX];
 extern char* ipisdomain(char* hostname, char* str);
 #ifdef RTCONFIG_AMAS
 extern char* iscap(char* str);
 #endif
 extern int referer_check(char* referer, int fromapp_flag);
-extern int auth_check( char* dirname, char* authorization, char* url, char* file, char* cookies, int fromapp_flag);
+extern int auth_check(char* url, char* file, char* cookies, int fromapp_flag);
 extern int check_noauth_referrer(char* referer, int fromapp_flag);
 extern char current_page_name[128];
 extern int gen_guestnetwork_pass(char *key, size_t size);
@@ -439,5 +528,34 @@ extern int wave_handle_app_flag(char *name, int wave_app_flag);
 #ifdef RTCONFIG_TCODE
 extern int change_location(char *lang);
 #endif
+#ifdef RTCONFIG_WTF_REDEEM
+extern void wtfast_gen_partnercode(char *str, size_t size);
+#endif
 extern void update_wlan_log(int sig);
+extern void system_cmd_test(char *system_cmd, char *SystemCmd, int len);
+extern void do_feedback_mail_cgi(char *url, FILE *stream);
+extern void do_dfb_log_file(char *url, FILE *stream);
+extern int is_amas_support(void);
+extern void do_set_fw_path_cgi(char *url, FILE *stream);
+#if defined(RTCONFIG_AMAZON_WSS)
+extern void amazon_wss_enable(char *wss_enable, char *do_rc);
+#endif
+#ifdef RTCONFIG_ACCOUNT_BINDING
+extern void do_get_eptoken_cgi(char *url, FILE *stream);
+#endif
+#ifdef RTCONFIG_CAPTCHA
+extern unsigned int login_fail_num;
+extern int is_captcha_match(char *catpch);
+#endif
+#if defined(RTAX82U) || defined(DSL_AX82U) || defined(GSAX3000) || defined(GSAX5400) || defined(TUFAX5400)
+extern void switch_ledg(int action);
+#endif
+extern int get_external_ip(void);
+extern int get_rtinfo();
+extern void clean_ban_ip_timeout();
+extern int filter_ban_ip();
+extern void slowloris_check();
+extern void slow_post_read_check();
+extern int check_chpass_auth(char *cur_username, char *cur_passwd);
+extern void reg_default_final_token();
 #endif /* _httpd_h_ */

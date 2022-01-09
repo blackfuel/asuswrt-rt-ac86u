@@ -5220,7 +5220,7 @@ $as_echo "$ac_cv_safe_to_define___extensions__" >&6; }
 
   $as_echo "#define _GNU_SOURCE 1" >>confdefs.h
 
-  $as_echo "#define _POSIX_PTHREAD_SEMANTICS 1" >>confdefs.h
+  #$as_echo "#define _POSIX_PTHREAD_SEMANTICS 1" >>confdefs.h
 
   $as_echo "#define _TANDEM_SOURCE 1" >>confdefs.h
 

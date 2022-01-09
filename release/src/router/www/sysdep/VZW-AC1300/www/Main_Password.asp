@@ -9,6 +9,9 @@
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="icon" href="images/favicon.png">
 <title>ASUS Login</title>
+<script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/js/https_redirect/https_redirect.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
 .content{
 	width:580px;
@@ -250,20 +253,27 @@ function validForm(){
 }
 
 function submitForm(){
+	var postData = {"restart_httpd": "0", "new_username":document.form.http_username_x.value, "new_passwd":document.form.http_passwd_x.value};
+	var sw_mode = '<% nvram_get("sw_mode"); %>';
+
+	if(sw_mode == 3 && '<% nvram_get("wlc_psta"); %>' == 2)
+		sw_mode = 2;
+
 	if(validForm()){
 		document.getElementById("error_status_field").style.display = "none";
-		document.form.http_username.value = document.form.http_username_x.value;
-		document.form.http_passwd.value = document.form.http_passwd_x.value;
-		document.form.http_username_x.disabled = true;
-		document.form.http_passwd_x.disabled = true;
-		document.form.http_passwd_2_x.disabled = true;
 		document.form.btn_modify.style.display = "none";
 		document.getElementById('loadingIcon').style.display = '';
-		document.form.submit();
+
+		setTimeout(function(){
+			httpApi.chpass(postData);
+		}, 100);
 
 		var nextPage = decodeURIComponent('<% get_ascii_parameter("nextPage"); %>');
 		setTimeout(function(){
-			location.href = (nextPage != "") ? nextPage : "<% rel_index_page(); %>";
+			if('<% nvram_get("w_Setting"); %>' == '0' && sw_mode != 2)
+				location.href = '/QIS_wizard.htm?flag=wireless';
+			else
+				location.href = (nextPage != "") ? nextPage : "<% rel_index_page(); %>";
 		}, 3000);
 	}
 	else
@@ -305,12 +315,20 @@ var validator = {
 	chkLoginPw: function(obj){
 		
 		if(obj.value.length > 0 && obj.value.length < 5){
-			showError("<#JS_short_password#>");
+			showError("<#JS_short_password#> <#JS_password_length#>");
 			obj.value = "";
 			obj.focus();
 			obj.select();
 			return false;
-		}		
+		}
+
+		if(obj.value.length > 32){
+            showError("<#JS_max_password#>");
+            obj.value = "";
+            obj.focus();
+            obj.select();
+            return false;
+        }	
 
 		if(obj.value.charAt(0) == '"'){
 			showError('<#JS_validstr1#> ["]');
@@ -350,7 +368,15 @@ var validator = {
 				obj.focus();
 				obj.select();
 				return false;	
-		}	
+		}
+
+		if(obj.value.length > 32){
+            showError("<#JS_max_password#>");
+            obj.value = "";
+            obj.focus();
+            obj.select();
+            return false;
+        }	
 		
 		var invalid_char = "";
 		for(var i = 0; i < obj.value.length; ++i){
@@ -428,7 +454,7 @@ function showError(str){
 					<tr style="height:72px;">
 						<td colspan="2">
 							<div style="margin:20px 0px 0px 78px;">
-								<input type="text" name="http_username_x" tabindex="1" class="form_input" maxlength="20" value="" autocapitalize="off" autocomplete="off" placeholder="<#Router_Login_Name#>">
+								<input type="text" name="http_username_x" tabindex="1" class="form_input" maxlength="32" value="" autocapitalize="off" autocomplete="off" placeholder="<#Router_Login_Name#>">
 							</div>
 						</td>
 					</tr>
@@ -440,7 +466,7 @@ function showError(str){
 					<tr style="height:72px;">
 						<td colspan="2">
 							<div style="margin:30px 0px 0px 78px;">
-								<input type="password" autocapitalize="off" autocomplete="off" value="" name="http_passwd_x" tabindex="2" class="form_input" maxlength="16" onkeyup="" onpaste="return false;"/ onBlur="" placeholder="<#PASS_new#>">
+								<input type="password" autocapitalize="off" autocomplete="off" value="" name="http_passwd_x" tabindex="2" class="form_input" maxlength="33" onkeyup="" onpaste="return false;"/ onBlur="" placeholder="<#PASS_new#>">
 							</div>
 						</td>
 					</tr>
@@ -452,7 +478,7 @@ function showError(str){
 					<tr style="height:72px;">
 						<td colspan="2">
 							<div style="margin:30px 0px 0px 78px;">
-								<input type="password" autocapitalize="off" autocomplete="off" value="" name="http_passwd_2_x" tabindex="3" class="form_input" maxlength="16" onkeyup="" onpaste="return false;"/ onBlur="" placeholder="<#Confirmpassword#>">
+								<input type="password" autocapitalize="off" autocomplete="off" value="" name="http_passwd_2_x" tabindex="3" class="form_input" maxlength="33" onkeyup="" onpaste="return false;"/ onBlur="" placeholder="<#Confirmpassword#>">
 							</div>
 						</td>
 					</tr>

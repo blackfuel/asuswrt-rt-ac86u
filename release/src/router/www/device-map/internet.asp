@@ -4,6 +4,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta HTTP-EQUIV="Pragma" CONTENT="no-cache">
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
+<meta name="format-detection" content="telephone=no,email=no,address=no">
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="icon" href="images/favicon.png">
 <title></title>
@@ -66,6 +67,9 @@ var wan0_primary = '<% nvram_get("wan0_primary"); %>';
 var wans_mode = '<%nvram_get("wans_mode");%>';
 var loadBalance_Ratio = '<%nvram_get("wans_lb_ratio");%>';
 var wlc_express = '<% nvram_get("wlc_express"); %>';
+var curState = (wans_dualwan_array[1] != "none")? "1":"0";
+if(wan_bonding_support)
+	var orig_bond_wan = httpApi.nvramGet(["bond_wan"], true).bond_wan;
 
 <% wan_get_parameter(); %>
 
@@ -91,18 +95,6 @@ function add_lanport_number(if_name)
 				return "lan" + "5";
 			if(wans_lanport == "3")
 				return "lan" + "6";
-		}
-	}
-	else if(based_modelid == "AC2900"){
-		if(if_name == "lan"){
-			if(wans_lanport == "4")
-				return "lan" + "1";
-			if(wans_lanport == "3")
-				return "lan" + "2";
-			if(wans_lanport == "2")
-				return "lan" + "3";
-			if(wans_lanport == "1")
-				return "lan" + "4";
 		}
 	}
 	else if (if_name == "lan") {
@@ -142,6 +134,17 @@ function initial(){
 		sec_if = add_lanport_number(sec_if);
 		pri_if = pri_if.toUpperCase();
 		sec_if = sec_if.toUpperCase();
+
+		if(based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U"){
+			if(pri_if == "WAN2")
+				pri_if = "10G base-T";
+			else if(pri_if == "SFP+")
+				pri_if = "10G SFP+";
+			if(sec_if == "WAN2")
+				sec_if = "10G base-T";
+			else if(sec_if == "SFP+")
+				sec_if = "10G SFP+";
+		}
 
 		if(sec_if != 'NONE'){
 			document.getElementById("dualwan_row_main").style.display = "";	
@@ -187,7 +190,7 @@ function initial(){
 				document.getElementById("goDualWANSetting").style.display = "none";
 				document.getElementById("dualwan_enable_button").style.display = "none";
 			}			
-			else if(parent.document.form.dual_wan_flag.value == 0){
+			else if(parent.document.form.dual_wan_flag.value == 0 && wans_caps != "wan lan"){
 				document.getElementById("goDualWANSetting").style.display = "none";
 				document.getElementById("dualwan_enable_button").style.display = "";
 			}
@@ -240,7 +243,7 @@ function initial(){
 	if(parent.wans_flag){
 		if(unit == 0){
 			if(dsl_support && wans_dualwan.split(" ")[0] == "dsl" 
-				&& (productid == "DSL-AC68U" || productid == "DSL-AC68R")){     //MODELDEP: DSL-AC68U,DSL-AC68R
+				&& (productid != "DSL-N55U" || productid != "DSL-N55U-B")){
 				document.getElementById("divSwitchMenu").style.display = "";	
 			}
 			update_all_ip(first_wanip, first_wannetmask, first_wangateway, 0);
@@ -248,6 +251,10 @@ function initial(){
 			update_all_dns(first_wandns, first_wanxdns, 0);
 		}
 		else if(unit == 1){
+			if(dsl_support && wans_dualwan.split(" ")[1] == "dsl" 
+			&& (productid != "DSL-N55U" || productid != "DSL-N55U-B")){
+				document.getElementById("divSwitchMenu").style.display = "";    
+			}
 			update_all_ip(secondary_wanip, secondary_wannetmask, secondary_wangateway, 1);
 			update_all_xip(secondary_wanxip, secondary_wanxnetmask, secondary_wanxgateway, 1);
 			update_all_dns(secondary_wandns, secondary_wanxdns, 1);
@@ -255,7 +262,7 @@ function initial(){
 	}
 	else{
 		if(dsl_support && wans_dualwan.split(" ")[0] == "dsl"
-			&& (productid == "DSL-AC68U" || productid == "DSL-AC68R")){     //MODELDEP: DSL-AC68U,DSL-AC68R
+			&& (productid != "DSL-N55U" || productid != "DSL-N55U-B")){
 			document.getElementById("divSwitchMenu").style.display = "";
 		}
 		update_all_ip(wanip, wannetmask, wangateway, unit);
@@ -321,6 +328,12 @@ function update_connection_type(dualwan_unit){
 		wanlink_type_conv = "PPPoA";
 	else if(wanlink_type_conv == "ipoa")
 		wanlink_type_conv = "IPoA";
+	else if(wanlink_type_conv == "lw4o6")
+		wanlink_type_conv = "LW 4over6";
+	else if(wanlink_type_conv == "map-e")
+		wanlink_type_conv = "MAP-E";
+	else if(wanlink_type_conv == "v6plus")
+		wanlink_type_conv = "<#IPv6_plus#>";
 
 	showtext($("#connectionType")[0], wanlink_type_conv);
 }
@@ -683,8 +696,8 @@ function manualSetup(){
 <input type="hidden" name="wan_enable" value="<% nvram_get("wan_enable"); %>">
 <input type="hidden" name="wans_dualwan" value="<% nvram_get("wans_dualwan"); %>">
 <input type="hidden" name="wan_unit" value="<% get_wan_unit(); %>">
-<input type="hidden" name="dslx_link_enable" value="" disabled>
 <input type="hidden" name="wans_mode" value='<% nvram_get("wans_mode"); %>'>
+<input type="hidden" name="bond_wan" value='<% nvram_get("bond_wan"); %>' disabled>
 <table border="0" cellpadding="0" cellspacing="0">
 	<tr>
 		<td>
@@ -725,12 +738,7 @@ function manualSetup(){
 						$('#radio_wan_enable').iphoneSwitch(wan_enable_orig,
 							 function() {
 								document.internetForm.wan_enable.value = "1";
-								if (dsl_support && wans_dualwan.split(" ")[wan_unit] == "dsl") {
-									document.internetForm.dslx_link_enable.value = "1";
-									document.internetForm.dslx_link_enable.disabled = false;
-									document.internetForm.action_script.value = "start_dslwan_if 0";
-								}
-								else if(parent.wans_flag){
+								if(parent.wans_flag){
 									document.internetForm.wan_unit.value = parent.document.form.dual_wan_flag.value;
 								}
 								document.internetForm.submit();
@@ -738,12 +746,7 @@ function manualSetup(){
 							 },
 							 function() {
 								document.internetForm.wan_enable.value = "0";
-								if (dsl_support && wans_dualwan.split(" ")[wan_unit] == "dsl") {
-									document.internetForm.dslx_link_enable.value = "0";
-									document.internetForm.dslx_link_enable.disabled = false;
-									document.internetForm.action_script.value = "stop_dslwan_if 0";
-								}
-								else if(parent.wans_flag){
+								if(parent.wans_flag){
 									document.internetForm.wan_unit.value = parent.document.form.dual_wan_flag.value;
 								}
 								document.internetForm.submit();
@@ -758,35 +761,59 @@ function manualSetup(){
 <tr id="dualwan_enable_button">
     <td height="50" style="padding:10px 15px 0px 15px;">
     		<p class="formfonttitle_nwm" style="float:left;width:98px;"><#dualwan_enable#></p>
-    		<div class="left" style="width:94px; float:right;" id="radio_dualwan_enable"></div>
+			<div class="left" style="width:94px; float:right;" id="nm_radio_dualwan_enable"></div>
 				<div class="clear"></div>
 				<script type="text/javascript">
-						$('#radio_dualwan_enable').iphoneSwitch(parent.wans_flag, 
+						$('#nm_radio_dualwan_enable').iphoneSwitch(parent.wans_flag,
 							 function() {
-								if(wans_dualwan.split(" ")[0] == "usb" || wans_dualwan.split(" ")[0] == "lan"){
-									document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan";
-									document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
-									document.internetForm.action_script.value = "reboot";
-								}
-								else if(wans_dualwan.split(" ")[0] == "wan2"){
-									document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan";
-									document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
-									document.internetForm.action_script.value = "reboot";
-									document.internetForm.flag.value = "Internet";
+								if(wan_bonding_support && orig_bond_wan == "1"){
+									var msg = "Your router is enabling WAN Aggregation. If you want to enable Dual WAN, WAN Aggregation will be disabled. Are you sure you want to continue?";
+									if(confirm(msg)){
+										document.internetForm.bond_wan.disabled = false;
+										document.internetForm.bond_wan.value = "0";
+										if(wans_dualwan.split(" ")[0] == "usb" || wans_dualwan.split(" ")[0] == "lan" || wans_dualwan.split(" ")[0] == "wan2"){
+												document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan";
+										}
+										else{
+											if(wans_caps.search("wan2") >= 0)
+												document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan2";
+											else
+												document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" usb";
+										}
+										document.internetForm.flag.value = "";
+										document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
+										document.internetForm.action_script.value = "reboot";
+									}
+									else{
+										$('#nm_radio_dualwan_enable').find('.iphone_switch').animate({backgroundPosition: "-38px"}, "slow");
+										return false;
+									}
 								}
 								else{
-									if(wans_caps.search("wan2") >= 0) {
-										document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan2";
+									if(wans_dualwan.split(" ")[0] == "usb" || wans_dualwan.split(" ")[0] == "lan" || wans_dualwan.split(" ")[0] == "wan2"){
+										document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan";
+										document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
+										document.internetForm.action_script.value = "reboot";
+										document.internetForm.flag.value = "";
+									}else if(wans_caps.search("usb") == -1){
+										document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" lan";
 										document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
 										document.internetForm.action_script.value = "reboot";
 									}else{
-										document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" usb";
-										document.internetForm.action_wait.value = '2';
-										document.internetForm.action_script.value = "start_multipath";
-										setTimeout(parent.refreshpage, 1000);
+										if(wans_caps.search("wan2") >= 0) {
+											document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" wan2";
+											document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
+											document.internetForm.action_script.value = "reboot";
+											document.internetForm.flag.value = "";
+										}else {
+											document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" usb";
+											document.internetForm.action_wait.value = '2';
+											document.internetForm.action_script.value = "start_multipath";
+											setTimeout(parent.refreshpage, 1000);
+										}
 									}
 								}
-
+								curState = "1";
 								document.internetForm.submit();
 								return true;
 							 },
@@ -795,16 +822,16 @@ function manualSetup(){
 									document.internetForm.action_wait.value = '2';
 									document.internetForm.action_script.value = "start_multipath";
 									setTimeout(parent.refreshpage, 1000);
-								}							 	
+								}
 								else{
 									document.internetForm.action_wait.value = '<% get_default_reboot_time(); %>';
 									document.internetForm.action_script.value = "reboot";
 									document.internetForm.flag.value = "Internet";
-								}	 	
+								}
+								curState = "0";
 								document.internetForm.wans_dualwan.value = wans_dualwan.split(" ")[0]+" none";
 								document.internetForm.wan_unit.value = 0;
 								document.internetForm.wans_mode.value = "fo";
-
 								document.internetForm.submit();
 								return true;
 							 }
@@ -1041,9 +1068,8 @@ function manualSetup(){
 <tr id="sitesurvey_tr" style="display:none">
   <td height="50" style="padding:10px 15px 0px 15px;">
   	<p class="formfonttitle_nwm" style="float:left;"><#APSurvey_action_search_again_hint2#></p>
-		<br />
-  	<input type="button" class="button_gen" onclick="gotoSiteSurvey();" value="<#QIS_rescan#>" style="float:right;">
-	<div style="margin-top:5px;" class="line_horizontal"></div>
+	<div class="line_horizontal"></div>     
+	<input type="button" class="button_gen" onclick="gotoSiteSurvey();" value="<#QIS_rescan#>" style="float:right;margin: 5px 0;">
   </td>
 </tr>
 

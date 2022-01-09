@@ -1,16 +1,3 @@
-#
-# Broadcom Linux Router WPS Makefile
-#
-# Copyright (C) 2014, Broadcom Corporation
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom Corporation;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom Corporation.
-#
-# $Id: Makefile 403251 2013-05-20 05:15:55Z $
-#
 REBUILD = $(shell if [ -f "prebuilt/wps_monitor" ]; then echo 0; else echo 1; fi)
 
 ifneq (true,$(parallel))
@@ -27,10 +14,8 @@ include $(TOP)/.config
 # linux kernel config
 include $(LINUXDIR)/.config
 
-ifneq ($(HND_ROUTER),)
 # 4.1 kernel config does not have these so force it to APSTA to enable all functionality
 CONFIG_WL_USE_APSTA=y
-endif
 
 export WPSSRC = $(SRCBASE)/wps
 
@@ -102,10 +87,8 @@ CFLAGS += -I$(SRCBASE)/include ${WLAN_StdIncPathA} -I$(SRCBASE)/common/include -
 	-I$(SRCBASE)/router/shared -I$(SRCBASE)/wps/brcm_apps/include	\
 	-I$(SRCBASE)/include/bcmcrypto ${WLAN_ComponentIncPath}
 
-ifneq ($(HND_ROUTER),)
 CFLAGS += -I$(INC_BRCMDRIVER_PUB_PATH)/$(BRCM_BOARD)
 CFLAGS += -I$(INC_BRCMSHARED_PUB_PATH)/$(BRCM_BOARD)
-endif
 
 LDFLAGS += -lgcc_s
 

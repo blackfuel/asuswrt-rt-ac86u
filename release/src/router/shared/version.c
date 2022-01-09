@@ -12,6 +12,17 @@ const char *rt_swpjverno = RT_SWPJVERNO;
 #ifdef RTCONFIG_NVRAM_ENCRYPT
 const char *enc_sp_extendno = ENC_SP_EXTENDNO;
 #endif
+#ifdef RTCONFIG_LIVE_UPDATE_RSA
+const char *live_update_rsa_ver = LIVE_UPDATE_RSA_VERSION;
+#endif
+#ifdef RT_MODELDESC
+const char *rt_modeldesc = RT_MODELDESC;
+#else
+const char *rt_modeldesc = "";
+#endif
+#ifdef CUSTOM_MODEL
+const char *custom_model = RT_CUSTOM_MODEL;
+#endif
 
 void set_basic_fw_name(void){
 	nvram_set("buildno", rt_serialno);
@@ -24,6 +35,12 @@ void set_basic_fw_name(void){
 	nvram_set("swpjverno", rt_swpjverno);
 #ifdef RTCONFIG_NVRAM_ENCRYPT
 	nvram_set("enc_sp_extendno", enc_sp_extendno);
+#endif
+#ifdef RTCONFIG_LIVE_UPDATE_RSA
+	nvram_set("live_update_rsa_ver", live_update_rsa_ver);
+#endif
+#ifdef CUSTOM_MODEL
+	nvram_set("custom_model", custom_model);
 #endif
 }
 

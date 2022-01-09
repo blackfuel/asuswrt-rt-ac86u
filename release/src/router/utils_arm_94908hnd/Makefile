@@ -100,7 +100,7 @@ vpath %.c $(SRCBASE)/wl/exe $(SRCBASE)/shared
 endif
 endif
 
-LDFLAGS += -L$(TOP)/nvram${BCMEX}${EX7} -lnvram ${EXTRA_NV_LDFLAGS}
+LDFLAGS += -L$(TOP_PLATFORM)/nvram${BCMEX}${EX7} -lnvram ${EXTRA_NV_LDFLAGS}
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
 LDFLAGS += -lgcc_s
 
@@ -162,3 +162,5 @@ install: all
 	install -d $(INSTALLDIR)/usr/sbin
 	install $(UTILS) $(INSTALLDIR)/usr/sbin
 	$(STRIP) $(foreach file,$(UTILS),$(INSTALLDIR)/usr/sbin/$(file))
+	install -D -m 755 WlGetDriverCfg.sh $(INSTALLDIR)/usr/sbin/WlGetDriverCfg.sh
+	install -D -m 755 WlGetDriverStats.sh $(INSTALLDIR)/usr/sbin/WlGetDriverStats.sh

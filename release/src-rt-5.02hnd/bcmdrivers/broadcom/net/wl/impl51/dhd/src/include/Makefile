@@ -1,26 +1,4 @@
 #!/bin/bash
-#
-# This script serves following purpose:
-#
-# 1. It generates native version information by querying
-#    automerger maintained database to see where src/include
-#    came from
-# 2. For select components, as listed in compvers.sh
-#    it generates component version files
-#
-# Broadcom Proprietary and Confidential. Copyright (C) 2017,
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom.
-#
-#
-# <<Broadcom-WL-IPTag/Proprietary:>>
-#
-# $Id: Makefile 514727 2014-11-12 03:02:48Z $
-#
 
 export SRCBASE:=..
 

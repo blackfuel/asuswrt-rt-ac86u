@@ -1,7 +1,8 @@
-/* $Id: upnppinhole.c,v 1.7 2014/12/09 09:13:53 nanard Exp $ */
-/* MiniUPnP project
+/* $Id: upnppinhole.c,v 1.14 2019/05/21 08:39:45 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2006-2012 Thomas Bernard
+ * (c) 2006-2019 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -23,6 +24,7 @@
 #include "upnpredirect.h"
 #include "upnpglobalvars.h"
 #include "upnpevents.h"
+#include "upnputils.h"
 #include "upnppinhole.h"
 #ifdef __APPLE__
 /* XXX - Apple version of PF API seems to differ from what
@@ -87,6 +89,21 @@ upnp_check_outbound_pinhole(int proto, int * timeout)
 }
 #endif
 
+int
+upnp_find_inboundpinhole(const char * raddr, unsigned short rport,
+                         const char * iaddr, unsigned short iport,
+                         int proto, char * desc, int desc_len, unsigned int * leasetime)
+{
+#if defined(USE_PF) || defined(USE_NETFILTER)
+	int uid;
+	uid = find_pinhole(NULL, raddr, rport, iaddr, iport, proto,
+	                   desc, desc_len, leasetime);
+	return uid;
+#else
+	return -42;
+#endif
+}
+
 /* upnp_add_inboundpinhole()
  * returns:  1 on success
  *          -1 Pinhole space exhausted
@@ -119,18 +136,14 @@ upnp_add_inboundpinhole(const char * raddr,
 	timestamp = current + leasetime;
 	r = 0;
 
-#if 0
-	if(r == 1 && strcmp(iaddr, iaddr_old)==0 && iport==iport_old)
-	{
-		syslog(LOG_INFO, "Pinhole for inbound traffic from [%s]:%hu to [%s]:%hu with protocol %s already done. Updating it.", raddr, rport, iaddr_old, iport_old, protocol);
-		t = upnp_update_inboundpinhole(idfound, leaseTime);
-		*uid = atoi(idfound);
-		return t;
+	*uid = upnp_find_inboundpinhole(raddr, rport, iaddr, iport, proto, NULL, 0, NULL);
+	if(*uid >= 0) {
+		syslog(LOG_INFO, "Pinhole for inbound traffic from [%s]:%hu to [%s]:%hu with proto %d found uid=%d. Updating it.", raddr, rport, iaddr, iport, proto, *uid);
+		r = upnp_update_inboundpinhole(*uid, timestamp);
+		return (r >= 0) ? 1 : r;
 	}
-	else
-#endif
 #if defined(USE_PF) || defined(USE_NETFILTER)
-	*uid = add_pinhole (0/*ext_if_name*/, raddr, rport,
+	*uid = add_pinhole (ext_if_name6, raddr, rport,
 	                    iaddr, iport, proto, desc, timestamp);
 	return *uid >= 0 ? 1 : -1;
 #else

@@ -51,6 +51,10 @@ ifeq ($(RTCONFIG_LANTIQ),y)
 LDFLAGS += -L$(TOP)/fapi_wlan_common-05.04.00.131 -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -L$(TOP)/libfapi-0.1 -lfapi
 endif
 
+ifeq ($(HND_ROUTER_AX), y)
+CFLAGS += -I$(SRCBASE)/../components/proto/include -I$(SRCBASE)/../components/wlioctl/include -I$(SRCBASE)/wl -I$(SRCBASE)/wl/sys
+endif
+
 ifeq ($(RTCONFIG_BWDPI),y)
 CFLAGS += -I$(TOP)/sqlite -I$(TOP)/httpd
 CFLAGS += -I$(TOP)/bwdpi_source/src/tdts_udb_sample
@@ -62,11 +66,18 @@ ifeq ($(RTCONFIG_BWDPI_DEP),y)
 CFLAGS += -I$(TOP)/httpd
 CFLAGS += -I$(TOP)/bwdpi_dep/bwdpi
 endif
+ifeq ($(RTCONFIG_AMAS),y)
+CFLAGS += -I$(TOP)/openssl/include
+CFLAGS += -I$(TOP)/json-c
+endif
 
-LDFLAGS += -lm -L$(TOP)/shared -lshared -L$(TOP)/nvram${BCMEX} -lnvram -L$(TOP)/json-c/.libs -ljson-c
-LDFLAGS += -L$(TOP)/shared -lshared -L$(TOP)/nvram${BCMEX}${EX7} -lnvram 
+LDFLAGS += -lm -L$(TOP)/shared -lshared -L$(TOP_PLATFORM)/nvram${BCMEX} -lnvram -L$(TOP)/json-c/.libs -ljson-c
+LDFLAGS += -L$(TOP)/shared -lshared -L$(TOP_PLATFORM)/nvram${BCMEX}${EX7} -lnvram 
+ifeq ($(RTCONFIG_AMAS),y)
+LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
+endif
 ifeq ($(HND_ROUTER),y)
-LDFLAGS += -L$(TOP)/wlcsm -lwlcsm
+LDFLAGS += -L$(TOP_PLATFORM)/wlcsm$(EXHND) -lwlcsm
 endif
 
 ifeq ($(RTCONFIG_BWDPI),y)
@@ -107,13 +118,32 @@ ifeq ($(HND_ROUTER),y)
 CFLAGS += -DHND_ROUTER
 endif
 
+ifeq ($(RTCONFIG_AMAS),y)
+ifeq ($(RTCONFIG_LLDPD_1_0_11),y)
+LLDPD_DIR = $(TOP)/lldpd-1.0.11
+else
+LLDPD_DIR = $(TOP)/lldpd-0.9.8
+endif
+CFLAGS += -I$(TOP)/amas-utils -I$(TOP)/shared/sysdeps/amas -pthread
+LDFLAGS += -L$(TOP)/amas-utils -lamas-utils -lpthread
+LDFLAGS += -L$(LLDPD_DIR)/src/lib/.libs -llldpctl -L$(STAGEDIR)/usr/lib/ -ljansson
+endif
+
 ifneq ($(AC2900),y)
 ifeq ($(wildcard $(SRCBASE)/router/networkmap/*.c),)
 all: 
 	-cp -f prebuild/networkmap networkmap
 	-cp -f prebuild/asusdiscovery asusdiscovery
+	-cp -f prebuild/arpstorm arpstorm
+ifeq ($(RTCONFIG_AMAS),y)
+	-cp -f prebuild/find_cap find_cap
+endif
+else
+ifeq ($(RTCONFIG_AMAS),y)
+all: $(EXEC) asusdiscovery arpstorm find_cap
 else
 all: $(EXEC) asusdiscovery arpstorm
+endif
 endif
 else
 ifeq ($(wildcard $(SRCBASE)/router/networkmap/*.c),)
@@ -135,13 +165,22 @@ asusdiscovery: packet.o ASUS_Discovery.o ASUS_Discovery_Debug.o
 	$(CC) -o $@ $^ $(LDFLAGS) $(CFLAGS)
 endif
 
+ifeq ($(RTCONFIG_AMAS),y)
+find_cap: packet.o ASUS_Discovery_for_find_cap.o ASUS_Discovery_Debug.o
+	$(CC) -o $@ $^ $(LDFLAGS) $(CFLAGS)
+endif
+
 install:
 	install -D $(EXEC) $(INSTALLDIR)/usr/sbin/$(EXEC)
 	$(STRIP) $(INSTALLDIR)/usr/sbin/$(EXEC)
 ifneq ($(AC2900),y)
 	install -D asusdiscovery $(INSTALLDIR)/usr/sbin/asusdiscovery
 	$(STRIP) $(INSTALLDIR)/usr/sbin/asusdiscovery
-ifneq ($(wildcard $(SRCBASE)/router/networkmap/*.c),)
+ifeq ($(RTCONFIG_AMAS),y)
+	install -D find_cap $(INSTALLDIR)/usr/sbin/find_cap
+	$(STRIP) $(INSTALLDIR)/usr/sbin/find_cap
+endif
+ifneq ($(wildcard $(SRCBASE)/router/networkmap/arpstorm),)
 	install -D arpstorm $(INSTALLDIR)/usr/sbin/arpstorm
 	$(STRIP) $(INSTALLDIR)/usr/sbin/arpstorm
 endif
@@ -152,6 +191,9 @@ endif
 clean:
 ifneq ($(AC2900),y)
 	rm -rf *.o $(EXEC) *~ asusdiscovery arpstorm
+ifeq ($(RTCONFIG_AMAS),y)
+	rm -rf find_cap
+endif
 else
 	rm -rf *.o $(EXEC) *~
 endif

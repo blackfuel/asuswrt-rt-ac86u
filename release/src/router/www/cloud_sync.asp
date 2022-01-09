@@ -136,14 +136,20 @@
 </style>
 <script>
 window.onresize = function() {
-	if(document.getElementById("cloudAddTable_div").style.display == "block") {
-		cal_panel_block("cloudAddTable_div", 0.2);
+	if(document.getElementById("cloudAddTable_div") != null){
+		if(document.getElementById("cloudAddTable_div").style.display == "block") {
+			cal_panel_block("cloudAddTable_div", 0.2);
+		}
 	}
-	if(document.getElementById("folderTree_panel").style.display == "block") {
-		cal_panel_block("folderTree_panel", 0.25);
+	if(document.getElementById("folderTree_panel") != null){
+		if(document.getElementById("folderTree_panel").style.display == "block") {
+			cal_panel_block("folderTree_panel", 0.25);
+		}
 	}
-	if(document.getElementById("invitation").style.display == "block") {
-		cal_panel_block("invitation", 0.25);
+	if(document.getElementById("invitation") != null){
+		if(document.getElementById("invitation").style.display == "block") {
+			cal_panel_block("invitation", 0.25);
+		}
 	}
 }
 <% get_AiDisk_status(); %>
@@ -190,9 +196,11 @@ var FromObject = "0";
 var lastClickedObj = 0;
 var _layer_order = "";
 var PROTOCOL = "cifs";
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=156";
 
 function initial(){
 	show_menu();	
+	document.getElementById("faq_link").href=faq_href;
 	showAddTable();
 	document.aidiskForm.protocol.value = PROTOCOL;
 	initial_dir();
@@ -612,7 +620,6 @@ function getDropBoxClientName(token, uid){
 }
 
 var updateCloudStatus_counter = 0;
-var captcha_flag = 0;
 function updateCloudStatus(){
     $.ajax({
     	url: '/cloud_status.asp',
@@ -660,20 +667,6 @@ function updateCloudStatus(){
 							_cloud_msg += "<span style=\\'word-break:break-all;\\'>" + decodeURIComponentSafe(cloud_obj) + "</span>";
 						}
 						else if(cloud_msg){
-							if(cloud_msg == "Need to enter the CAPTCHA"){
-								if(captcha_flag == 0){
-									for(var i = 0; i < cloud_synclist_all.length; i += 1) {
-										if(cloud_synclist_all[i][0] == 0){ //ASUS WebStorage
-											showAddTable(0, i);
-											editRule = i + 1;
-										}
-									}
-									document.getElementById('captcha_tr').style.display = "";															
-									autoFocus('captcha_field');	
-									document.getElementById('captcha_iframe').src = CAPTCHA_URL;
-									captcha_flag = 1;
-								}
-							}
 							_cloud_msg += cloud_msg;
 						}
 						else{
@@ -1089,12 +1082,8 @@ function applyRule(){
 			newRule.push(document.form.cloud_username.value);
 			newRule.push(document.form.cloud_password.value);
 
-			if(document.form.captcha_field.value == "" && document.form.security_code_field.value == ""){
-				newRule.push("none");
-			}
-			else{
-				newRule.push(document.form.security_code_field.value+'#'+document.form.captcha_field.value);
-			}
+			//OPT Authentication#Captcha
+			newRule.push("none");
 
 			newRule.push(document.form.cloud_rule.value);
 			newRule.push("/tmp"+document.form.cloud_dir.value);
@@ -1572,8 +1561,6 @@ function change_service(obj){
 		document.getElementById('ftp_port').parentNode.parentNode.style.display = "none";
 		document.getElementById('ftp_root_path').parentNode.parentNode.style.display = "none";
 		//document.getElementById('cloud_rule').parentNode.parentNode.style.display = "";
-		document.form.security_code_field.disabled = false;
-		document.getElementById("security_code_tr").style.display = "";
 		document.getElementById("cloud_username_tr").style.display = "";
 		document.getElementById("cloud_password_tr").style.display = "";
 		document.getElementById("applyBtn").style.display = "";
@@ -1593,8 +1580,6 @@ function change_service(obj){
 		document.getElementById('ftp_port').parentNode.parentNode.style.display = "none";
 		document.getElementById('ftp_root_path').parentNode.parentNode.style.display = "none";
 		//document.getElementById('cloud_rule').parentNode.parentNode.style.display = "";
-		document.form.security_code_field.disabled = true;
-		document.getElementById("security_code_tr").style.display = "none";
 		document.getElementById("cloud_username_tr").style.display = "none";
 		document.getElementById("cloud_password_tr").style.display = "none";
 		document.getElementById("applyBtn").style.display = "none";
@@ -1614,8 +1599,6 @@ function change_service(obj){
 		document.getElementById('ftp_port').parentNode.parentNode.style.display = "";
 		document.getElementById('ftp_root_path').parentNode.parentNode.style.display = "";
 		//document.getElementById('cloud_rule').parentNode.parentNode.style.display = "none";
-		document.form.security_code_field.disabled = true;
-		document.getElementById("security_code_tr").style.display = "none";
 		document.getElementById("cloud_username_tr").style.display = "";
 		document.getElementById("cloud_password_tr").style.display = "";
 		document.getElementById("applyBtn").style.display = "";
@@ -1634,8 +1617,6 @@ function change_service(obj){
 		document.getElementById('ftp_url').parentNode.parentNode.style.display = "none";
 		document.getElementById('ftp_port').parentNode.parentNode.style.display = "none";
 		document.getElementById('ftp_root_path').parentNode.parentNode.style.display = "none";
-		document.form.security_code_field.disabled = false;
-		document.getElementById("security_code_tr").style.display = "none";
 		document.getElementById("cloud_username_tr").style.display = "";
 		document.getElementById("cloud_password_tr").style.display = "";
 		document.getElementById("applyBtn").style.display = "";
@@ -1658,8 +1639,6 @@ function change_service(obj){
 		//document.getElementById('cloud_rule').parentNode.parentNode.style.display = "none";
 		document.form.cloud_rule.options[1] = new Option("USB Disk A to B", 1, false, false);
 		document.form.cloud_rule.options[2] = new Option("USB Disk B to A", 2, false, false);
-		document.form.security_code_field.disabled = true;
-		document.getElementById("security_code_tr").style.display = "none";
 		document.getElementById("cloud_username_tr").style.display = "none";
 		document.getElementById("cloud_password_tr").style.display = "none";
 		document.getElementById("applyBtn").style.display = "";
@@ -1670,15 +1649,15 @@ function change_service(obj){
 	var ss_support = '<% nvram_get("ss_support"); %>';	
 	$("#povider_tr").hover(
 		function(){     // for mouse enter event
-			if(isSupport(ss_support, "asuswebstorage"))
+			if(smart_sync_support(ss_support, "asuswebstorage"))
 				$('#WebStorage').parent().css('display','block');
-			if(isSupport(ss_support, "dropbox"))
+			if(smart_sync_support(ss_support, "dropbox"))
 				$('#Dropbox').parent().css('display','block');
-			if(isSupport(ss_support, "ftp"))
+			if(smart_sync_support(ss_support, "ftp"))
 				$('#ftp_server').parent().css('display','block');
-			if(isSupport(ss_support, "samba"))
+			if(smart_sync_support(ss_support, "samba"))
 				$('#Samba').parent().css('display','block');
-			if(isSupport(ss_support, "usb"))
+			if(smart_sync_support(ss_support, "usb"))
 				$('#Usb').parent().css('display','block');
 
 		},
@@ -1693,19 +1672,8 @@ function change_service(obj){
 }
 
 // parsing ss_support (Smart Sync)
-function isSupport(_nvramvalue, _ptn){
+function smart_sync_support(_nvramvalue, _ptn){
 	return (_nvramvalue.search(_ptn) == -1) ? false : true;
-}
-
-var captcha_flag = 0;
-function refresh_captcha(){
-	if(captcha_flag == 0){
-		var captcha_url = 'http://sg03.asuswebstorage.com/member/captcha/?userid='+document.form.cloud_username.value;
-		document.getElementById('captcha_iframe').setAttribute("src", captcha_url);
-	}
-	else{
-		document.getElementById('captcha_iframe').src = document.getElementById('captcha_iframe').src;
-	}
 }
 
 //- Login success callback function
@@ -1726,7 +1694,7 @@ function onDropBoxLogin(_parm){
 </script>
 </head>
 
-	<body onload="initial();" onunload="return unload_body();">
+	<body onload="initial();" onunload="return unload_body();" class="bg">
 	<div id="TopBanner"></div>
 	
 <div id="invitationBg" class="invitepopup_bg">
@@ -1914,7 +1882,7 @@ function onDropBoxLogin(_parm){
 								<#AiDisk_Account#>
 							</th>			
 							<td>
-							  <input type="text" maxlength="32"class="input_32_table" style="height: 23px;" id="cloud_username" name="cloud_username" value="" autocorrect="off" autocapitalize="off">
+							  <input type="text" maxlength="64"class="input_32_table" style="height: 23px;" id="cloud_username" name="cloud_username" value="" autocorrect="off" autocapitalize="off">
 							</td>
 						  </tr>	
 
@@ -1950,34 +1918,12 @@ function onDropBoxLogin(_parm){
 								</select>			
 							</td>
 						  </tr>
-
-						  <tr id="security_code_tr">
-							<th width="30%" style="font-family: Calibri;font-weight: bolder;">
-								<#routerSync_Security_code#>
-							</th>
-							<td>
-								<div style="color:#FC0;"><input id="security_code_field" name="security_code_field" type="text" maxlength="6" class="input_32_table" style="height: 23px;width:100px;margin-right:10px;" autocorrect="off" autocapitalize="off"><#OTP_Auth#></div>
-							</td>
-						  </tr>
-						  <tr height="45px;" id="captcha_tr" style="display:none;">
-							<th width="30%" style="font-family: Calibri;font-weight: bolder;">
-								<#Captcha#>
-							</th>			
-							<td style="height:85px;">
-								<div style="height:25px;"><input id="captcha_field" name="captcha_field" type="text" maxlength="6" class="input_32_table" style="height: 23px;width:100px;margin-top:8px;" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
-								<div id="captcha_hint" style="color:#FC0;height:25px;margin-top:10px;"><#Captcha_note#></div>
-								<div>
-									<iframe id="captcha_iframe" frameborder="0" scrolling="no" src="" style="width:230px;height:80px;*width:210px;*height:87px;margin:-60px 0 0 160px;*margin-left:165px;"></iframe>
-								</div>
-								<div style="color:#FC0;text-decoration:underline;height:35px;margin:-35px 0px 0px 380px;cursor:pointer" onclick="refresh_captcha();"><#CTL_refresh#></div>   
-							</td>
-						  </tr>
 						</table>
 							<div class="apply_gen pop_div_bg" style="margin-top:20px;margin-bottom:10px;display:none;" id="applyDiv">
 	  					<input name="button" type="button" class="button_gen" onclick="showAddTable();" value="<#CTL_Cancel#>"/>
 						<input id="applyBtn" name="button" type="button" class="button_gen" onclick="applyRule()" value="<#CTL_apply#>"/>
 						<input id="authBtn" name="button" type="button" class="button_gen" value="Authenticate"/>
-						<span id="authHint" style="color:#FC0;display:none">Authenticated!</span>
+						<span id="authHint" style="color:#FC0;display:none"><#Authenticated#></span>
 	  				</div>
 </div>
 <table border="0" align="center" cellpadding="0" cellspacing="0" class="content">
@@ -2030,7 +1976,7 @@ function onDropBoxLogin(_parm){
 									<td>&nbsp;&nbsp;</td>
 									<td>
 										<div style="padding:10px;width:95%;font-style:italic;font-size:14px;word-break:break-all;">
-											<#smart_sync_help#> <a href="https://www.asus.com/support/FAQ/1010006/" style="text-decoration:underline;font-weight:bolder;">FAQ</a>
+											<#smart_sync_help#> <a id="faq_link" href="" style="text-decoration:underline;font-weight:bolder;">FAQ</a>
 										</div>
 									</td>
 								</tr>

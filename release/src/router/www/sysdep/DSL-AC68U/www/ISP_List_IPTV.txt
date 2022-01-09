@@ -1,1 +1,1 @@
-../../DSL-N55U/www/ISP_List_IPTV.txt
+../../DSL-AX82U/www/ISP_List_IPTV.txt

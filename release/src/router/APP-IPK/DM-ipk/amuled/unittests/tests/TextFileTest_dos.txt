@@ -1,9 +1,0 @@
- # comment
-abc
-# foo bar
- 
-def ghi 
-
-# xyz
- xyz
- 

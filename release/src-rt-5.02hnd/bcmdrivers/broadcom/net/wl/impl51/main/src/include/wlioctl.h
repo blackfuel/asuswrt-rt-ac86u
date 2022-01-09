@@ -1137,6 +1137,8 @@ typedef struct {
 	uint32			rx_pkts_retried;	/* # rx with retry bit set */
 	uint32			tx_rate_fallback;	/* lowest fallback TX rate */
 	wl_rateset_args_t	rateset_adv;	/* rateset along with mcs index bitmap */
+
+	uint32			wnm_cap;	/* wnm capabilities */
 } sta_info_t;
 
 #define WL_OLD_STAINFO_SIZE	OFFSETOF(sta_info_t, tx_tot_pkts)
@@ -1606,12 +1608,10 @@ typedef struct {
 	uint16 thresh1_40_hi;	/* Radar detection, thresh 1 (range 5470-5725MHz) for BW 40MHz */
 	uint16 thresh0_80_hi;	/* Radar detection, thresh 0 (range 5470-5725MHz) for BW 80MHz */
 	uint16 thresh1_80_hi;	/* Radar detection, thresh 1 (range 5470-5725MHz) for BW 80MHz */
-#ifdef WL11AC160
 	uint16 thresh0_160_lo;	/* Radar detection, thresh 0 (range 5250-5350MHz) for BW 160MHz */
 	uint16 thresh1_160_lo;	/* Radar detection, thresh 1 (range 5250-5350MHz) for BW 160MHz */
 	uint16 thresh0_160_hi;	/* Radar detection, thresh 0 (range 5470-5725MHz) for BW 160MHz */
 	uint16 thresh1_160_hi;	/* Radar detection, thresh 1 (range 5470-5725MHz) for BW 160MHz */
-#endif /* WL11AC160 */
 } wl_radar_thr_t;
 
 #define WL_RADAR_THR_VERSION	2
@@ -7178,5 +7178,11 @@ typedef struct wlc_fbt_action_resp {
 						status code,fbt response frame body
 						*/
 } wlc_fbt_action_resp_t;
+
+/* WET host ip and mac parameter configuration */
+typedef struct wet_host {
+	uint8 buf[6]; /* ip or mac*/
+	uint8 bssidx;
+} wet_host_t;
 
 #endif /* _wlioctl_h_ */

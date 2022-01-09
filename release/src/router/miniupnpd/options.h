@@ -1,8 +1,9 @@
-/* $Id: options.h,v 1.21 2012/06/29 19:26:09 nanard Exp $ */
-/* MiniUPnP project
- * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
+/* $Id: options.h,v 1.32 2020/04/09 18:40:42 nanard Exp $ */
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * MiniUPnP project
+ * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
  * author: Ryan Wagoner
- * (c) 2006-2014 Thomas Bernard
+ * (c) 2006-2020 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -16,10 +17,17 @@
 enum upnpconfigoptions {
 	UPNP_INVALID = 0,
 	UPNPEXT_IFNAME = 1,		/* ext_ifname */
+#ifdef ENABLE_IPV6
+	UPNPEXT_IFNAME6,		/* ext_ifname6 */
+#endif
 	UPNPEXT_IP,				/* ext_ip */
+	UPNPEXT_PERFORM_STUN,		/* ext_perform_stun */
+	UPNPEXT_STUN_HOST,		/* ext_stun_host */
+	UPNPEXT_STUN_PORT,		/* ext_stun_port */
 	UPNPLISTENING_IP,		/* listening_ip */
 #ifdef ENABLE_IPV6
 	UPNPIPV6_LISTENING_IP,		/* listening address for IPv6 */
+	UPNPIPV6_DISABLE,		/* ipv6_disable */
 #endif /* ENABLE_IPV6 */
 	UPNPPORT,				/* "port" / "http_port" */
 #ifdef ENABLE_HTTPS
@@ -51,6 +59,7 @@ enum upnpconfigoptions {
 #ifdef USE_NETFILTER
 	UPNPFORWARDCHAIN,
 	UPNPNATCHAIN,
+	UPNPNATPOSTCHAIN,
 #endif
 #ifdef USE_PF
 	UPNPANCHOR,				/* anchor */
@@ -64,7 +73,16 @@ enum upnpconfigoptions {
 #ifdef ENABLE_LEASEFILE
 	UPNPLEASEFILE,			/* lease_file */
 #endif
+#ifdef ENABLE_AURASYNC
+	UPNPENABLEAURASYNC,
+#endif
+#ifdef ENABLE_NVGFN
+	UPNPENABLENVGFN,
+#endif
 	UPNPMINISSDPDSOCKET,	/* minissdpdsocket */
+#ifdef IGD_V2
+	UPNPFORCEIGDDESCV1,
+#endif
 	UPNPENABLE				/* enable_upnp */
 };
 
@@ -91,4 +109,3 @@ extern unsigned int num_options;
 #endif /* DISABLE_CONFIG_FILE */
 
 #endif /* OPTIONS_H_INCLUDED */
-

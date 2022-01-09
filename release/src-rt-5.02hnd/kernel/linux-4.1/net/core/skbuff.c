@@ -207,6 +207,15 @@ int skb_avail_headroom(const struct sk_buff *skb)
 }
 EXPORT_SYMBOL(skb_avail_headroom);
 
+static inline void bcm_skb_set_end_pointer(struct sk_buff *skb, const int end_offset)
+{
+#ifdef NET_SKBUFF_DATA_USES_OFFSET
+	skb->end = end_offset; 
+#else
+	skb->end = skb->head + end_offset;
+#endif
+}
+
 /**
  *
  *	skb_headerinit  -   initialize a socket buffer header
@@ -236,7 +245,9 @@ void skb_headerinit(unsigned int headroom, unsigned int datalen,
 	skb_set_tail_pointer(skb, datalen);
 	/* FIXME!! check if this alignment is to ensure cache line aligned?
 	 * make sure skb buf ends at 16 bytes boudary */
-	skb->end = skb->tail + (0x10 - (((uintptr_t)skb_tail_pointer(skb)) & 0xf));
+
+	bcm_skb_set_end_pointer(skb, SKB_DATA_ALIGN(headroom + datalen));
+
 	skb->len = datalen;
 
 #if defined(CONFIG_BCM_KF_BLOG) && defined(CONFIG_BLOG)
@@ -864,6 +875,19 @@ static void skb_free_head(struct sk_buff *skb)
 		kfree(skb->head);
 }
 
+static void hex_dump(const unsigned char *buf, int len)
+{
+	size_t i;
+
+	printk("buf %p len %d\n", buf, len);
+	for (i = 0; i < len; i++) {
+		if (i && !(i % 16))
+			printk("\n");
+		printk("%02x ", *(buf + i));
+	}
+	printk("\n");
+}
+
 static void skb_release_data(struct sk_buff *skb)
 {
 	struct skb_shared_info *shinfo = skb_shinfo(skb);
@@ -873,6 +897,15 @@ static void skb_release_data(struct sk_buff *skb)
 	    atomic_sub_return(skb->nohdr ? (1 << SKB_DATAREF_SHIFT) + 1 : 1,
 			      &shinfo->dataref))
 		return;
+
+#if 1 //cathy debug
+	if (!virt_addr_valid(shinfo)) {
+		printk("%s: skb %p head %p end %p data %p tail %p len %d hook %pS flags 0x%x\n",
+			__FUNCTION__, skb, skb->head, skb_end_pointer(skb), skb->data, skb_tail_pointer(skb), skb->len,
+			skb->recycle_hook, skb->recycle_flags);
+		hex_dump(skb->head, skb_end_offset(skb));
+	}
+#endif
 
 	for (i = 0; i < shinfo->nr_frags; i++)
 		__skb_frag_unref(&shinfo->frags[i]);
@@ -1082,6 +1115,10 @@ struct sk_buff *skb_xlate_dp(struct fkbuff * fkb_p, uint8_t *dirty_p)
 	skb_set_tail_pointer(skb_p, fkb_p->len);
 	/* FIXME!! check whether this has to do with the cache line size
 	 * make sure skb buf ends at 16 bytes boudary */
+
+	bcm_skb_set_end_pointer(skb_p, SKB_DATA_ALIGN((skb_p->data -skb_p->head) +
+				fkb_p->len + BCM_SKB_TAILROOM));
+
 	skb_p->end = skb_p->tail + (0x10 - (((uintptr_t)skb_tail_pointer(skb_p)) & 0xf)); 
 
 #define F2S(x) skb_p->x = fkb_p->x
@@ -1780,6 +1817,16 @@ struct sk_buff *skb_morph(struct sk_buff *dst, struct sk_buff *src)
 	recycle_flags = dst->recycle_flags & SKB_RECYCLE;
 	recycle_hook = dst->recycle_hook;
 	recycle_context = dst->recycle_context;
+
+	if (unlikely((src->recycle_flags & SKB_DATA_RECYCLE) &&
+	   ((recycle_hook != src->recycle_hook) ||
+	    (recycle_context != src->recycle_context))))
+	{
+	    /* free the skb->head from src and reallocate from kernel 
+	     * if pskb_expand_head returns fail, unhandled error will be triggered.
+	     * so BUG_ON here. */
+	    BUG_ON(pskb_expand_head(src, 0, 0, GFP_ATOMIC));
+	}
 
 	skb = __skb_clone(dst, src);
 

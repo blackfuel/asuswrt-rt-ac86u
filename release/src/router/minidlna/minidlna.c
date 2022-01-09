@@ -71,7 +71,7 @@
 
 #include <sys/stat.h>
 
-#ifdef RTAC68U
+#if defined(RTAC68U) || defined(RTAX82U)
 #include <shared.h>
 #include <bcmnvram.h>
 #endif
@@ -1130,6 +1130,11 @@ retry:
 #define PATH_ICON_ALT2_PNG_LRG	"/rom/dlna/icon_alt2_lrg.png"
 #define PATH_ICON_ALT2_JPEG_SM	"/rom/dlna/icon_alt2_sm.jpg"
 #define PATH_ICON_ALT2_JPEG_LRG	"/rom/dlna/icon_alt2_lrg.jpg"
+#elif defined(RTAX82U)
+#define PATH_ICON_GD_PNG_SM	"/rom/dlna/icon_gd_sm.png"
+#define PATH_ICON_GD_PNG_LRG	"/rom/dlna/icon_gd_lrg.png"
+#define PATH_ICON_GD_JPEG_SM	"/rom/dlna/icon_gd_sm.jpg"
+#define PATH_ICON_GD_JPEG_LRG	"/rom/dlna/icon_gd_lrg.jpg"
 #endif
 unsigned char buf_png_sm[65536];
 unsigned char buf_png_lrg[65536];
@@ -1154,6 +1159,8 @@ init_icon(const char *iconfile)
 #ifdef RTAC68U
 		|| strcmp(iconfile, PATH_ICON_ALT_PNG_SM) == 0
 		|| strcmp(iconfile, PATH_ICON_ALT2_PNG_SM) == 0
+#elif defined(RTAX82U)
+		|| strcmp(iconfile, PATH_ICON_GD_PNG_SM) == 0
 #endif
 	)
 	{
@@ -1164,6 +1171,8 @@ init_icon(const char *iconfile)
 #ifdef RTAC68U
 		|| strcmp(iconfile, PATH_ICON_ALT_PNG_LRG) == 0
 		|| strcmp(iconfile, PATH_ICON_ALT2_PNG_LRG) == 0
+#elif defined(RTAX82U)
+		|| strcmp(iconfile, PATH_ICON_GD_PNG_LRG) == 0
 #endif
 	)
 	{
@@ -1174,6 +1183,8 @@ init_icon(const char *iconfile)
 #ifdef RTAC68U
 		|| strcmp(iconfile, PATH_ICON_ALT_JPEG_SM) == 0
 		|| strcmp(iconfile, PATH_ICON_ALT2_JPEG_SM) == 0
+#elif defined(RTAX82U)
+		|| strcmp(iconfile, PATH_ICON_GD_JPEG_SM) == 0
 #endif
 	)
 	{
@@ -1184,6 +1195,8 @@ init_icon(const char *iconfile)
 #ifdef RTAC68U
 		|| strcmp(iconfile, PATH_ICON_ALT_JPEG_LRG) == 0
 		|| strcmp(iconfile, PATH_ICON_ALT2_JPEG_LRG) == 0
+#elif defined(RTAX82U)
+		|| strcmp(iconfile, PATH_ICON_GD_JPEG_LRG) == 0
 #endif
 	)
 	{
@@ -1302,6 +1315,13 @@ main(int argc, char **argv)
 		init_icon(PATH_ICON_ALT_JPEG_LRG);
 	}
 	else
+#elif defined(RTAX82U)
+	if (!strncmp(nvram_safe_get("territory_code"), "GD", 2)) {
+		init_icon(PATH_ICON_GD_PNG_SM);
+		init_icon(PATH_ICON_GD_PNG_LRG);
+		init_icon(PATH_ICON_GD_JPEG_SM);
+		init_icon(PATH_ICON_GD_JPEG_LRG);
+	} else
 #endif
 	{
 		init_icon(PATH_ICON_PNG_SM);

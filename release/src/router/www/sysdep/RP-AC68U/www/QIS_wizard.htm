@@ -13,6 +13,7 @@
 <script type="text/javascript" src="js/jquery.mobile.js"></script>
 <script type="text/javascript" src="/require/require.min.js"></script>
 <script type="text/javascript" src="/validator.js"></script>
+<script type="text/javascript" src="/js/https_redirect/https_redirect.js"></script>
 <style>
 body{
 	background-color:#000;
@@ -308,6 +309,10 @@ var tcode = '<% nvram_get("territory_code"); %>';
 var based_modelid = '<% nvram_get("productid"); %>';
 
 $(document).ready(function(){
+	if(Check_Https_Redirect_Status()){
+		Initial_Https_Redirect();
+		return;
+	}
 	if(based_modelid == "RP-AC53" && tcode == "UK/01")
 		 $("#model_image").css("background-image", "url('images/Model_product_UK.png')");
 
@@ -1202,7 +1207,7 @@ function internetCheck(){
 
 	$("#summary_try_button").show();
 	var lang_alise = get_supportsite_lang();
-	url = "http://www.asus.com" + lang_alise + "/Networking/";
+	url = "https://www.asus.com" + lang_alise + "/Networking/";
 	setTimeout('top.location.href =" ' + url + '"', 10000);
 }
 
@@ -1970,7 +1975,7 @@ function validForm(){
 		return false;
 	}
 	else{
-		var alert_str = validator.hostName(document.getElementById("http_username"));
+		var alert_str = validator.host_name(document.getElementById("http_username"));
 
 		if(alert_str != ""){
 			alert(alert_str);
@@ -2014,7 +2019,14 @@ function validForm(){
 	}
 
 	if(httpPassInput.value.length > 0 && httpPassConfirmInput.value.length < 5){
-		alert("<#JS_short_password#>");
+		alert("<#JS_short_password#> <#JS_password_length#>");
+		httpPassInput.focus();
+		httpPassInput.select();
+		return false;
+	}
+
+	if(httpPassInput.value.length > 32){
+		alert("<#JS_max_password#>");
 		httpPassInput.focus();
 		httpPassInput.select();
 		return false;
@@ -2175,7 +2187,7 @@ function genOptions(){
 					<div class="icon_eye_open" style="width:32px;height:32px;display:table-cell;padding-right:110px;" onclick="pass_checked('http_passwd', this)"></div>
 				</div>
 				<div style="margin:22px 55px 41px 30px">
-					<input id="http_passwd" type="text" maxlength="64" style="padding-left:18px;font-family:HelveticaNeueW10-45Ligh,Helvetica,Arial;font-size:1.875em;color:#DBDBDB;" value="" data-clear-btn="true"></input>
+					<input id="http_passwd" type="text" maxlength="33" style="padding-left:18px;font-family:HelveticaNeueW10-45Ligh,Helvetica,Arial;font-size:1.875em;color:#DBDBDB;" value="" data-clear-btn="true"></input>
 				</div>
 			</div>
 			<div style="margin-left:38px;margin-bottom:150px;">
@@ -2183,7 +2195,7 @@ function genOptions(){
 					<div style="HelveticaNeueLT45_Light_regular,Helvetica_regular,Arial;font-size:1.5em;color:#B8D8FF;display:table-cell"><#PASS_retype#></div>
 				</div>
 				<div style="margin:22px 55px 41px 30px">
-					<input id="http_passwd_confirm" type="text" maxlength="64" style="padding-left:18px;font-family:HelveticaNeueW10-45Ligh,Helvetica,Arial;font-size:1.875em;color:#DBDBDB;" value="" data-clear-btn="true"></input>
+					<input id="http_passwd_confirm" type="text" maxlength="33" style="padding-left:18px;font-family:HelveticaNeueW10-45Ligh,Helvetica,Arial;font-size:1.875em;color:#DBDBDB;" value="" data-clear-btn="true"></input>
 				</div>
 			</div>
 
@@ -2317,14 +2329,13 @@ function genOptions(){
 						<div style="width:284px;font-family:HelveticaNeueW10-45Ligh,Helvetica,Arial;font-size:2.5em;color:#FFF;margin:38px 0 38px 46px;"><#QIS_RP_desc9#></div>
 					</td>
 					<td style="padding:0;width:96px">
-						<div style="width:56px;height:56px;background:#FFF;border-radius:20px;padding:20px;margin-right:56px;" onclick="sort_ap('band', 'down')">
-							<!--div class="icon_sort_band_2g" style="width:39px;height:32px;"></div-->
-							<div class="icon_sort_band_2g" style="width:78px;height:64px;background-repeat:no-repeat;background-size:100%;margin-left:-10px;"></div>
+						<div style="width:56px;height:56px;background:#FFF;border-radius:20px;padding:20px;margin-right:56px;" onclick="sort_ap('band', 'top')">
+							<div class="icon_sort_freq_high" style="width:64px;height:64px;background-size:100%;"></div>
 						</div>
 					</td>
 					<td style="padding:0;width:96px">
-						<div style="width:56px;height:56px;background:#FFF;border-radius:20px;padding:20px;margin-right:64px;" onclick="sort_ap('band', 'top')">
-							<div class="icon_sort_band_5g" style="width:46px;height:64px;background-size:100%;margin-left:5px;"></div>
+						<div style="width:56px;height:56px;background:#FFF;border-radius:20px;padding:20px;margin-right:64px;" onclick="sort_ap('band', 'down')">
+							<div class="icon_sort_freq_low" style="width:64px;height:64px;background-size:100%;"></div>
 						</div>
 					</td>
 				</tr>

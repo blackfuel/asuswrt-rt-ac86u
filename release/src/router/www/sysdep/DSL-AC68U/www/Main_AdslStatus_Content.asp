@@ -347,7 +347,7 @@ function showadslbootTime(){
 
 			<table width="760px" border="0" cellpadding="5" cellspacing="0" bordercolor="#6b8fa3"  class="FormTitle" id="FormTitle">
 				<tr>
-					<td bgcolor="#4D595D" height="400px" colspan="3" valign="top">
+					<td bgcolor="#4D595D" height="350px" colspan="3" valign="top">
 						<div>&nbsp;</div>
 						<div class="formfonttitle"><#System_Log#> - <#menu_dsl_log#></div>
 						<div style="margin: 10px 0 10px 5px;" class="splitLine"></div>
@@ -358,14 +358,14 @@ function showadslbootTime(){
 								<th colspan="2"><#DSL_info#></th>
 							</tr>
 							</thead>
-							<tr>
+							<tr id="tr_dsl_fwver">
 								<th width="36%">DSL <#FW_item2#></th>
 								<td colspan="2">
 									<% nvram_get("dsllog_fwver"); %>
 								</td>
 							</tr>
 							<tr>
-								<th><#adsl_fw_ver_itemname#></th>
+								<th width="36%"><#adsl_fw_ver_itemname#></th>
 								<td colspan="2">
 									<% nvram_get("dsllog_drvver"); %>
 								</td>
@@ -524,7 +524,7 @@ function showadslbootTime(){
 									<div id="div_INPUp"><% nvram_get("dsllog_inpup"); %></div>
 								</td>
 							</tr>
-							<tr>
+							<tr id="tr_inp_shine">
 								<th>INP-SHINE</th>
 								<td>
 									<div id="div_INPSHINEDown"><% nvram_get("dsllog_inpshinedown"); %></div>

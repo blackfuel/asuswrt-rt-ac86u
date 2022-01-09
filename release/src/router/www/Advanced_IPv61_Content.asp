@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <html xmlns:v>
 <head>
@@ -48,11 +48,11 @@ var ipv6_service_opt = new Array(	new Array("<#btn_disable#>", "disabled"),
 new Array("SLAAC", "slaac"),
 new Array("ICMPv6", "icmp6")
 */
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=108";
 
 function initial(){	
 	show_menu();	
-	// https://www.asus.com/US/support/FAQ/113990
-	httpApi.faqURL("113990", function(url){document.getElementById("faq").href=url;});
+	document.getElementById("faq").href=faq_href;
 	if(!IPv6_Passthrough_support){
 		$("#ipv61_service option[value='ipv6pt']").remove();
 		$("#ipv61_service option[value='flets']").remove();
@@ -78,12 +78,15 @@ function initial(){
 
 function showInputfield(v){
 	if(v == "dhcp6"){
-		if(wan_proto_orig == "l2tp" || wan_proto_orig == "pptp" || wan_proto_orig == "pppoe")
+		if(wan_proto_orig == "l2tp" || wan_proto_orig == "pptp" || wan_proto_orig == "pppoe"){
 			inputCtrl(document.form.ipv61_ifdev_select, 1);
-		else
+			showInputfield2('ipv61_ifdev', document.form.ipv61_ifdev_select.value);
+		}else{
 			inputCtrl(document.form.ipv61_ifdev_select, 0);
-		inputCtrl(document.form.ipv61_dhcp_pd[0], 1);	
-		inputCtrl(document.form.ipv61_dhcp_pd[1], 1);		
+			showInputfield2('ipv61_ifdev', 0);
+		}
+		inputCtrl(document.form.ipv61_dhcp_pd[0], 1);
+		inputCtrl(document.form.ipv61_dhcp_pd[1], 1);
 		inputCtrl(document.form.ipv61_tun_v4end, 0);
 		inputCtrl(document.form.ipv61_relay, 0);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 0);
@@ -155,6 +158,7 @@ function showInputfield(v){
 			inputCtrl(document.form.ipv61_ifdev_select, 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);
+		showInputfield2('ipv61_ifdev', 0);
 		inputCtrl(document.form.ipv61_tun_v4end, 0);
 		inputCtrl(document.form.ipv61_relay, 0);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 0);
@@ -195,7 +199,8 @@ function showInputfield(v){
 	else if(v == "6to4"){
 		inputCtrl(document.form.ipv61_ifdev_select, 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);
-		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);	
+		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);
+		showInputfield2('ipv61_ifdev', 0);
 		inputCtrl(document.form.ipv61_tun_v4end, 0);
 		inputCtrl(document.form.ipv61_relay, 1);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 0);
@@ -245,7 +250,8 @@ function showInputfield(v){
 	else if(v == "6in4"){
 		inputCtrl(document.form.ipv61_ifdev_select, 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);
-		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);	
+		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);
+		showInputfield2('ipv61_ifdev', 0);
 		inputCtrl(document.form.ipv61_tun_v4end, 1);
 		inputCtrl(document.form.ipv61_relay, 0);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 0);
@@ -295,6 +301,7 @@ function showInputfield(v){
 		inputCtrl(document.form.ipv61_ifdev_select, 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);
+		showInputfield2('ipv61_ifdev', 0);
 		inputCtrl(document.form.ipv61_tun_v4end, 0);
 		inputCtrl(document.form.ipv61_relay, 0);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 1);
@@ -340,8 +347,9 @@ function showInputfield(v){
 			inputCtrl(document.form.ipv61_ifdev_select, 1);
 		else
 			inputCtrl(document.form.ipv61_ifdev_select, 0);
-		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);	
-		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);	
+		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);
+		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);
+		showInputfield2('ipv61_ifdev', 0);
 		inputCtrl(document.form.ipv61_tun_v4end, 0);
 		inputCtrl(document.form.ipv61_relay, 0);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 0);
@@ -404,7 +412,8 @@ function showInputfield(v){
 	else{		// disabled
 		inputCtrl(document.form.ipv61_ifdev_select, 0);
 		inputCtrl(document.form.ipv61_dhcp_pd[0], 0);
-		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);	
+		inputCtrl(document.form.ipv61_dhcp_pd[1], 0);
+		showInputfield2('ipv61_ifdev', 0);
 		inputCtrl(document.form.ipv61_tun_v4end, 0);
 		inputCtrl(document.form.ipv61_relay, 0);
 		inputCtrl(document.form.ipv61_6rd_dhcp[0], 0);
@@ -549,6 +558,10 @@ function showInputfield2(s, v){
 				document.form.ipv61_dhcp_start_start.value = ipv61_dhcp_start_orig.split("::")[1];
 				document.form.ipv61_dhcp_end_end.value = ipv61_dhcp_end_orig.split("::")[1];
 		}
+	}else if(s=='ipv61_ifdev'){
+		var enable = (document.form.ipv61_service.value == "dhcp6" && v == "ppp") ? 1 : 0;
+		inputCtrl(document.form._ipv61_accept_defrtr[0], enable);
+		inputCtrl(document.form._ipv61_accept_defrtr[1], enable);
 	}
 }
 // } Viz 2013.08 modify for dhcp-pd 
@@ -600,20 +613,6 @@ function valid_IP(obj_name, obj_flag){
 			ip_obj.select();
 			return false;
 		}
-}
-
-function ipv6_valid(obj){
-	//var rangere=new RegExp("^[a-f0-9]{1,4}:([a-f0-9]{0,4}:){2,6}[a-f0-9]{1,4}$", "gi");	
-	var rangere=new RegExp("^((([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){6}:[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){5}:([0-9A-Fa-f]{1,4}:)?[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){4}:([0-9A-Fa-f]{1,4}:){0,2}[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){3}:([0-9A-Fa-f]{1,4}:){0,3}[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){2}:([0-9A-Fa-f]{1,4}:){0,4}[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){6}((\\b((25[0-5])|(1\\d{2})|(2[0-4]\\d)|(\\d{1,2}))\\b)\\.){3}(\\b((25[0-5])|(1\\d{2})|(2[0-4]\\d)|(\\d{1,2}))\\b))|(([0-9A-Fa-f]{1,4}:){0,5}:((\\b((25[0-5])|(1\\d{2})|(2[0-4]\\d)|(\\d{1,2}))\\b)\\.){3}(\\b((25[0-5])|(1\\d{2})|(2[0-4]\\d)|(\\d{1,2}))\\b))|(::([0-9A-Fa-f]{1,4}:){0,5}((\\b((25[0-5])|(1\\d{2})|(2[0-4]\\d)|(\\d{1,2}))\\b)\\.){3}(\\b((25[0-5])|(1\\d{2})|(2[0-4]\\d)|(\\d{1,2}))\\b))|([0-9A-Fa-f]{1,4}::([0-9A-Fa-f]{1,4}:){0,5}[0-9A-Fa-f]{1,4})|(::([0-9A-Fa-f]{1,4}:){0,6}[0-9A-Fa-f]{1,4})|(([0-9A-Fa-f]{1,4}:){1,7}:))$", "gi");
-	if(rangere.test(obj.value)){
-			//alert(obj.value+"good");	
-			return true;
-	}else{
-			alert(obj.value+" <#JS_validip#>");
-			obj.focus();
-			obj.select();			
-			return false;
-	}	
 }
 
 function GetIPv6_split(obj){
@@ -678,19 +677,19 @@ function calcIP6(ip) {
 function validForm(){
 	
 	if(document.form.ipv61_service.value=="other"){
-		if(!ipv6_valid(document.form.ipv61_ipaddr) || 
+		if(!validator.isLegal_ipv6(document.form.ipv61_ipaddr) ||
 				!validator.range(document.form.ipv61_prefix_len_wan, 3, 128)){
 				return false;
 		}
 		if(document.form.ipv61_gateway.value != "" &&
-				!ipv6_valid(document.form.ipv61_gateway)){
+				!validator.isLegal_ipv6(document.form.ipv61_gateway)){
 				return false;
 		}
 		
 				// stateful autconf eats 16 bits of 128
 		if(!validator.range(document.form.ipv61_prefix_length, 3,
 				document.form.ipv61_autoconf_type[1].checked ? 112 : 126) ||
-				!ipv6_valid(document.form.ipv61_rtr_addr)){
+				!validator.isLegal_ipv6(document.form.ipv61_rtr_addr)){
 				return false;
 		}
 
@@ -720,7 +719,7 @@ function validForm(){
 			// stateful autconf eats 16 bits of 128
 			if(!validator.range(document.form.ipv61_prefix_length, 3,
 				document.form.ipv61_autoconf_type[1].checked ? 112 : 126) ||
-				!ipv6_valid(document.form.ipv61_rtr_addr)){
+				!validator.isLegal_ipv6(document.form.ipv61_rtr_addr)){
 				return false;	
 			}
 		}
@@ -759,11 +758,11 @@ function validForm(){
 	    document.form.ipv61_service.value=="other" ||
 	    document.form.ipv61_service.value=="6to4" || document.form.ipv61_service.value=="6in4" || document.form.ipv61_service.value=="6rd"){
 		if(document.form.ipv61_dns1.value != "")
-			if(!ipv61_valid(document.form.ipv61_dns1)) return false;
+			if(!validator.isLegal_ipv6(document.form.ipv61_dns1)) return false;
 		if(document.form.ipv61_dns2.value != "")
-			if(!ipv61_valid(document.form.ipv61_dns2)) return false;
+			if(!validator.isLegal_ipv6(document.form.ipv61_dns2)) return false;
 		if(document.form.ipv61_dns3.value != "")
-			if(!ipv61_valid(document.form.ipv61_dns3)) return false;
+			if(!validator.isLegal_ipv6(document.form.ipv61_dns3)) return false;
 	}
 
 	if(document.form.ipv61_service.value=="6to4"){
@@ -772,11 +771,11 @@ function validForm(){
 	
 	if(document.form.ipv61_service.value=="6in4"){
 			if(!validator.ipRange(document.form.ipv61_tun_v4end, "")) return false;  //6in4 tun endpoint	
-			if(!ipv6_valid(document.form.ipv61_tun_addr)) return false;  //6in4 Client IPv6 Address			
+			if(!validator.isLegal_ipv6(document.form.ipv61_tun_addr)) return false;  //6in4 Client IPv6 Address
 			if(!validator.range(document.form.ipv61_tun_addrlen, 3, 128))  return false;
-			if(document.form.ipv61_tun_peer.value != "" && !ipv6_valid(document.form.ipv61_tun_peer)) return false;
+			if(document.form.ipv61_tun_peer.value != "" && !validator.isLegal_ipv6(document.form.ipv61_tun_peer)) return false;
 			if(!validator.range(document.form.ipv61_prefix_length, 3, 126) ||
-					!ipv6_valid(document.form.ipv61_prefix)){
+					!validator.isLegal_ipv6(document.form.ipv61_prefix)){
 					return false;
 			}
 	}		
@@ -784,7 +783,7 @@ function validForm(){
 	if(document.form.ipv61_service.value=="6rd" && document.form.ipv61_6rd_dhcp[1].checked){
 			if(!validator.ipRange(document.form.ipv61_6rd_router, "")) return false;  //6rd ip4 router
 			if(!validator.range(document.form.ipv61_6rd_ip4size, 0, 32)) return false;  //6rd ip4 router mask length
-			if(!ipv6_valid(document.form.ipv61_6rd_prefix) ||
+			if(!validator.isLegal_ipv6(document.form.ipv61_6rd_prefix) ||
 					!validator.range(document.form.ipv61_6rd_prefixlen, 3,
 					126 - (32 - document.form.ipv61_6rd_ip4size.value))){
 					return false;
@@ -804,7 +803,10 @@ function applyRule(){
 				document.form.ipv61_prefix_length.disabled = false;
 				document.form.ipv61_prefix.disabled = false;
 			}
-				
+
+			document.form.ipv61_accept_defrtr.disabled = false;
+			document.form.ipv61_accept_defrtr.value = document.form._ipv61_accept_defrtr[0].checked?1:0;
+
 			if(document.form.ipv61_autoconf_type[1].checked){
 				document.form.ipv61_dhcp_start.disabled = false;
 				document.form.ipv61_dhcp_start.value = document.form.ipv61_prefix_span_for_start.value +"::"+document.form.ipv61_dhcp_start_start.value;
@@ -813,7 +815,7 @@ function applyRule(){
 			}
 		}
 
-		if(document.form.ipv61_service.value=="flets"){
+		if(IPv6_Passthrough_support && document.form.ipv61_service.value=="flets"){
 			inputCtrl(document.form.ipv61_ifdev_select, 1);
 			document.form.ipv61_ifdev.value = "eth";
 		}else if(document.form.ipv61_ifdev_select.disabled){	// set ipv6_ifdev="ppp" while interface is disabled.
@@ -844,6 +846,8 @@ function applyRule(){
 				document.form.ipv61_prefix_s.value = document.form.ipv61_prefix.value;
 		}
 		//End
+
+		document.form.ipv61_radvd.value = document.form._ipv61_radvd[0].checked?1:0;
 
 		/*if(machine_arm)	//Viz 2013.06 Don't need to reboot anymore
 		{ // MODELDEP: Machine ARM structure
@@ -929,6 +933,13 @@ function genWANSoption(){
 				
 			document.form.wan_selection.options[i] = new Option(wans_dualwan_NAME, i);
 		}
+
+		if(based_modelid == "GT-AXY16000" || based_modelid == "RT-AX89U"){
+			if(wans_dualwan_NAME == "WAN2")
+				document.form.wan_selection.options[i] = new Option("10G base-T", i);
+			else if(wans_dualwan_NAME == "SFP+")
+				document.form.wan_selection.options[i] = new Option("10G SFP+", i);
+		}
 	}
 
 	document.form.wan_selection.selectedIndex = parseInt(ipv6_unit);
@@ -937,7 +948,7 @@ function genWANSoption(){
 </script>
 </head>
 
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="hiddenMask" class="popup_bg">
 	<table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center">
@@ -974,6 +985,8 @@ function genWANSoption(){
 <input type="hidden" name="ipv61_prefix_length_s" value="">
 <input type="hidden" name="ipv61_rtr_addr_s" value="">
 <input type="hidden" name="ipv61_prefix_s" value="">
+<input type="hidden" name="ipv61_radvd" value="<% nvram_get("ipv61_radvd"); %>">
+<input type="hidden" name="ipv61_accept_defrtr" value="<% nvram_get("ipv61_accept_defrtr"); %>" disabled>
 <table class="content" align="center" cellpadding="0" cellspacing="0">
   <tr>
 	<td width="17">&nbsp;</td>
@@ -1021,13 +1034,13 @@ function genWANSoption(){
 		     		<td>
 							<select id="ipv61_service" name="ipv61_service" class="input_option" onchange="showInputfield(this.value);">
 								<option value="disabled" <% nvram_match("ipv61_service", "disabled", "selected"); %>><#btn_disable#></option>
-								<option value="dhcp6" <% nvram_match("ipv61_service", "dhcp6", "selected"); %>>Native</option>
+								<option value="dhcp6" <% nvram_match("ipv61_service", "dhcp6", "selected"); %>><#IPv6_native#></option>
 								<option value="other" <% nvram_match("ipv61_service", "other", "selected"); %>><#IPv6_static_IP#></option>
-								<option value="ipv6pt" <% nvram_match("ipv61_service", "ipv6pt", "selected"); %>>Passthrough</option>
-								<option value="flets" <% nvram_match("ipv61_service", "flets", "selected"); %>>FLET'S IPv6 service</option>
-								<option value="6to4" <% nvram_match("ipv61_service", "6to4", "selected"); %>>Tunnel 6to4</option>
-								<option value="6in4" <% nvram_match("ipv61_service", "6in4", "selected"); %>>Tunnel 6in4</option>
-								<option value="6rd" <% nvram_match("ipv61_service", "6rd", "selected"); %>>Tunnel 6rd</option>
+								<option value="ipv6pt" <% nvram_match("ipv61_service", "ipv6pt", "selected"); %>><#ipv6_passthrough#></option>
+								<option value="flets" <% nvram_match("ipv61_service", "flets", "selected"); %>><#ipv6_flets#></option>
+								<option value="6to4" <% nvram_match("ipv61_service", "6to4", "selected"); %>><#ipv6_tunnel_6to4#></option>
+								<option value="6in4" <% nvram_match("ipv61_service", "6in4", "selected"); %>><#ipv6_tunnel_6in4#></option>
+								<option value="6rd" <% nvram_match("ipv61_service", "6rd", "selected"); %>><#ipv6_tunnel_6rd#></option>
 								<!--option value="slaac" <% nvram_match("ipv61_service", "slaac", "selected"); %>>SLAAC</option-->
 								<!--option value="icmp6" <% nvram_match("ipv61_service", "icmp6", "selected"); %>>ICMPv6</option-->
 							</select>
@@ -1037,7 +1050,7 @@ function genWANSoption(){
 				<tr>
 					<th><#wan_interface#></th>
 		     		<td>
-						<select name="ipv61_ifdev_select" class="input_option">
+						<select name="ipv61_ifdev_select" class="input_option" onchange="showInputfield2('ipv61_ifdev', this.value);">
 							<option class="content_input_fd" value="ppp" <% nvram_match("ipv61_ifdev", "ppp","selected"); %>>PPP</option>
 							<option class="content_input_fd" value="eth" <% nvram_match("ipv61_ifdev", "eth","selected"); %>><#wan_ethernet#></option>
 						</select>
@@ -1051,6 +1064,13 @@ function genWANSoption(){
 						<input type="radio" name="ipv61_dhcp_pd" class="input" value="0" onclick="showInputfield2('ipv61_dhcp_pd', this.value);" <% nvram_match("ipv61_dhcp_pd", "0","checked"); %>><#btn_disable#>
 		     		</td>
 		     	</tr>
+		     	<tr style="display:none;"><!-- Viz add ipv6_accept_defrtr 2019.01-->
+					<th><#ipv6_default_route#></th>
+					<td>
+						<input type="radio" name="_ipv61_accept_defrtr" class="input" value="1" <% nvram_match("ipv61_accept_defrtr", "1","checked"); %>><#WLANConfig11b_WirelessCtrl_button1name#>
+						<input type="radio" name="_ipv61_accept_defrtr" class="input" value="0" <% nvram_match("ipv61_accept_defrtr", "0","checked"); %>><#btn_disable#>
+					</td>
+				</tr>
 
 				<tr style="display:none;">
 					<th><#IPv6_tun_v4end#></th>
@@ -1282,15 +1302,13 @@ function genWANSoption(){
 						<td colspan="2"><#ipv6_auto_config#></td>
 				  </tr>
 				  </thead>		
-					<tr>
+				  <tr>
 						<th><#Enable_Router_AD#></th>
-		     		<td>
-							<select name="ipv61_radvd" class="input_option">
-								<option class="content_input_fd" value="1" <% nvram_match("ipv61_radvd", "1","selected"); %>><#WLANConfig11b_WirelessCtrl_button1name#></option>
-								<option class="content_input_fd" value="0" <% nvram_match("ipv61_radvd", "0","selected"); %>><#btn_disable#></option>
-							</select>
-		     		</td>
-		     	</tr>
+		     			<td>
+							<input type="radio" name="_ipv61_radvd" class="input" value="1" <% nvram_match("ipv61_radvd", "1","checked"); %>><#WLANConfig11b_WirelessCtrl_button1name#>
+							<input type="radio" name="_ipv61_radvd" class="input" value="0" <% nvram_match("ipv61_radvd", "0","checked"); %>><#btn_disable#>
+		     			</td>
+		     	  </tr>
 			</table>
 			<!--====================================Auto Config end===============================-->  	
 				

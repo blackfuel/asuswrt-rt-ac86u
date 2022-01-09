@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <typedefs.h>
+#include <limits.h>		//PATH_MAX, LONG_MIN, LONG_MAX
 #include <bcmnvram.h>
 #include <sys/ioctl.h>
 #include <qca.h>
@@ -25,6 +26,8 @@
 #endif
 #include <linux_gpio.h>
 
+#include "flash_mtd.h"		//FRead()
+
 typedef uint32_t __u32;
 
 /////// copy from qca-wifi
@@ -32,10 +35,25 @@ typedef uint32_t __u32;
 #define IEEE80211_IOCTL_GETCHANINFO     (SIOCIWFIRSTPRIV+7)
 typedef unsigned int	u_int;
 
+#if defined(RTCONFIG_SPF11_4_QSDK)
+/* SPF11.4 or above */
+struct ieee80211_channel {
+    uint8_t ieee;
+    uint16_t ic_freq;
+    uint64_t flags;
+    uint32_t flags_ext;
+    uint8_t vhtop_ch_num_seg1;
+    uint8_t vhtop_ch_num_seg2;
+};
+#else
 struct ieee80211_channel {
     u_int16_t       ic_freq;        /* setting in Mhz */
+#if defined(RTCONFIG_WIFI_QCN5024_QCN5054) || defined(RTCONFIG_QCA_AXCHIP) || defined(RTCONFIG_QSDK10CS)
+    u_int64_t       ic_flags;       /* see below */
+#else
     u_int32_t       ic_flags;       /* see below */
-#if defined(RTCONFIG_WIFI_QCA9994_QCA9994) || defined(RTCONFIG_WIFI_QCA9990_QCA9990)
+#endif
+#if defined(RTCONFIG_WIFI_QCN5024_QCN5054) || defined(RTCONFIG_QCA_AXCHIP) || defined(RTCONFIG_QSDK10CS)
     u_int16_t        ic_flagext;     /* see below */
 #else
     u_int8_t        ic_flagext;     /* see below */
@@ -50,6 +68,7 @@ struct ieee80211_channel {
     u_int8_t        ic_vhtop_ch_freq_seg2;         /* Channel Center frequency applicable
                                                   * for 80+80MHz mode of operation */ 
 };
+#endif
 
 struct ieee80211req_chaninfo {
 	u_int	ic_nchans;
@@ -74,6 +93,11 @@ ieee80211_mhz2ieee(u_int freq)
             return 15 + ((freq - 2512) / 20);
         }
     }
+#ifdef RTCONFIG_WIFI6E
+    if (freq >= 6115 && freq <= 7115) {
+	    return (freq - 5950) / 5;
+    }
+#endif
     if (freq >= 58320 && freq <= 69120) {	/* 802.11ad Wigig */
 	    return (freq - 58320) / 2160 + 1;
     }
@@ -81,19 +105,25 @@ ieee80211_mhz2ieee(u_int freq)
 }
 /////////////
 
-#if defined(RTCONFIG_WIFI_QCA9557_QCA9882) || defined(RTCONFIG_QCA953X) || defined(RTCONFIG_QCA956X) || defined(RTCONFIG_SOC_IPQ40XX)
+#if defined(RTCONFIG_WIFI_QCA9557_QCA9882) || defined(RTCONFIG_QCA953X) || defined(RTCONFIG_QCA956X) || defined(RTCONFIG_QCN550X) || defined(RTCONFIG_SOC_IPQ40XX)
 const char WIF_5G[] = "ath1";
 const char WIF_2G[] = "ath0";
 const char STA_5G[] = "sta1";
 const char STA_2G[] = "sta0";
 const char VPHY_5G[] = "wifi1";
 const char VPHY_2G[] = "wifi0";
+#if defined(RTCONFIG_CFG80211)
+const char WSUP_DRV[] = "nl80211";
+#else
 const char WSUP_DRV[] = "athr";
+#endif
 const char BR_GUEST[] = "brg0";
 const char WIF_5G_BH[] = "ath101";
 const char APMODE_BRGUEST_IP[]="192.168.55.1";
-#elif defined(RTCONFIG_WIFI_QCA9990_QCA9990) || defined(RTCONFIG_WIFI_QCA9994_QCA9994)
-#if defined(RTAC88N)
+#elif defined(RTCONFIG_WIFI_QCA9990_QCA9990) || \
+      defined(RTCONFIG_WIFI_QCA9994_QCA9994) || \
+      defined(RTCONFIG_WIFI_QCN5024_QCN5054)
+#if defined(GTAXY16000) || defined(GTAX6000N) || defined(RTAX89U) || defined(RTAC88N)
 const char WIF_5G[] = "ath0";
 const char WIF_2G[] = "ath1";
 const char STA_5G[] = "sta0";
@@ -108,6 +138,13 @@ const char STA_5G[] = "sta1";
 const char STA_2G[] = "sta0";
 const char VPHY_5G[] = "wifi1";
 const char VPHY_2G[] = "wifi0";
+#elif defined(RTCONFIG_SOC_IPQ60XX) // imply RTCONFIG_WIFI_QCN5024_QCN5054
+const char WIF_5G[] = "ath0";
+const char WIF_2G[] = "ath1";
+const char STA_5G[] = "sta0";
+const char STA_2G[] = "sta1";
+const char VPHY_5G[] = "wifi0";
+const char VPHY_2G[] = "wifi1";
 #else
 /* BRT-AC828, RT-AC88S */
 const char WIF_5G[] = "ath1";
@@ -117,15 +154,58 @@ const char STA_2G[] = "sta0";
 const char VPHY_5G[] = "wifi1";
 const char VPHY_2G[] = "wifi0";
 #endif
+#if defined(RTCONFIG_CFG80211)
+const char WSUP_DRV[] = "nl80211";
+#else
 const char WSUP_DRV[] = "athr";
+#endif
+#elif defined(RTCONFIG_SOC_IPQ60XX)
+const char WIF_5G[] = "ath0";
+const char WIF_2G[] = "ath1";
+const char STA_5G[] = "sta0";
+const char STA_2G[] = "sta1";
+const char VPHY_5G[] = "wifi0";
+const char VPHY_2G[] = "wifi1";
+#if defined(RTCONFIG_CFG80211)
+const char WSUP_DRV[] = "nl80211";
+#else
+const char WSUP_DRV[] = "athr";
+#endif
+#elif defined(RTCONFIG_SOC_IPQ50XX)
+#if defined(ETJ)
+const char WIF_5G[] = "ath2";
+const char WIF_2G[] = "ath0";
+const char STA_5G[] = "sta2";
+const char STA_2G[] = "sta0";
+const char VPHY_5G[] = "wifi2";
+const char VPHY_2G[] = "wifi0";
+#else
+const char WIF_5G[] = "ath1";
+const char WIF_2G[] = "ath0";
+const char STA_5G[] = "sta1";
+const char STA_2G[] = "sta0";
+const char VPHY_5G[] = "wifi1";
+const char VPHY_2G[] = "wifi0";
+#endif
+#if defined(RTCONFIG_CFG80211)
+const char WSUP_DRV[] = "nl80211";
+#else
+const char WSUP_DRV[] = "athr";
+#endif
 #else
 #error Define WiFi 2G/5G interface name!
 #endif
 
 #if defined(RTCONFIG_HAS_5G_2)
+#if defined(ETJ)
+const char WIF_5G2[] = "ath1";
+const char STA_5G2[] = "sta1";
+const char VPHY_5G2[] = "wifi1";
+#else
 const char WIF_5G2[] = "ath2";
 const char STA_5G2[] = "sta2";
 const char VPHY_5G2[] = "wifi2";
+#endif
 #else
 const char WIF_5G2[] = "xxx";
 const char STA_5G2[] = "xxx";
@@ -135,7 +215,7 @@ const char VPHY_5G2[] = "xxx";
 #if defined(RTCONFIG_WIGIG)
 const char WIF_60G[] = "wlan0";
 const char STA_60G[] = "wlan0";
-const char VPHY_60G[] = "phy0";
+const char VPHY_60G[] = "phy2";
 const char WSUP_DRV_60G[] = "nl80211";
 #else
 const char WIF_60G[] = "xxx";
@@ -143,6 +223,20 @@ const char STA_60G[] = "xxx";
 const char VPHY_60G[] = "xxx";
 const char WSUP_DRV_60G[] = "xxx";
 #endif
+
+const char *max_2g_ax_mode = "11GHE";	/* B,G,N,AX */
+const char *max_5g_ax_mode = "11AHE";	/* A,N,AC,AX */
+const char *max_2g_n_mode = "11NG";	/* B,G,N */
+const char *max_5g_ac_mode = "11ACV";	/* A,N,AC */
+
+/* [0]: 11AC
+ * [1]: 11AX
+ */
+const char *bw20[2] = { "HT20", "20" };
+const char *bw40[2] = { "HT40", "40" };
+const char *bw80[2] = { "HT80", "80" };
+const char *bw80_80_tbl[2] = { "HT80_80", "80_80" };
+const char *bw160_tbl[2] = { "HT160", "160" };
 
 #define GPIOLIB_DIR	"/sys/class/gpio"
 #ifdef RTCONFIG_LEDS_CLASS
@@ -188,6 +282,33 @@ uint32_t gpio_dir(uint32_t gpio, int dir)
 	__export_gpio(gpio);
 	snprintf(path, sizeof(path), "%s/gpio%d/direction", GPIOLIB_DIR, gpio);
 	f_write_string(path, dir_str, 0, 0);
+
+	return 0;
+}
+
+#define PWM_SYS_PREFIX	"/sys/class/pwm/pwmchip0"
+uint32_t pwm_export(uint8_t channel, uint32_t period, uint32_t duty_cycle)
+{
+	char path[PATH_MAX], tmpbuf[20];
+
+	if (!d_exists(PWM_SYS_PREFIX))
+		return -1;
+
+	snprintf(tmpbuf, sizeof(tmpbuf), "%u", channel);
+	f_write_string(PWM_SYS_PREFIX"/export", tmpbuf, 0, 0);
+
+	snprintf(path, sizeof(path), PWM_SYS_PREFIX"/pwm%u/period", channel);
+	snprintf(tmpbuf, sizeof(tmpbuf), "%u", period);
+	f_write_string(path, tmpbuf, 0, 0);
+
+	snprintf(path, sizeof(path), PWM_SYS_PREFIX"/pwm%u/duty_cycle", channel);
+	snprintf(tmpbuf, sizeof(tmpbuf), "%u", duty_cycle);
+	f_write_string(path, tmpbuf, 0, 0);
+
+	// toggle enable to make the status correct
+	snprintf(path, sizeof(path), PWM_SYS_PREFIX"/pwm%u/enable", channel);
+	f_write_string(path, "1", 0, 0);
+	f_write_string(path, "0", 0, 0);
 
 	return 0;
 }
@@ -329,43 +450,45 @@ void set_radio(int on, int unit, int subunit)
 	int sub = (subunit >= 0) ? subunit : 0;
 	char tmp[100], prefix[] = "wlXXXXXXXXXXXXXX", athfix[]="athXXXXXX";
 	char path[sizeof(NAWDS_SH_FMT) + 6], wds_iface[IFNAMSIZ] = "";
-#if defined(RTCONFIG_WIGIG)
-	char conf_path[sizeof("/etc/Wireless/conf/hostapd_athXXX.confYYYYYY")];
-	char pid_path[sizeof("/var/run/hostapd_athXXX.pidYYYYYY")];
-	char entropy_path[sizeof("/var/run/entropy_athXXX.binYYYYYY")];
-#endif
 
-	switch (unit) {
-		case WL_2G_BAND:
-			strlcpy(wds_iface, WIF_2G, sizeof(wds_iface));
-			break;
-#if defined(RTCONFIG_HAS_5G)
-		case WL_5G_BAND:
-			strlcpy(wds_iface, WIF_5G, sizeof(wds_iface));
-			break;
-#endif
-#if defined(RTCONFIG_HAS_5G_2)
-		case WL_5G_2_BAND:
-			strlcpy(wds_iface, WIF_5G2, sizeof(wds_iface));
-			break;
-#endif
-#if defined(RTCONFIG_WIGIG)
-		case WL_60G_BAND:
-			strlcpy(wds_iface, WIF_60G, sizeof(wds_iface));
-			snprintf(pid_path, sizeof(pid_path), "/var/run/hostapd_%s.pid", WIF_60G);
-			if (on) {
-				snprintf(conf_path, sizeof(conf_path), "/etc/Wireless/conf/hostapd_%s.conf", WIF_60G);
-				snprintf(entropy_path, sizeof(entropy_path), "/var/run/entropy_%s.bin", WIF_60G);
-				eval("hostapd", "-d", "-B", conf_path, "-P", pid_path, "-e", entropy_path);
-			} else {
-				kill_pidfile(pid_path);
-			}
-			break;
-#endif
-		default:
-			dbg("%s: wl%d is not supported!\n", __func__, unit);
+	if (unit < WL_2G_BAND || unit >= WL_NR_BANDS) {
+		dbg("%s: wl%d is not supported!\n", __func__, unit);
+		return;
 	}
 
+#if defined(RTCONFIG_SOC_IPQ8074)
+	if(sub)
+	{
+		snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, sub);
+		strcpy(wds_iface, nvram_safe_get(strcat_r(prefix, "ifname", tmp)));
+	}	
+	else	
+		strlcpy(wds_iface, get_wififname(unit), sizeof(wds_iface));
+
+#if defined(RTCONFIG_SINGLE_HOSTAPD)
+		if (on) {
+			char bss_cfg[sizeof("bss_config=") + IFNAMSIZ + sizeof(":/etc/Wireless/conf/hostapd_XXX.conf") + IFNAMSIZ];
+
+			snprintf(bss_cfg, sizeof(bss_cfg), "bss_config=%s:/etc/Wireless/conf/hostapd_%s.conf", wds_iface, wds_iface);
+			eval(QWPA_CLI, "-g", QHOSTAPD_CTRL_IFACE, "raw", "ADD", bss_cfg);
+		} else {
+			eval(QWPA_CLI, "-g", QHOSTAPD_CTRL_IFACE, "raw", "REMOVE", wds_iface);
+		}
+#else
+		char conf_path[sizeof("/etc/Wireless/conf/hostapd_athXXX.confYYYYYY")];
+		char pid_path[sizeof("/var/run/hostapd_athXXX.pidYYYYYY")];
+		char entropy_path[sizeof("/var/run/entropy_athXXX.binYYYYYY")];
+
+		snprintf(pid_path, sizeof(pid_path), "/var/run/hostapd_%s.pid", wds_iface);
+		if (on) {
+			snprintf(conf_path, sizeof(conf_path), "/etc/Wireless/conf/hostapd_%s.conf", wds_iface);
+			snprintf(entropy_path, sizeof(entropy_path), "/var/run/entropy_%s.bin", wds_iface);
+			eval("hostapd", "-d", "-B", "-P", pid_path, "-e", entropy_path, conf_path);
+		} else {
+			kill_pidfile(pid_path);
+		}
+#endif
+#endif
 	do {
 		if (sub > 0)
 			snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, sub);
@@ -378,6 +501,15 @@ void set_radio(int on, int unit, int subunit)
 			_dprintf("%s: unit %d-%d, %s\n", __func__, unit, sub, (on?"on":"off"));
 			if (unit != WL_60G_BAND) {
 				eval("ifconfig", athfix, on? "up":"down");
+#if  defined(RTCONFIG_SINGLE_HOSTAPD) && defined(RTCONFIG_CFG80211)
+				if (on) {
+					char cfg[sizeof("bss_config=") + IFNAMSIZ + sizeof(":/etc/Wireless/conf/hostapd_XXX.conf") + IFNAMSIZ];
+					snprintf(cfg, sizeof(cfg), "bss_config=%s:/etc/Wireless/conf/hostapd_%s.conf", athfix, athfix);
+					eval(QWPA_CLI, "-g", QHOSTAPD_CTRL_IFACE, "raw", "ADD", cfg);
+				} else {
+					eval(QWPA_CLI, "-g", QHOSTAPD_CTRL_IFACE, "raw", "REMOVE", athfix);
+				}
+#endif
 			}
 
 			/* Reconnect to peer WDS AP */
@@ -390,7 +522,7 @@ void set_radio(int on, int unit, int subunit)
 		sub++;
 	} while (subunit < 0 && sub <= 3);
 
-	led_control(led, onoff);
+	led_control(led, inhibit_led_on()? LED_OFF : onoff);
 }
 
 char *wif_to_vif(char *wif)
@@ -516,14 +648,8 @@ int get_channel_list_via_driver(int unit, char *buffer, int len)
 {
 	int r = 0;
 
-#if !defined(RTCONFIG_HAS_5G_2)
-	if (unit == 2)
+	if (absent_band(unit))
 		return 0;
-#endif
-#if !defined(RTCONFIG_WIGIG)
-	if (unit == 3)
-		return 0;
-#endif
 
 	if (buffer == NULL || len <= 0 || unit < 0 || unit >= MAX_NR_WL_IF)
 		return -1;
@@ -544,14 +670,25 @@ int get_channel_list_via_driver(int unit, char *buffer, int len)
 	return r;
 }
 
-int qc98xx_verify_checksum(void *eeprom)
+/* Verify QCA Wi-Fi EEPROM checksum
+ * @eeprom:		pointer to a EEPROM data in ART/Factory.
+ * @eeprom_length:	length of EEPROM data
+ * @return:
+ * 	0:		success
+ *     -2:		invalid parameter
+ *     -1:		wrong checksum
+ */
+int verify_qca_eeprom_csum(void *eeprom, unsigned int eeprom_length)
 {
     unsigned short *p_half;
     unsigned short sum = 0;
     int i;
 
+    if (!eeprom_length || (eeprom_length & 1))
+	    return -1;
+
     p_half = (unsigned short *)eeprom;
-    for (i = 0; i < QC98XX_EEPROM_SIZE_LARGEST / 2; i++) {
+    for (i = 0; i < eeprom_length / 2; i++) {
         sum ^= __le16_to_cpu(*p_half++);
     }
     if (sum != 0xffff) {
@@ -560,23 +697,34 @@ int qc98xx_verify_checksum(void *eeprom)
     return 0;
 }
 
-int calc_qca_eeprom_csum(void *ptr, unsigned int eeprom_size)
+/* Calculate checksum of a QCA EEPROM.
+ * @ptr:		pointer to EEPROM data
+ * @eeprom_size:	size of this eeprom
+ * @eeprom_csum_offset:	offset of checksum
+ * @return:
+ * 	0:		success
+ *     -1:		invalid parameter
+ */
+int calc_qca_eeprom_csum(void *ptr, unsigned int eeprom_size, unsigned int eeprom_csum_offset)
 {
 	int i;
-	uint16_t *p = ptr, sum = 0;
+	uint16_t *p = ptr, sum = 0, csum_idx;
 
-	if (!ptr || (eeprom_size & 1)) {
-		_dprintf("%s: invalid param. (ptr %p, eeprom_size %u)\n",
-			__func__, ptr, eeprom_size);
+	if (!ptr || (eeprom_size & 1) || (eeprom_csum_offset + 1 ) >= eeprom_size ||
+	    (eeprom_csum_offset & 1))
+	{
+		_dprintf("%s: invalid param. (ptr %p, eeprom_size %u, eeprom_csum_offset %u)\n",
+			__func__, ptr, eeprom_size, eeprom_csum_offset);
 		return -1;
 	}
 
-	*(p + 1) = 0;
+	csum_idx = eeprom_csum_offset / 2;
+	*(p + csum_idx) = 0;
 	for (i = 0; i < (eeprom_size / 2); ++i, ++p)
 		sum ^= __le16_to_cpu(*p);
 
 	p = ptr;
-	*(p + 1) = __cpu_to_le16(sum ^ 0xFFFF);
+	*(p + csum_idx) = __cpu_to_le16(sum ^ 0xFFFF);
 
 	return 0;
 }
@@ -1084,6 +1232,47 @@ int get_channel_list_via_country(int unit, const char *country_code,
 	return (p - buffer);
 }
 
+#ifdef RTCONFIG_BONDING_WAN
+/** Return speed of a bonding interface.
+ * @bond_if:	name of bonding interface. LAN bond_if = bond0; WAN bond_if = bond1.
+ * @return:
+ *  <= 0	error
+ *  otherwise	link speed
+ */
+int get_bonding_speed(char *bond_if)
+{
+	int speed;
+	char confbuf[sizeof(SYS_CLASS_NET) + IFNAMSIZ + sizeof("/speedXXXXXX")];
+	char buf[32] = { 0 };
+
+	snprintf(confbuf, sizeof(confbuf), SYS_CLASS_NET "/%s/speed", bond_if);
+	if (f_read_string(confbuf, buf, sizeof(buf)) <= 0)
+		return 0;
+
+	speed = safe_atoi(buf);
+	if (speed <= 0)
+		speed = 0;
+
+	return speed;
+}
+
+/** Return link speed of a bonding slave port if it's connected or 0 if it's disconnected.
+ * @port:	0: WAN, 1~8: LAN1~8, 30: 10G base-T (RJ-45), 31: 10G SFP+
+ * @return:
+ *  <= 0:	disconnected
+ *  otherwise:	link speed
+ */
+int get_bonding_port_status(int port)
+{
+	int ret = 0;
+
+	if (__get_bonding_port_status)
+		ret = __get_bonding_port_status(port);
+
+	return ret;
+}
+#endif /* RTCONFIG_BONDING_WAN */
+
 #ifdef RTCONFIG_POWER_SAVE
 #define SYSFS_CPU	"/sys/devices/system/cpu"
 #define CPUFREQ		"cpufreq"
@@ -1113,7 +1302,7 @@ void set_cpufreq_attr(char *attr, char *val)
 
 static void set_cpu_power_save_mode(void)
 {
-#if defined(RTCONFIG_SOC_IPQ8064)
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SOC_IPQ8074)
 	char path[128];
 
 	snprintf(path, sizeof(path), "%s/cpu%d/%s", SYSFS_CPU, 0, CPUFREQ);
@@ -1130,6 +1319,9 @@ static void set_cpu_power_save_mode(void)
 	case 1:
 		/* CPU: On Demand - auto */
 		set_cpufreq_attr("scaling_governor", "ondemand");
+#if defined(RTCONFIG_SOC_IPQ8074)
+		set_cpufreq_attr("scaling_min_freq", "1382400");
+#endif
 		break;
 	default:
 		/* CPU: performance - max. freq */
@@ -1142,7 +1334,7 @@ static void set_cpu_power_save_mode(void)
 #define PROC_NSS_CLOCK	"/proc/sys/dev/nss/clock"
 static void set_nss_power_save_mode(void)
 {
-#if defined(RTCONFIG_SOC_IPQ8064)
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SOC_IPQ8074)
 	int r;
 	unsigned long nss_min_freq = 0, nss_max_freq = 0;
 	char path[128], buf[128] = "", nss_freq[16] = "";
@@ -1161,12 +1353,19 @@ static void set_nss_power_save_mode(void)
 		return;
 	}
 
+#if defined(RTCONFIG_SOC_IPQ8064)
 	nss_min_freq = 110 * 1000000;
 	if (safe_atoi(buf) == 1400000) {
 		nss_max_freq = 733 * 1000000;	/* IPQ8064 */
 	} else {
 		nss_max_freq = 800 * 1000000;	/* IPQ8065 */
 	}
+#elif defined(RTCONFIG_SOC_IPQ8074)
+	nss_min_freq = 748800000;
+	nss_max_freq = 1689600000;
+#else
+#error Unknown NSS frequency.
+#endif
 
 	_dprintf("%s: NSS min/max freq: %lu/%lu\n", __func__, nss_min_freq, nss_max_freq);
 	if (!nss_min_freq || !nss_max_freq)
@@ -1195,7 +1394,7 @@ static void set_nss_power_save_mode(void)
 		f_write_string(path, nss_freq, 0, 0);
 		break;
 	}
-#endif	/* RTCONFIG_SOC_IPQ8064 */
+#endif	/* RTCONFIG_SOC_IPQ8064 || RTCONFIG_SOC_IPQ8074 */
 }
 
 void set_power_save_mode(void)
@@ -1205,45 +1404,37 @@ void set_power_save_mode(void)
 }
 #endif	/* RTCONFIG_POWER_SAVE */
 
+/* Return wan_base_if for start_vlan() and selectable upstream port for IPTV.
+ * @return:	pointer to base interface name for start_vlan().
+ */
+char *get_wan_base_if(void)
+{
+	static char wan_base_if[IFNAMSIZ] = "eth0";
+
+	if (__get_wan_base_if) {
+		__get_wan_base_if(wan_base_if);
+		return wan_base_if;
+	}
+
+#if defined(RTCONFIG_DETWAN)
+	char *detwan_ifname;
+
+	if((detwan_ifname = nvram_get("detwan_ifname")) != NULL) {
+		strlcpy(wan_base_if, detwan_ifname, sizeof(wan_base_if));
+	}
+#elif defined(RTCONFIG_SWITCH_RTL8370MB_PHY_QCA8033_X2) || defined(RTN19)
+	strlcpy(wan_base_if, "eth1", sizeof(wan_base_if));	/* lan_1, WAN interface if IPTV is enabled. */
+#endif	/* RTCONFIG_DETWAN */
+
+	return wan_base_if;
+}
+
 /* Return nvram variable name, e.g. et1macaddr, which is used to repented as LAN MAC.
  * @return:
  */
 char *get_lan_mac_name(void)
 {
-	int model = get_model();
-	char *mac_name = "et1macaddr";
-
-	/* Check below configuration in convert_wan_nvram() too. */
-	switch (model) {
-	case MODEL_PLN12:	/* fall-through */
-	case MODEL_PLAC56:	/* fall-through */
-	case MODEL_PLAC66U:	/* fall-through */
-	case MODEL_RPAC66:	/* fall-through */
-	case MODEL_RTAC55U:	/* fall-through */
-	case MODEL_RTAC55UHP:	/* fall-through */
-	case MODEL_RT4GAC55U:	/* fall-through */
-	case MODEL_BRTAC828:	/* fall-through */
-	case MODEL_RTAD7200:	/* fall-through */
-	case MODEL_GTAX6000:	/* fall-through */
-	case MODEL_GTAX6000N:	/* fall-through */
-	case MODEL_GTAX6000S:	/* fall-through */
-	case MODEL_RTAC88S:	/* fall-through */
-	case MODEL_RTAC88N:	/* fall-through */
-	case MODEL_RPAC51:	/* fall-through */
-        case MODEL_MAPAC1300:
-        case MODEL_VZWAC1300:
-        case MODEL_MAPAC1750:
-        case MODEL_MAPAC2200:
-        case MODEL_RTAC92U:
-		/* Use 5G MAC address as LAN MAC address. */
-		mac_name = "et1macaddr";
-		break;
-	default:
-		dbg("%s: Define LAN MAC address for model %d\n", __func__, model);
-		mac_name = "et1macaddr";
-		break;
-	};
-
+	char *mac_name = "et1macaddr";	/* Use 5G(+x) MAC address as LAN MAC address. */
 	return mac_name;
 }
 
@@ -1252,39 +1443,13 @@ char *get_lan_mac_name(void)
  */
 char *get_wan_mac_name(void)
 {
-	int model = get_model();
-	char *mac_name = "et0macaddr";
-
-	/* Check below configuration in convert_wan_nvram() too. */
-	switch (model) {
-	case MODEL_PLN12:	/* fall-through */
-	case MODEL_PLAC56:	/* fall-through */
-	case MODEL_RTAC55U:	/* fall-through */
-	case MODEL_RTAC55UHP:	/* fall-through */
-	case MODEL_RT4GAC55U:	/* fall-through */
-	case MODEL_BRTAC828:	/* fall-through */
-	case MODEL_RTAD7200:	/* fall-through */
-	case MODEL_GTAX6000:	/* fall-through */
-	case MODEL_GTAX6000N:	/* fall-through */
-	case MODEL_GTAX6000S:	/* fall-through */
-	case MODEL_RTAC88S:	/* fall-through */
-	case MODEL_RTAC88N:	/* fall-through */
-	case MODEL_RPAC51:	/* fall-through */
-		/* Use 2G MAC address as LAN MAC address. */
-		mac_name = "et0macaddr";
-		break;
-	default:
-		dbg("%s: Define WAN MAC address for model %d\n", __func__, model);
-		mac_name = "et0macaddr";
-		break;
-	};
-
+	char *mac_name = "et0macaddr";	/* Use 2G(+x) MAC address as WAN MAC address. */
 	return mac_name;
 }
 
 char *get_2g_hwaddr(void)
 {
-#if defined(RTCONFIG_SOC_IPQ8064)
+#if defined(RTCONFIG_SOC_IPQ8064) || defined(RTCONFIG_SOC_IPQ8074)
 	static char mac_str[sizeof("00:00:00:00:00:00XXX")];
 	unsigned char mac[ETH_ALEN];
 
@@ -1322,7 +1487,11 @@ char *get_5g_hwaddr(void)
 
 char *get_label_mac()
 {
+#if defined(PLAX56_XP4) // Label MAC is lan_hwaddr
+	return nvram_safe_get(get_lan_mac_name()); // same as get_lan_hwaddr()
+#else
 	return get_2g_hwaddr();
+#endif
 }
 
 char *get_lan_hwaddr(void)
@@ -1377,8 +1546,22 @@ char *get_wlifname(int unit, int subunit, int subunit_x, char *buf)
 #endif
 		 && subunit == 1) {
 		strcpy(buf, get_staifname(unit));
+		return buf;
 	} else
 #endif /* RTCONFIG_WIRELESSREPEATER */
+#if defined(RTCONFIG_AMAS)
+	if (sw_mode() == SW_MODE_AP && nvram_match("re_mode", "1")) {
+		/*
+		 * wlX.0_bss_enabled: the interface to Upper.
+		 * wlX.1_bss_enabled: the interface to Lowwer (main)
+		 * wlX.2_bss_enabled: the interface for guest networks 1
+		 */
+		if (subunit <= 1) {
+			strcpy(buf, "");
+			return buf;
+		}
+	}
+#endif	/* RTCONFIG_AMAS */
 	{
 		__get_wlifname(unit, 0, wifbuf);
 		snprintf(prefix, sizeof(prefix), "wl%d.%d_", unit, subunit);
@@ -1465,14 +1648,103 @@ char *get_vphyifname(int band)
 }
 
 #ifdef RTCONFIG_HAS_5G_2
-const char *get_5ghigh_ifname(int *unit)
+const char *get_5ghigh_ifname(int unit)
 {
-	if(unit != NULL)
-		*unit = 1;
-	return "ath1";
+	return get_wififname(swap_5g_band(unit));
 }
 #endif
 
+/**
+ * Return band if @ifname is STA interface name and the band is supported.
+ * @return:
+ * 	-1:	@ifname is not STA interface name
+ * 	band:	@ifname is STA interface.
+ *  otherwise:	not defined.
+ */
+int get_sta_ifname_unit(const char *ifname)
+{
+	int band;
+	const char *sta[] = { STA_2G, STA_5G, STA_5G2 };
+
+	if (!ifname)
+		return -1;
+	for (band = 0; band < min(MAX_NR_WL_IF, ARRAY_SIZE(sta)); ++band) {
+		SKIP_ABSENT_BAND(band);
+
+		if (!strncmp(ifname, sta[band], strlen(sta[band])))
+			return swap_5g_band(band);
+	}
+	return -1;
+}
+
+/**
+ * Return true if @ifname is main/guest VAP interface name and the band is supported.
+ * @return:
+ * 	0:	@ifname is not VAP interface name
+ * 	1:	@ifname is VAP interface name.
+ *  otherwise:	not defined.
+ */
+int is_vap_ifname(const char *ifname)
+{
+	int band;
+	const char *wif[] = { WIF_2G, WIF_5G, WIF_5G2, WIF_60G };
+
+	if (!ifname)
+		return 0;
+	for (band = 0; band < min(MAX_NR_WL_IF, ARRAY_SIZE(wif)); ++band) {
+		SKIP_ABSENT_BAND(band);
+
+		if (!strncmp(ifname, wif[band], strlen(wif[band])))
+			return 1;
+	}
+	return 0;
+}
+
+/**
+ * Return true if @ifname is STA interface name and the band is supported.
+ * @return:
+ * 	0:	@ifname is not STA interface name
+ * 	1:	@ifname is STA interface name.
+ *  otherwise:	not defined.
+ */
+int is_sta_ifname(const char *ifname)
+{
+	int band;
+	const char *sta[] = { STA_2G, STA_5G, STA_5G2, STA_60G };
+
+	if (!ifname)
+		return 0;
+	for (band = 0; band < min(MAX_NR_WL_IF, ARRAY_SIZE(sta)); ++band) {
+		SKIP_ABSENT_BAND(band);
+
+		if (!strncmp(ifname, sta[band], strlen(sta[band])))
+			return 1;
+	}
+	return 0;
+}
+
+/**
+ * Return true if @ifname is main/guest VPHY interface name and the band is supported.
+ * @return:
+ * 	0:	@ifname is not VPHY interface name
+ * 	1:	@ifname is VPHY interface name.
+ *  otherwise:	not defined.
+ */
+int is_vphy_ifname(const char *ifname)
+{
+	int band;
+	const char *vphy[] = { VPHY_2G, VPHY_5G, VPHY_5G2, VPHY_60G };
+
+	if (!ifname)
+		return 0;
+	for (band = 0; band < min(MAX_NR_WL_IF, ARRAY_SIZE(vphy)); ++band) {
+		SKIP_ABSENT_BAND(band);
+
+		if (!strcmp(ifname, vphy[band]))
+			return 1;
+	}
+	return 0;
+}
 
 /**
  * Input @band and @ifname and return Y of wlX.Y.
@@ -1496,6 +1768,12 @@ int get_wlsubnet(int band, const char *ifname)
 
 	for (subnet = 0, sidx = 0; subnet < MAX_NO_MSSID; subnet++)
 	{
+#ifdef RTCONFIG_AMAS
+		if (sw_mode() == SW_MODE_AP && nvram_match("re_mode", "1")) {
+			if(subnet == 1)
+				subnet++;
+		}
+#endif	/* RTCONFIG_AMAS */
 		if(!nvram_match(wl_nvname("bss_enabled", band, subnet), "1")) {
 			if (!subnet)
 				sidx++;
@@ -1508,6 +1786,45 @@ int get_wlsubnet(int band, const char *ifname)
 		sidx++;
 	}
 	return -1;
+}
+
+int get_wlif_unit(const char *wlifname, int *unit, int *subunit)
+{
+	int i;
+	int _unit = -1, _subunit = -1;
+	char *wlif;
+	int cmp;
+	int len;
+
+	for (i = WL_2G_BAND; i < MAX_NR_WL_IF; ++i) {
+		SKIP_ABSENT_BAND(i);
+
+		wlif = get_wififname(i);
+		len = strlen(wlif);
+		cmp = strncmp(wlifname, wlif, len);
+		if(cmp)		/* wlifname is less than wlif */
+			continue;
+		_unit = i;
+		break;
+	}
+	if (_unit < 0 || absent_band(_unit))
+		return -1;
+
+	if(subunit == NULL || strlen(wlifname) == len) {
+		_subunit = 0;
+	}
+	else {
+		_subunit = get_wlsubnet(_unit, wlifname);
+		if (_subunit < 0)
+			_subunit = 0;
+	}
+
+	if(unit)
+		*unit = _unit;
+	if(subunit)
+		*subunit = _subunit;
+
+	return 0;
 }
 
 #define PROC_NET_WIRELESS  "/proc/net/wireless"
@@ -1539,19 +1856,14 @@ int get_wl_status_ioctl(const char *ifname, int *status, int *quality, int *sign
 		return -2;
 
 	*status = stats.status;
-	if(quality) {
-		if(stats.qual.updated & IW_QUAL_QUAL_INVALID)
-			*quality = 0;
-		else
+	if(quality && !(stats.qual.updated & IW_QUAL_QUAL_INVALID)) {
 			*quality = stats.qual.qual;
 		if(update)
 			*update |= (stats.qual.updated & 1);
 	}
 
-	if(signal) {
-		if(stats.qual.updated & IW_QUAL_LEVEL_INVALID)
-			*signal = 0;
-		else if(stats.qual.updated & IW_QUAL_RCPI) {
+	if(signal && !(stats.qual.updated & IW_QUAL_LEVEL_INVALID)) {
+		if(stats.qual.updated & IW_QUAL_RCPI) {
 			double    rcpivalue = (stats.qual.level / 2.0) - 110.0;
 			*signal = (int) rcpivalue;
 		}
@@ -1560,14 +1872,15 @@ int get_wl_status_ioctl(const char *ifname, int *status, int *quality, int *sign
 			if(*signal >= 64)
 				*signal -= 0x100;	/* convert from unsigned to signed */
 		}
+		if(*signal >= 0)
+			*signal = -1;
+
 		if(update)
 			*update |= (stats.qual.updated & 2);
 	}
 
-	if(noise) {
-		if(stats.qual.updated & IW_QUAL_NOISE_INVALID)
-			*noise = 0;
-		else if(stats.qual.updated & IW_QUAL_RCPI) {
+	if(noise && !(stats.qual.updated & IW_QUAL_NOISE_INVALID)) {
+		if(stats.qual.updated & IW_QUAL_RCPI) {
 			double    rcpivalue = (stats.qual.level / 2.0) - 110.0;
 			*noise = (int) rcpivalue;
 		}
@@ -1637,6 +1950,8 @@ int get_wl_status_proc(const char *ifname, int *status, int *quality, int *signa
 		value = strtoul(p1, &p2, 0);
 		if(signal) {
 			*signal = value;
+			if(*signal >= 0)
+				*signal = -1;
 			if(update && *p2 == '.') {
 				p2++;
 				*update |= 2;
@@ -1664,14 +1979,16 @@ int get_wl_status_proc(const char *ifname, int *status, int *quality, int *signa
 int get_wl_status(const char *ifname, int *status, int *quality, int *signal, int *noise, unsigned int *update)
 {
 	int ret;
+	pid_t pid;
 	if((ret = get_wl_status_ioctl(ifname, status, quality, signal, noise, update)) >= 0)
 		return ret;
 
-	cprintf("get_wl_status_ioctl() failed ret(%d)\n", ret);
+	pid = getpid();
+	cprintf("get_wl_status_ioctl(%s) pid(%s) failed ret(%d)\n", ifname, get_process_name_by_pid(pid), ret);
 	if((ret = get_wl_status_proc(ifname, status, quality, signal, noise, update)) >= 0)
 		return ret;
 
-	cprintf("get_wl_status_proc() failed ret(%d)\n", ret);
+	cprintf("get_wl_status_proc(%s) pid(%s) failed ret(%d)\n", ifname, get_process_name_by_pid(pid), ret);
 	return ret;
 }
 
@@ -1703,6 +2020,167 @@ cprintf("## %s(): ret(%d) ap_addr(%02x:%02x:%02x:%02x:%02x:%02x)\n", __func__, r
 		return -1;	// Invalid
 
 	return 1;
+}
+
+
+#if defined(RTCONFIG_BCN_RPT)
+void save_wlxy_mac(char *mode, char* ifname)
+{
+	char cmdbuf[20],buf[1024];
+ 	FILE *fp;
+        int len;
+        char *pt1,*pt2;
+	int x,y;
+	char prefix[sizeof("wlXXXXXXXXXXXXX_")];
+	x=-1;y=-1;
+	if(!strcmp(mode,"ap"))
+	{
+		get_wlif_unit(ifname,&x,&y);
+		if(x!=-1 && y>0)
+		{
+			snprintf(prefix, sizeof(prefix), "wl%d.%d_hwaddr", x,y);
+			snprintf(cmdbuf, sizeof(cmdbuf), "ifconfig %s", ifname);
+			fp = popen(cmdbuf, "r");
+			pt1=NULL;
+			pt2=NULL;
+        		if (fp) {
+                		memset(buf, 0, sizeof(buf));
+                		len = fread(buf, 1, sizeof(buf), fp);
+                		pclose(fp);
+                		if (len > 1) {
+                        		buf[len-1] = '\0';
+                        		pt1 = strstr(buf, "HWaddr ");
+                        		if (pt1)
+                        		{
+                                		pt2 = pt1 + strlen("HWaddr ");
+                                		*(pt2+17)='\0';
+					}
+				}	
+                        }
+			if(pt2 && strlen(pt2)==17)
+			{	
+				_dprintf("%s=%s\n",prefix,pt2);
+				nvram_set(prefix,pt2);
+			}	
+		}
+	}			
+}
+#endif	
+
+
+#if defined(RTCONFIG_CFG80211)
+/**
+ * Get PHY name of a cfg80211 based VAP interface.
+ * @unit:	wl_unit
+ * @iwphy:	buffer that is used to store PHY name.
+ * @size:	sizeof @iwphy
+ * @return:
+ * 	0:	success
+ *     -1:	invalid parameter
+ *  otherwise:	error
+ */
+int get_iwphy_name(int unit, char *iwphy, size_t size)
+{
+	int r;
+	char *p, path[sizeof("/sys/class/net/wifiX/phy80211/nameXXXXXX")];
+
+	if (unit < 0 || unit >= MAX_NR_WL_IF || !iwphy || !size)
+		return -1;
+
+	snprintf(path, sizeof(path), "%s/%s/phy80211/name", SYS_CLASS_NET, get_vphyifname(unit));
+	r = f_read_string(path, iwphy, size);
+	for (p = iwphy + strlen(iwphy) - 1; p >= iwphy; --p) {
+		if (isalnum(*p))
+			break;
+		if (*p == '\r' || *p == '\n')
+			*p = 0;
+	}
+
+	return (r <= 0)? -2 : 0;
+}
+#endif
+
+/**
+ * Create a VAP interface onto specified VPHY unit.
+ * @ifname:	VAP interface name.
+ * @unit:	VPHY unit number.
+ * @mode:	VAP mode. "ap", or "sta".
+ * @return:
+ * 	0:	success
+ *     -1:	invalid parameter.
+ *  otherwise:	error
+ */
+int create_vap(char *ifname, int unit, char *mode)
+{
+	char vphy[IFNAMSIZ] = { 0 };
+	char *wlanargv[10] = { "wlanconfig", ifname, "create", "wlandev", vphy, "wlanmode", mode, NULL }, **v = &wlanargv[7];
+#if defined(RTCONFIG_CFG80211)
+	char iwmode[sizeof("managedXXXXX")] = { 0 };
+	char iwphy[IFNAMSIZ] = { 0 };
+	char *iwargv[] = { "iw", "phy", iwphy, "interface", "add", ifname, "type", iwmode, NULL };
+#endif
+
+	if (!ifname || !mode || unit < 0 || unit >= MAX_NR_WL_IF)
+		return -1;
+
+	if (!strcmp(mode, "ap")) {
+#if defined(RTCONFIG_CFG80211)
+	       strlcpy(iwmode, "__ap", sizeof(iwmode));
+#endif
+	} else if (!strcmp(mode, "sta")) {
+#if defined(RTCONFIG_CFG80211)
+		strlcpy(iwmode, "managed", sizeof(iwmode));
+#endif
+		*v++ = "nosbeacon";
+	} else
+		return -1;
+
+	strlcpy(vphy, get_vphyifname(unit), sizeof(vphy));
+#if defined(RTCONFIG_CFG80211)
+	*v++ = "-cfg80211";	/* must be last parameter. */
+#endif
+	*v++ = NULL;
+
+#if defined(RTCONFIG_CFG80211)
+	get_iwphy_name(unit, iwphy, sizeof(iwphy));
+	dbG("\ncreate a wifi node %s from %s,%s\n", ifname, vphy, iwphy);
+	_eval(wlanargv, NULL, 0, NULL);
+	_eval(iwargv, NULL, 0, NULL);
+#else
+	dbG("\ncreate a wifi node %s from %s\n", ifname, vphy);
+	_eval(wlanargv, NULL, 0, NULL);
+#endif
+#if defined(RTCONFIG_CFG80211)
+	if (!strcmp(mode, "sta"))
+		eval("iw", "dev", ifname, "set", "4addr", "on");
+#endif
+
+#if defined(RTCONFIG_BCN_RPT)
+	save_wlxy_mac(mode,ifname);
+#endif	
+
+	return 0;
+}
+
+/**
+ * Destroy a VAP interface.
+ * @ifname:	VAP interface name.
+ * @return:
+ * 	0:	success
+ *     -1:	invalid parameter
+ */
+int destroy_vap(char *ifname)
+{
+	if (!ifname)
+		return -1;
+
+#if defined(RTCONFIG_CFG80211)
+	eval("iw", ifname, "del");
+#else
+	eval("wlanconfig", ifname, "destroy");
+#endif
+
+	return 0;
 }
 
 int get_ch(int freq)
@@ -1761,6 +2239,24 @@ int get_channel(const char *ifname)
 	return iwfreq_to_ch(fr);
 }
 
+unsigned long long get_bitrate(const char *ifname)
+{
+	struct iwreq wrq;
+	double ratio = 1;
+
+#if defined(RTCONFIG_QCA_BIGRATE_WIFI)
+	ratio = 1000;
+#endif
+
+	if (ifname == NULL)
+		return -1;
+
+	if (wl_ioctl(ifname, SIOCGIWRATE, &wrq))
+		return -1;
+
+	return ratio * wrq.u.bitrate.value;
+}
+
 /*
  * get_channel_list(ifname, ch_list[], size)
  *
@@ -1778,7 +2274,6 @@ int get_channel_list(const char *ifname, int ch_list[], int size)
 {
 	struct iwreq wrq;
 	struct iw_range *range;
-	union iw_range_raw *  range_raw;
 	unsigned char buffer[sizeof(iwrange) * 2];	/* Large enough */
 	int i;
 
@@ -1795,7 +2290,6 @@ int get_channel_list(const char *ifname, int ch_list[], int size)
 		return -1;
 	}
 
-	range_raw = (union iw_range_raw *) buffer;
 	range = (struct iw_range *) buffer;
 	if(wrq.u.data.length < 300 || range->we_version_compiled <= 15) {
 		cprintf("Wireless Extensions is TOO OLD length(%d) ver(%d)\n", wrq.u.data.length, range->we_version_compiled);
@@ -1810,6 +2304,33 @@ int get_channel_list(const char *ifname, int ch_list[], int size)
 		ch_list[i] = range->freq[i].i;
 	}
 	return size;
+}
+
+int has_dfs_channel(void)
+{
+	char word[8], *next;
+	int has_dfs_channel = 0;
+	int i;
+
+	foreach (word, nvram_safe_get("wl_ifnames"), next) {
+		char buf[256], *p = buf;
+		int ch_list[32];
+		int ret;
+
+		ret = get_channel_list(word, ch_list, ARRAY_SIZE(ch_list));
+		for(i = 0; i < ret; i++) {
+			if(is_dfs_channel(ch_list[i]))
+				has_dfs_channel++;
+			p += sprintf(p, "%s%d", i?",":"", ch_list[i]);
+		}
+		p = '\0';
+//		_dprintf("# get_channel_list(%s) ret(%d) ch_list(%s) has_dfs_channel(%d)\n", word, ret, buf, has_dfs_channel);
+	}
+	if(has_dfs_channel)
+		nvram_set_int("has_dfs_channel", has_dfs_channel);
+	else
+		nvram_unset("has_dfs_channel");
+	return has_dfs_channel;
 }
 
 /* dfs channel data from radartool */
@@ -1833,13 +2354,14 @@ int get_radar_channel_list(const char *vphy, int radar_list[], int size)
 {
 	const char *dfs_file = "/tmp/dfsreq_nolinfo";
 	FILE *fp = NULL;
-	int freq;
 	int cnt;
 	struct dfsreq_nolinfo *nol = NULL;
-	int len;
 
 	if(vphy == NULL || radar_list == NULL || size < 0)
 		return -1;
+
+	if (!strcmp(vphy, VPHY_2G) || !strcmp(vphy, VPHY_60G))
+		return 0;
 
 	unlink(dfs_file);
 	doSystem("radartool -i %s getnol %s", vphy, dfs_file);
@@ -1875,7 +2397,7 @@ char *qca_iwpriv_one_line(const char *ifname, const char *cmd, char *line, int l
 	char *p;
 	char *answer = NULL;
 
-	snprintf(line, len, "iwpriv %s %s", ifname, cmd);
+	snprintf(line, len, IWPRIV " %s %s", ifname, cmd);
 	if((fp = popen(line, "r")) != NULL) {
 		while(fgets(line, len, fp)) {
 			strip_new_line(line);
@@ -1908,6 +2430,7 @@ int get_bw_nctrlsb(const char *ifname, int *bw, int *nctrlsb)
 {
 	char line[256];
 	char *p;
+	char *p2;
 
 	if(ifname == NULL || bw == NULL || nctrlsb == NULL)
 		return -1;
@@ -1921,11 +2444,14 @@ int get_bw_nctrlsb(const char *ifname, int *bw, int *nctrlsb)
 		return -3;
 	p += 2;
 
-	if((p = strstr(p, "HT")) == NULL) {	/* 11A, 11B, 11G */
+	if((p2 = strstr(p, "HE")) != NULL) {	/* 11AHE, 11GHE */
+	}
+	else
+	if((p2 = strstr(p, "HT")) == NULL) {	/* 11A, 11B, 11G */
 		*bw = 20;
 		return *bw;
 	}
-	p += 2;
+	p = p2 + 2;
 
 	if(memcmp(p, "20", 2) == 0)		/* 11NGHT20, 11NAHT20, 11ACVHT20 */
 		*bw = 20;
@@ -2015,31 +2541,50 @@ void set_wpa_cli_cmd(int band, const char *cmd, int chk_reply)
 	char fcmd[128];
 	char reply[WPA_CLI_REPLY_SIZE];
 	int timeout = QUERY_WPA_CLI_REPLY_TIMEOUT;
+	int scan_and_with_scan_events = 0;
 
 	if(band < 0 || band >= MAX_NR_WL_IF || cmd == NULL || cmd[0] == '\0')
 		return;
 
 	get_wpa_ctrl_sk(band, ctrl_sk, sizeof(ctrl_sk));
 	sta = get_staifname(band);
-
 	if (chk_reply) {
-		snprintf(fcmd, sizeof(fcmd), "/usr/bin/wpa_cli -p %s -i %s %s", ctrl_sk, sta, cmd);
-		while (strcmp(wpa_cli_reply(fcmd, reply), "OK") && timeout--) {
-			//dbg("%s: reply [%s] ...(%d/%d)\n", __func__, reply, timeout, QUERY_WPA_CLI_REPLY_TIMEOUT);
-			sleep(1);
-		};
-
-		if (strcmp(cmd, "scan") == 0) {
-			snprintf(fcmd, sizeof(fcmd), "/usr/bin/wpa_cli -p %s -i %s status | grep wpa_state=", ctrl_sk, sta);
+#if defined(RTCONFIG_QCN550X) || defined(RTCONFIG_SOC_IPQ40XX) || defined(RTCONFIG_SOC_IPQ8074) // newer QCA platform with AMAS capability
+		if (strcmp(cmd, "scan") == 0) { // check if scan_events is supported
+			char *rpt;
+			snprintf(fcmd, sizeof(fcmd), "/usr/bin/wpa_cli -p %s -i %s scan_events", ctrl_sk, sta);
+			rpt = wpa_cli_reply(fcmd, reply);
+			if ((strcmp(rpt, "YES")==0) || (strcmp(rpt, "NO")==0))
+				scan_and_with_scan_events = 1;
+		}
+#endif
+		if (scan_and_with_scan_events) {
+			eval("/usr/bin/wpa_cli", "-p", ctrl_sk, "-i", sta, (char*) cmd); // just issue scan command & wait scan_events
+			snprintf(fcmd, sizeof(fcmd), "/usr/bin/wpa_cli -p %s -i %s scan_events", ctrl_sk, sta);
 			timeout = QUERY_WPA_STATE_TIMEOUT;
-			while (strcmp(wpa_cli_reply(fcmd, reply), "wpa_state=INACTIVE") && timeout--) {
-				//dbg("%s: reply [%s] ...(%d/%d)\n", __func__, reply, timeout, QUERY_WPA_STATE_TIMEOUT);
+			while (strcmp(wpa_cli_reply(fcmd, reply), "YES") && timeout--) {
+				//dbg("%s(%d): reply [%s] ...(%d/%d)\n", __func__, band, reply, timeout, QUERY_WPA_STATE_TIMEOUT);
 				sleep(1);
 			};
+		} else { // non-scan cmd or no scan_events supported
+			snprintf(fcmd, sizeof(fcmd), "/usr/bin/wpa_cli -p %s -i %s %s", ctrl_sk, sta, cmd);
+			while (strcmp(wpa_cli_reply(fcmd, reply), "OK") && timeout--) {
+				//dbg("%s(%d): reply [%s] ...(%d/%d)\n", __func__, band, reply, timeout, QUERY_WPA_CLI_REPLY_TIMEOUT);
+				sleep(1);
+			};
+
+			if (strcmp(cmd, "scan") == 0) {
+				snprintf(fcmd, sizeof(fcmd), "/usr/bin/wpa_cli -p %s -i %s status | grep wpa_state=", ctrl_sk, sta);
+				timeout = QUERY_WPA_STATE_TIMEOUT;
+				while (!strcmp(wpa_cli_reply(fcmd, reply), "wpa_state=SCANNING") && timeout--) {
+					//dbg("%s(%d): reply [%s] ...(%d/%d)\n", __func__, band, reply, timeout, QUERY_WPA_STATE_TIMEOUT);
+					sleep(1);
+				};
+			}
 		}
 	}
 	else
-		eval("/usr/bin/wpa_cli", "-p", ctrl_sk, "-i", sta, cmd);
+		eval("/usr/bin/wpa_cli", "-p", ctrl_sk, "-i", sta, (char*) cmd);
 }
 
 void disassoc_sta(char *ifname, char *sta_addr)
@@ -2047,7 +2592,11 @@ void disassoc_sta(char *ifname, char *sta_addr)
 	if(ifname == NULL || *ifname == '\0' || sta_addr == NULL || *sta_addr == '\0')
 		return;
 
-	eval("iwpriv", ifname, "kickmac", sta_addr);
+#if defined(RTCONFIG_CFG80211)
+	eval("hostapd_cli", "-i", ifname, "disassociate", sta_addr);
+#else
+	eval(IWPRIV, ifname, "kickmac", sta_addr);
+#endif
 }
 
 
@@ -2066,14 +2615,18 @@ void set_maclist_mode(char *ifname, int mode)
 #ifdef RTCONFIG_WIFI_SON
 	if (nvram_match("wifison_ready", "1"))
 		sec = "_sec";
-#endif // WIFI_SON
+#endif
+#ifdef RTCONFIG_QCA_LBD
+	if (nvram_match("smart_connect_x", "1"))
+		sec = "_sec";
+#endif
 	sprintf(qca_maccmd, "%s%s", QCA_MACCMD, sec);
 
 	if (mode < 0 || mode > 3)
 		mode = 0;
 	snprintf(str_mode, sizeof(str_mode), "%d", mode);
 
-	eval("iwpriv", ifname, qca_maccmd, str_mode);
+	eval(IWPRIV, ifname, qca_maccmd, str_mode);
 }
 
 void set_maclist_add_kick(char *ifname, int mode, char *sta_addr)
@@ -2087,10 +2640,14 @@ void set_maclist_add_kick(char *ifname, int mode, char *sta_addr)
 #ifdef RTCONFIG_WIFI_SON
 	if (nvram_match("wifison_ready", "1"))
 		sec = "_sec";
-#endif // WIFI_SON
+#endif
+#ifdef RTCONFIG_QCA_LBD
+	if (nvram_match("smart_connect_x", "1"))
+		sec = "_sec";
+#endif
 	snprintf(qca_addmac, sizeof(qca_addmac), "%s%s", QCA_ADDMAC, sec);
 
-	eval("iwpriv", ifname, qca_addmac, sta_addr);
+	eval(IWPRIV, ifname, qca_addmac, sta_addr);
 
 	if(mode == 2)
 		disassoc_sta(ifname, sta_addr);
@@ -2107,10 +2664,14 @@ void set_maclist_del_kick(char *ifname, int mode, char *sta_addr)
 #ifdef RTCONFIG_WIFI_SON
 	if (nvram_match("wifison_ready", "1"))
 		sec = "_sec";
-#endif // WIFI_SON
+#endif
+#ifdef RTCONFIG_QCA_LBD
+	if (nvram_match("smart_connect_x", "1"))
+		sec = "_sec";
+#endif
 	snprintf(qca_delmac, sizeof(qca_delmac), "%s%s", QCA_DELMAC, sec);
 
-	eval("iwpriv", ifname, qca_delmac, sta_addr);
+	eval(IWPRIV, ifname, qca_delmac, sta_addr);
 
 	if(mode == 1)
 		disassoc_sta(ifname, sta_addr);
@@ -2119,12 +2680,12 @@ void set_maclist_del_kick(char *ifname, int mode, char *sta_addr)
 
 void set_macfilter_unit(int unit, int subnet, FILE *fp)
 {
-	char prefix[32];
+	char prefix[sizeof("wlXXXXXX_")], tmp_prefix[sizeof("wlXXXXXX_")];
 	char tmp[32];
 	char athfix[8];
 	char *sec = "";
 	char qca_mac[32];
-	int mode;	/* 0: disable, 1: allow, 2: deny */
+	int i, j, max_subnet, mode;	/* 0: disable, 1: allow, 2: deny */
 	char *p;
 
 #ifdef RTCONFIG_AMAS
@@ -2132,9 +2693,18 @@ void set_macfilter_unit(int unit, int subnet, FILE *fp)
 		snprintf(prefix, sizeof(prefix), "wl%d.1_", unit);
 	else
 #endif
-	if (subnet > 0)
-		snprintf(prefix, sizeof(prefix), "wl%d.%d", unit, subnet);
-	else
+	if (subnet > 0) {
+		max_subnet = num_of_mssid_support(unit);
+		for (j = 0, i = 1; i <= max_subnet; i++) {
+			snprintf(tmp_prefix, sizeof(tmp_prefix), "wl%d.%d_", unit, i);
+			if (!nvram_pf_match(tmp_prefix, "bss_enabled", "1"))
+				continue;
+
+			j++;
+			if (j == subnet)
+				strlcpy(prefix, tmp_prefix, sizeof(prefix));
+		}
+	} else
 		snprintf(prefix, sizeof(prefix), "wl%d_", unit);
 
 	__get_wlifname(swap_5g_band(unit), subnet, athfix);
@@ -2142,7 +2712,11 @@ void set_macfilter_unit(int unit, int subnet, FILE *fp)
 #ifdef RTCONFIG_WIFI_SON
 	if (nvram_match("wifison_ready", "1"))
 		sec = "_sec";
-#endif // WIFI_SON
+#endif
+#ifdef RTCONFIG_QCA_LBD
+	if (nvram_match("smart_connect_x", "1"))
+		sec = "_sec";
+#endif
 	sprintf(qca_mac, "%s%s", QCA_MACCMD, sec);
 
 	p = nvram_get(strcat_r(prefix, "macmode", tmp));
@@ -2154,8 +2728,8 @@ void set_macfilter_unit(int unit, int subnet, FILE *fp)
 	else
 		mode = 0;
 
-	fprintf(fp, "iwpriv %s %s %d\n", athfix, qca_mac, 3);	/* flush old list */
-	fprintf(fp, "iwpriv %s %s %d\n", athfix, qca_mac, mode);
+	fprintf(fp, IWPRIV " %s %s %d\n", athfix, qca_mac, 3);	/* flush old list */
+	fprintf(fp, IWPRIV " %s %s %d\n", athfix, qca_mac, mode);
 
 	if (mode) {
 		char *nv, *nvp, *mac;
@@ -2166,7 +2740,7 @@ void set_macfilter_unit(int unit, int subnet, FILE *fp)
 			while ((mac = strsep(&nvp, "<")) != NULL) {
 				if(*mac == '\0')
 					continue;
-				fprintf(fp, "iwpriv %s %s %s\n", athfix, qca_mac, mac);
+				fprintf(fp, IWPRIV " %s %s %s\n", athfix, qca_mac, mac);
 			}
 			free(nv);
 		}
@@ -2193,3 +2767,210 @@ void set_macfilter_all(FILE *fp)
 	free(wl_ifnames);
 }
 
+/** Return temperature of specific Wireless band via thermaltool.
+ * @band:
+ * @return:
+ * 	>= 0	temperature of specific Wireless band.
+ * 	<  0	error
+ */
+int get_wifi_temperature(enum wl_band_id band)
+{
+	int t = 0;
+	char cmd[sizeof("thermaltool -i wifi0 -getXXXXXX")];
+
+	if (band >= MAX_NR_WL_IF)
+		return -1;
+
+	/* Example:
+	 * Thermal config for wifi0
+	 *   enable: 1, dc: 100, dc_per_event: 2
+	 *   level: 0, low thresold: -100, high thresold: 110, dcoffpercent: 0, queue priority 7, policy; 1
+	 *   level: 1, low thresold: 100, high thresold: 120, dcoffpercent: 50, queue priority 7, policy; 1
+	 *   level: 2, low thresold: 110, high thresold: 135, dcoffpercent: 90, queue priority 7, policy; 1
+	 *   level: 3, low thresold: 125, high thresold: 150, dcoffpercent: 100, queue priority 7, policy; 1
+	 * Thermal stats for wifi0
+	 *   sensor temperature: 41, current level: 0
+	 *   level: 0, entry count: 0, duty cycle spent: 1000
+	 *   level: 1, entry count: 0, duty cycle spent: 0
+	 *   level: 2, entry count: 0, duty cycle spent: 0
+	 *   level: 3, entry count: 0, duty cycle spent: 0
+	 */
+
+	snprintf(cmd, sizeof(cmd), "thermaltool -i %s -get", get_vphyifname(band));
+	if (exec_and_parse(cmd, "sensor temperature:", "%*[^:]:%d%*[^\n]", 1, &t))
+		return 0;
+
+	return t;
+}
+
+#if defined(RTCONFIG_BT_CONN_UART)
+#if defined(RTCONFIG_SOC_IPQ40XX)
+#define BTDEV "/dev/ttyQHS0"
+#elif defined(RTCONFIG_SOC_IPQ60XX)
+#define BTDEV "/dev/ttyMSM1"
+#else
+#error "Defined the bt device!!"
+#endif
+#define BT_BSCP_CONF_PATH "/etc/bt_bscp_conf.psr"
+#define BT_UART_RATE "115200"
+
+#if !defined(PLAX56_XP4)
+#define BT_ACTIVE "0001 0001"
+#define BT_STATUS "0004 0001"
+#define BT_WLAN_DENY "0009 0001"
+#endif
+extern int FRead(const unsigned char *buf, int addr, int count);
+
+static int generate_bt_bscp_conf()
+{
+	FILE *fp;
+	int plus = 0;
+	unsigned char buf[6];
+	char bt_cal[16], bt_mac[32];
+
+	if (f_exists(BT_BSCP_CONF_PATH))
+		return 1;
+
+	if (!(fp = fopen(BT_BSCP_CONF_PATH, "w+")))
+		return 0;
+
+	// Set BT cal
+#if defined(RTCONFIG_CSR8811)
+	memset(buf, 0, sizeof(buf));
+	if ((FRead(buf, OFFSET_CSR8811_CAL, 1) < 0)	// Fread Out of scope.
+		|| (buf[0]==0xff || buf[0]==0)	// Invalid cal
+	) {
+		snprintf(bt_cal, sizeof(bt_cal), "00%02x", 0x1d);	// Def cal val.
+	}
+	else {
+		snprintf(bt_cal, sizeof(bt_cal), "00%02x", buf[0]);
+	}
+#else
+		snprintf(bt_cal, sizeof(bt_cal), "00%02x", 0x1d);
+#endif
+	_dprintf("BT cal(%s)\n", bt_cal);
+
+	// Set BT Mac
+	memset(buf, 0, sizeof(buf));
+	if ((FRead(buf, OFFSET_MAC_ADDR_2G, 6) < 0)	// ET0/WAN is same as 2.4G, Fread Out of scope.
+		|| (buf[0]==0xff || (buf[0]==0 && buf[1]==0 && buf[2]==0 && buf[3]==0 && buf[4]==0 && buf[5]==0))	// Invalid mac.
+	) {
+		snprintf(bt_mac, sizeof(bt_mac), "00%x %x%x 00%x %x%x\n", 0x44, 0x55, 0x66, 0x33, 0x22, 0x11);	// Def mac addr.
+	}
+	else {
+		plus = 2;
+		buf[5] += plus;
+
+		snprintf(bt_mac, sizeof(bt_mac), "00%02x %02x%02x 00%02x %02x%02x\n", buf[3], buf[4], buf[5], buf[2], buf[0], buf[1]);
+	}
+	_dprintf("BT mac(%s)\n", bt_mac);
+
+	// BT BSCP CONF
+	fprintf(fp, "// # explicit, PSKEY_HCI_LMP_LOCAL_VERSION (0x010d, 269), 1 words\n");
+	fprintf(fp, "&010d = 0808\n");
+	fprintf(fp, "// # explicit, PSKEY_LMP_REMOTE_VERSION (0x010e, 270), 1 words\n");
+	fprintf(fp, "&010e = 0008\n");
+
+	fprintf(fp, "// ===================================\n");
+	fprintf(fp, "// # patch_hardware_0, PSKEY_PATCH50 (0x212c, 8492), 56 words\n");
+	fprintf(fp, "&212c = 0000 f001 0617 0513 0118 ff2b ff0e 1a00 2818 009e 081b f100 8888 24f0 f925 f821 0a17 0184 0cf0 0117 0013 0009 02a4 fb25 fa21 f915 f811 fb55 fa61 09e0 ff84 10f0 0117 0013 0009 02a4 f935 f841 f925 f821 0f1b 0712 10a4 0494 0712 e151 0722 f915 f811 0018 ff2b ff0e f000 0518 00e2 5a79\n");
+	fprintf(fp, "// # patch_hardware_1, PSKEY_PATCH51 (0x212d, 8493), 21 words\n");
+	fprintf(fp, "&212d = 0002 968a 0863 f925 f821 0757 0663 e099 02ec 05e0 f915 0727 f815 0627 0218 ff2b ff0e 9700 8d18 00e2 7e34\n");
+	fprintf(fp, "// # patch_hardware_2, PSKEY_PATCH52 (0x212e, 8494), 16 words\n");
+	fprintf(fp, "&212e = 0002 0b5a 0100 7834 0040 0327 0223 f815 e311 0218 ff2b ff0e 0b00 5e18 00e2 59c1\n");
+	fprintf(fp, "// # patch_hardware_3, PSKEY_PATCH53 (0x212f, 8495), 17 words\n");
+	fprintf(fp, "&212f = 0000 7315 0084 04f0 0800 0014 03e0 f800 1215 0b27 0018 ff2b ff0e 7300 1818 00e2 0549\n");
+	fprintf(fp, "// # patch_hardware_4, PSKEY_PATCH54 (0x2130, 8496), 21 words\n");
+	fprintf(fp, "&2130 = 0001 53f8 0817 0e27 0c00 6384 07f0 0118 ff2b ff0e 5400 0918 00e2 0917 0118 ff2b ff0e 5400 fb18 00e2 91f6\n");
+	fprintf(fp, "// # patch_hardware_5, PSKEY_PATCH55 (0x2131, 8497), 49 words\n");
+	fprintf(fp, "&2131 = 0002 c0d5 0423 05f4 031b 0012 0280 1df0 021b 0916 1000 00c4 1ef0 0916 03c4 1bf4 031b 0012 0280 17f4 0380 15f4 0480 13f4 0580 11f4 0680 0ff4 0b80 0df4 0d80 0bf4 019c fb00 6719 0d9e 0218 ff2b ff0e c200 8c18 00e2 0218 ff2b ff0e c100 de18 00e2 c5cf\n");
+	fprintf(fp, "// # patch_hardware_6, PSKEY_PATCH56 (0x2132, 8498), 42 words\n");
+	fprintf(fp, "&2132 = 0003 243f f40b 0827 0923 e019 0916 01b4 0926 0318 ff2b ff0e 2400 4218 00e2 fa0b 3d14 0327 0114 0227 0014 0127 0027 081b 0816 0218 ff2b ff0e f700 fd18 009e e111 081b 0816 0218 ff2b ff0e 3300 ff18 009e fa0f 40f2\n");
+	fprintf(fp, "// # patch_hardware_7, PSKEY_PATCH57 (0x2133, 8499), 23 words\n");
+	fprintf(fp, "&2133 = 0003 254e 02c0 0916 1000 00c4 02f4 02b0 0916 fec4 e1b1 0922 0816 0318 ff2b ff0e 2500 5218 8000 00c0 08f2 00e2 e402\n");
+	fprintf(fp, "// # patch_hardware_8, PSKEY_PATCH58 (0x2134, 8500), 16 words\n");
+	fprintf(fp, "&2134 = 0003 21ca fa0b 0227 0323 e019 0916 01b4 0926 0318 ff2b ff0e 2200 cd18 00e2 22dc\n");
+	fprintf(fp, "// # patch_hardware_9, PSKEY_PATCH59 (0x2135, 8501), 18 words\n");
+	fprintf(fp, "&2135 = 0000 55e2 09f4 0218 ff2b ff0e 2c00 a718 009e 0314 fc0f 0018 ff2b ff0e 5600 0118 00e2 a008\n");
+	fprintf(fp, "// # patch_hardware_10, PSKEY_PATCH60 (0x2136, 8502), 30 words\n");
+	fprintf(fp, "&2136 = 0004 0d80 1aa4 0418 ff2b ff0e 1d00 ba18 009e 0184 0d2c 0013 8f00 89d0 0117 bf00 d6d4 0318 ff2b ff0e 2700 4218 009e 0418 ff2b ff0e 0e00 8418 00e2 6855\n");
+	fprintf(fp, "// patch_hardware_11, PSKEY_PATCH61 (0x2137, 8503), 22 words\n");
+	fprintf(fp, "&2137 = 0002 4da5 0118 ff2b ff0e 6200 c518 009e 031b 2b22 fcc4 2c26 0114 e700 f025 0218 ff2b ff0e 4e00 a818 00e2 8dfc\n");
+	fprintf(fp, "// patch_hardware_12, PSKEY_PATCH62 (0x2138, 8504), 19 words\n");
+	fprintf(fp, "&2138 = 0002 0f22 0310 081b 0100 8022 0100 b012 04f4 0114 e019 0426 0218 ff2b ff0e 0f00 2618 00e2 bc41\n");
+	fprintf(fp, "// patch_hardware_13, PSKEY_PATCH63 (0x2139, 8505), 12 words\n");
+	fprintf(fp, "&2139 = 0002 0d95 0513 0100 b022 0218 ff2b ff0e 0f00 db18 00e2 7a40\n");
+	fprintf(fp, "// patch_fsm_shared_patchpoint, PSKEY_PATCH121 (0x2209, 8713), 36 words\n");
+	fprintf(fp, "&2209 = fc0b 0b13 0717 1d00 c184 1df0 081b 0016 6384 05f0 1380 17f0 0114 13e0 6084 13f0 0100 da80 0df0 0d1b 5d9a 0af4 b900 f014 0127 0214 0027 e315 0010 000e 019f 0014 0d1b 5d26 fc0f a1a6\n");
+	fprintf(fp, "// patch_sched_get_or_peek_message, PSKEY_PATCH123 (0x220b, 8715), 49 words\n");
+	fprintf(fp, "&220b = fa0b 0717 0484 2cf0 0617 0690 e119 0c00 d438 041a 001a 022b 23f4 0116 0184 20f0 0216 0327 1df4 e119 0016 0784 19f0 e500 ab15 8000 0054 0100 c018 ff2b fe27 0317 ff0e fe9f e199 0cf4 7d00 f214 0127 0014 0027 0317 000e 019f 0014 021b 0226 fa0f 8392\n");
+	fprintf(fp, "// patch_spare1, PSKEY_PATCH155 (0x222b, 8747), 60 words\n");
+	fprintf(fp, "&222b = e70b 1627 a100 8514 0227 0214 0127 6b00 d814 0427 0214 0327 0417 fe27 0317 ff27 1613 0230 0814 0027 e415 0534 ff0e fe9f 0513 0009 01a4 e015 7fc4 7f84 1bf0 0617 1584 18f0 161b 0116 010e 029f e119 049a 11f4 0116 4184 0ef0 e500 ac11 8000 0050 0100 c014 ff27 fe23 0816 ff0e fe9f 0114 02e0 0014 e70f 4d65\n");
+	fprintf(fp, "// patch_spare2, PSKEY_PATCH156 (0x222c, 8748), 40 words\n");
+	fprintf(fp, "&222c = f40b 0927 2900 d414 0427 0314 0327 3500 ea14 0627 0314 0527 2900 9614 0827 0414 0727 0917 0110 070e 089f 0917 030e 049f 0617 fe27 0517 ff27 7f14 0027 1514 0127 2a14 0227 0114 0913 ff0e fe9f f40f 3478\n");
+	fprintf(fp, "// ===================================\n");
+
+	fprintf(fp, "// # PSKEY_HOST_INTERFACE UART link running H4 for BLE test\n");
+	fprintf(fp, "// #&01f9 0003\n");
+	fprintf(fp, "// #&01C0 08a8\n");
+	fprintf(fp, "// sleep 500\n");
+
+	fprintf(fp, "// # PSKEY_HOST_INTERFACE UART link running BCSP\n");
+	fprintf(fp, "&01f9 = 0001\n");
+	fprintf(fp, "// # PSKEY_UART_BITRATE 115200 - 0001 c200, 921600 - 000e 1000, 3Mbps - 002d c6c0\n");
+	fprintf(fp, "&01ea = 0001 c200\n");
+	fprintf(fp, "// # BT_ADDR\n");
+	fprintf(fp, "&0001 = %s\n", bt_mac);
+	fprintf(fp, "// # set PSKEY_ANA_FREQ Xtal frequency 26MHz\n");
+	fprintf(fp, "&01fe = 6590\n");
+	fprintf(fp, "// # Set PSKEY_ANA_FTRIM for fine tunning Xtal frequency.\n");
+	fprintf(fp, "&01f6 = %s\n", bt_cal);
+	fprintf(fp, "//# PSKEY_LC_MAX_TX_POWER\n");
+	fprintf(fp, "&0017 = 0004\n");
+	fprintf(fp, "//# PSKEY_BLE_DEFAULT_TX_POWER\n");
+	fprintf(fp, "&22c8 = 0004\n");
+
+#if !defined(PLAX56_XP4)
+	fprintf(fp, "## Configure co-existence\n");
+	fprintf(fp, "# PSKEY_COEX_SCHEME(0x2480) set to 5 for Unity 3+; set to 9 for Unity-3e+\n");
+	fprintf(fp, "#PSKEY_COEX_SCHEME(0x2480) Unity-3 (standard 3 wire co-existence)\n");
+	fprintf(fp, "&2480 = 0003\n");
+	fprintf(fp, "#PSKEY_COEX_PIO_UNITY_3_BT_ACTIVE_PIO1, Active High\n");
+	fprintf(fp, "&2483 = %s\n", BT_ACTIVE);
+	fprintf(fp, "#PSKEY_COEX_PIO_UNITY_3_BT_STATUS_PIO4, Active High\n");
+	fprintf(fp, "&2484 = %s\n", BT_STATUS);
+	fprintf(fp, "#PSKEY_COEX_PIO_UNITY_3_WLAN_DENY_PIO9, Active High\n");
+	fprintf(fp, "&2485 = %s\n", BT_WLAN_DENY);
+	fprintf(fp, "#COEX_UNITY_3_TIMINGS_T1 and T2 timings\n");
+	fprintf(fp, "&2489 = 0096 0011\n");
+#endif
+
+	fprintf(fp, "// # #PSKEY_LC_DEFAULT_TX_POWER\n");
+	fprintf(fp, "// #psset 0x0021 0x0004\n");
+	fprintf(fp, "// #psset 0x00ef 0xffff 0xfe8f 0xffdb 0x875b\n");
+
+	fclose(fp);
+
+	return 1;
+}
+void execute_bt_bscp()
+{
+	char *hciattach_argv[] = { "/usr/bin/hciattach", "-s", BT_UART_RATE, BTDEV, "bcsp", BT_UART_RATE, NULL };
+
+	if (nvram_get_int("x_Setting")==1)
+		return;
+
+	if (pids("hciattach")) {
+		eval("killall", "hciattach");
+		sleep(1);
+	}
+
+	if (generate_bt_bscp_conf()) {
+		doSystem("bccmd -t bcsp -b %s -d %s psload -r %s", BT_UART_RATE, BTDEV, BT_BSCP_CONF_PATH);
+		sleep(1);
+		_eval(hciattach_argv, NULL, 0, NULL);
+	}
+	else 
+		_dprintf("%s, Generate bt_bscp_conf fail.\n", __func__);
+}
+#endif

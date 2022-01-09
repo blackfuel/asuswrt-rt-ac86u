@@ -34,7 +34,7 @@
 #define MAX_WANLAN_PORT	5
 
 enum {
-#if defined(RTAC58U)
+#if defined(RTAC58U) || defined(RTAC95U)
 	CPU_PORT=0,
 	LAN1_PORT=4,
 	LAN2_PORT=3,
@@ -58,7 +58,7 @@ enum {
 	LAN4_PORT=4,
 	WAN_PORT=5,
 	P6_PORT=5,
-#elif defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(RTAC92U) 
+#elif defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(SHAC1300)
 	CPU_PORT=0,
 	LAN1_PORT=1,
 	LAN2_PORT=2,
@@ -74,6 +74,17 @@ enum {
 
 //0:WAN, 1:LAN, lan_wan_partition[][0] is port0
 static const int lan_wan_partition[9][NR_WANLAN_PORT] = {
+#if defined(RTAC95U)
+	/* W, L1, L2, L3, X */
+	{0,1,1,1,1}, //WLLLL
+	{0,0,1,1,1}, //WWLLL
+	{0,1,0,1,1}, //WLWLL
+	{0,1,1,0,1}, //WLLWL
+	{0,1,1,0,1}, //WLLWL
+	{0,0,0,1,1}, //WWWLL
+	{0,1,0,0,1}, //WLWWL
+	{1,1,1,1,1}  //ALL
+#else
 	/* W, L1, L2, L3, L4 */
 	{0,1,1,1,1}, //WLLLL
 	{0,0,1,1,1}, //WWLLL
@@ -83,6 +94,7 @@ static const int lan_wan_partition[9][NR_WANLAN_PORT] = {
 	{0,0,0,1,1}, //WWWLL
 	{0,1,1,0,0}, //WLLWW
 	{1,1,1,1,1}  //ALL
+#endif
 };
 
 #define	CPU_PORT_WAN_MASK	(1U << CPU_PORT)
@@ -104,6 +116,18 @@ static unsigned int wans_lan_mask = 0;	/* wan_type = WANS_DUALWAN_IF_LAN. */
  * ==> Model-specific port number.
  */
 static int switch_port_mapping[] = {
+#if defined(RTAC95U)
+	LAN3_PORT,	//0000 0000 0001 LAN4 (convert to LAN3)
+	LAN2_PORT,	//0000 0000 0010 LAN3 (convert to LAN2)
+	LAN2_PORT,	//0000 0000 0100 LAN2
+	LAN1_PORT,	//0000 0000 1000 LAN1
+	WAN_PORT,	//0000 0001 0000 WAN
+	P6_PORT,	//0000 0010 0000 -
+	P6_PORT,	//0000 0100 0000 -
+	P6_PORT,	//0000 1000 0000 -
+	P6_PORT,	//0001 0000 0000 -
+	CPU_PORT,	//0010 0000 0000 CPU port
+#else
 	LAN4_PORT,	//0000 0000 0001 LAN4
 	LAN3_PORT,	//0000 0000 0010 LAN3
 	LAN2_PORT,	//0000 0000 0100 LAN2
@@ -114,6 +138,7 @@ static int switch_port_mapping[] = {
 	P6_PORT,	//0000 1000 0000 -
 	P6_PORT,	//0001 0000 0000 -
 	CPU_PORT,	//0010 0000 0000 CPU port
+#endif
 };
 
 /* Model-specific LANx ==> Model-specific PortX mapping */
@@ -125,7 +150,7 @@ const int lan_id_to_port_mapping[NR_WANLAN_PORT] = {
 	LAN4_PORT,
 };
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(RTAC92U) /* for Lyra */
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(SHAC1300) /* for Lyra */
 /* this table is mapping to lan_id_to_port_mapping */
 static const int skip_ports[NR_WANLAN_PORT] = {
 	0,  /* WAN_PORT */
@@ -134,7 +159,17 @@ static const int skip_ports[NR_WANLAN_PORT] = {
 	1,
 	0,  /* LAN4_PORT */
 };
-
+#elif defined(RTAC95U)
+static const int skip_ports[NR_WANLAN_PORT] = {
+	0,  /* WAN_PORT */
+	0,
+	0,
+	0,
+	1,  /* LAN4_PORT */
+};
+#else
+static const int skip_ports[NR_WANLAN_PORT] = { 0 };
+#endif
 int is_skip_port(int port)
 {
 	int i;
@@ -144,10 +179,6 @@ int is_skip_port(int port)
 	}
 	return 1;
 }
-#else
-static const int skip_ports[NR_WANLAN_PORT] = { 0 };
-#define is_skip_port(p) (0)
-#endif
 
 void reset_qca_switch(void);
 
@@ -321,7 +352,7 @@ void vlan_accept_vid_via_switch(int accept, int wan, int lan)
  *     -1:	invalid parameter
  *  otherwise:	fail
  */
-static int get_ipq40xx_port_info(unsigned int port, unsigned int *link, unsigned int *speed)
+static int get_ipq40xx_port_info(unsigned int port, unsigned int *link, unsigned int *speed, phy_info *info)
 {
         FILE *fp;
 	size_t rlen;
@@ -381,6 +412,36 @@ static int get_ipq40xx_port_info(unsigned int port, unsigned int *link, unsigned
 			s = 2;
 		else
 			s = 1;
+
+		if (info) {
+			snprintf(info->state, sizeof(info->state), "up");
+			info->link_rate = strtol(pt, NULL, 10);
+
+			sprintf(buf, "ssdk_sh port duplex get %d", port);
+			if ((fp = popen(buf, "r")) == NULL) {
+				_dprintf("%s: Run [%s] fail!\n", __func__, buf);
+				return -5;
+			}
+			rlen = fread(buf, 1, sizeof(buf), fp);
+			pclose(fp);
+			if (rlen <= 1)
+				return -6;
+
+			buf[rlen-1] = '\0';
+			if ((pt = strstr(buf, "[duplex]:")) == NULL)
+				return -7;
+
+			pt += 9; // strlen of "[duplex]:"
+			if (!strncmp(pt, "FULL", 4))
+				snprintf(info->duplex, sizeof(info->duplex), "full");
+			else
+				snprintf(info->duplex, sizeof(info->duplex), "half");
+		}
+	} else {
+		if (info) {
+			snprintf(info->state, sizeof(info->state), "down");
+			snprintf(info->duplex, sizeof(info->duplex), "none");
+		}
 	}
 
 	if (link)
@@ -388,6 +449,96 @@ static int get_ipq40xx_port_info(unsigned int port, unsigned int *link, unsigned
 	if (speed)
 		*speed = s;
 
+	return 0;
+}
+
+/*define structure for software with 64bit*/
+typedef struct
+{
+	uint64_t RxBroad;
+	uint64_t RxPause;
+	uint64_t RxMulti;
+	uint64_t RxFcsErr;
+	uint64_t RxAllignErr;
+	uint64_t RxRunt;
+	uint64_t RxFragment;
+	uint64_t Rx64Byte;
+	uint64_t Rx128Byte;
+	uint64_t Rx256Byte;
+	uint64_t Rx512Byte;
+	uint64_t Rx1024Byte;
+	uint64_t Rx1518Byte;
+	uint64_t RxMaxByte;
+	uint64_t RxTooLong;
+	uint64_t RxGoodByte;
+	uint64_t RxBadByte;
+	uint64_t RxOverFlow;		/* no this counter for Hawkeye*/
+	uint64_t Filtered;			/*no this counter for Hawkeye*/
+	uint64_t TxBroad;
+	uint64_t TxPause;
+	uint64_t TxMulti;
+	uint64_t TxUnderRun;
+	uint64_t Tx64Byte;
+	uint64_t Tx128Byte;
+	uint64_t Tx256Byte;
+	uint64_t Tx512Byte;
+	uint64_t Tx1024Byte;
+	uint64_t Tx1518Byte;
+	uint64_t TxMaxByte;
+	uint64_t TxOverSize;	/*no this counter for Hawkeye*/
+	uint64_t TxByte;
+	uint64_t TxCollision;
+	uint64_t TxAbortCol;
+	uint64_t TxMultiCol;
+	uint64_t TxSingalCol;
+	uint64_t TxExcDefer;
+	uint64_t TxDefer;
+	uint64_t TxLateCol;
+	uint64_t RxUniCast;
+	uint64_t TxUniCast;
+	uint64_t RxJumboFcsErr;	/* add for  Hawkeye*/
+	uint64_t RxJumboAligenErr;	/* add for Hawkeye*/
+} fal_mib_counter_t;
+
+#define MISC_CHR_DEV           10
+#define UK_MINOR_DEV           254
+#define DEV_SWITH_SSDK_PATH    "/dev/switch_ssdk"
+#define SW_MAX_API_BUF         2048
+#define SW_MAX_API_PARAM       12 /* cmd type + return value + ten parameters */
+#define SW_API_PT_MIB_COUNTER_GET        1107
+static int get_ipq40xx_port_mib(unsigned int port, phy_info *info)
+{
+	int fd;
+	unsigned long arg_val[SW_MAX_API_PARAM] = {0};
+	unsigned long rtn = 0;
+	fal_mib_counter_t mib_counter = {0};
+
+	if (!info)
+		return -1;
+
+	/* even mknod fail we not quit, perhaps the device node exist already */
+	mknod(DEV_SWITH_SSDK_PATH, S_IFCHR, makedev(MISC_CHR_DEV, UK_MINOR_DEV));
+	if ((fd = open(DEV_SWITH_SSDK_PATH, O_RDWR)) < 0) {
+		return -1;
+	}
+	arg_val[0] = (unsigned long)SW_API_PT_MIB_COUNTER_GET;  // API
+	arg_val[1] = (unsigned long)&rtn;
+	arg_val[2] = (unsigned long)0;    //device id
+	arg_val[3] = (unsigned long)port; //port
+	arg_val[4] = (unsigned long)(&mib_counter);
+
+	ioctl(fd, SIOCDEVPRIVATE, arg_val);
+	//fprintf(stderr, "rtn=%d, port=%d\n", rtn, port);
+	if (rtn == 0) {
+		info->tx_bytes = mib_counter.TxByte;
+		info->rx_bytes = mib_counter.RxGoodByte;
+		info->tx_packets = mib_counter.TxBroad + mib_counter.TxMulti + mib_counter.TxUniCast;
+		info->rx_packets = mib_counter.RxBroad + mib_counter.RxMulti + mib_counter.RxUniCast;
+		info->crc_errors = mib_counter.RxFcsErr;
+		//fprintf(stderr, "tx_bytes=%llu, rx_bytes=%llu, tx_packets=%lu, rx_packets=%lu, crc_errors=%lu\n", 
+		//	info->tx_bytes, info->rx_bytes, info->tx_packets, info->rx_packets, info->crc_errors);
+	}
+	close(fd);
 	return 0;
 }
 
@@ -408,7 +559,7 @@ static void get_ipq40xx_phy_linkStatus(unsigned int mask, unsigned int *linkStat
 		if (!(m & 1))
 			continue;
 
-		get_ipq40xx_port_info(i, &value, NULL);
+		get_ipq40xx_port_info(i, &value, NULL, NULL);
 		value &= 0x1;
 	}
 	*linkStatus = value;
@@ -434,6 +585,14 @@ static void build_wan_lan_mask(int stb)
 	}
 	else
 		f_write_string("/proc/sys/net/edma/merge_wan_into_lan", "0", 0, 0);
+#endif
+#if defined(MAPAC1300) /* Lyra mini WAN/LAN port exchanged. */
+	if (!nvram_match("switch_wantag", "none") && !nvram_match("switch_wantag", "")) {
+		if (stb==4 || stb==6) // All WAN.
+			stb = 7;
+		else if (stb == 7) // All LAN.
+			stb = 4;
+	}
 #endif
 
 #if 0	/* TODO: no WAN port */
@@ -483,6 +642,10 @@ static void build_wan_lan_mask(int stb)
 				nvram_unset(nvram_ports);
 		}
 		nvram_set_int("lanports_mask", lan_mask);
+#if defined(MAPAC1300) /* Lyra mini fixed the WAN / LAN port mask. */
+		nvram_set_int(nvram_ports, lan_mask);
+		nvram_set_int("lanports_mask", wan_mask);
+#endif
 	}
 }
 
@@ -601,7 +764,7 @@ unsigned int get_portlink_bymask(unsigned int portmask)
 		if (!(m & 1))
 			continue;
 
-		get_ipq40xx_port_info(i, &islink, NULL);
+		get_ipq40xx_port_info(i, &islink, NULL, NULL);
 		if (islink)
 			value |= orbit;
 	}
@@ -745,11 +908,14 @@ static void config_ipq40xx_LANWANPartition(int type)
 	// WAN & DUALWAN
 	{
 		int vlan = 2;
-		if (wan_mask)
+		if (wan_mask) {
 			ipq40xx_vlan_set(vlan++, 0, (wan_mask      | CPU_PORT_WAN_MASK), wan_mask);
-		if (wans_lan_mask)
+			edma_group_mask_to_bmp(1, wan_mask);
+		}
+		if (wans_lan_mask) {
 			ipq40xx_vlan_set(vlan++, 0, (wans_lan_mask | CPU_PORT_WAN_MASK), wans_lan_mask);
-		edma_group_mask_to_bmp(1, wan_mask);
+			edma_group_mask_to_bmp(vlan == 2 ? 1 : 3, wans_lan_mask);
+		}
 	}
 }
 
@@ -766,7 +932,7 @@ static void get_ipq40xx_Port_Speed(unsigned int port_mask, unsigned int *speed)
 		if (!(m & 1))
 			continue;
 
-		get_ipq40xx_port_info(i, NULL, (unsigned int*) &t);
+		get_ipq40xx_port_info(i, NULL, (unsigned int*) &t, NULL);
 		t &= 0x3;
 		if (t > v)
 			v = t;
@@ -888,7 +1054,7 @@ void reset_qca_switch(void)
 	f_write_string("/sys/class/net/eth1/queues/rx-2/rps_flow_cnt", "256", 0, 0);
 	f_write_string("/sys/class/net/eth1/queues/rx-3/rps_flow_cnt", "256", 0, 0);
 	f_write_string("/proc/sys/net/core/rps_sock_flow_entries", "1024", 0, 0);
-#if defined(VZWAC1300)
+#if defined(VZWAC1300) || defined(SHAC1300)
 	eval("ssdk_sh", "debug", "phy", "set", "5", "0xB", "0x000a"); // decrease PHY NOISE, Arcadyan request
 #endif
 }
@@ -918,6 +1084,7 @@ static int convert_n56u_to_qca_bitmask(int orig)
 		if (orig & bit)
 			bitmask |= (1 << switch_port_mapping[i]);
 	}
+#if defined(RTCONFIG_PORT2_DEVICE)
 #if defined(RTCONFIG_DETWAN)
 	if(nvram_match("wifison_ready", "1")) {
 		if(nvram_safe_get("detwan_phy")[0] != '\0')
@@ -936,18 +1103,19 @@ static int convert_n56u_to_qca_bitmask(int orig)
 			bitmask |= mask;
 		}
 	}
-#elif defined(VZWAC1300)
+	else
+#endif	/* RTCONFIG_DETWAN */
 	{
 		int mask = 0;
 		//iptv (VoIP & STB) use LAN3/LAN4 but only LAN1 OR WAN to be real port in LYRA
 		if((bitmask & (1 << LAN4_PORT)) || (bitmask & (1 << LAN3_PORT))) {
 			bitmask &= ~(1 << LAN4_PORT);
 			bitmask &= ~(1 << LAN3_PORT);
-			mask |= LAN1_PORT;
+			mask |= (1 << LAN4_PORT);
 		}
 		bitmask |= mask;
 	}
-#endif
+#endif	/* RTCONFIG_PORT2_DEVICE */
 
 	return bitmask;
 }
@@ -1343,7 +1511,7 @@ int re_port_status(int re_iface)
 		pS.link[i] = 0;
 		pS.speed[i] = 0;
 		if (!skip_ports[i])
-			get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i]);
+			get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i], NULL);
 	}
 	res=0;member=0;
 	if(re_iface==0)
@@ -1371,27 +1539,80 @@ int re_port_status(int re_iface)
 }
 #endif
 
-void ATE_port_status(void)
+void ATE_port_status(phy_info_list *list)
 {
 	int i;
-	char buf[32];
+	char buf[32] = {0};
+#ifdef RTCONFIG_NEW_PHYMAP
+	char cap_buf[64] = {0};
+#endif
 	phyState pS;
 
+	if (list)
+		list->count = 0;
+
+#ifdef RTCONFIG_NEW_PHYMAP
+	phy_port_mapping port_mapping = get_phy_port_mapping();
+
+	for (i = 0; i < port_mapping.count; i++) {
+		pS.link[i] = 0;
+		pS.speed[i] = 0;
+		get_ipq40xx_port_info(port_mapping.port[i].phy_port_id, &pS.link[i], &pS.speed[i], list ? &list->phy_info[i] : NULL);
+		if (list) {
+			list->phy_info[i].phy_port_id = port_mapping.port[i].phy_port_id;
+			snprintf(list->phy_info[i].label_name, sizeof(list->phy_info[i].label_name), "%s", 
+				port_mapping.port[i].label_name);
+			snprintf(list->phy_info[i].cap_name, sizeof(list->phy_info[i].cap_name), "%s", 
+				get_phy_port_cap_name(port_mapping.port[i].cap, cap_buf, sizeof(cap_buf)));
+			if (pS.link[i] == 1)
+				get_ipq40xx_port_mib(port_mapping.port[i].phy_port_id, &list->phy_info[i]);
+
+			list->count++;
+		}
+		sprintf(buf, "%s%s=%C;", buf, port_mapping.port[i].label_name,
+			(pS.link[i] == 1) ? (pS.speed[i] == 2) ? 'G' : 'M': 'X');
+	}
+
+#else
 	for (i = 0; i < NR_WANLAN_PORT; i++) {
 		pS.link[i] = 0;
 		pS.speed[i] = 0;
-		if (!skip_ports[i])
-			get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i]);
+		if (!skip_ports[i]) {
+			get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i], list ? &list->phy_info[list->count] : NULL);
+
+			if (list) {
+				list->phy_info[list->count].phy_port_id = lan_id_to_port_nr(i);
+				if (!list->count) {
+					snprintf(list->phy_info[list->count].cap_name, sizeof(list->phy_info[i].cap_name), "wan");
+					snprintf(list->phy_info[list->count].label_name, sizeof(list->phy_info[list->count].label_name), "W0");
+				}
+				else {
+					snprintf(list->phy_info[list->count].cap_name, sizeof(list->phy_info[i].cap_name), "lan");
+					snprintf(list->phy_info[list->count].label_name, sizeof(list->phy_info[list->count].label_name), "L%d", 
+						list->count);
+				}
+				if (pS.link[i] == 1)
+					get_ipq40xx_port_mib(lan_id_to_port_nr(i), &list->phy_info[i]);
+
+				list->count++;
+			}
+		}
 	}
 
 #if defined(RT4GAC53U)
 	sprintf(buf, "L1=%C;L2=%C;",
 		(pS.link[1] == 1) ? (pS.speed[1] == 2) ? 'G' : 'M': 'X',
 		(pS.link[2] == 1) ? (pS.speed[2] == 2) ? 'G' : 'M': 'X');
+#elif defined(RTAC95U)
+	sprintf(buf, "W0=%C;L1=%C;L2=%C;L3=%C;",
+		(pS.link[0] == 1) ? (pS.speed[0] == 2) ? 'G' : 'M': 'X',
+		(pS.link[1] == 1) ? (pS.speed[1] == 2) ? 'G' : 'M': 'X',
+		(pS.link[2] == 1) ? (pS.speed[2] == 2) ? 'G' : 'M': 'X',
+		(pS.link[3] == 1) ? (pS.speed[3] == 2) ? 'G' : 'M': 'X');
 #else
 	sprintf(buf, "W0=%C;L1=%C;L2=%C;L3=%C;L4=%C;",
 		(pS.link[0] == 1) ? (pS.speed[0] == 2) ? 'G' : 'M': 'X',
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(RTAC92U)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(SHAC1300)
 		(pS.link[4] == 1) ? (pS.speed[4] == 2) ? 'G' : 'M': 'X',
 		'X',
 		'X',
@@ -1401,9 +1622,10 @@ void ATE_port_status(void)
 		(pS.link[2] == 1) ? (pS.speed[2] == 2) ? 'G' : 'M': 'X',
 		(pS.link[3] == 1) ? (pS.speed[3] == 2) ? 'G' : 'M': 'X',
 		(pS.link[4] == 1) ? (pS.speed[4] == 2) ? 'G' : 'M': 'X'
-#endif	/* MAPAC1300 || MAPAC2200 || VZWAC1300 || RTAC92U */
+#endif	/* MAPAC1300 || MAPAC2200 || VZWAC1300 || SHAC1300 */
 		);
 #endif
+#endif // #ifdef RTCONFIG_NEW_PHYMAP
 	puts(buf);
 }
 
@@ -1417,7 +1639,7 @@ int led_ctrl(void)
                 led=LED_ID_MAX;
 		pS.link[i] = 0;
                 pS.speed[i] = 0;
-                get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i]);
+                get_ipq40xx_port_info(lan_id_to_port_nr(i), &pS.link[i], &pS.speed[i], NULL);
 		switch(i)
 		{
 			case 1: led=LED_LAN1;
@@ -1468,12 +1690,12 @@ int detwan_set_def_vid(const char *ifname, int setVid, int needTagged, int avoid
 				int new_vid;
 				new_vid = detwan_set_def_vid(ipq40xx_net[i].ifname, 0, 0, setVid);
 
-#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(RTAC92U)
+#if defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(SHAC1300)
 				if (IPTV_ports_cnt() >= 2)
 				{
 					doSystem("ssdk_sh vlan entry del %d", new_vid);	/* remove new vid (NOT USED) */
 				}
-#endif	/* MAPAC1300 || MAPAC2200 || VZWAC1300 || RTAC92U */
+#endif	/* MAPAC1300 || MAPAC2200 || VZWAC1300 || SHAC1300 */
 			}
 		}
 	}
@@ -1526,6 +1748,39 @@ int detwan_set_def_vid(const char *ifname, int setVid, int needTagged, int avoid
 	return vid;
 }
 
+#ifdef RTCONFIG_NEW_PHYMAP
+/* phy port related start */
+phy_port_mapping get_phy_port_mapping(void)
+{
+	static const phy_port_mapping port_mapping = {
+#if defined(RT4GAC53U)
+		.count = 2,
+		.port[0] = { .phy_port_id = WAN_PORT, .label_name = "L1", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = NULL },
+		.port[1] = { .phy_port_id = LAN4_PORT, .label_name = "L2", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = NULL }
+#elif defined(MAPAC1300) || defined(MAPAC2200) || defined(VZWAC1300) || defined(SHAC1300) /* for Lyra */
+		.count = 2,
+		.port[0] = { .phy_port_id = WAN_PORT, .label_name = "W0", .cap = PHY_PORT_CAP_WAN, .max_rate = 1000, .ifname = "eth0" },
+		.port[1] = { .phy_port_id = LAN4_PORT, .label_name = "L1", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = "eth1" }
+#elif defined(RTAC95U)
+		.count = 4,
+		.port[0] = { .phy_port_id = WAN_PORT, .label_name = "W0", .cap = PHY_PORT_CAP_WAN, .max_rate = 1000, .ifname = "eth0" },
+		.port[1] = { .phy_port_id = LAN1_PORT, .label_name = "L1", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = "eth1" },
+		.port[2] = { .phy_port_id = LAN2_PORT, .label_name = "L2", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = "eth1" },
+		.port[3] = { .phy_port_id = LAN3_PORT, .label_name = "L3", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = "eth1" }
+#else
+		.count = 5,
+		.port[0] = { .phy_port_id = WAN_PORT, .label_name = "W0", .cap = PHY_PORT_CAP_WAN, .max_rate = 1000, .ifname = NULL },
+		.port[1] = { .phy_port_id = LAN1_PORT, .label_name = "L1", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = NULL },
+		.port[2] = { .phy_port_id = LAN2_PORT, .label_name = "L2", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = NULL },
+		.port[3] = { .phy_port_id = LAN3_PORT, .label_name = "L3", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = NULL },
+		.port[4] = { .phy_port_id = LAN4_PORT, .label_name = "L4", .cap = PHY_PORT_CAP_LAN, .max_rate = 1000, .ifname = NULL }
+#endif
+	};
+	return port_mapping;
+}
+/* phy port related end.*/
+#endif
+
 
 
 #if 0
@@ -1567,3 +1822,13 @@ void usage(char *cmd)
 	exit(0);
 }
 #endif
+
+unsigned int
+rtkswitch_Port_phyLinkRate(unsigned int port_mask)
+{
+	unsigned int speed = 0;
+
+	get_ipq40xx_Port_Speed(port_mask, &speed);
+
+	return speed;
+}

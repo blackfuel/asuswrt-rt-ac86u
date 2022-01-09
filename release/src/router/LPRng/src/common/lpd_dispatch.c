@@ -46,6 +46,8 @@
 #include "lpd_dispatch.h"
 
 #include <bcmnvram.h>
+extern int file_lock(const char *tag);	//in shared.h but conflicting types for 'connect_timeout'
+extern void file_unlock(int lockfd);	//in shared.h but conflicting types for 'connect_timeout'
 
 //extern char busy;
 
@@ -76,7 +78,7 @@ void Dispatch_input(int *talk, char *input , int ignore_busy)	// by Jiahao for U
 
 			//syslog(LOG_NOTICE, "LPR ACK_RETRY: %d\n", busy);
 
-			return(0);	
+			return;
 		}
 
 /**/
@@ -89,7 +91,7 @@ void Dispatch_input(int *talk, char *input , int ignore_busy)	// by Jiahao for U
 			if((fd_print <= 0) ||(fd_print == NULL))
 			{
 				//printf("device open error\n");//JY1113
-				return(0);//JY1120: exit
+				return;//JY1120: exit
 			}
 			Receive_job( talk, input );
 			break;

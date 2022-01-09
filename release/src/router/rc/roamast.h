@@ -1,6 +1,9 @@
 #ifdef RTCONFIG_LIBASUSLOG
 #include <libasuslog.h>
 #endif
+#ifdef RTCONFIG_HND_ROUTER_AX
+#include <wlc_types.h>
+#endif
 
 #define RAST_COUNT_RSSI_SENSITIVE	2
 #define RAST_PERIOD_IDLE_SENSITIVE 	10
@@ -20,9 +23,33 @@
 #define RAST_EVENT_INTERVAL_MAX 5	/* maximum additional time for next event trigger */
 #define RAST_EVENT_FREEZE 10		/* event of specific will be freezed once event is triggered over this number */
 #define RAST_OBVS_RSSI_DELTA 3		/* condition of rssi for obvious moving */
+#define RAST_DFT_WEAK_RSSI_DIFF 10	/* rssi delta allow to roam the station which stamon result is not better than trigger criteria */
+#define RAST_DFT_RSSI_VIDEO_CALL -80	/* rssi thresold to change idle rate weighting scheme */
 #define WL_NBAND_2G 2
 #define WL_NBAND_5G 1
+
+#define ROAMING_BYPASS 1
+#define ROAMING_NOT_BYPASS 2
+
 #endif
+#define MAC_STR_LEN 17
+#ifdef RTCONFIG_11K_RCPI_CHECK
+struct report_entry {
+	uint8 rcpi;
+	char ap_mac[MAC_STR_LEN+1];
+	struct report_entry *next;
+};
+
+struct rcpi_checklist {
+	char report_ok;
+	char sta_mac[MAC_STR_LEN+1];
+	struct report_entry *rplist;
+	struct rcpi_checklist *next;
+};
+#endif
+
+#define RAST_SUPPORT_K_PASSIVE_SCAN	0x1
+#define RAST_SUPPORT_V	0x2
 
 #define RAST_POLL_INTV_NORMAL 5
 #if defined(RTCONFIG_RALINK)  /* Remove dead STA from assoclist */
@@ -32,7 +59,11 @@
 #define RAST_TIMEOUT_STA 10
 #endif
 #define	MAX_IF_NUM 3
+# ifdef RTCONFIG_FRONTHAUL_DWB
+#define MAX_SUBIF_NUM 6
+#else
 #define MAX_SUBIF_NUM 4
+#endif
 #define MAX_STA_COUNT 128
 #define ETHER_ADDR_STR_LEN 18
 #define MACF_UP	"%02X:%02X:%02X:%02X:%02X:%02X"
@@ -67,47 +98,53 @@
 
 #define RAST_DEBUG "/tmp/RAST_DEBUG"
 
+#define LOG_TITLE_ROAM "roamast"
+
 #ifdef RTCONFIG_LIBASUSLOG
 #define AMAS_DBG_LOG	"roamast.log"
 #define RAST_INFO(fmt, arg...) \
-	do {    \
+	do { \
 		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
 			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
+		if(rast_force_syslog) \
+			logmessage(LOG_TITLE_ROAM, fmt, ##arg); \
 	} while (0)
 #define RAST_DBG(fmt, arg...) \
-	do {    \
+	do { \
 		if(rast_dbg || f_exists(RAST_DEBUG)) \
+			_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
+		if(rast_syslog || f_exists(RAST_DEBUG)) \
+			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
+		if(rast_force_syslog) \
+			logmessage(LOG_TITLE_ROAM, fmt, ##arg); \
+	} while (0)
+#define RAST_SYSLOG(fmt, arg...) \
+	do { \
 		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
 			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
+		logmessage(LOG_TITLE_ROAM, fmt, ##arg); \
 	} while (0)
-#define RAST_SYSLOG(fmt, arg...) \
-        do {    \
-                _dprintf("RAST %lu: "fmt, uptime(), ##arg); \
-                logmessage("roamast", ""fmt, ##arg); \
-		if(rast_syslog || f_exists(RAST_DEBUG)) \
-			asusdebuglog(LOG_INFO, AMAS_DBG_LOG, LOG_CUSTOM, LOG_SHOWTIME, 0, fmt, ##arg); \
-        } while (0)
 #else
 #define RAST_INFO(fmt, arg...) \
-	do {    \
+	do { \
 		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
-		logmessage("RAST","[%s] "fmt, nvram_get("lan_hwaddr"), ##arg); \
+			logmessage(LOG_TITLE_ROAM, fmt, ##arg); \
 	} while (0)
 #define RAST_DBG(fmt, arg...) \
-	do {    \
+	do { \
 		if(rast_dbg || f_exists(RAST_DEBUG)) \
-		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
+			_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
 		if(rast_syslog || f_exists(RAST_DEBUG)) \
-		logmessage("RAST", "[%s] "fmt, nvram_get("lan_hwaddr"), ##arg); \
+			logmessage(LOG_TITLE_ROAM, fmt, ##arg); \
 	} while (0)
 #define RAST_SYSLOG(fmt, arg...) \
-        do {    \
-                _dprintf("RAST %lu: "fmt, uptime(), ##arg); \
-                logmessage("roamast", ""fmt, ##arg); \
-        } while (0)
+	do { \
+		_dprintf("RAST %lu: "fmt, uptime(), ##arg); \
+		logmessage(LOG_TITLE_ROAM, fmt, ##arg); \
+	} while (0)
 #endif
 
 #ifdef RTCONFIG_CONNDIAG
@@ -126,24 +163,31 @@
 #define KEY_ROAMING_EVENT 34952
 
 typedef struct _TG_ROAMING_TABLE {
+	unsigned char sta[MAX_STA_COUNT][MAC_LEN];
+	int band_unit[MAX_STA_COUNT];
+	int sta_rssi[MAX_STA_COUNT];
 	time_t tstamp[MAX_STA_COUNT];
 	int user_low_rssi[MAX_STA_COUNT];
 	int rssi_cnt[MAX_STA_COUNT];
 	int idle_period[MAX_STA_COUNT];
-	unsigned char sta[MAX_STA_COUNT][MAC_LEN];
-	int sta_rssi[MAX_STA_COUNT];
-	int idle_start[MAX_STA_COUNT];
+	time_t idle_start[MAX_STA_COUNT];
 	int total;
 } TG_ROAMING_TABLE, *P_TG_ROAMING_TABLE;
 
 typedef struct _ROAMING_TABLE {
-	time_t tstamp[MAX_STA_COUNT];
 	unsigned char sta[MAX_STA_COUNT][MAC_LEN];
 	int sta_rssi[MAX_STA_COUNT];
+	time_t tstamp[MAX_STA_COUNT];
 	int candidate_rssi_criteria[MAX_STA_COUNT];
 	unsigned char candidate[MAX_STA_COUNT][MAC_LEN];
 	int candidate_rssi[MAX_STA_COUNT];
 	int total;
+#if defined(RTCONFIG_BTM_11V) && defined(RTCONFIG_BCN_RPT)
+	int ret_11v[MAX_STA_COUNT];
+#ifdef RTCONFIG_CONN_EVENT_TO_EX_AP
+	unsigned char present_ap[MAX_STA_COUNT][MAC_LEN];
+#endif
+#endif
 } ROAMING_TABLE, *P_ROAMING_TABLE;
 #endif
 
@@ -151,31 +195,6 @@ typedef struct _ROAMING_TABLE {
 #define xR_MAX  4
 extern int xTxR;
 #elif defined(RTCONFIG_QCA)
-typedef struct _WLANCONFIG_LIST {
-         char addr[18];
-         unsigned int aid;
-         unsigned int chan;
-         char txrate[6];
-         char rxrate[6];
-         unsigned int rssi;
-         unsigned int rssi_min;
-         unsigned int rssi_max;
-         unsigned int idle;
-         unsigned int txseq;
-         unsigned int rxseq;
-         char caps[12];
-         char acaps[10];
-         char erp[7];
-         char state[20];
-         unsigned int maxrate;
-         char htcaps[8];
-         char assoctime[12];
-         char Ies[32];
-         char mode[32];
-         unsigned int psmode;
-         unsigned int rxnss;
-         unsigned int txnss;
-} WLANCONFIG_LIST;
 #endif
 
 typedef struct rast_sta_info {
@@ -196,10 +215,10 @@ typedef struct rast_sta_info {
 	int32 last_txrx_bytes; /* bytes */
 #elif defined(RTCONFIG_REALTEK)
 	unsigned long long last_txrx_bytes;
-#else //BRCM
-#ifndef RTCONFIG_BCMARM
+#elif defined(RTCONFIG_LANTIQ)
+	unsigned long last_txrx_bytes;
+#elif !defined(RTCONFIG_BCMARM) // BRCM MIPS
 	uint32 prepkts;
-#endif
 #endif
 
 #ifdef RTCONFIG_ADV_RAST
@@ -207,22 +226,48 @@ typedef struct rast_sta_info {
 	int next_trigger_interval;	/* interval of next STAMON event trigger */
 	int stamon_event_count;		/* counter of STAMON event trigger */
 	int32 previous_rssi;		/* save previous rssi for detecting sticky sta */
+	uint32 wnm_cap;			/* WNM capability */
+#ifdef RTCONFIG_BCN_RPT
+	uint8 rrm_bcn_passive_cap;	/* RRM Beacon Passive Measurement capability */
 #endif
-#if defined(RTCONFIG_LANTIQ)
-	unsigned long last_txrx_bytes;
 #endif
-	int32 tx_rate;
-	int32 rx_rate;
-}rast_sta_info_t;
+	uint32 tx_rate;
+	uint32 rx_rate;
+#if defined(RTCONFIG_BCMARM) || defined(RTCONFIG_LANTIQ) || defined(RTCONFIG_QCA)
+	uint64 tx_byte;
+	uint64 rx_byte;
+#if defined(RTCONFIG_BCMARM)
+	uint64 rx_bytes;
+#if defined(RTCONFIG_HND_ROUTER_AX)
+	char tx_nrate[64];
+	char rx_nrate[64];
+#endif
+#endif
+#endif
+#ifdef RTCONFIG_STA_AP_BAND_BIND
+	int in_binding_list;
+#endif	
+} rast_sta_info_t;
 
 
 #ifdef RTCONFIG_ADV_RAST
 typedef struct rast_maclist {
-        time_t timestamp;
+	time_t timestamp;
 	uint8 mesh_node;
-        struct ether_addr addr;
-        struct rast_maclist *next;
-}rast_maclist_t;
+	struct ether_addr addr;
+	struct rast_maclist *next;
+	int force_roaming_blocktime;
+	int sta_ap_band_bind_action;
+} rast_maclist_t;
+#endif
+
+#ifdef RTCONFIG_FORCE_ROAMING
+struct force_roaming_list {
+	char stamac[18];
+	int  blocktime;
+	char target[18];
+	struct force_roaming_list *next;
+};
 #endif
 
 typedef struct rast_bss_info {
@@ -246,6 +291,10 @@ typedef struct rast_bss_info {
 	rast_maclist_t *static_client;
 	char tmp_static_client_path[32];
 #endif
+#ifdef RTCONFIG_FRONTHAUL_DWB
+	int fhdwb_if_enable[MAX_SUBIF_NUM];
+	int user_low_rssi_for_fhdwb_if;
+#endif
 }rast_bss_info_t;
 
 #ifdef RTCONFIG_ADV_RAST
@@ -256,14 +305,17 @@ typedef enum {
 
 typedef struct rast_adv_conf {
 	uint32 aclist_timeout;
+	uint8 weak_rssi_diff;
 } rast_adv_conf_t;
 #endif
 
 rast_bss_info_t bssinfo[MAX_IF_NUM];
 int rast_dbg;
 int rast_syslog;
+int rast_force_syslog;
 
 #ifdef RTCONFIG_ADV_RAST
+struct ether_addr* rast_ether_atoe(char *a,struct ether_addr *ret_ea);
 rast_adv_conf_t adv_conf;
 extern int alarm_count;
 char maclist_buf[4096];
@@ -331,3 +383,28 @@ extern void rast_retrieve_bs_data(int bssidx, int vifidx, int interval);
 #define WLC_MACMODE_ALLOW       1      /* Allow specified (i.e. deny unspecified) */
 #define WLC_MACMODE_DENY        2      /* Deny specified (i.e. allow unspecified) */
 #endif
+
+#ifdef RTCONFIG_11K_RCPI_CHECK
+void add_to_rcpi_checklist(char *sta, char *ap_mac, char rcpi,struct rcpi_checklist **rcpi_list);
+#endif
+
+#ifdef RTCONFIG_RAST_NONMESH_KVONLY
+struct roaming_list_entry{
+	int idx;
+	int vidx;
+	struct ether_addr sta;
+	int rssi;
+	time_t trigger_time;
+	struct roaming_list_entry *next;
+};
+struct report_list_entry {
+	struct ether_addr sta;
+	struct ether_addr bssid;
+	int8 rcpi;
+	time_t recv_time;
+	struct report_list_entry *next;
+};
+int add_to_roaming_list(int idx,int vidx ,struct ether_addr *sta,int rssi);
+int remove_from_roaming_list(int idx,int vidx ,struct ether_addr *sta);
+
+#endif //RTCONFIG_RAST_NONMESH_KVONLY

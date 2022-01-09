@@ -32,6 +32,9 @@
 
 #if DROPBEAR_CLI_AGENTFWD
 
+/* From OpenSSH authfd.h */
+#define SSH_AGENT_RSA_SHA2_256          0x02
+
 /* An agent reply can be reasonably large, as it can
  * contain a list of all public keys held by the agent.
  * 10000 is arbitrary */
@@ -40,8 +43,8 @@
 /* client functions */
 void cli_load_agent_keys(m_list * ret_list);
 void agent_buf_sign(buffer *sigblob, sign_key *key, 
-	buffer *data_buf);
-void cli_setup_agent(struct Channel *channel);
+		const buffer *data_buf, enum signature_type type);
+void cli_setup_agent(const struct Channel *channel);
 
 #ifdef __hpux
 #define seteuid(a)       setresuid(-1, (a), -1)
@@ -56,7 +59,7 @@ extern const struct ChanType cli_chan_agent;
 
 int svr_agentreq(struct ChanSess * chansess);
 void svr_agentcleanup(struct ChanSess * chansess);
-void svr_agentset(struct ChanSess *chansess);
+void svr_agentset(const struct ChanSess *chansess);
 
 #endif /* DROPBEAR_SVR_AGENTFWD */
 

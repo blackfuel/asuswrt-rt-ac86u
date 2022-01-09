@@ -1,13 +1,16 @@
 var noti_auth_mode_2g = "";
 var noti_auth_mode_5g = "";
+var noti_auth_mode_5g2 = "";
 
 if(isSwMode('rt') || isSwMode('ap') || '<% nvram_get("wlc_band"); %>' == ''){
 	noti_auth_mode_2g = '<% nvram_get("wl0_auth_mode_x"); %>';
 	noti_auth_mode_5g = '<% nvram_get("wl1_auth_mode_x"); %>';
+	noti_auth_mode_5g2 = '<% nvram_get("wl2_auth_mode_x"); %>';
 }
 else if(isSwMode('mb')){
 	noti_auth_mode_2g = '';
 	noti_auth_mode_5g = '';
+	noti_auth_mode_5g2 = "";
 }
 else{
 	noti_auth_mode_2g = ('<% nvram_get("wlc_band"); %>' == 0) ? '<% nvram_get("wl0.1_auth_mode_x"); %>' : '<% nvram_get("wl0_auth_mode_x"); %>';
@@ -32,8 +35,8 @@ var enable_ftp = '<% nvram_get("enable_ftp"); %>';
 var autodet_state = '<% nvram_get("autodet_state"); %>';
 var autodet_auxstate = '<% nvram_get("autodet_auxstate"); %>';
 var wan_proto = '<% nvram_get("wan0_proto"); %>';
-// MODELDEP : DSL-AC68U Only for now
-if(based_modelid == "DSL-AC68U"){
+// MODELDEP : DSL-AC68U | DSL-AX82U Only for now
+if(dsl_support){
 	var dla_modified = (vdsl_support == false) ? "0" :'<% nvram_get("dsltmp_dla_modified"); %>';	
 	var dsl_loss_sync = "";
 	if(dla_modified == "1")
@@ -71,7 +74,7 @@ if(dsl_support){
 }
 
 var aimesh_system_new_fw_flag = false;
-if(amesh_support) {
+if(amesh_support && ameshRouter_support) {
 	var get_cfg_clientlist = [<% get_cfg_clientlist(); %>][0];
 	for (var idx in get_cfg_clientlist) {
 		if(get_cfg_clientlist.hasOwnProperty(idx)) {
@@ -85,6 +88,205 @@ if(amesh_support) {
 	}
 }
 
+var check_ipv6_s46_ports_hook = (Softwire46_support && wan_proto=="v6plus")? '<%chk_s46_port_range();%>':'0';
+var check_ipv6_s46_ports = "0";
+if(check_ipv6_s46_ports_hook != "" && check_ipv6_s46_ports_hook != "0"){
+	check_ipv6_s46_ports = JSON.parse(check_ipv6_s46_ports_hook);
+}
+
+
+var get_ipv6_s46_ports = (Softwire46_support && wan_proto=="v6plus")? '<%nvram_get("ipv6_s46_ports");%>':'0';
+var array_ipv6_s46_ports = new Array("");
+if(get_ipv6_s46_ports!="0" && get_ipv6_s46_ports!=""){
+	array_ipv6_s46_ports = get_ipv6_s46_ports.split(" ");
+}
+
+function pop_s46_ports(p, flag){
+	var isMobile = function() {
+		
+		if(	navigator.userAgent.match(/iPhone/i)	|| 
+			navigator.userAgent.match(/iPod/i)		||
+			navigator.userAgent.match(/iPad/i)		||
+			(navigator.userAgent.match(/Android/i) && (navigator.userAgent.match(/Mobile/i) || navigator.userAgent.match(/Tablet/i))) ||
+			(navigator.userAgent.match(/Opera/i) && (navigator.userAgent.match(/Mobi/i) || navigator.userAgent.match(/Mini/i))) ||	// Opera mobile or Opera Mini
+			navigator.userAgent.match(/IEMobile/i)	||	// IE Mobile
+			navigator.userAgent.match(/BlackBerry/i)	//BlackBerry
+		 ) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	};
+
+	var left_tuned=p.left;
+	if(isMobile()){
+		
+		if(flag=="game"){
+			var top_tuned=p.top+1165;
+		}
+		else if(flag=="pf"){
+			var top_tuned=p.top-170;
+		}
+		else if(flag=="table"){
+			var top_tuned=p.top-200;
+		}
+		else{
+			var top_tuned=p.top-200;
+		}
+	}
+	else{
+		
+		if(flag=="game"){
+			var top_tuned=p.top+575;
+		}
+		else if(flag=="pf"){
+			var top_tuned=p.top;
+		}
+		else if(flag=="table"){
+			var top_tuned=p.top;
+		}
+		else{
+			var top_tuned=p.top-24;
+		}
+	}
+	var margin_set=top_tuned +"px 0px 0px "+left_tuned+"px";
+	if(document.getElementById("s46_ports_content") != null) {
+		$("#s46_ports_content").remove();
+	}
+	var divObj = document.createElement("div");
+	divObj.setAttribute("id","s46_ports_content");
+	divObj.className = "s46_ports";
+	divObj.style.zIndex = "300";
+	divObj.style.margin = margin_set;
+	divObj.innerHTML = "<div style='float:right;'><img src='/images/button-close.gif' style='width:30px;cursor:pointer' onclick='close_s46_ports();'></div>Since you are currently using v6plus connection, please make sure your external port settings are within the following port range:<br><br>"+get_ipv6_s46_ports+"<br>";
+	document.body.prepend(divObj);
+	if(flag=="pf")
+		adjust_panel_block_top("s46_ports_content", -70);
+	else if(flag=="table")
+		adjust_panel_block_top("s46_ports_content", 30);
+	
+	cal_panel_s46_ports("s46_ports_content", 0.045);
+	$("#s46_ports_content").fadeIn();
+}
+function close_s46_ports(){
+	$("#s46_ports_content").fadeOut();
+}
+
+function pop_s46_ports_conflict(){
+
+	var conflict_links = gen_conflict_links();
+	var confilct_content = "<div style='float:right;'><img src='/images/button-close.gif' style='width:30px;cursor:pointer;margin:-28px -28px 0 0;' onclick='close_s46_ports_conflict();'></div>The following port related settings may not work properly since port number mismatch in current v6plus usable port range. Please set up a usable port listed in <a target='_self' style='text-decoration:underline;' href='Main_IPV6Status_Content.asp'>IPv6 Log</a>.<br><br>"+conflict_links;
+	
+	var left_tuned=0;
+	var top_tuned=130;
+	var margin_set=top_tuned +"px 0px 0px "+left_tuned+"px";
+
+	if(document.getElementById("s46_ports_confilct") != null) {
+		$("#s46_ports_confilct").remove();
+	}
+	var divObj = document.createElement("div");
+	divObj.setAttribute("id","s46_ports_confilct");
+	divObj.className = "noti_s46_ports";
+	divObj.style.zIndex = "300";
+	divObj.style.margin = margin_set;
+	divObj.innerHTML = confilct_content;
+	document.body.prepend(divObj);
+	
+	cal_panel_s46_ports("s46_ports_confilct", 0.045);
+	$("#s46_ports_confilct").fadeIn();
+}
+function close_s46_ports_conflict(){
+	$("#s46_ports_confilct").fadeOut();
+}
+function cal_panel_s46_ports(obj, multiple) {
+	var isMobile = function() {		
+		if(	navigator.userAgent.match(/iPhone/i)	|| 
+			navigator.userAgent.match(/iPod/i)		||
+			navigator.userAgent.match(/iPad/i)		||
+			(navigator.userAgent.match(/Android/i) && (navigator.userAgent.match(/Mobile/i) || navigator.userAgent.match(/Tablet/i))) ||
+			(navigator.userAgent.match(/Opera/i) && (navigator.userAgent.match(/Mobi/i) || navigator.userAgent.match(/Mini/i))) ||	// Opera mobile or Opera Mini
+			navigator.userAgent.match(/IEMobile/i)	||	// IE Mobile
+			navigator.userAgent.match(/BlackBerry/i)	//BlackBerry
+		 ) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	};
+	var blockmarginLeft;
+	if (window.innerWidth) {
+		winWidth = window.innerWidth;
+	}
+	else if ((document.body) && (document.body.clientWidth)) {
+		winWidth = document.body.clientWidth;
+	}
+
+	if (document.documentElement  && document.documentElement.clientHeight && document.documentElement.clientWidth) {
+		winWidth = document.documentElement.clientWidth;
+	}
+
+	if(winWidth > 1050) {
+		winPadding = (winWidth - 1050) / 2;
+		winWidth = 1105;
+		blockmarginLeft = (winWidth * multiple) + winPadding;
+	}
+	else if(winWidth <= 1050) {
+		if(isMobile()) {
+			if(document.body.scrollLeft < 50) {
+				blockmarginLeft= (winWidth) * multiple + document.body.scrollLeft;
+			}
+			else if(document.body.scrollLeft >320) {
+				blockmarginLeft = 320;
+			}
+			else {
+				blockmarginLeft = document.body.scrollLeft;
+			}	
+		}
+		else {
+			blockmarginLeft = (winWidth) * multiple + document.body.scrollLeft;	
+		}
+	}
+
+	document.getElementById(obj).style.marginLeft = blockmarginLeft + "px";
+}
+
+function gen_conflict_links(){
+	var items="";
+	$.each(check_ipv6_s46_ports, function (key, data) {
+    	if(data=='1'){
+    		switch(key) {
+                case "pf" :
+                        items += "<li><#menu5_3_4#></li>";
+                        break;
+                case "open_nat" :
+                        items += "<li>OPEN NAT</li>";
+                        break;
+                case "pt" :
+                        items += "<li><#menu5_3_3#></li>";
+                        break;
+                case "https" :
+                        items += "<li><#FirewallConfig_x_WanWebPort_itemname#></li>";
+                        break;
+                case "ssh" :
+                        items += "<li><#Port_SSH#></li>";
+                        break;
+                case "openvpn" :
+                        items += "<li>OpenVPN</li>";
+                        break;
+                case "ftp" :
+                        items += "<li><#NAT_passthrough_itemname#> - <#FTP_ALG_port#></li>";
+                        break;
+                default :
+                        break;
+        	}
+
+    	}
+	})
+
+	return items;
+}
 var notification = {
 	stat: "off",
 	flash: "off",
@@ -97,6 +299,7 @@ var notification = {
 	upgrade: 0,
 	wifi_2g: 0,
 	wifi_5g: 0,
+	wifi_5g2: 0,
 	ftp: 0,
 	samba: 0,
 	loss_sync: 0,
@@ -118,9 +321,11 @@ var notification = {
 	clickCallBack: [],
 	pppoe_tw: 0,
 	ie_legacy: 0,
+	s46_ports: 0,
 	notiClick: function(){
 		// stop flashing after the event is checked.
-		cookie.set("notification_history", [notification.upgrade, notification.wifi_2g ,notification.wifi_5g ,notification.ftp ,notification.samba ,notification.loss_sync ,notification.experience_FB ,notification.notif_hint, notification.mobile_traffic, notification.send_debug_log, notification.sim_record, notification.pppoe_tw, notification.pppoe_tw_static, notification.ie_legacy].join(), 1000);
+		cookie.set("notification_history", [notification.upgrade, notification.wifi_2g ,notification.wifi_5g, notification.wifi_5g2, notification.ftp ,notification.samba ,notification.loss_sync ,notification.experience_FB ,notification.notif_hint, notification.mobile_traffic, 
+											notification.send_debug_log, notification.sim_record, notification.pppoe_tw, notification.pppoe_tw_static, notification.ie_legacy, notification.s46_ports].join(), 1000);
 		clearInterval(notification.flashTimer);
 		document.getElementById("notification_status").className = "notification_on";
 		if(notification.clicking == 0){
@@ -128,35 +333,52 @@ var notification = {
 
 			for(i=0; i<notification.array.length; i++){
 				if(notification.array[i] != null && notification.array[i] != "off"){
-					if(i == 3 && notification.array[2] != null && notification.array[2] != "off")//filter 5G when 2G have notification
-						continue;
+					if(notification.array[2] != null && notification.array[2] != "off"){//filter 5G when 2G have notification
+						if(i == 3 || i == 19)
+							continue;
+					}
+					else if(i == 19 && notification.array[3] != null && notification.array[3] != "off"){
+							continue;
+					}
 
 						txt += '<tr><td><table id="notiDiv_table3" width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#232629">';
 		  			txt += '<tr><td><table id="notiDiv_table5" border="0" cellpadding="5" cellspacing="0" bgcolor="#232629" width="100%">';
 		  			txt += '<tr><td valign="TOP" width="100%"><div style="white-space:pre-wrap;font-size:13px;color:white;cursor:text">' + notification.desc[i] + '</div>';
 		  			txt += '</td></tr>';
 
-		  			if( i == 2 ){					  				
+					if( i == 2 ){
 		  				txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</div></td></tr>';
 		  				if(band5g_support && notification.array[3] != null && notification.array[3] != "off"){
 		  						txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i+1] + '">' + notification.action_desc[i+1] + '</div></td></tr>';
 		  				}else
 			  				notification.array[3] = "off";
-		  			}
-						else if( i == 7){
-							if(notification.array[18] != null){
-								txt += '<tr><td width="100%"><div style="text-align:right;text-decoration:underline;color:#FFCC00;font-size:14px;"><span style="cursor: pointer" onclick="' + notification.clickCallBack[18] + '">' + notification.action_desc[18] + '</span>';
-							}								
-							txt += '<span style="margin-left:10px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</span></div></td></tr>';
-							notification.array[18] = "off";
+
+						if(band5g2_support && notification.array[19] != null && notification.array[19] != "off"){
+								txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[19] + '">' + notification.action_desc[19] + '</div></td></tr>';
+						}else
+							notification.array[19] = "off";
+					}
+					else if( i == 3 ){
+						txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</div></td></tr>';
+						if(band5g2_support && notification.array[19] != null && notification.array[19] != "off"){
+								txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[19] + '">' + notification.action_desc[19] + '</div></td></tr>';
+						}else
+							notification.array[19] = "off";
+					}
+					else if( i == 7){
+						if(notification.array[18] != null){
+							txt += '<tr><td width="100%"><div style="text-align:right;text-decoration:underline;color:#FFCC00;font-size:14px;"><span style="cursor: pointer" onclick="' + notification.clickCallBack[18] + '">' + notification.action_desc[18] + '</span>';
 						}
-						else if( i == 9){
-		  				txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</div></td></tr>';
-							if(notification.array[10] != null && notification.array[10] != "off"){
-								txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i+1] + '">' + notification.action_desc[i+1] + '</div></td></tr>';
-							}		
-							notification.array[10] = "off";
+						txt += '<span style="margin-left:10px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</span></div></td></tr>';
+						notification.array[18] = "off";
+					}
+					else if( i == 9){
+						txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</div></td></tr>';
+						if(notification.array[10] != null && notification.array[10] != "off"){
+							txt += '<tr><td width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i+1] + '">' + notification.action_desc[i+1] + '</div></td></tr>';
 						}
+						notification.array[10] = "off";
+					}
 		  			else{
 	  					txt += '<tr><td><table width="100%"><div style="text-decoration:underline;text-align:right;color:#FFCC00;font-size:14px;cursor: pointer" onclick="' + notification.clickCallBack[i] + '">' + notification.action_desc[i] + '</div></table></td></tr>';
 		  			}
@@ -207,7 +429,7 @@ var notification = {
 		}
 		else if(notification.stat == "on" && !notification.mobile_traffic && !notification.sim_record && !notification.upgrade && !notification.wifi_2g &&
 				!notification.wifi_5g && !notification.ftp && !notification.samba && !notification.loss_sync && !notification.experience_FB && !notification.notif_hint && !notification.mobile_traffic && 
-				!notification.send_debug_log && !notification.pppoe_tw && !notification.pppoe_tw_static && !notification.ie_legacy){
+				!notification.send_debug_log && !notification.pppoe_tw && !notification.pppoe_tw_static && !notification.ie_legacy && !notification.s46_ports){
 			cookie.unset("notification_history");
 			clearInterval(notification.flashTimer);
 			document.getElementById("notification_status").className = "notification_off";
@@ -226,7 +448,7 @@ var notification = {
 		}else
 			notification.acpw = 0;
 
-		if(amesh_support) {
+		if(amesh_support && ameshRouter_support) {
 			if(aimesh_system_new_fw_flag) {
 				notification.array[1] = 'noti_upgrade';
 				notification.upgrade = 1;
@@ -248,7 +470,7 @@ var notification = {
 				}
 				else{
 					notification.action_desc[1] = '<#ASUSGATE_act_update#>';
-					notification.clickCallBack[1] = "location.href = 'Advanced_FirmwareUpgrade_Content.asp?confirm_show="+current_firmware_path+"';"
+					notification.clickCallBack[1] = "location.href = 'Advanced_FirmwareUpgrade_Content.asp?confirm_show=0'";
 				}
 			}else
 				notification.upgrade = 0;
@@ -267,10 +489,22 @@ var notification = {
 				notification.array[3] = 'noti_wifi_5g';
 				notification.wifi_5g = 1;
 				notification.desc[3] = '<#ASUSGATE_note3#>';
-				notification.action_desc[3] = '<#ASUSGATE_act_change#> (5 GHz)';
+				if(band5g2_support)
+					notification.action_desc[3] = '<#ASUSGATE_act_change#> (5GHz-1)';
+				else
+					notification.action_desc[3] = '<#ASUSGATE_act_change#> (5GHz)';
 				notification.clickCallBack[3] = "change_wl_unit_status(1);";
 		}else
 			notification.wifi_5g = 0;
+
+		if(band5g2_support && sw_mode != 4 && noti_auth_mode_5g2 == 'open'){	//case3-3
+				notification.array[19] = 'noti_wifi_5g2';
+				notification.wifi_5g2 = 1;
+				notification.desc[19] = '<#ASUSGATE_note3#>';
+				notification.action_desc[19] = '<#ASUSGATE_act_change#> (5GHz-2)';
+				notification.clickCallBack[19] = "change_wl_unit_status(2);";
+		}else
+			notification.wifi_5g2 = 0;
 		
 		if(usb_support && !noftp_support && enable_ftp == 1 && st_ftp_mode == 1 && st_ftp_force_mode == '' ){ //case4_1
 				notification.array[4] = 'noti_ftp';
@@ -304,8 +538,8 @@ var notification = {
 
 		//Higher priority: DLA intervened case dsltmp_dla_modified 0: default / 1:need to feedback / 2:Feedback submitted 
 		//Lower priority: dsl_loss_sync  0: default / 1:need to feedback / 2:Feedback submitted
-		// Only DSL-AC68U for now
-		if(dsl_loss_sync == 1){         //case9(case10 act) + case6
+		// Only DSL-AC68U | DSL-AX82U for now
+		if(frs_feedback_support && dsl_loss_sync == 1){         //case9(case10 act) + case6
 			
 			notification.loss_sync = 1;
 			if(dla_modified == 1){
@@ -327,7 +561,7 @@ var notification = {
 			notification.loss_sync = 0;
 			
 		//experiencing DSL issue experience_fb=0: notif, 1:no display again.
-		if(experience_fb == 0){		//case7
+		if(frs_feedback_support && experience_fb == 0){		//case7
 				notification.array[7] = 'noti_experience_FB';
 				notification.array[18] = 'noti_experience_FB_cancel';
 				notification.experience_FB = 1;
@@ -371,6 +605,16 @@ var notification = {
 			}
 		}
 
+		if(Softwire46_support && wan_proto=="v6plus"){
+			if(check_ipv6_s46_ports != "0"){
+				notification.s46_ports = 1;
+				notification.array[20] = 'noti_s46_ports';
+				notification.desc[20] = 'Port settings mismatch v6plus usable port range.';  /* Untranslated */
+				notification.action_desc[20] = "Detail";
+				notification.clickCallBack[20] = "setTimeout('pop_s46_ports_conflict()', 100);"
+			}
+		}
+
 		/*if(is_TW_sku && wan_proto == "pppoe" && is_CHT_pppoe && !is_CHT_pppoe_static){
 			notification.pppoe_tw_static = 1;
 			notification.array[17] = 'noti_pppoe_tw_static';
@@ -387,7 +631,7 @@ var notification = {
 			notification.clickCallBack[15] = "location.href = 'Advanced_WAN_Content.asp?af=wan_proto'";			
 		}
 		
-		if( notification.acpw || notification.upgrade || notification.wifi_2g || notification.wifi_5g || notification.ftp || notification.samba || notification.loss_sync || notification.experience_FB || notification.notif_hint || notification.send_debug_log || notification.mobile_traffic || notification.sim_record || notification.pppoe_tw || notification.pppoe_tw_static || notification.ie_legacy){
+		if( notification.acpw || notification.upgrade || notification.wifi_2g || notification.wifi_5g || notification.wifi_5g2 || notification.ftp || notification.samba || notification.loss_sync || notification.experience_FB || notification.notif_hint || notification.send_debug_log || notification.mobile_traffic || notification.sim_record || notification.pppoe_tw || notification.pppoe_tw_static || notification.ie_legacy || notification.s46_ports){
 			notification.stat = "on";
 			notification.flash = "on";
 			notification.run_notice();
@@ -408,7 +652,7 @@ var notification = {
 			tarObj1.className = "notification_on1";
 		}
 
-		if(this.flash == "on" && cookie.get("notification_history") != [notification.upgrade, notification.wifi_2g ,notification.wifi_5g ,notification.ftp ,notification.samba ,notification.loss_sync ,notification.experience_FB ,notification.notif_hint, notification.mobile_traffic, notification.send_debug_log, notification.sim_record, notification.pppoe_tw, notification.pppoe_tw_static, notification.ie_legacy].join()){
+		if(this.flash == "on" && cookie.get("notification_history") != [notification.upgrade, notification.wifi_2g ,notification.wifi_5g ,notification.ftp ,notification.samba ,notification.loss_sync ,notification.experience_FB ,notification.notif_hint, notification.mobile_traffic, notification.send_debug_log, notification.sim_record, notification.pppoe_tw, notification.pppoe_tw_static, notification.ie_legacy, notification.s46_ports].join()){
 			notification.flashTimer = setInterval(function(){
 				tarObj.className = (tarObj.className == "notification_on") ? "notification_off" : "notification_on";
 			}, 1000);
@@ -424,6 +668,7 @@ var notification = {
 		this.upgrade = 0;
 		this.wifi_2g = 0;
 		this.wifi_5g = 0;
+		this.wifi_5g2 = 0;
 		this.ftp = 0;
 		this.samba = 0;
 		this.loss_sync = 0;

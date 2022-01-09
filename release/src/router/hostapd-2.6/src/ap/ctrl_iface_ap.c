@@ -187,10 +187,36 @@ static int hostapd_ctrl_iface_sta_mib(struct hostapd_data *hapd,
 }
 
 
+static int hostapd_ctrl_iface_sta_ext_mib(struct hostapd_data *hapd,
+				      struct sta_info *sta,
+				      char *buf, size_t buflen)
+{
+	int len, res, ret, i;
+
+	if (!sta)
+		return 0;
+
+	len = 0;
+	ret = os_snprintf(buf + len, buflen - len, MACSTR " btm_supported=%d rrm_beacon_passive_measurement_supported=%d\n",
+			  MAC2STR(sta->addr), sta->btm_supported, (sta->rrm_enabled_capa[0] & WLAN_RRM_CAPS_BEACON_PASSIVE_MEASUREMENT) ? 1 : 0);
+	if (os_snprintf_error(buflen - len, ret))
+		return len;
+	len += ret;
+
+	return len;
+}
+
+
 int hostapd_ctrl_iface_sta_first(struct hostapd_data *hapd,
 				 char *buf, size_t buflen)
 {
 	return hostapd_ctrl_iface_sta_mib(hapd, hapd->sta_list, buf, buflen);
+}
+
+int hostapd_ctrl_iface_sta_ext_first(struct hostapd_data *hapd,
+				 char *buf, size_t buflen)
+{
+	return hostapd_ctrl_iface_sta_ext_mib(hapd, hapd->sta_list, buf, buflen);
 }
 
 
@@ -235,6 +261,37 @@ int hostapd_ctrl_iface_sta(struct hostapd_data *hapd, const char *txtaddr,
 	return ret;
 }
 
+int hostapd_ctrl_iface_sta_ext(struct hostapd_data *hapd, const char *txtaddr,
+			   char *buf, size_t buflen)
+{
+	u8 addr[ETH_ALEN];
+	int ret;
+	const char *pos;
+	struct sta_info *sta;
+
+	if (hwaddr_aton(txtaddr, addr)) {
+		ret = os_snprintf(buf, buflen, "FAIL\n");
+		if (os_snprintf_error(buflen, ret))
+			return 0;
+		return ret;
+	}
+
+	sta = ap_get_sta(hapd, addr);
+	if (sta == NULL)
+		return -1;
+
+	pos = os_strchr(txtaddr, ' ');
+	if (pos) {
+		pos++;
+
+		return -1;
+	}
+
+	ret = hostapd_ctrl_iface_sta_ext_mib(hapd, sta, buf, buflen);
+
+	return ret;
+}
+
 
 int hostapd_ctrl_iface_sta_next(struct hostapd_data *hapd, const char *txtaddr,
 				char *buf, size_t buflen)
@@ -255,6 +312,28 @@ int hostapd_ctrl_iface_sta_next(struct hostapd_data *hapd, const char *txtaddr,
 		return 0;
 
 	return hostapd_ctrl_iface_sta_mib(hapd, sta->next, buf, buflen);
+}
+
+
+int hostapd_ctrl_iface_sta_ext_next(struct hostapd_data *hapd, const char *txtaddr,
+				char *buf, size_t buflen)
+{
+	u8 addr[ETH_ALEN];
+	struct sta_info *sta;
+	int ret;
+
+	if (hwaddr_aton(txtaddr, addr) ||
+	    (sta = ap_get_sta(hapd, addr)) == NULL) {
+		ret = os_snprintf(buf, buflen, "FAIL\n");
+		if (os_snprintf_error(buflen, ret))
+			return 0;
+		return ret;
+	}
+
+	if (!sta->next)
+		return 0;
+
+	return hostapd_ctrl_iface_sta_ext_mib(hapd, sta->next, buf, buflen);
 }
 
 

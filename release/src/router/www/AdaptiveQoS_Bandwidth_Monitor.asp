@@ -25,6 +25,9 @@
 <script type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <style type="text/css">
+*{
+	box-sizing: content-box;
+}
 .appIcons{
 	width:36px;
 	height:36px;
@@ -64,15 +67,6 @@
     ms-transform:rotate(-123deg);
     transform:rotate(-123deg);
 }
-.divUserIcon{
-	cursor: pointer;
-	margin: 0 auto;
-	width: 50px;
-	height: 50px;
-	-webkit-border-radius: 10px;
-	-moz-border-radius: 10px;
-	border-radius: 10px;
-}
 .traffic_bar{
 	width: 0%;
 	background-color: #93E7FF;
@@ -109,9 +103,6 @@
 	background: -ms-linear-gradient(top, #A21717 0%,#B71010 50%,#FF4848 100%); /* IE10+ */
 	background: linear-gradient(to bottom, #A21717 0%,#B71010 70%,#FF4848 100%); /* W3C */
 	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#A21717', endColorstr='#FF4848',GradientType=0 ); /* IE6-9 */
-}
-.speed-meter-1000{
-	background-image:url('images/New_ui/speedmeter_2.png');
 }
 .speed-meter-100{
 	background-image:url('images/New_ui/speedmeter.png');
@@ -155,22 +146,62 @@ function register_event(){
 		});
 	});
 }
+
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=102";
 var scale = [1, 5, 10, 20, 30, 50, 75, 100];
 var download_maximum = 100 * 1024;
 var upload_maximum = 100 * 1024;
 function initial(){
-	if(cookie.get('maxBandwidth') == '1000'){
+	var _scale = cookie.get('maxBandwidth_scale');
+	if(cookie.get('maxBandwidth') == '100'){
+		if(_scale != '0'){
+			$('#traffic_unit').val('100');
+		}
+	}
+	else if(cookie.get('maxBandwidth') == '1000'){
 		scale = [10, 50, 100, 200, 350, 500, 750, 1000];
-		$('#upload_speed_meter_bg').attr("class", "speed-meter-1000");
-		$('#download_speed_meter_bg').attr("class", "speed-meter-1000");
 		download_maximum = 1000 * 1024;
 		upload_maximum = 1000 * 1024;
+		if(_scale != '0'){
+			$('#traffic_unit').val('1000');
+		}
+	}
+	else if(cookie.get('maxBandwidth') == '10000'){
+		scale = [500, 750, 1000, 2000, 3500, 5000, 7500, 10000];
+		download_maximum = 10000 * 1024;
+		upload_maximum = 10000 * 1024;
+		if(_scale != '0'){
+			$('#traffic_unit').val('10000');
+		}
 	}
 
+	$('#scale_unit').val(getTrafficUnit());
 	show_menu();
-	// http://www.asus.com/support/FAQ/1008717/
-	httpApi.faqURL("1008717", function(url){document.getElementById("faq").href=url;});
-	show_clients();
+	document.getElementById("faq").href=faq_href;
+
+	if(totalClientNum.online == 0) {
+		var loop_count = 0;
+		httpApi.updateClientList();
+		setTimeout(function(){
+			if(loop_count >= 60) {
+				$("#sortable").html("<div style='text-align:center;color:#FFCC00'><#IPConnection_VSList_Norule#></div>");
+				return false;
+			}
+			if(totalClientNum.online != 0)
+				show_clients();
+			else {
+				loop_count++;
+				originData.fromNetworkmapd[0] = httpApi.hookGet("get_clientlist", true);
+				genClientList();
+				setTimeout(arguments.callee, 1000);
+			}
+		}, 1000);
+	}
+	else
+		show_clients();
+
+	if(!ASUS_EULA.status("tm"))
+		ASUS_EULA.config(eula_confirm, cancel);
 }
 
 
@@ -263,17 +294,6 @@ function calculate_router_traffic(traffic){
 	var angle = 0;
 	var rotate = "";
 /* angle mapping table: [0M: -123deg, 1M: -90deg, 5M: -58deg, 10M: -33deg, 20M: -1deg, 30M: 30deg, 50M: 58deg, 75M: 88deg, 100M: 122deg]*/
-	if(cookie.get('maxBandwidth') == "100"){
-		if(tx_mb > 100 || rx_mb > 100){
-			cookie.set('maxBandwidth', '1000');
-			scale = [10, 50, 100, 200, 350, 500, 750, 1000];
-			$('#upload_speed_meter_bg').attr("class", "speed-meter-1000");
-			$('#download_speed_meter_bg').attr("class", "speed-meter-1000");
-			download_maximum = 1000 * 1024;
-			upload_maximum = 1000 * 1024;
-		}
-	}
-
 	if(router_traffic_old.length != 0){
 		//angle = (tx_mb - lower unit)/(upper unit - lower unit)*(degree in the range) + (degree of previous scale) + (degree of 0M)
 		document.getElementById('upload_speed').innerHTML = tx_mb.toFixed(2);
@@ -365,11 +385,6 @@ function show_clients(priority_type){
 	//user icon
 	var userIconBase64 = "NoIcon";
 
-	if(clientList.length == 0){
-		setTimeout("show_clients();", 500);
-		return false;
-	}
-
 	if(typeof(priority_type) != "undefined"){
 		document.getElementById('block_all').style.visibility = "visible";
 	}
@@ -419,7 +434,7 @@ function show_clients(priority_type){
 				code += '<div id="icon_' + i + '" onclick="show_apps(this);" class="closed qosLevel' + clientObj.qosLevel + ' clientIconIE8HACK" ';
 			}
 			else{
-				code += '<div id="icon_' + i + '" onclick="show_apps(this);" class="closed qosLevel' + clientObj.qosLevel + ' divUserIcon" ';
+				code += '<div id="icon_' + i + '" onclick="show_apps(this);" class="closed qosLevel' + clientObj.qosLevel + ' clientIcon" ';
 			}
 			code += 'style="background-image:url('+userIconBase64+');background-size:50px;">';
 			code += '</div>';
@@ -470,7 +485,7 @@ function show_clients(priority_type){
 		code += '<td><div><table>';
 		code += '<tr>';
 		code += '<td style="width:385px">';
-		code += '<div style="height:8px;padding:3px;background-color:#000;border-radius:10px;">';
+		code += '<div style="height:8px;background-color:#000;border-radius:10px;">';
 		if(clientObj.wtfast && wtfast_support)
 			code += '<div id="'+clientObj.mac+'_upload_bar" class="traffic_bar transition_style traffic_bar_boost"></div>';
 		else
@@ -478,10 +493,10 @@ function show_clients(priority_type){
 		code += '</div>';
 		code += '</td>';
 		code += '<td style="text-align:right;">';
-		code += '<div id="'+clientObj.mac+'_upload" style="width:45px;">0.0</div>';
+		code += '<div id="'+clientObj.mac+'_upload" style="width:80px;">0.00</div>';
 		code += '</td>';
 		code += '<td style="width:20px;">';
-		code += '<div id="'+clientObj.mac+'_upload_unit">Kb</div>';
+		code += '<div id="'+clientObj.mac+'_upload_unit">Mb</div>';
 		code += '</td>';
 		code += '<td style="width:20px;">';
 		code += '<div class="arrow_up" style="width:0;height:0;border-width:0 7px 10px 7px;border-style:solid;"></div>';
@@ -489,7 +504,7 @@ function show_clients(priority_type){
 		code += '</tr>';
 		code += '<tr>';
 		code += '<td>';
-		code +=	'<div style="height:8px;padding:3px;background-color:#000;border-radius:10px;">';
+		code +=	'<div style="height:8px;background-color:#000;border-radius:10px;">';
 		if(clientObj.wtfast && wtfast_support)
 			code += '<div id="'+clientObj.mac+'_download_bar" class="traffic_bar transition_style traffic_bar_boost"></div>';
 		else
@@ -497,10 +512,10 @@ function show_clients(priority_type){
 		code +=	'</div>';
 		code += '</td>';
 		code += '<td style="text-align:right;">';
-		code += '<div id="'+clientObj.mac+'_download" style="width:45px;">0.0</div>';
+		code += '<div id="'+clientObj.mac+'_download" style="width:80px;">0.00</div>';
 		code += '</td>';
 		code += '<td style="width:20px;">';
-		code += '<div id="'+clientObj.mac+'_download_unit" >Kb</div>';
+		code += '<div id="'+clientObj.mac+'_download_unit" >Mb</div>';
 		code += '</td>';
 		code += '<td style="width:20px;">';
 		code += '<div class="arrow_down" style="width:0;height:0;border-width:10px 7px 0 7px;border-style:solid;"></div>';
@@ -550,11 +565,11 @@ function show_apps(obj){
 		parent_obj_temp.appendChild(last_element);
 		register_event();
 		if(children_obj != undefined) {
-			obj.setAttribute("class", "closed qosLevel" + clientObj.qosLevel + " divUserIcon");
+			obj.setAttribute("class", "closed qosLevel" + clientObj.qosLevel + " clientIcon");
 		}
 		else {
 			if(clientObj.type != "0" || clientObj.vendor == "") {
-				obj.setAttribute("class", "closed clientIcon type" + clientObj.type + " qosLevel" + clientObj.qosLevel + " divUserIcon");
+				obj.setAttribute("class", "closed clientIcon type" + clientObj.type + " qosLevel" + clientObj.qosLevel + " clientIcon");
 			}
 			else if(clientObj.vendor != "") {
 				var clientListCSS = "";
@@ -565,7 +580,7 @@ function show_apps(obj){
 				else {
 					clientListCSS = "clientIcon type" + clientObj.type;
 				}
-				obj.setAttribute("class", "closed " + clientListCSS + " qosLevel" + clientObj.qosLevel + " divUserIcon");
+				obj.setAttribute("class", "closed " + clientListCSS + " qosLevel" + clientObj.qosLevel + " clientIcon");
 			}
 		}
 	}
@@ -590,11 +605,11 @@ function show_apps(obj){
 		parent_obj.appendChild(new_element);
 		parent_obj.appendChild(last_element);
 		if(children_obj != undefined) {
-			obj.setAttribute("class", "opened clicked qosLevel" + clientObj.qosLevel + " divUserIcon");
+			obj.setAttribute("class", "opened clicked qosLevel" + clientObj.qosLevel + " clientIcon");
 		}
 		else {
 			if(clientObj.type != "0" || clientObj.vendor == "") {
-				obj.setAttribute("class", "opened clientIcon_clicked type" + clientObj.type + " clicked qosLevel" + clientObj.qosLevel + " divUserIcon");
+				obj.setAttribute("class", "opened clientIcon_clicked type" + clientObj.type + " clicked qosLevel" + clientObj.qosLevel + " clientIcon");
 			}
 			else if(clientObj.vendor != "") {
 				var clientListCSS = "";
@@ -605,7 +620,7 @@ function show_apps(obj){
 				else {
 					clientListCSS = "clientIcon_clicked type" + clientObj.type;
 				}
-				obj.setAttribute("class", "opened " + clientListCSS + " clicked qosLevel" + clientObj.qosLevel + " divUserIcon");
+				obj.setAttribute("class", "opened " + clientListCSS + " clicked qosLevel" + clientObj.qosLevel + " clientIcon");
 			}
 		}
 		update_device_tarffic();
@@ -638,11 +653,11 @@ function cancel_previous_device_apps(obj){
 	parent_obj_temp.appendChild(first_element);
 	parent_obj_temp.appendChild(last_element);
 	if(children_obj != undefined) {
-		obj.setAttribute("class", "closed qosLevel" + clientObj.qosLevel + " divUserIcon");
+		obj.setAttribute("class", "closed qosLevel" + clientObj.qosLevel + " clientIcon");
 	}
 	else {
 		if(clientObj.type != "0" || clientObj.vendor == "") {
-			obj.setAttribute("class", "closed clientIcon type" + clientObj.type + " qosLevel" + clientObj.qosLevel + " divUserIcon");
+			obj.setAttribute("class", "closed clientIcon type" + clientObj.type + " qosLevel" + clientObj.qosLevel + " clientIcon");
 		}
 		else if(clientObj.vendor != "") {
 			var clientListCSS = "";
@@ -653,7 +668,7 @@ function cancel_previous_device_apps(obj){
 			else {
 				clientListCSS = "clientIcon type" + clientObj.type;
 			}
-			obj.setAttribute("class", "closed " + clientListCSS + " qosLevel" + clientObj.qosLevel + " divUserIcon");
+			obj.setAttribute("class", "closed " + clientListCSS + " qosLevel" + clientObj.qosLevel + " clientIcon");
 		}
 	}
 }
@@ -661,6 +676,11 @@ function cancel_previous_device_apps(obj){
 function render_apps(apps_array, obj_icon, apps_field){
 	var code = "";
 	var img = "";
+	var unit = getTrafficUnit();
+	var scale = 'Kb';
+	if(unit == '1'){
+		scale = 'Mb';
+	}
 
 	apps_array.sort();	//sort apps' name
 	for(i=0;i<apps_array.length;i++){
@@ -690,10 +710,10 @@ function render_apps(apps_array, obj_icon, apps_field){
 		code +='</div>';
 		code +='</td>';
 		code +='<td style="text-align:right;">';
-		code +='<div id="'+apps_array[i][0]+'_upload">0.0</div>';
+		code +='<div id="'+apps_array[i][0]+'_upload">0.00</div>';
 		code +=	'</td>';
 		code +='<td style="width:30px;">';
-		code +='<div id="'+apps_array[i][0]+'_upload_unit">Kb</div>';
+		code +='<div id="'+apps_array[i][0]+'_upload_unit">'+ scale +'</div>';
 		code +='</td>';
 		code +='</tr>';
 
@@ -704,10 +724,10 @@ function render_apps(apps_array, obj_icon, apps_field){
 		code +='</div>';
 		code +='</td>';
 		code +='<td style="text-align:right;">';
-		code +='<div id="'+apps_array[i][0]+'_download">0.0</div>';
+		code +='<div id="'+apps_array[i][0]+'_download">0.00</div>';
 		code +='</td>';
 		code +='<td style="width:30px;">';
-		code +='<div id="'+apps_array[i][0]+'_download_unit">Kb</div>';
+		code +='<div id="'+apps_array[i][0]+'_download_unit">'+ scale +'</div>';
 		code +='</td>';
 		code +='</tr>';
 		code +='</table>';
@@ -728,6 +748,7 @@ function render_apps(apps_array, obj_icon, apps_field){
 client_traffic_old = new Array();
 function calculate_traffic(array_traffic){
 	var client_traffic_new = new Array();
+	var unit = getTrafficUnit();
 
 	for(i=0;i< array_traffic.length;i++){
 		if(typeof(clientList[array_traffic[i][0]]) != "undefined" && clientList[array_traffic[i][0]].isOnline){
@@ -791,34 +812,71 @@ function calculate_traffic(array_traffic){
 				}
 				else{
 					tx_width = parseInt(diff_tx_kb/(upload_maximum/5)*30);
-					if(diff_tx_kb.toFixed(1) >= 0.1 && tx_width < 1)
-						tx_width = 1;
-
+					if(unit == '0'){
+						if(diff_tx_kb.toFixed(2) >= 0.01 && tx_width < 1){
+							tx_width = 1;
+						}
+					}
+					else if(unit == '1'){
+						if(diff_tx_mb.toFixed(2) >= 0.01 && tx_width < 1){
+							tx_width = 1;
+						}
+					}
+					else{
+						if(diff_tx_kb.toFixed(2) >= 0.01 && tx_width < 1){
+							tx_width = 1;
+						}				
+					}
+					
 					if(document.getElementById(client_traffic_new[i]+'_upload_bar') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload_bar') != null){
 						document.getElementById(client_traffic_new[i]+'_upload_bar').style.width = tx_width + "%";
 					}
 				}
 
-				if(diff_tx_kb < 1024){
+				if(unit == '0'){
 					if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
-						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(1);
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(2);
 						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Kb";
 					}
 				}
-				else{
+				else if(unit == '1'){
 					if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
-						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(1) ;
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2) ;
 						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
 					}
 				}
+				else{	// unit = 9, Flexbile
+					if(diff_tx_kb < 1024){
+						if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
+							document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(2);
+							document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Kb";
+						}
+					}
+					else{
+						if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
+							document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2) ;
+							document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+						}
+					}
+				}				
 			}
 			else if((diff_tx_kb >= upload_maximum/5) && (diff_tx_kb < upload_maximum*2/5)){
 				tx_width = parseInt((diff_tx_kb - (upload_maximum/5))/(upload_maximum/5)*25);
 				tx_width += 30;
 				if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
 					document.getElementById(client_traffic_new[i]+'_upload_bar').style.width = tx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}		
 				}
 			}
 			else if((diff_tx_kb >= upload_maximum*2/5) && (diff_tx_kb < upload_maximum*3/5)){
@@ -826,8 +884,18 @@ function calculate_traffic(array_traffic){
 				tx_width += 55;
 				if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
 					document.getElementById(client_traffic_new[i]+'_upload_bar').style.width = tx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}	
 				}
 			}
 			else if((diff_tx_kb >= upload_maximum*3/5) && (diff_tx_kb < upload_maximum*4/5)){
@@ -835,8 +903,18 @@ function calculate_traffic(array_traffic){
 				tx_width += 75;
 				if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
 					document.getElementById(client_traffic_new[i]+'_upload_bar').style.width = tx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}	
 				}
 			}
 			else{
@@ -846,8 +924,18 @@ function calculate_traffic(array_traffic){
 					tx_width = 100;
 				if(document.getElementById(client_traffic_new[i]+'_upload') != "undefined" && document.getElementById(client_traffic_new[i]+'_upload') != null){
 					document.getElementById(client_traffic_new[i]+'_upload_bar').style.width = tx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(client_traffic_new[i]+'_upload_unit').innerHTML = "Mb";
+					}	
 				}
 			}
 
@@ -864,33 +952,72 @@ function calculate_traffic(array_traffic){
 				}
 				else{
 					rx_width = parseInt(diff_rx_kb/(download_maximum/5)*30);
-					if( diff_rx_kb.toFixed(1) >= 0.1 &&  rx_width < 1)
-						rx_width = 1;
+					if(unit == '0'){
+						if(diff_rx_kb.toFixed(2) >= 0.01 &&  rx_width < 1){
+							rx_width = 1;
+						}	
+					}
+					else if(unit == '1'){
+						if(diff_rx_mb.toFixed(2) >= 0.01 &&  rx_width < 1){
+							rx_width = 1;
+						}	
+					}
+					else{
+						if(diff_rx_kb.toFixed(2) >= 0.01 &&  rx_width < 1){
+							rx_width = 1;
+						}			
+					}
+					
 					if(document.getElementById(client_traffic_new[i]+'_download_bar') != "undefined" && document.getElementById(client_traffic_new[i]+'_download_bar') != null){
 						document.getElementById(client_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
 					}
 				}
 
-				if(diff_rx_kb < 1024){
+				if(unit == '0'){
 					if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
-						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(1);
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
 						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Kb";
 					}
 				}
-				else{
+				else if(unit == '1'){
 					if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
-						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
 						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
 					}
 				}
+				else{
+					if(diff_rx_kb < 1024){
+						if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
+							document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(1);
+							document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+						}
+					}
+					else{
+						if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
+							document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+							document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+						}
+					}
+				}				
 			}
 			else if((diff_rx_kb >= download_maximum/5) && (diff_rx_kb < download_maximum*2/5)){		//	25%
 				rx_width = parseInt((diff_rx_kb - (download_maximum/5))/(download_maximum/5)*25);
 				rx_width += 30;
 				if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
 					document.getElementById(client_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}			
 				}
 			}
 			else if((diff_rx_kb >= download_maximum*2/5) && (diff_rx_kb < download_maximum*3/5)){		// 20%
@@ -898,8 +1025,18 @@ function calculate_traffic(array_traffic){
 				rx_width += 55;
 				if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
 					document.getElementById(client_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}			
 				}
 			}
 			else if((diff_rx_kb >= download_maximum*3/5) && (diff_rx_kb <download_maximum*4/5)){		//	15%
@@ -907,8 +1044,18 @@ function calculate_traffic(array_traffic){
 				rx_width += 75;
 				if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
 					document.getElementById(client_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}					
 				}
 			}
 			else{		//10%
@@ -919,8 +1066,18 @@ function calculate_traffic(array_traffic){
 
 				if(document.getElementById(client_traffic_new[i]+'_download') != "undefined" && document.getElementById(client_traffic_new[i]+'_download') != null){
 					document.getElementById(client_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					if(unit == '0'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(client_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(client_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
 				}
 			}
 		}
@@ -936,6 +1093,7 @@ function calculate_apps_traffic(apps_traffic){
 	apps_traffic_new = new Array();
 	var traffic_flag = 0;
 	var empty_count = 0;
+	var unit = getTrafficUnit();
 	for(i=0;i< apps_traffic.length;i++){
 		apps_traffic_new[i] = apps_traffic[i][0];
 		apps_traffic_new[apps_traffic[i][0]] = {"tx":apps_traffic[i][1], "rx":apps_traffic[i][2], "account":0};
@@ -986,41 +1144,97 @@ function calculate_apps_traffic(apps_traffic){
 					}
 					else{
 						tx_width = parseInt(diff_tx_kb/(upload_maximum/5)*30);
-						if(diff_tx_kb.toFixed(1) >= 0.1 && tx_width < 1)
-							tx_width = 1;
-
+						if(unit == '0'){
+							if(diff_tx_kb.toFixed(2) >= 0.01 && tx_width < 1){
+								tx_width = 1;
+							}
+						}
+						else if(unit == '1'){
+							if(diff_tx_mb.toFixed(2) >= 0.01 && tx_width < 1){
+								tx_width = 1;
+							}
+						}
+						else{
+							if(diff_tx_kb.toFixed(2) >= 0.01 && tx_width < 1){
+								tx_width = 1;
+							}
+						}
+						
 						document.getElementById(apps_traffic_new[i]+'_upload_bar').style.width = tx_width + "%";
 					}
 
-					if(diff_tx_kb < 1024){
-						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(1);
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(2);
 						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Kb";
 					}
-					else{
-						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(1) ;
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2) ;
 						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
 					}
+					else{
+						if(diff_tx_kb < 1024){
+							document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(2);
+							document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Kb";
+						}
+						else{
+							document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2) ;
+							document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+						}
+					}					
 				}
 				else if((diff_tx_kb >= upload_maximum/5) && (diff_tx_kb < upload_maximum*2/5)){
 					tx_width = parseInt((diff_tx_kb - (upload_maximum/5))/(upload_maximum/5)*25);
 					tx_width += 30;
 					document.getElementById(apps_traffic_new[i] + '_upload_bar').style.width = tx_width + "%";
-					document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}			
 				}
 				else if((diff_tx_kb >= upload_maximum*2/5) && (diff_tx_kb < upload_maximum*3/5)){
 					tx_width = parseInt((diff_tx_kb - (upload_maximum*2/5))/(upload_maximum/5)*20);
 					tx_width += 55;
 					document.getElementById(apps_traffic_new[i] + '_upload_bar').style.width = tx_width + "%";
-					document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
 				}
 				else if((diff_tx_kb >= upload_maximum*3/5) && (diff_tx_kb < upload_maximum*4/5)){
 					tx_width = parseInt((diff_tx_kb - (upload_maximum*3/5))/(upload_maximum/5)*15);
 					tx_width += 75;
 					document.getElementById(apps_traffic_new[i] + '_upload_bar').style.width = tx_width + "%";
-					document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
 				}
 				else{
 					tx_width = parseInt((diff_tx_kb - (upload_maximum*4/5))/(upload_maximum/5)*15);
@@ -1029,8 +1243,19 @@ function calculate_apps_traffic(apps_traffic){
 						tx_width = 100;
 
 					document.getElementById(apps_traffic_new[i] + '_upload_bar').style.width = tx_width + "%";
-					document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(1)
-					document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_kb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i] + '_upload').innerHTML = diff_tx_mb.toFixed(2)
+						document.getElementById(apps_traffic_new[i] + '_upload_unit').innerHTML = "Mb";
+					}
 				}
 
 				if(diff_rx_kb < download_maximum/5){		//30%
@@ -1044,42 +1269,99 @@ function calculate_apps_traffic(apps_traffic){
 					}
 					else{
 						rx_width = parseInt(diff_rx_kb/(download_maximum/5)*30);
-						if(diff_rx_kb.toFixed(1) >= 0.1 && rx_width < 1)
-							rx_width = 1;
+						
+						if(unit == '0'){
+							if(diff_rx_kb.toFixed(2) >= 0.01 &&  rx_width < 1){
+								rx_width = 1;
+							}	
+						}
+						else if(unit == '1'){
+							if(diff_rx_mb.toFixed(2) >= 0.01 &&  rx_width < 1){
+								rx_width = 1;
+							}	
+						}
+						else{
+							if(diff_rx_kb.toFixed(2) >= 0.01 &&  rx_width < 1){
+								rx_width = 1;
+							}			
+						}
+							
 
 						document.getElementById(apps_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
 					}
 
-					if(diff_rx_kb < 1024){
-						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(1);
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
 						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Kb";
-
 					}
-					else{
-						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
 						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
 					}
+					else{
+						if(diff_rx_kb < 1024){
+							document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+							document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+						}
+						else{
+							document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+							document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+						}
+					}					
 				}
 				else if((diff_rx_kb >= download_maximum/5) && (diff_rx_kb < download_maximum*2/5)){		//	25%
 					rx_width = parseInt((diff_rx_kb - (download_maximum/5))/(download_maximum/5)*25);
 					rx_width += 30;
 					document.getElementById(apps_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}					
 				}
 				else if((diff_rx_kb >= download_maximum*2/5) && (diff_rx_kb < download_maximum*3/5)){		// 20%
 					rx_width = parseInt((diff_rx_kb - (download_maximum*2/5))/(download_maximum/5)*20);
 					rx_width += 55;
 					document.getElementById(apps_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
 				}
 				else if((diff_rx_kb >= download_maximum*3/5) && (diff_rx_kb <download_maximum*4/5)){		//	15%
 					rx_width = parseInt((diff_rx_kb - (download_maximum*3/5))/(download_maximum/5)*15);
 					rx_width += 75;
 					document.getElementById(apps_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
 				}
 				else{		//10%
 					rx_width = parseInt((diff_rx_kb - (download_maximum*4/5))/(download_maximum/5)*10);
@@ -1088,8 +1370,19 @@ function calculate_apps_traffic(apps_traffic){
 						rx_width = 100;
 
 					document.getElementById(apps_traffic_new[i]+'_download_bar').style.width = rx_width + "%";
-					document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(1);
-					document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					
+					if(unit == '0'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_kb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Kb";
+					}
+					else if(unit == '1'){
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
+					else{
+						document.getElementById(apps_traffic_new[i]+'_download').innerHTML = diff_rx_mb.toFixed(2);
+						document.getElementById(apps_traffic_new[i]+'_download_unit').innerHTML = "Mb";
+					}
 				}
 			}
 		}
@@ -1181,15 +1474,11 @@ function regen_qos_rule(obj, priority){
 }
 
 function applyRule(){
-	if(reset_wan_to_fo(document.form, document.form.apps_analysis.value)) {
-		document.form.qos_rulelist.value = qos_rulelist;
-		document.form.submit();
-	}
-	else {
-		curState = 0;
-		document.form.apps_analysis.value = 0;
-		$('#apps_analysis_enable').find('.iphone_switch').animate({backgroundPosition: -37}, "slow");
-	}
+	if(reset_wan_to_fo.change_status)
+		reset_wan_to_fo.change_wan_mode(document.form);
+
+	document.form.qos_rulelist.value = qos_rulelist;
+	document.form.submit();
 }
 
 function eula_confirm(){
@@ -1202,11 +1491,73 @@ function eula_confirm(){
 function cancel(){
 	curState = 0;
 	$('#iphone_switch').animate({backgroundPosition: -37}, "slow", function() {});
+	document.form.action_script.value = "restart_qos;restart_firewall";
+	document.form.action_wait.value = "5";
+}
+function switch_control(_status){
+	if(_status) {
+		if(reset_wan_to_fo.check_status()) {
+			if(ASUS_EULA.check("tm")){
+				document.form.apps_analysis.value = 1;
+				applyRule();
+			}
+		}
+		else
+			cancel();
+	}
+	else {
+		document.form.apps_analysis.value = 0;
+		applyRule();
+	}
+}
+
+function setUnit(unit){
+	if(unit == '1000'){		// 1 Gbps
+		cookie.set("maxBandwidth", unit);
+		cookie.set("maxBandwidth_scale", unit);
+		scale = [10, 50, 100, 200, 350, 500, 750, 1000];
+		download_maximum = 1000 * 1024;
+		upload_maximum = 1000 * 1024;
+	}
+	else if(unit == '10000'){	// 10 Gbps
+		cookie.set("maxBandwidth", unit);
+		cookie.set("maxBandwidth_scale", unit);
+		scale = [500, 750, 1000, 2000, 3500, 5000, 7500, 10000];
+		download_maximum = 10000 * 1024;
+		upload_maximum = 10000 * 1024;
+	}
+	else if(unit == '100'){	// 100 Mbps
+		cookie.set("maxBandwidth", unit);
+		cookie.set("maxBandwidth_scale", unit);
+		scale = [1, 5, 10, 20, 30, 50, 75, 100];
+		download_maximum = 100 * 1024;
+		upload_maximum = 100 * 1024;
+	}
+	else{		// Auto
+		cookie.set("maxBandwidth", '100');
+		cookie.set("maxBandwidth_scale", unit);
+		scale = [1, 5, 10, 20, 30, 50, 75, 100];
+		download_maximum = 100 * 1024;
+		upload_maximum = 100 * 1024;
+	}
+}
+
+function setScale(scale){
+	cookie.set('ASUS_TrafficClient_unit', scale);
+}
+
+function getTrafficUnit(){
+	var value = 9;
+	if(cookie.get('ASUS_TrafficClient_unit')){
+		value = cookie.get('ASUS_TrafficClient_unit');
+	}
+
+	return value;
 }
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
@@ -1250,28 +1601,36 @@ function cancel(){
 										<td class="formfonttitle" align="left">
 											<div><#menu5_3_2#> - <#Bandwidth_monitor_WANLAN#></div>
 										</td>
+										<td >
+											<div style="display:flex;align-items: center;">
+												<div style="font-size: 14px;margin-right:8px;"><#Statistic_show_type#></div>
+												<div>
+													<select class="input_option" id="traffic_unit" onchange="setUnit(this.value);">
+														<option value="100">100 Mbps</option>
+														<option value="1000">1 Gbps</option>
+														<option value="10000">10 Gbps</option>
+														<option value="0" selected><#Auto#></option>
+													</select>
+												</div>
+											</div>											
+										</td>
 										<td>
 											<div>
 												<table align="right">
-													<tr>
+													<tr>														
 														<td>
 															<div class="formfonttitle" style="margin-bottom:0px;margin-left:50px;" title="<#Bandwidth_monit_analy_desc#>"><#Bandwidth_monitor_analysis#></div>
 														</td>
+														
 														<td >
 															<div align="center" class="left" style="width:94px; float:left; cursor:pointer;" id="apps_analysis_enable"></div>
 															<script type="text/javascript">
 																$('#apps_analysis_enable').iphoneSwitch('<% nvram_get("apps_analysis"); %>',
 																	function(){
-																		ASUS_EULA.config(eula_confirm, cancel);
-																		
-																		if(ASUS_EULA.check("tm")){
-																			document.form.apps_analysis.value = 1;
-																			applyRule();
-																		}
+																		switch_control(1);
 																	},
 																	function(){
-																		document.form.apps_analysis.value = 0;
-																		applyRule();
+																		switch_control(0);
 																	}
 																);
 															</script>
@@ -1326,6 +1685,20 @@ function cancel(){
 							<td>
 								<div style="margin:-5px 0px;">
 									<table>
+										<tr>
+											<td colspan="2">
+												<div style="display:flex;align-items: center;justify-content: flex-end;margin-right:8px;">
+													<div style="font-size:14px;margin-right:8px;"><#Scale#></div>
+													<div>
+														<select class="input_option" id="scale_unit" onchange="setScale(this.value);">
+															<option value="0">Kb</option>
+															<option value="1">Mb</option>
+															<option value="9"><#Auto#></option>
+														</select>
+													</div>
+												</div>
+											</td>
+										</tr>
 										<tr>
 											<td id="block_all" style="width:50%;font-family: Arial, Helvetica, sans-serif;text-align:left;padding-left:15px;visibility:hidden;">
 												<div style="cursor:pointer;width:113px;border-radius:10px;text-align:center;box-shadow:0px 2px black;" onclick="show_clients()">
@@ -1393,7 +1766,7 @@ function cancel(){
 														</tr>
 													</table>
 												</div>
-											<td>
+											</td>
 										</tr>
 									</table>
 								</div>

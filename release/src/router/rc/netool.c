@@ -36,7 +36,7 @@
 	dbg("[Netool][%s:(%d)]"fmt, __FUNCTION__, __LINE__, ##args);
 
 #ifdef RTCONFIG_TRACEROUTE
-#define TRACEROUTE    "usr/sbin/traceroute"
+#define TRACEROUTE    "/usr/sbin/traceroute"
 #else
 #define TRACEROUTE    "traceroute"
 #endif
@@ -239,7 +239,7 @@ static int do_ping(void *rInfo)
 				}
 				
 			} else {
-				ErrorMsg("fp = %d\n", (int) fp); 
+				ErrorMsg("fp = %p\n", fp); 
 				perror(cmd);
 			}
 			loop--;
@@ -275,7 +275,7 @@ static int do_ping_normal(void *rInfo)
 		snprintf(ifpara, sizeof(ifpara), "-I %s", req->interface);
 	}
 	
-	snprintf(cmd, sizeof(cmd), "%s %s -c %d -W %d %s > %s 2>&1 && echo 'XU6J03M6' >> %s &", 
+	snprintf(cmd, sizeof(cmd), "%s %s -c %d -W %d %s > %s 2>&1 || true && echo 'XU6J03M6' >> %s &",
 				   (!strcmp(req->ver, "v6")) ? "ping6" : "ping", ifpara, req->ping_cnt,
 				   req->response, req->target, result_path, result_path);
 	
@@ -536,7 +536,7 @@ static int do_traceroute(void *rInfo)
 			}
 			MyDBG("Lastping:%s\n", lastpingbuf);
 		} else {
-			ErrorMsg("fp = %d\n", (int) fp); 
+			ErrorMsg("fp = %p\n", fp); 
 			perror(cmd);
 		}
 		if (fp)
@@ -871,7 +871,7 @@ int netool_main (int argc, char *argv[])
 			process_task();
 		}
 #endif
-		usleep(1000);
+		pause();
 	}
 	
 	/* Free memory */

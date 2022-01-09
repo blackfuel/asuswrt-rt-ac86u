@@ -79,6 +79,7 @@ void show_pte(struct mm_struct *mm, unsigned long addr)
 	printk("\n");
 }
 
+extern void dump_debug_lock_info(void);
 /*
  * The kernel tried to access some page that wasn't present.
  */
@@ -90,6 +91,8 @@ static void __do_kernel_fault(struct mm_struct *mm, unsigned long addr,
 	 */
 	if (fixup_exception(regs))
 		return;
+
+	dump_debug_lock_info();
 
 	/*
 	 * No handler, we'll have to terminate things with extreme prejudice.
@@ -463,7 +466,9 @@ asmlinkage void __exception do_mem_abort(unsigned long addr, unsigned int esr,
 
 	if (!inf->fn(addr, esr, regs))
 		return;
-
+#ifdef CONFIG_DUMP_PREV_OOPS_MSG
+	enable_oopsbuf(1);
+#endif
 	pr_alert("Unhandled fault: %s (0x%08x) at 0x%016lx\n",
 		 inf->name, esr, addr);
 
@@ -482,7 +487,9 @@ asmlinkage void __exception do_sp_pc_abort(unsigned long addr,
 					   struct pt_regs *regs)
 {
 	struct siginfo info;
-
+#ifdef CONFIG_DUMP_PREV_OOPS_MSG
+	enable_oopsbuf(1);
+#endif
 	info.si_signo = SIGBUS;
 	info.si_errno = 0;
 	info.si_code  = BUS_ADRALN;
@@ -522,7 +529,9 @@ asmlinkage int __exception do_debug_exception(unsigned long addr,
 
 	if (!inf->fn(addr, esr, regs))
 		return 1;
-
+#ifdef CONFIG_DUMP_PREV_OOPS_MSG
+	enable_oopsbuf(1);
+#endif
 	pr_alert("Unhandled debug exception: %s (0x%08x) at 0x%016lx\n",
 		 inf->name, esr, addr);
 

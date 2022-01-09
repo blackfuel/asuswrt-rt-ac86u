@@ -43,6 +43,10 @@
  * mp_int	y
  * mp_int	x
  *
+ * Ed25519:
+ * string	"ssh-ed25519"
+ * string	k (32 bytes) + A (32 bytes)
+ *
  */
 #include "includes.h"
 #include "signkey.h"
@@ -51,6 +55,7 @@
 
 #include "genrsa.h"
 #include "gendss.h"
+#include "gened25519.h"
 #include "ecdsa.h"
 #include "crypto_desc.h"
 #include "dbrandom.h"
@@ -76,6 +81,9 @@ static void printhelp(char * progname) {
 #if DROPBEAR_ECDSA
 					"		ecdsa\n"
 #endif
+#if DROPBEAR_ED25519
+					"		ed25519\n"
+#endif
 					"-f filename    Use filename for the secret key.\n"
 					"               ~/.ssh/id_dropbear is recommended for client keys.\n"
 					"-s bits	Key size in bits, should be a multiple of 8 (optional)\n"
@@ -95,6 +103,9 @@ static void printhelp(char * progname) {
 #endif
 					"\n"
 #endif
+#if DROPBEAR_ED25519
+					"           Ed25519 has a fixed size of 256 bits\n"
+#endif
 					"-y		Just print the publickey and fingerprint for the\n		private key in <filename>.\n"
 #if DEBUG_TRACE
 					"-v		verbose\n"
@@ -106,6 +117,14 @@ static void printhelp(char * progname) {
 static void check_signkey_bits(enum signkey_type type, int bits)
 {
 	switch (type) {
+#if DROPBEAR_ED25519
+		case DROPBEAR_SIGNKEY_ED25519:
+			if (bits != 256) {
+				dropbear_exit("Ed25519 keys have a fixed size of 256 bits\n");
+				exit(EXIT_FAILURE);
+			}
+			break;
+#endif
 #if DROPBEAR_RSA
 		case DROPBEAR_SIGNKEY_RSA:
 			if (bits < 512 || bits > 4096 || (bits % 8 != 0)) {
@@ -114,7 +133,7 @@ static void check_signkey_bits(enum signkey_type type, int bits)
 			}
 			break;
 #endif
-#ifdef DROPEAR_DSS
+#if DROPEAR_DSS
 		case DROPBEAR_SIGNKEY_DSS:
 			if (bits != 1024) {
 				dropbear_exit("DSS keys have a fixed size of 1024 bits\n");
@@ -134,12 +153,12 @@ int main(int argc, char ** argv) {
 #endif
 
 	int i;
-	char ** next = 0;
+	char ** next = NULL;
 	char * filename = NULL;
 	enum signkey_type keytype = DROPBEAR_SIGNKEY_NONE;
 	char * typetext = NULL;
 	char * sizetext = NULL;
-	unsigned int bits = 0;
+	unsigned int bits = 0, genbits;
 	int printpub = 0;
 
 	crypto_init();
@@ -224,6 +243,12 @@ int main(int argc, char ** argv) {
 		keytype = DROPBEAR_SIGNKEY_ECDSA_KEYGEN;
 	}
 #endif
+#if DROPBEAR_ED25519
+	if (strcmp(typetext, "ed25519") == 0)
+	{
+		keytype = DROPBEAR_SIGNKEY_ED25519;
+	}
+#endif
 
 	if (keytype == DROPBEAR_SIGNKEY_NONE) {
 		fprintf(stderr, "Unknown key type '%s'\n", typetext);
@@ -240,8 +265,9 @@ int main(int argc, char ** argv) {
 		check_signkey_bits(keytype, bits);;
 	}
 
-	fprintf(stderr, "Generating key, this may take a while...\n");
-	if (signkey_generate(keytype, bits, filename) == DROPBEAR_FAILURE)
+	genbits = signkey_generate_get_bits(keytype, bits);
+	fprintf(stderr, "Generating %u bit %s key, this may take a while...\n", genbits, typetext);
+	if (signkey_generate(keytype, bits, filename, 0) == DROPBEAR_FAILURE)
 	{
 		dropbear_exit("Failed to generate key.\n");
 	}

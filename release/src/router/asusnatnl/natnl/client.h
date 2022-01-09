@@ -168,13 +168,13 @@ typedef struct call_data
 
 	fd_set              client_fds;
 	int					nfds;
-	list_t             *clients;
+	natnl_list_t             *clients;
 
     /* for UDP_CLIENT */
-    list_t             *conn_clients;
+    natnl_list_t             *conn_clients;
 
 	//socket_t           *tcp_serv;
-    list_t             *sock_servs;
+    natnl_list_t             *sock_servs;
 
     char *lhost, *lport, *phost, *pport, *rhost, *rport;
 
@@ -202,7 +202,7 @@ client_t *client_create(uint16_t id, socket_t *tcp_sock, pjmedia_transport *tp,
 client_t *client_copy(client_t *dst, client_t *src, size_t len);
 int client_cmp(client_t *c1, client_t *c2, size_t len);
 void client_free(client_t **c);
-void disconnect_and_remove_client(client_t *c, list_t *clients,
+void disconnect_and_remove_client(client_t *c, natnl_list_t *clients,
 								  fd_set *fds, int full_disconnect, int type);
 void mutex_free(pj_mutex_t **c);
 int client_connect_tcp(client_t *c);
@@ -256,7 +256,7 @@ int client_rtsp_response_check(client_t *c);
 #define p_packet_cmp ((int (*)(const void *, const void *, size_t))&packet_cmp)
 #define p_packet_free ((void (*)(void **))&packet_free)
 
-#define max(a,b)            (((a) > (b)) ? (a) : (b))
+#define my_max(a,b)            (((a) > (b)) ? (a) : (b))
 
 extern PJ_DEF(int) natnl_get_im_nfds(int inst_id);
 extern PJ_DEF(void) natnl_set_im_nfds(int inst_id, int nfds);
@@ -271,10 +271,10 @@ static _inline_ void client_add_fd_to_set(client_t *c, fd_set *set, struct call_
 			uint16_t port;
 			FD_SET(SOCK_FD(c->sock), set);
 			if (cd)
-				cd->nfds = max(cd->nfds, SOCK_FD(c->sock));
+				cd->nfds = my_max(cd->nfds, SOCK_FD(c->sock));
 			else {
 				int nfds = natnl_get_im_nfds(c->inst_id);
-				natnl_set_im_nfds(c->inst_id, max(nfds, SOCK_FD(c->sock)));
+				natnl_set_im_nfds(c->inst_id, my_max(nfds, SOCK_FD(c->sock)));
 			}
 
 			port = sock_get_port(c->sock);

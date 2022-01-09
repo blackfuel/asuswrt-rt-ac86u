@@ -285,6 +285,21 @@ static int hostapd_cli_cmd_sta(struct wpa_ctrl *ctrl, int argc, char *argv[])
 	return wpa_ctrl_command(ctrl, buf);
 }
 
+static int hostapd_cli_cmd_sta_ext(struct wpa_ctrl *ctrl, int argc, char *argv[])
+{
+	char buf[64];
+	if (argc < 1) {
+		printf("Invalid 'sta' command - at least one argument, STA "
+		       "address, is required.\n");
+		return -1;
+	}
+	if (argc > 1)
+		snprintf(buf, sizeof(buf), "STA_EXT %s %s", argv[0], argv[1]);
+	else
+		snprintf(buf, sizeof(buf), "STA_EXT %s", argv[0]);
+	return wpa_ctrl_command(ctrl, buf);
+}
+
 
 static int hostapd_cli_cmd_new_sta(struct wpa_ctrl *ctrl, int argc,
 				   char *argv[])
@@ -815,6 +830,20 @@ static int hostapd_cli_cmd_all_sta(struct wpa_ctrl *ctrl, int argc,
 		return 0;
 	do {
 		snprintf(cmd, sizeof(cmd), "STA-NEXT %s", addr);
+	} while (wpa_ctrl_command_sta(ctrl, cmd, addr, sizeof(addr)) == 0);
+
+	return -1;
+}
+
+static int hostapd_cli_cmd_all_sta_ext(struct wpa_ctrl *ctrl, int argc,
+				   char *argv[])
+{
+	char addr[32], cmd[64];
+
+	if (wpa_ctrl_command_sta(ctrl, "STA_EXT-FIRST", addr, sizeof(addr)))
+		return 0;
+	do {
+		snprintf(cmd, sizeof(cmd), "STA_EXT-NEXT %s", addr);
 	} while (wpa_ctrl_command_sta(ctrl, cmd, addr, sizeof(addr)) == 0);
 
 	return -1;
@@ -2071,8 +2100,12 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
 	{ "status", hostapd_cli_cmd_status, NULL, NULL },
 	{ "sta", hostapd_cli_cmd_sta, NULL,
 	  "<addr> = get MIB variables for one station" },
+	{ "sta_ext", hostapd_cli_cmd_sta_ext, NULL,
+	  "<addr> = get extended MIB variables for one station" },
 	{ "all_sta", hostapd_cli_cmd_all_sta, NULL,
 	   "= get MIB variables for all stations" },
+	{ "all_sta_ext", hostapd_cli_cmd_all_sta_ext, NULL,
+	   "= get extended MIB variables for all stations" },
 	{ "new_sta", hostapd_cli_cmd_new_sta, NULL,
 	  "<addr> = add a new station" },
 	{ "deauthenticate", hostapd_cli_cmd_deauthenticate,

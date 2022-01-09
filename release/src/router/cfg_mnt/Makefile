@@ -1,26 +1,52 @@
 include ../common.mak
 include $(SRCBASE)/router/.config
 
-CFLAGS += -Wall -Os $(EXTRACFLAGS)
+CFLAGS += -Wall -Os $(EXTRACFLAGS) -ffunction-sections -fdata-sections
 CFLAGS += -I. -I$(TOP)/shared -I$(SRCBASE) -I$(SRCBASE)/include -I./include -I$(TOP)/networkmap
 CFLAGS += -I./sysdeps
 CFLAGS += -I$(TOP)/openssl/include
 CFLAGS += -I$(TOP)/json-c
 
-LDFLAGS += -L$(TOP)/nvram${BCMEX}${EX7} -lnvram -L$(TOP)/shared -lshared
+LDFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections
+LDFLAGS += -L$(TOP_PLATFORM)/nvram${BCMEX}${EX7} -lnvram -L$(TOP)/shared -lshared
 LDFLAGS += -L$(TOP)/openssl -lcrypto -lssl
 LDFLAGS += -lpthread
 LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
 LDFLAGS += -lm
 
 ifeq ($(RTCONFIG_AMAS),y)
-CFLAGS += -I$(TOP)/amas-utils -I$(TOP)/shared/sysdeps/amas -DUPDATECOST
+ifeq ($(RTCONFIG_LLDPD_1_0_11),y)
+LLDPD_DIR = $(TOP)/lldpd-1.0.11
+else
+LLDPD_DIR = $(TOP)/lldpd-0.9.8
+endif
+CFLAGS += -I$(TOP)/amas-utils -I$(TOP)/shared/sysdeps/amas
 LDFLAGS += -L$(TOP)/amas-utils -lamas-utils
+LDFLAGS += -L$(LLDPD_DIR)/src/lib/.libs -llldpctl -L$(STAGEDIR)/usr/lib/ -ljansson
+ifeq ($(RTCONFIG_AVBLCHAN),y)
+CFLAGS += -DAVBLCHAN
+endif
+CFLAGS += -DFREE_MEMORY_DOWNLOAD
 endif
 
 ifeq ($(HND_ROUTER),y)
 CFLAGS += -DPTHREAD_STACK_SIZE_256K -DPTHREAD_EXIT
-LDFLAGS += -L$(TOP)/wlcsm -lwlcsm
+LDFLAGS += -L$(TOP_PLATFORM)/wlcsm -lwlcsm
+else ifeq ($(RTCONFIG_QCA),y)
+CFLAGS += -DPTHREAD_STACK_SIZE_256K -DPTHREAD_EXIT
+endif
+
+ifeq ($(RTCONFIG_HND_ROUTER_AX),y)
+CFLAGS +=-I$(SRCBASE)/../components/wlioctl/include -I$(SRCBASE)/../components/proto/include -I$(SRCBASE)/wl/sys
+endif
+
+ifeq ($(RTCONFIG_NOTIFICATION_CENTER),y)
+CFLAGS  += -I$(TOP)/sqlite
+CFLAGS  += -I$(TOP)/nt_center/lib
+CFLAGS  += -I$(TOP)/nt_center/actMail
+CFLAGS  += -I$(TOP)/wlc_nt
+LDFLAGS += -L$(TOP)/sqlite/.libs -lsqlite3 -lpthread -L$(TOP)/nt_center/lib -lnt
+LDFLAGS += -L$(TOP)/wlc_nt -lwlc_nt_client
 endif
 
 ifeq ($(RTCONFIG_DHDAP), y)
@@ -75,24 +101,30 @@ endif
 ifeq ($(RTCONFIG_AMAS),y)
 COMMON_OBJS += chmgmt.o
 endif
-COMMON_OBJS += encrypt.o cfg_crc.o cfg_udp.o cfg_dencrypt.o cfg_common.o cfg_ipc.o cfg_wevent.o cfg_upgrade.o cfg_clientlist.o cfg_sched.o cfg_slavelist.o
+COMMON_OBJS += encrypt.o linklist.o
+COMMON_OBJS += cfg_crc.o cfg_udp.o cfg_dencrypt.o cfg_common.o cfg_ipc.o cfg_wevent.o cfg_upgrade.o cfg_clientlist.o cfg_sched.o cfg_slavelist.o
+COMMON_OBJS += cfg_capability.o cfg_action.o cfg_eventnotify.o
+COMMON_OBJS += cfg_ctrllist.o
 ifeq ($(RTCONFIG_DWB),y)
 COMMON_OBJS += cfg_dwb.o
 endif
 COMMON_OBJS += cfg_chanspec.o
 COMMON_OBJS += cfg_parammgnt.o
-SERVER_OBJS += $(COMMON_OBJS) cfg_eventnotify.o cfg_mnt.o
-CLIENT_OBJS += $(COMMON_OBJS) cfg_capability.o cfg_client.o
+SERVER_OBJS += $(COMMON_OBJS) cfg_mnt.o
+CLIENT_OBJS += $(COMMON_OBJS) cfg_client.o
 REPORTSTATUS_OBJS += cfg_common.o cfg_reportstatus.o
 
 ifeq ($(RTCONFIG_WIFI_SON),y)
 CFLAGS += -DREPORT_PAP_INFO
 endif
-ifneq ($(RTCONFIG_REALTEK),y)
+ifeq ($(RTCONFIG_AMAS),y)
 COMMON_OBJS += cfg_roaming.o
 CFLAGS += -DLEGACY_ROAMING
 COMMON_OBJS += cfg_onboarding.o cfg_ethevent.o
 CFLAGS += -DONBOARDING -DRSSI_LIST
+ifeq ($(RTCONFIG_VIF_ONBOARDING),y)
+CFLAGS += -DONBOARDING_VIA_VIF
+endif
 # for wireless channel sync
 CFLAGS += -DSYNC_WCHANNEL
 # for roaming info for sta
@@ -105,14 +137,49 @@ COMMON_OBJS += cfg_radardet.o
 CFLAGS += -DRADAR_DET
 COMMON_OBJS += cfg_conndiag.o
 CFLAGS += -DCONN_DIAG
+ifeq ($(RTCONFIG_STA_AP_BAND_BIND),y)
+# for sta bind on AP
+CFLAGS += -DSTA_BIND_AP
+endif
 endif
 
-ifeq ($(BUILD_NAME), $(filter $(BUILD_NAME), RT-AC5300 GT-AC5300 MAP-AC2200 RT-AC92U))
+ifeq ($(RTCONFIG_AMASDB),y)
+CFLAGS += -DDUAL_BAND_DETECTION
+COMMON_OBJS += cfg_dualbandlist.o
+endif
+# for sending re join event
+#ifeq ($(HND_ROUTER_AX),y)
+#CFLAGS += -DNOTIFY_RE_JOIN_EVENT
+#endif
+
+ifeq ($(RTCONFIG_TCODE),y)
+ifeq ($(RTCONFIG_CFGSYNC_LOCSYNC),y)
+COMMON_OBJS += cfg_loclist.o
+endif
+endif
+
+ifeq ($(RTCONFIG_HAS_5G_2), y)
+CFLAGS += -DSUPPORT_TRI_BAND
+else ifdef $(filter $(BUILD_NAME), RT-AC5300 GT-AC5300 RT-AC92U RT-AX92U GT-AX11000 RT-AX95Q XT8PRO RT-AXE95Q ET8PRO RP-AC92 GT-AXE11000 GT-AX11000PRO)
 CFLAGS += -DSUPPORT_TRI_BAND
 endif
 
 ifeq ($(RTCONFIG_MASTER_DET),y)
 CFLAGS += -DMASTER_DET
+endif
+
+ifeq ($(RTCONFIG_PRELINK),y)
+CFLAGS += -DPRELINK
+COMMON_OBJS += cfg_prelink.o
+endif
+
+ifeq ($(RTCONFIG_MSSID_PRELINK),y)
+CFLAGS += -DMSSID_PRELINK
+COMMON_OBJS += cfg_prelink.o
+endif
+
+ifeq ($(RTCONFIG_NBR_RPT),y)
+COMMON_OBJS += cfg_nbr_rpt.o
 endif
 
 ifeq ($(RTCONFIG_LANTIQ),y)
@@ -128,6 +195,14 @@ endif
 
 ifeq ($(RTCONFIG_BCMBSD),y)
 CFLAGS += -DSMART_CONNECT
+endif
+
+ifeq ($(or $(HND_ROUTER_AX),$(RTCONFIG_WIFI_QCN5024_QCN5054)),y)
+CFLAGS += -DSUPPORT_11AX
+endif
+
+ifeq ($(RTCONFIG_QCA_PLC2),y)
+CFLAGS += -DPLC_STATUS
 endif
 
 

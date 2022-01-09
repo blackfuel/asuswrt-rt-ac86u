@@ -21,6 +21,9 @@ var action_wait = '<% get_parameter("action_wait"); %>';
 var group_id = '<% get_parameter("group_id"); %>';
 var getflag = '<% get_parameter("flag"); %>';
 var lan_proto = '<% get_parameter("lan_proto"); %>';
+var dsl_unit = '<% get_parameter("dsl_unit"); %>';
+var dsl_subunit = '<% get_parameter("dsl_subunit"); %>';
+var wan_unit = '<% get_parameter("wan_unit"); %>';
 
 if(tmo_support)
 	var theUrl = "cellspot.router"; 
@@ -248,7 +251,17 @@ function showWlHint(){
 			}
 			else if(wl_nband_array[j] == '1'){
 				band5g_count++;
-				wl_nband_title.push("5 GHz-" + band5g_count);
+				if(parent.band6g_support){
+					if(band5g_count == '1'){
+						wl_nband_title.push("5 GHz");
+					}
+					else{
+						wl_nband_title.push("6 GHz");
+					}
+				}
+				else{					
+					wl_nband_title.push("5 GHz-" + band5g_count);
+				}
 			}
 		}
 		if(wl_nband_title.indexOf("2.4 GHz-2") == -1) wl_nband_title[wl_nband_title.indexOf("2.4 GHz-1")] = "2.4 GHz";
@@ -307,7 +320,14 @@ function showWlHint(){
 			if(smart_connect_nvram == 1){
 				// Tri band steering
 				wlObj.length = 1;
-				wlObj[0].band = "Tri-band Smart Connect";
+				if(parent.smart_connect_support){
+					if(parent.band5g2_support){
+						wlObj[0].band = "<#smart_connect_tri#>";
+					}
+					else{
+						wlObj[0].band = "<#smart_connect_dual#>";
+					}
+				}
 			}
 			else if(smart_connect_nvram == 2){
 				// 5GHz band steering
@@ -318,7 +338,14 @@ function showWlHint(){
 		else if(applyParam.smartConnect == 1){
 			// Tri band steering
 			wlObj.length = 1;
-			wlObj[0].band = "Tri-band Smart Connect";
+			if(parent.smart_connect_support){
+				if(parent.band5g2_support){
+					wlObj[0].band = "<#smart_connect_tri#>";
+				}
+				else{
+					wlObj[0].band = "<#smart_connect_dual#>";
+				}
+			}
 		}
 		else if(applyParam.smartConnect == 2){
 			// 5GHz band steering
@@ -500,7 +527,7 @@ function initial(){
 		return false;
 	}
 	else if(getflag == "set_language"){
-		top.location.reload();
+		parent.location.href = current_page;
 	}
 	else if(next_page.indexOf("MobileQIS_Login") != -1){
 	}
@@ -592,7 +619,7 @@ function initial(){
 						setTimeout("delay_redirect('/qis/QIS_verify_detect.htm');", restart_time*1000);
 					return;
 				}
-				else{			
+				else{
 					parent.showLoading(restart_time, "waiting");
 					if(isWLclient()) {
 							setTimeout(getXMLAndRedirect, restart_time*1000);
@@ -611,11 +638,20 @@ function initial(){
 		parent.showLoading(restart_time, "waiting");
 		setTimeout(getXMLAndRedirect, restart_time*1000);
 	}
+	else if(current_page.indexOf("Advanced_DSL_Content") != -1 && getflag == "chg_pvc"){
+		setTimeout("top_delay_redirect('"+current_page+"?chg_pvc="+dsl_unit+"');", action_wait*1000);
+	}
+	else if(current_page.indexOf("Advanced_VDSL_Content") != -1 && getflag == "chg_pvc"){
+		setTimeout("top_delay_redirect('"+current_page+"?chg_pvc="+dsl_subunit+"');", action_wait*1000);
+	}
+	else if(current_page.indexOf("Advanced_WAN_Content") != -1 && getflag == "chg_pvc"){
+		setTimeout("top_delay_redirect('"+current_page+"?chg_pvc="+wan_unit+"');", action_wait*1000);
+	}
 	else if(current_page.indexOf("Feedback") != -1){
 		if(action_script == "stop_dblog")
 			setTimeout("top_delay_redirect('"+current_page+"');", restart_time*1000);
 		else
-			setTimeout("parent.redirect();", action_wait*1000);
+			setTimeout("parent.CheckFBSize();", 15000);
 	}	
 	else if(getflag == "ddnscheck"){
 		setTimeout("parent.go_index_page();", 2000);
@@ -666,6 +702,10 @@ function initial(){
 	else if(getflag == "apply_routersync"){
 		parent.show_block();
 	}
+	else if(action_script.indexOf("ipsec_") != -1 && (current_page.indexOf("Advanced_VPN_IPSec") != -1) && parent.based_modelid != "BRT-AC828"){
+		parent.showLoading(restart_time, "waiting");
+		setTimeout(getXMLAndRedirect, restart_time*1000);
+	}
 	else if(page_modified == 1){
 		if(amesh_support && current_page == "device-map/amesh.asp") {
 			return;
@@ -686,7 +726,7 @@ function initial(){
 				setTimeout("top_delay_redirect('/');", restart_time*1000);
 			}
 			else if(current_page.indexOf("Advanced_OperationMode_Content.asp") != -1){
-				parent.document.getElementById('drword').innerHTML = "<#LAN_IP_changed_suggedtion1#>"+parent.document.form.lan_ipaddr.value+"<#LAN_IP_changed_suggedtion2#><br/>";
+				parent.document.getElementById('drword').innerHTML = "<#LAN_IP_changed_suggedtion1#>&nbsp;"+parent.document.form.lan_ipaddr.value+"<#LAN_IP_changed_suggedtion2#><br/>";
 				setTimeout("hideLoading()	",20000);
 				setTimeout("parent.document.getElementById('Loading').style.display = 'none';",20000);
 				setTimeout("parent.dr_advise();",20000);
@@ -697,7 +737,7 @@ function initial(){
 					parent.document.getElementById('drword').innerHTML = "<#Main_alert_proceeding_desc3#>.<#LANConfig_ChangedLANIP#>";
 				}
 				else{
-					parent.document.getElementById('drword').innerHTML = "<#LAN_IP_changed_suggedtion1#>"+parent.document.form.lan_ipaddr.value+"<#LAN_IP_changed_suggedtion2#><br/>";
+					parent.document.getElementById('drword').innerHTML = "<#LAN_IP_changed_suggedtion1#>&nbsp;"+parent.document.form.lan_ipaddr.value+"<#LAN_IP_changed_suggedtion2#><br/>";
 				}
 				setTimeout("hideLoading();",20000);
 				setTimeout("parent.dr_advise();",20000);

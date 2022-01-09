@@ -320,7 +320,7 @@ function show_wl_radio(){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
@@ -381,7 +381,7 @@ function show_wl_radio(){
 												<img src="/images/New_ui/Key-Guard.png">
 											</td>
 											<td>&nbsp;&nbsp;</td>
-											<td style="font-style: italic;font-size: 14px;">
+											<td style="font-size: 14px;">
 												<span>Key Guard let you assign specific devices as keys to lock/unlock router's feature. <br>For example, if you are not in the home, the router is unnecessary to run at full speed to save power and you may also want to disable the internet connection for better security.</span><br><span style="font-style: italic;font-size: 12px;color: #FFCC00;">Note:If there are IOT devices such as IPCam or smart thermostat which require internet connection all the time, pleaes test this feature at home first to ensure the IOT devices work well when key devices do not connect to router.</span>
 											</td>
 										</tr>

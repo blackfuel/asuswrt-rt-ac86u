@@ -49,7 +49,9 @@ static char const RCSID[] =
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#if defined(__GLIBC__) || defined(__UCLIBC__) /* not musl */
 #include <net/ethernet.h>
+#endif
 #include <net/if_arp.h>
 #include <linux/ppp_defs.h>
 #include <linux/if_pppox.h>

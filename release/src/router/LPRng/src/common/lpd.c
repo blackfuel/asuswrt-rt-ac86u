@@ -31,6 +31,7 @@
 #include "wlancom.h"
 #include "lp_asus.h"
 #include "syslog.h"
+#include "shared.h"
 
 #include <bcmnvram.h>
 #include <netinet/tcp.h>
@@ -90,14 +91,11 @@ void sig_remove(int sig);//JY1110
 //void checkstatus_usb_par();//JY1110
 int waitsock(int sockfd , int sec , int usec);  //wait to socket until timeout
 void reset_printer(int sec);
-int check_par_usb_prn();//JY: 20031104 change to int from void
 DWORD RECV(int sockfd , PBYTE pRcvbuf , DWORD dwlen , DWORD timeout);
 
 int  fdPRN=0; //File descriptor of the printer port
 char g_useUsb = FALSE;
 char busy = FALSE; //Add by Lisa
-void check_prn_status(char *status_prn, char *cliadd_prn); //Added by Jiahao
-void processReq_Raw(int fd); //Added by Jiahao
 
 static void update_pidfile(void)
 {
@@ -174,7 +172,7 @@ int main(int argc, char *argv[])
 
     sigset_t sigs_to_catch;
     sigemptyset(&sigs_to_catch);
-    sigaddset(&sigs_to_catch, SIGCLD);
+    sigaddset(&sigs_to_catch, SIGCHLD);
     sigaddset(&sigs_to_catch, SIGINT);
     sigaddset(&sigs_to_catch, SIGQUIT);
     sigaddset(&sigs_to_catch, SIGKILL);
@@ -182,7 +180,7 @@ int main(int argc, char *argv[])
     sigprocmask(SIG_UNBLOCK, &sigs_to_catch, NULL);
 
     //Setup the signal handler
-    signal(SIGCLD, sig_child); 
+    signal(SIGCHLD, sig_child); 
     signal(SIGINT, sig_cleanup); 
     signal(SIGQUIT, sig_cleanup); 
     signal(SIGKILL, sig_cleanup);
@@ -1115,7 +1113,7 @@ void sig_remove(int sig)
 int closesocket(int sockfd)
 {
     //shutdown(sockfd,SHUT_RDWR);
-    close(sockfd);
+	return close(sockfd);
 }
 
 /************************************/
@@ -1172,6 +1170,7 @@ int check_par_usb_prn()//JY: 20031104 change to int from void
     g_useUsb = TRUE;
     return(g_useUsb);
 #else
+    g_useUsb = FALSE;
     fp=fopen("/proc/sys/dev/parport/parport0/devices/lp/deviceid","r");
 
     if( fp != NULL)
@@ -1201,16 +1200,13 @@ int check_par_usb_prn()//JY: 20031104 change to int from void
                     g_useUsb = FALSE;
 //printf("PARALLEL\n");//JY1112: delete               
                 }
-			return(g_useUsb);//JY: 1104
                 break;
             }
-            
         }
-        
         fclose(fp);
     }
 #endif
-    
+    return(g_useUsb);//JY: 1104
 }
 
 /*1110test status

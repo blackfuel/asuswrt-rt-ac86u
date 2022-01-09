@@ -23,7 +23,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <sys/unistd.h>
+#include <unistd.h>
 #include <sys/select.h>
 
 #include <libdaemon/dfork.h>

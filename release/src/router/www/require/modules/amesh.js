@@ -33,20 +33,37 @@ function initial_amesh_obj() {
 		$('.amesh_popup_bg').remove();
 	}
 }
-function check_wl_auth_support(_wl_auth_mode_x, _obj) {
+function check_wl_auth_support(_obj, _wl_unit) {
+	var auth_mode = _obj.val();
+	var auth_text = _obj.text();
 	var support_flag = false;
 	var support_auth = ["psk2", "pskpsk2"];
+
+	if(isSupport("wifi6e")){
+		var wl_band = httpApi.nvramGet(["wl" + _wl_unit + "_nband"])["wl" + _wl_unit + "_nband"];//1:5G, 2:2.4G, 4:6G
+		if(wl_band == 4)
+			support_auth = ["sae"];
+		else
+			support_auth = ["psk2", "pskpsk2", "psk2sae"];
+	}
+	else{
+		var re_count = httpApi.hookGet("get_cfg_clientlist", true).length;
+		if(re_count > 1)// have re node
+			support_auth = ["psk2", "pskpsk2", "psk2sae"];
+		else
+			support_auth = ["psk2", "pskpsk2"];
+	}
+
 	for (var idx in support_auth) {
 		if (support_auth.hasOwnProperty(idx)) {
-			if(_wl_auth_mode_x == support_auth[idx]) {
+			if(auth_mode == support_auth[idx]) {
 				support_flag = true;
 				break;
 			}
 		}
 	}
 	if(!support_flag) {
-		var auth_text = _obj.text();
-		var confirm_msg = "When using " + auth_text + " Authentication, AiMesh system will become invalid.\nAre you sure to process?";/*untranslated*/
+		var confirm_msg = "<#AiMesh_confirm_msg9#>".replace("#AUTHMODE", auth_text);
 		support_flag = confirm(confirm_msg);
 	}
 	return support_flag;
@@ -55,10 +72,10 @@ function AiMesh_confirm_msg(_name, _value) {
 	var check_operation_mode = function(_value) {
 		switch(parseInt(_value)) {
 			case 2 :
-				return confirm("If you change to Repeater mode, it will disable AiMesh system.\nAre you sure to process?");/* untranslated */
+				return confirm("<#AiMesh_confirm_msg2#>\n<#AiMesh_confirm_msg0#>");//Repeater
 				break;
 			case 4 :
-				return confirm("If you change to Media Bridge mode, it will disable AiMesh system.\nAre you sure to process?");/* untranslated */
+				return confirm("<#AiMesh_confirm_msg4#>\n<#AiMesh_confirm_msg0#>");//Media Bridge
 				break;
 			default :
 				return true;
@@ -81,34 +98,34 @@ function AiMesh_confirm_msg(_name, _value) {
 			if(current_ssid == original_ssid && current_psk == original_psk)
 				return true;
 			else if(current_ssid != original_ssid && current_psk != original_psk)
-				return confirm("If you change SSID and WPA Pre-Shared Key, it will affect the offline AiMesh node wifi connectivity.\nAre you sure to process?");/* untranslated */
+				return confirm("<#AiMesh_confirm_msg_ChangeSSIDnKey#>\n<#AiMesh_confirm_msg0#>");//SSID & WPA key
 			else if(current_ssid != original_ssid)
-				return confirm("If you change SSID, it will affect the offline AiMesh node wifi connectivity.\nAre you sure to process?");/* untranslated */
+				return confirm("<#AiMesh_confirm_msg_ChangeSSID#>\n<#AiMesh_confirm_msg0#>");//SSID
 			else if(current_psk != original_psk)
-				return confirm("If you change WPA Pre-Shared Key, it will affect the offline AiMesh node wifi connectivity.\nAre you sure to process?");/* untranslated */
+				return confirm("<#AiMesh_confirm_msg_ChangeKey#>\n<#AiMesh_confirm_msg0#>");/* untranslated */
 		}
 		else
 			return true;
 	};
 	var check_wireless_country_code = function() {
-		return confirm("By changing country code, AiMesh might not work properly.\nAre you sure to process?");/* untranslated */
+		return confirm("<#AiMesh_confirm_msg_CountryCode#>\n<#AiMesh_confirm_msg0#>");//Country code
 	};
 	var feature_value = {
 		"Wireless_Radio" : {
 			"value" : 1,
-			"text" : "If you disable Radio, it will affect the AiMesh wifi connectivity.\nAre you sure to process?" /* untranslated */
+			"text" : "<#AiMesh_confirm_msg5#>\n<#AiMesh_confirm_msg0#>" //Disable Radio
 		},
 		"Wireless_Hide" : {
 			"value" : 0,
-			"text" : "If you Hide SSID, it will affect the AiMesh wifi connectivity.\nAre you sure to process?" /* untranslated */
+			"text" : "<#AiMesh_confirm_msg6#>\n<#AiMesh_confirm_msg0#>" //Hide SSID
 		},
 		"Wireless_Hide_WPS" : {
 			"value" : 0,
-			"text" : "If you Hide SSID, it will disable the WPS function and affect the AiMesh wifi connectivity.\nAre you sure to process?" /* untranslated */
+			"text" : "<#AiMesh_confirm_msg7#>\n<#AiMesh_confirm_msg0#>" //Hide SSID
 		},
 		"DHCP_Server" : {
 			"value" : 1,
-			"text" : "If you disable DHCP Server, it will affect the AiMesh wifi connectivity.\nAre you sure to process?" /* untranslated */
+			"text" : "<#AiMesh_confirm_msg8#>\n<#AiMesh_confirm_msg0#>" //Disable DHCP
 		}
 	};
 	var confirm_flag = true;

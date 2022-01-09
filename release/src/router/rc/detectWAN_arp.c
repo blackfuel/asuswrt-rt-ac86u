@@ -342,7 +342,7 @@ static int detectARP(void)
 	ioctl(sock_fd, SIOCGIFINDEX, (char*)&ifr);
 	me.sll_ifindex = ifr.ifr_ifindex;
 	ioctl(sock_fd, SIOCGIFFLAGS, (char*)&ifr);
-	if (!ifr.ifr_flags & IFF_UP) {
+	if (!(ifr.ifr_flags & IFF_UP)) {
 #ifdef DEBUG
 		dbg("[detectWan_arp] %s is down\n", device);
 #endif
@@ -551,7 +551,12 @@ int detectWAN_arp_main(int argc, char **argv)
 /* [MUST]: Need to discuss to add new mode for Media Bridge  */
 	if (nvram_get_int("wlc_psta") == 1) // Media bridge mode
 		return -1;
+#ifdef RTCONFIG_AMAS
+    if (nvram_get_int("re_mode") == 1)
+        return -1;
 #endif
+#endif
+
 
 	memset(_lan_proto, 0x0, sizeof(_lan_proto));
 	strcpy(_lan_proto, nvram_safe_get("lan_proto"));

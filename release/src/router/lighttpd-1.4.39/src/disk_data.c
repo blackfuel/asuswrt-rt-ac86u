@@ -3245,7 +3245,7 @@ extern int add_account(const char *const account, const char *const password){
     memset(ascii_passwd, 0, 64);
     char_to_ascii_safe(ascii_passwd, password, 64);
 #ifdef RTCONFIG_NVRAM_ENCRYPT
-    int enclen = pw_enc_blen(ascii_passwd);
+    int enclen = pw_enc_blen(ascii_passwd) + 1;
     char enc_passwd[enclen];
     memset(enc_passwd, 0, sizeof(enc_passwd));
     pw_enc(ascii_passwd, enc_passwd);
@@ -3302,29 +3302,6 @@ extern int add_account(const char *const account, const char *const password){
     return 0;
 }
 
-//==========================================================================================================================
-// shared/misc.c
-int upper_strncmp(const char *const str1, const char *const str2, int count){
-	char *upper_str1, *upper_str2;
-	int ret;
-
-	if(str1 == NULL || str2 == NULL)
-		return -1;
-
-	if(get_upper_str(str1, &upper_str1) == NULL)
-		return -1;
-
-	if(get_upper_str(str2, &upper_str2) == NULL){
-		free(upper_str1);
-		return -1;
-	}
-
-	ret = strncmp(upper_str1, upper_str2, count);
-	free(upper_str1);
-	free(upper_str2);
-
-	return ret;
-}
 //==========================================================================================================================
 // libpasswd/passwd.c
 #include <shadow.h>

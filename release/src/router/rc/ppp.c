@@ -40,13 +40,20 @@ int
 ppp_ifunit(char *ifname)
 {
 	int unit;
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 
 	for (unit = WAN_UNIT_FIRST; unit < WAN_UNIT_MAX; unit++) {
 		snprintf(prefix, sizeof(prefix), "wan%d_", unit);
 		if (nvram_match(strcat_r(prefix, "pppoe_ifname", tmp), ifname))
 			return unit;
 	}
+#ifdef RTCONFIG_MULTISERVICE_WAN
+	for (unit = WAN_UNIT_FIRST_MULTISRV_START; unit < WAN_UNIT_MULTISRV_MAX; unit++) {
+		snprintf(prefix, sizeof(prefix), "wan%d_", unit);
+		if (nvram_match(strcat_r(prefix, "pppoe_ifname", tmp), ifname))
+			return unit;
+	}
+#endif
 
 	return -1;
 }
@@ -70,7 +77,7 @@ ipup_main(int argc, char **argv)
 	FILE *fp;
 	char *wan_ifname = safe_getenv("IFNAME");
 	char *wan_linkname = safe_getenv("LINKNAME");
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 	char buf[256], *value;
 	int unit;
 
@@ -93,6 +100,9 @@ ipup_main(int argc, char **argv)
 		}
 	}
 #endif
+
+	snprintf(tmp, sizeof(tmp), "/tmp/%sppp.env", prefix);
+	envsave(tmp);
 
 	/* Stop triggering demand connection */
 	if (nvram_get_int(strcat_r(prefix, "pppoe_demand", tmp)))
@@ -140,9 +150,6 @@ ipup_main(int argc, char **argv)
 
 	wan_up(wan_ifname);
 
-	nvram_set(strcat_r(prefix, "auth_ok", tmp), "1");
-	nvram_commit();
-
 	_dprintf("%s:: done\n", __FUNCTION__);
 	return 0;
 }
@@ -155,7 +162,7 @@ ipdown_main(int argc, char **argv)
 {
 	char *wan_ifname = safe_getenv("IFNAME");
 	char *wan_linkname = safe_getenv("LINKNAME");
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 	int unit;
 
 	_dprintf("%s():: %s\n", __FUNCTION__, argv[0]);
@@ -188,8 +195,8 @@ ippreup_main(int argc, char **argv)
 {
 	char *wan_ifname = safe_getenv("IFNAME");
 	char *wan_linkname = safe_getenv("LINKNAME");
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
-	int unit;
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
+	int unit, ppp_unit;
 
 	_dprintf("%s():: %s\n", __FUNCTION__, argv[0]);
 
@@ -198,6 +205,15 @@ ippreup_main(int argc, char **argv)
 		return 0;
 
 	_dprintf("%s: unit=%d ifname=%s\n", __FUNCTION__, unit, wan_ifname);
+
+	/* Clear obsolete interfaces */
+	for (ppp_unit = WAN_UNIT_FIRST; ppp_unit < WAN_UNIT_MAX; ppp_unit++) {
+		if (ppp_unit != unit) {
+			snprintf(prefix, sizeof(prefix), "wan%d_", ppp_unit);
+			if (nvram_match(strcat_r(prefix, "pppoe_ifname", tmp), wan_ifname))
+				nvram_set(strcat_r(prefix, "pppoe_ifname", tmp), "");
+		}
+	}
 	snprintf(prefix, sizeof(prefix), "wan%d_", unit);
 
 	/* Set wanX_pppoe_ifname to real interface name */
@@ -216,19 +232,30 @@ int ip6up_main(int argc, char **argv)
 {
 	char *wan_ifname = safe_getenv("IFNAME");
 	char *wan_linkname = safe_getenv("LINKNAME");
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 	char *value;
-	int unit;
+	int unit, ppp_unit;
 
-	if (!wan_ifname || strlen(wan_ifname) <= 0)
-		return 0;
+	_dprintf("%s():: %s\n", __FUNCTION__, argv[0]);
 
 	/* Get unit from LINKNAME: ppp[UNIT] */
 	if ((unit = ppp_linkunit(wan_linkname)) < 0)
 		return 0;
 
 	_dprintf("%s: unit=%d ifname=%s\n", __FUNCTION__, unit, wan_ifname);
+
+	/* Clear obsolete interfaces */
+	for (ppp_unit = WAN_UNIT_FIRST; ppp_unit < WAN_UNIT_MAX; ppp_unit++) {
+		if (ppp_unit != unit) {
+			snprintf(prefix, sizeof(prefix), "wan%d_", ppp_unit);
+			if (nvram_match(strcat_r(prefix, "pppoe_ifname", tmp), wan_ifname))
+				nvram_set(strcat_r(prefix, "pppoe_ifname", tmp), "");
+		}
+	}
 	snprintf(prefix, sizeof(prefix), "wan%d_", unit);
+
+	snprintf(tmp, sizeof(tmp), "/tmp/%sppp6.env", prefix);
+	envsave(tmp);
 
 	/* share the same interface with pppoe ipv4 connection */
 	nvram_set(strcat_r(prefix, "pppoe_ifname", tmp), wan_ifname);
@@ -244,6 +271,16 @@ int ip6up_main(int argc, char **argv)
 int ip6down_main(int argc, char **argv)
 {
 	char *wan_ifname = safe_getenv("IFNAME");
+	char *wan_linkname = safe_getenv("LINKNAME");
+	int unit;
+
+	_dprintf("%s():: %s\n", __FUNCTION__, argv[0]);
+
+	/* Get unit from LINKNAME: ppp[UNIT] */
+	if ((unit = ppp_linkunit(wan_linkname)) < 0)
+		return 0;
+
+	_dprintf("%s: unit=%d ifname=%s\n", __FUNCTION__, unit, wan_ifname);
 
 	wan6_down(wan_ifname);
 
@@ -259,7 +296,7 @@ authfail_main(int argc, char **argv)
 {
 	char *wan_ifname = safe_getenv("IFNAME");
 	char *wan_linkname = safe_getenv("LINKNAME");
-	char tmp[100], prefix[] = "wanXXXXXXXXXX_";
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 	int unit;
 
 	_dprintf("%s():: %s\n", __FUNCTION__, argv[0]);

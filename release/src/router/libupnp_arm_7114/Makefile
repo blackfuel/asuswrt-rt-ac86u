@@ -1,15 +1,3 @@
-#
-# Copyright (C) 2015, Broadcom Corporation
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom Corporation;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom Corporation.
-#
-# $Id: Makefile 403251 2013-05-20 05:15:55Z $
-#
-
 include ../common.mak
 
 UPNPLIB_NAME = libupnp.so
@@ -33,7 +21,7 @@ SRCFILES = upnp.c upnp_ssdp.c upnp_http.c upnp_gena.c upnp_soap.c \
 
 OBJFILES = ${SRCFILES:.c=.o}
 
-ifeq ($(wildcard ./upnp),)
+ifneq ($(wildcard ./prebuilt/$(UPNPLIB_NAME)),)
 all:
 	echo use prebuilt 
 	cp -f ./prebuilt/$(UPNPLIB_NAME) .

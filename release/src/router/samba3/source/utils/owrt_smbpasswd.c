@@ -137,6 +137,7 @@ void delete_user_from_smbpasswd(char *user)
 			p = strchr(t, ':');
 			if(p && (p - t == strlen(user)) && (strncmp(t, user, strlen(user))) == 0)
 			{
+#ifdef __GLIBC__
 				fpos_t r_pos, w_pos;
 				char t2[256];
 				fgetpos(fp, &r_pos);
@@ -151,6 +152,22 @@ void delete_user_from_smbpasswd(char *user)
 					fsetpos(fp, &r_pos);
 				}
 				ftruncate(fileno(fp), w_pos.__pos);
+#else
+				long r_pos, w_pos;
+				char t2[256];
+				r_pos = ftell(fp);
+				w_pos = r_pos;
+				w_pos -= strlen(t);
+				while(fgets(t2, 256, fp))
+				{
+					fseek(fp, w_pos, SEEK_SET);
+					fputs(t2, fp);
+					r_pos += strlen(t2);
+					w_pos += strlen(t2);
+					fseek(fp, r_pos, SEEK_SET);
+				}
+				ftruncate(fileno(fp), w_pos);
+#endif
 				break;
 			}
 		}

@@ -35,10 +35,10 @@ static size_t listensockets(int *sock, size_t sockcount, int *maxfd);
 static void sigchld_handler(int dummy);
 static void sigsegv_handler(int);
 static void sigintterm_handler(int fish);
-#ifdef INETD_MODE
+#if INETD_MODE
 static void main_inetd(void);
 #endif
-#ifdef NON_INETD_MODE
+#if NON_INETD_MODE
 static void main_noinetd(void);
 #endif
 static void commonsetup(void);
@@ -58,7 +58,7 @@ int main(int argc, char ** argv)
 	/* get commandline options */
 	svr_getopts(argc, argv);
 
-#ifdef INETD_MODE
+#if INETD_MODE
 	/* service program mode */
 	if (svr_opts.inetdmode) {
 		main_inetd();
@@ -66,7 +66,7 @@ int main(int argc, char ** argv)
 	}
 #endif
 
-#ifdef NON_INETD_MODE
+#if NON_INETD_MODE
 	main_noinetd();
 	/* notreached */
 #endif
@@ -76,12 +76,21 @@ int main(int argc, char ** argv)
 }
 #endif
 
-#ifdef INETD_MODE
+#if INETD_MODE
 static void main_inetd() {
 	char *host, *port = NULL;
 
-	/* Set up handlers, syslog, seed random */
+	/* Set up handlers, syslog */
 	commonsetup();
+
+	seedrandom();
+
+#if DEBUG_TRACE
+	if (debug_trace) {
+		/* -v output goes to stderr which would get sent over the inetd network socket */
+		dropbear_exit("Dropbear inetd mode is incompatible with debug -v");
+	}
+#endif
 
 	/* In case our inetd was lax in logging source addresses */
 	get_socket_address(0, NULL, NULL, &host, &port, 0);
@@ -103,7 +112,7 @@ static void main_inetd() {
 }
 #endif /* INETD_MODE */
 
-#ifdef NON_INETD_MODE
+#if NON_INETD_MODE
 static void main_noinetd() {
 	fd_set fds;
 	unsigned int i, j;
@@ -171,7 +180,7 @@ static void main_noinetd() {
 	/* incoming connection select loop */
 	for(;;) {
 
-		FD_ZERO(&fds);
+		DROPBEAR_FD_ZERO(&fds);
 		
 		/* listening sockets */
 		for (i = 0; i < listensockcount; i++) {
@@ -188,7 +197,7 @@ static void main_noinetd() {
 
 		val = select(maxsock+1, &fds, NULL, NULL, NULL);
 
-		if (exitflag) {
+		if (ses.exitflag) {
 			unlink(svr_opts.pidfile);
 			dropbear_exit("Terminated by signal");
 		}
@@ -266,7 +275,7 @@ static void main_noinetd() {
 				goto out;
 			}
 
-#ifdef DEBUG_NOFORK
+#if DEBUG_NOFORK
 			fork_ret = 0;
 #else
 			fork_ret = fork();
@@ -289,11 +298,6 @@ static void main_noinetd() {
 			} else {
 
 				/* child */
-#ifdef DEBUG_FORKGPROF
-				extern void _start(void), etext(void);
-				monstartup((u_long)&_start, (u_long)&etext);
-#endif /* DEBUG_FORKGPROF */
-
 				getaddrstring(&remoteaddr, NULL, &remote_port, 0);
 				dropbear_log(LOG_INFO, "Child connection from %s:%s", remote_host, remote_port);
 				m_free(remote_host);
@@ -359,7 +363,7 @@ static void sigsegv_handler(int UNUSED(unused)) {
 /* catch ctrl-c or sigterm */
 static void sigintterm_handler(int UNUSED(unused)) {
 
-	exitflag = 1;
+	ses.exitflag = 1;
 }
 
 /* Things used by inetd and non-inetd modes */
@@ -397,8 +401,6 @@ static void commonsetup() {
 	/* Now we can setup the hostkeys - needs to be after logging is on,
 	 * otherwise we might end up blatting error messages to the socket */
 	load_all_hostkeys();
-
-	seedrandom();
 }
 
 /* Set up listening sockets for all the requested ports */

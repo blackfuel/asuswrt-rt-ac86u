@@ -1,3 +1,259 @@
+2020.81 - 29 October 2020
+
+- Fix regression in 2020.79 which prevented connecting with some SSH 
+  implementations. Increase MAX_PROPOSED_ALGO to 50, and print a log 
+  message if the limit is hit. This fixes interoperability with sshj 
+  library (used by PyCharm), and GoAnywhere.
+  Reported by Pirmin Walthert and Piotr Jurkiewicz
+
+- Fix building with non-GCC compilers, reported by Kazuo Kuroi
+
+- Fix potential long delay in dbclient, found by OSS Fuzz
+
+- Fix null pointer dereference crash, found by OSS Fuzz
+
+- libtommath now uses the same random source as Dropbear (in 2020.79 
+  and 2020.80 used getrandom() separately)
+
+- Some fuzzing improvements, start of a dbclient fuzzer
+
+2020.80 - 26 June 2020
+
+- Don't block authorized_keys logins with no-X11-forwarding or no-agent-forwarding 
+  restrictions when X11 or agent forwarding are disabled at compile time.
+  This is more of a problem now X11 is disabled by default, reported by Guilhem Moulin
+
+- Reduce binary size by 4kB (x64) when using bundled libtommath
+
+- Define GNU_SOURCE for getrandom() on uclibc, reported by Laurent Bercot and
+  Fabrice Fontaine
+
+- Improve checking libtomcrypt version compatibility
+
+- Add some style notes to DEVELOPING.md
+
+2020.79 - 15 June 2020
+
+- Support ed25519 hostkeys and authorized_keys, many thanks to Vladislav Grishenko.
+  This also replaces curve25519 with a TweetNaCl implementation that reduces code size.
+
+- Add chacha20-poly1305 authenticated cipher. This will perform faster than AES
+  on many platforms. Thanks to Vladislav Grishenko
+
+- Support using rsa-sha2 signatures. No changes are needed to hostkeys/authorized_keys
+  entries, existing RSA keys can be used with the new signature format (signatures
+  are ephemeral within a session). Old ssh-rsa signatures will no longer
+  be supported by OpenSSH in future so upgrading is recommended.
+
+- Use getrandom() call on Linux to ensure sufficient entropy has been gathered at startup.
+  Dropbear now avoids reading from the random source at startup, instead waiting until
+  the first connection. It is possible that some platforms were running without enough 
+  entropy previously, those could potentially block at first boot generating host keys.
+  The dropbear "-R" option is one way to avoid that.
+
+- Upgrade libtomcrypt to 1.18.2 and libtommath to 1.2.0, many thanks to Steffen Jaeckel for
+  updating Dropbear to use the current API. Dropbear's configure script will check 
+  for sufficient system library versions, otherwise using the bundled versions.
+
+- CBC ciphers, 3DES, hmac-sha1-96, and x11 forwarding are now disabled by default.
+  They can be set in localoptions.h if required.
+  Blowfish has been removed.
+
+- Support AES GCM, patch from Vladislav Grishenko. This is disabled by default,
+  Dropbear doesn't currently use hardware accelerated AES.
+
+- Added an API for specifying user public keys as an authorized_keys replacement.
+  See pubkeyapi.h for details, thanks to Fabrizio Bertocci
+
+- Fix idle detection clashing with keepalives, thanks to jcmathews
+
+- Include IP addresses in more early exit messages making it easier for fail2ban
+  processing. Patch from Kevin Darbyshire-Bryant
+
+- scp fix for CVE-2018-20685 where a server could modify name of output files
+
+- SSH_ORIGINAL_COMMAND is set for "dropbear -c" forced command too
+
+- Fix writing key files on systems without hard links, from Matt Robinson
+
+- Compatibility fixes for IRIX from Kazuo Kuroi
+
+- Re-enable printing MOTD by default, was lost moving from options.h. Thanks to zciendor
+
+- Call fsync() is called on parent directory when writing key files to ensure they are flushed
+
+- Fix "make install" for manpages in out-of-tree builds, from Gabor Z. Papp
+
+- Some notes are added in DEVELOPING.md
+
+2019.78 - 27 March 2019
+
+- Fix dbclient regression in 2019.77. After exiting the terminal would be left
+  in a bad state. Reported by Ryan Woodsmall
+  
+2019.77 - 23 March 2019
+
+- Fix server -R option with ECDSA - only advertise one key size which will be accepted.
+  Reported by Peter Krefting, 2018.76 regression.
+
+- Fix server regression in 2018.76 where multiple client -R forwards were all forwarded 
+  to the first destination. Reported by Iddo Samet.
+
+- Make failure delay more consistent to avoid revealing valid usernames, set server password 
+  limit of 100 characters. Problem reported by usd responsible disclosure team
+
+- Change handling of failed authentication to avoid disclosing valid usernames,
+  CVE-2018-15599. 
+
+- Fix dbclient to reliably return the exit code from the remote server.
+  Reported by W. Mike Petullo
+
+- Fix export of 521-bit ECDSA keys, from Christian Hohnstädt
+
+- Add -o Port=xxx option to work with sshfs, from xcko
+
+- Merged fuzzing code, see FUZZER-NOTES.md
+
+- Add a DROPBEAR_SVR_MULTIUSER=0 compile option to run on 
+  single-user Linux kernels (CONFIG_MULTIUSER disabled). From Patrick Stewart
+
+- Increase allowed username to 100 characters, reported by W. Mike Petullo
+
+- Update config.sub and config.guess, should now work with RISC-V
+
+- Cygwin compile fix from karel-m
+
+- Don't require GNU sed (accidentally in 2018.76), reported by Samuel Hsu
+
+- Fix for IRIX and writev(), reported by Kazuo Kuroi
+
+- Other fixes and cleanups from François Perrad, Andre McCurdy, Konstantin Demin,
+  Michael Jones, Pawel Rapkiewicz
+
+
+2018.76 - 27 February 2018
+
+> > > Configuration/compatibility changes
+  IMPORTANT
+  Custom configuration is now specified in localoptions.h rather than options.h
+  Available options and defaults can be seen in default_options.h
+
+  To migrate your configuration, compare your customised options.h against the
+  upstream options.h from your relevant version. Any customised options should
+  be put in localoptions.h in the build directory.
+
+- "configure --enable-static" should now be used instead of "make STATIC=1"
+  This will avoid 'hardened build' flags that conflict with static binaries
+
+- Set 'hardened build' flags by default if supported by the compiler.
+  These can be disabled with configure --disable-harden if needed.
+  -Wl,-pie
+  -Wl,-z,now -Wl,-z,relro
+  -fstack-protector-strong
+  -D_FORTIFY_SOURCE=2
+  # spectre v2 mitigation
+  -mfunction-return=thunk
+  -mindirect-branch=thunk
+
+  Spectre patch from Loganaden Velvindron
+
+- "dropbear -r" option for hostkeys no longer attempts to load the default
+  hostkey paths as well. If desired these can be specified manually. 
+  Patch from CamVan Nguyen
+
+- group1-sha1 key exchange is disabled in the server by default since
+  the fixed 1024-bit group may be susceptible to attacks
+
+- twofish ciphers are now disabled in the default configuration
+
+- Default generated ECDSA key size is now 256 (rather than 521) 
+  for better interoperability
+
+- Minimum RSA key length has been increased to 1024 bits
+
+> > > Other features and fixes
+
+- Add runtime -T max_auth_tries option from Kevin Darbyshire-Bryant
+
+- Add 'dbclient -J &fd' to allow dbclient to connect over an existing socket.
+  See dbclient manpage for a socat example. Patch from Harald Becker
+
+- Add "-c forced_command" option. Patch from Jeremy Kerr
+
+- Restricted group -G option added with patch from stellarpower
+
+- Support server-chosen TCP forwarding ports, patch from houseofkodai
+
+- Allow choosing outgoing address for dbclient with -b [bind_address][:bind_port]
+  Patch from houseofkodai
+
+- Makefile will now rebuild object files when header files are modified
+
+- Add group14-256 and group16 key exchange options
+
+- curve25519-sha256 also supported without @libssh.org suffix
+
+- Update bundled libtomcrypt to 1.18.1, libtommath to 1.0.1
+  This fixes building with some recent versions of clang
+
+- Set PAM_RHOST which is needed by modules such as pam_abl
+
+- Improvements to DSS and RSA public key validation, found by OSS-Fuzz. 
+
+- Don't exit when an authorized_keys file has malformed entries. Found by OSS-Fuzz
+
+- Fix null-pointer crash with malformed ECDSA or DSS keys. Found by OSS-Fuzz
+
+- Numerous code cleanups and small issues fixed by Francois Perrad
+
+- Test for pkt_sched.h rather than SO_PRIORITY which was problematic with some musl
+  platforms. Reported by Oliver Schneider and Andrew Bainbridge
+
+- Fix some platform portability problems, from Ben Gardner
+
+- Add EXEEXT filename suffix for building dropbearmulti, from William Foster
+
+- Support --enable-<option> properly for configure, from Stefan Hauser
+
+- configure have_openpty result can be cached, from Eric Bénard
+
+- handle platforms that return close() < -1 on failure, from Marco Wenzel
+
+- Build and configuration cleanups from Michael Witten
+
+- Fix libtomcrypt/libtommath linking order, from Andre McCurdy
+
+- Fix old Linux platforms that have SYS_clock_gettime but not CLOCK_MONOTONIC
+
+- Update curve25519-donna implementation to current version
+
+2017.75 - 18 May 2017
+
+- Security: Fix double-free in server TCP listener cleanup
+  A double-free in the server could be triggered by an authenticated user if
+  dropbear is running with -a (Allow connections to forwarded ports from any host)
+  This could potentially allow arbitrary code execution as root by an authenticated user.
+  Affects versions 2013.56 to 2016.74. Thanks to Mark Shepard for reporting the crash.
+  CVE-2017-9078 https://hg.ucc.asn.au/dropbear/rev/c8114a48837c
+
+- Security: Fix information disclosure with ~/.ssh/authorized_keys symlink.
+  Dropbear parsed authorized_keys as root, even if it were a symlink. The fix
+  is to switch to user permissions when opening authorized_keys
+
+  A user could symlink their ~/.ssh/authorized_keys to a root-owned file they
+  couldn't normally read. If they managed to get that file to contain valid
+  authorized_keys with command= options it might be possible to read other
+  contents of that file.
+  This information disclosure is to an already authenticated user.
+  Thanks to Jann Horn of Google Project Zero for reporting this.
+  CVE-2017-9079 https://hg.ucc.asn.au/dropbear/rev/0d889b068123
+
+- Generate hostkeys with dropbearkey atomically and flush to disk with fsync
+  Thanks to Andrei Gherzan for a patch
+
+- Fix out of tree builds with bundled libtom
+  Thanks to Henrik Nordström and Peter Krefting for patches.
+
 2016.74 - 21 July 2016
 
 - Security: Message printout was vulnerable to format string injection.
@@ -10,23 +266,23 @@
   run arbitrary code as the dbclient user. This could be a problem if scripts
   or webpages pass untrusted input to the dbclient program.
   CVE-2016-7406
-  https://secure.ucc.asn.au/hg/dropbear/rev/b66a483f3dcb
+  https://hg.ucc.asn.au/dropbear/rev/b66a483f3dcb
 
 - Security: dropbearconvert import of OpenSSH keys could run arbitrary code as
   the local dropbearconvert user when parsing malicious key files
   CVE-2016-7407
-  https://secure.ucc.asn.au/hg/dropbear/rev/34e6127ef02e
+  https://hg.ucc.asn.au/dropbear/rev/34e6127ef02e
 
 - Security: dbclient could run arbitrary code as the local dbclient user if
   particular -m or -c arguments are provided. This could be an issue where
   dbclient is used in scripts.
   CVE-2016-7408
-  https://secure.ucc.asn.au/hg/dropbear/rev/eed9376a4ad6
+  https://hg.ucc.asn.au/dropbear/rev/eed9376a4ad6
 
 - Security: dbclient or dropbear server could expose process memory to the
   running user if compiled with DEBUG_TRACE and running with -v
   CVE-2016-7409
-  https://secure.ucc.asn.au/hg/dropbear/rev/6a14b1f6dc04
+  https://hg.ucc.asn.au/dropbear/rev/6a14b1f6dc04
 
   The security issues were reported by an anonymous researcher working with
   Beyond Security's SecuriTeam Secure Disclosure www.beyondsecurity.com/ssd.html
@@ -72,7 +328,7 @@
 
 - Validate X11 forwarding input. Could allow bypass of authorized_keys command= restrictions,
   found by github.com/tintinweb. Thanks for Damien Miller for a patch. CVE-2016-3116
-  https://secure.ucc.asn.au/hg/dropbear/rev/a3e8389e01ff
+  https://hg.ucc.asn.au/dropbear/rev/a3e8389e01ff
 
 2015.71 - 3 December 2015
 
@@ -306,6 +562,8 @@ kernels, from Steve Dover
 
 2013.61test - Thursday 14 November 2013
 
+- Default generated RSA key size changed from 1024 to 2048 bits
+
 - ECC (elliptic curve) support. Supports ECDSA hostkeys (requires new keys to
   be generated) and ECDH for setting up encryption keys (no intervention
   required). This is significantly faster.
@@ -351,11 +609,11 @@ kernels, from Steve Dover
 - Limit the size of decompressed payloads, avoids memory exhaustion denial
   of service 
   Thanks to Logan Lamb for reporting and investigating it. CVE-2013-4421
-  https://secure.ucc.asn.au/hg/dropbear/rev/0bf76f54de6f
+  https://hg.ucc.asn.au/dropbear/rev/0bf76f54de6f
 
 - Avoid disclosing existence of valid users through inconsistent delays
   Thanks to Logan Lamb for reporting. CVE-2013-4434
-  https://secure.ucc.asn.au/hg/dropbear/rev/d7784616409a
+  https://hg.ucc.asn.au/dropbear/rev/d7784616409a
 
 - Update config.guess and config.sub for newer architectures
 
@@ -458,7 +716,7 @@ though probably will be soon
   This bug affects releases 0.52 onwards. Ref CVE-2012-0920.
   Thanks to Danny Fullerton of Mantor Organization for reporting
   the bug.
-  https://secure.ucc.asn.au/hg/dropbear/rev/818108bf7749
+  https://hg.ucc.asn.au/dropbear/rev/818108bf7749
 
 - Compile fix, only apply IPV6 socket options if they are available in headers
   Thanks to Gustavo Zacarias for the patch
@@ -502,7 +760,7 @@ though probably will be soon
 - New version numbering scheme.
 
 Source repository has now migrated to Mercurial at 
-https://secure.ucc.asn.au/hg/dropbear/graph/default
+https://hg.ucc.asn.au/dropbear/graph/default
 
 0.53.1 - Wednesday 2 March 2011
 

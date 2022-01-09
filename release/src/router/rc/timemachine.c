@@ -51,12 +51,9 @@ int generate_afp_config(char *mpname)
 {
 	FILE *fp;
 	char afp_config[80];
-	char et0macaddr[18];
 	int ret = 0;
 
 	sprintf(afp_config, "%s/%s", AFP_CONFIG_PATH, AFP_CONFIG_FN);
-
-	strcpy(et0macaddr, get_lan_hwaddr());
 
 	/* Generate afp configuration file */
 	if (!(fp = fopen(afp_config, "w"))) {
@@ -71,8 +68,8 @@ int generate_afp_config(char *mpname)
 	fprintf(fp, "vol dbpath = %s/%s\n", mpname, CNID_DIR_NAME);
 	//fprintf(fp, "server quantum = 32000\n");
 	fprintf(fp, "sleep time = 1\n");
-	fprintf(fp, "hostname = %s-%c%c%c%c.local\n", nvram_safe_get("model"),et0macaddr[12],et0macaddr[13],et0macaddr[15],et0macaddr[16]);
-	fprintf(fp, "signature = %s-%c%c%c%c.local\n",nvram_safe_get("model"),et0macaddr[12],et0macaddr[13],et0macaddr[15],et0macaddr[16]);
+	fprintf(fp, "hostname = %s.local\n", get_lan_hostname());
+	fprintf(fp, "signature = %s\n", get_lan_hostname());
 	if (nvram_match("tm_debug", "1")){
 		fprintf(fp, "log file = %s/netatalk.log\n", mpname);
 		//fprintf(fp, "log file = /var/log/netatalk.log\n");
@@ -109,15 +106,15 @@ int start_afpd()
 	return ret;
 }
 
-void stop_afpd()
+void stop_afpd(int force)
 {
-	if (getpid() != 1) {
+	if(!force && getpid() != 1){
 		notify_rc("stop_afpd");
+		return;
 	}
 
 	//killall_tk("afpd");
 	system("killall -SIGKILL afpd");
-	return;
 }
 
 int start_cnid_metad()
@@ -136,16 +133,17 @@ int start_cnid_metad()
 	return ret;
 }
 
-void stop_cnid_metad()
+void stop_cnid_metad(int force)
 {
-	if (getpid() != 1) {
+	if(!force && getpid() != 1){
 		notify_rc("stop_cnid_metad");
+		return;
 	}
 
 	//killall_tk("cnid_metad");
 	system("killall -SIGKILL cnid_metad");
-	return;
 }
+
 #if 0
 int generate_avahi_config()
 {
@@ -592,12 +590,11 @@ int start_timemachine()
 	return ret;
 }
 
-void stop_timemachine()
+void stop_timemachine(int force)
 {
-	stop_afpd();
-	stop_cnid_metad();
+	stop_afpd(force);
+	stop_cnid_metad(force);
 	restart_mdns();
 	logmessage("Timemachine", "daemon is stoped");
 }
-
 

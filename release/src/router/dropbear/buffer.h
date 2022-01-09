@@ -44,20 +44,22 @@ buffer * buf_new(unsigned int size);
 /* Possibly returns a new buffer*, like realloc() */
 buffer * buf_resize(buffer *buf, unsigned int newsize);
 void buf_free(buffer* buf);
-void buf_burn(buffer* buf);
-buffer* buf_newcopy(buffer* buf);
+void buf_burn(const buffer* buf);
+buffer* buf_newcopy(const buffer* buf);
 void buf_setlen(buffer* buf, unsigned int len);
 void buf_incrlen(buffer* buf, unsigned int incr);
 void buf_setpos(buffer* buf, unsigned int pos);
-void buf_incrpos(buffer* buf, int incr); /* -ve is ok, to go backwards */
+void buf_incrpos(buffer* buf, unsigned int incr);
+void buf_decrpos(buffer* buf, unsigned int decr);
 void buf_incrwritepos(buffer* buf, unsigned int incr);
 unsigned char buf_getbyte(buffer* buf);
 unsigned char buf_getbool(buffer* buf);
 void buf_putbyte(buffer* buf, unsigned char val);
-unsigned char* buf_getptr(buffer* buf, unsigned int len);
-unsigned char* buf_getwriteptr(buffer* buf, unsigned int len);
+unsigned char* buf_getptr(const buffer* buf, unsigned int len);
+unsigned char* buf_getwriteptr(const buffer* buf, unsigned int len);
 char* buf_getstring(buffer* buf, unsigned int *retlen);
 buffer * buf_getstringbuf(buffer *buf);
+buffer * buf_getbuf(buffer *buf);
 void buf_eatstring(buffer *buf);
 void buf_putint(buffer* buf, unsigned int val);
 void buf_putstring(buffer* buf, const char* str, unsigned int len);

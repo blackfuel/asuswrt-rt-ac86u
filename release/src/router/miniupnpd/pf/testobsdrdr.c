@@ -1,7 +1,7 @@
-/* $Id: testobsdrdr.c,v 1.28 2014/03/06 13:02:47 nanard Exp $ */
+/* $Id: testobsdrdr.c,v 1.31 2020/05/29 22:29:13 nanard Exp $ */
 /* MiniUPnP project
- * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
- * (c) 2006-2014 Thomas Bernard
+ * http://miniupnp.free.fr/ or https://miniupnp.tuxfamily.org/
+ * (c) 2006-2020 Thomas Bernard
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution */
 
@@ -19,6 +19,7 @@ int runtime_flags = 0;
 const char * tag = 0;
 const char * anchor_name = "miniupnpd";
 const char * queue = NULL;
+const char * use_ext_ip_addr = "42.42.42.42";
 
 void
 list_rules(void);
@@ -96,9 +97,10 @@ main(int argc, char * * argv)
 	add_redirect_rule("ep0", 12123, "192.168.1.23", 1234);
 	add_redirect_rule2("ep0", 12155, "192.168.1.155", 1255, IPPROTO_TCP);
 #endif
-	if(add_redirect_rule2("ep0", "8.8.8.8", 12123, "192.168.1.125", 1234,
+	if(add_redirect_rule2("ep0", NULL/*"8.8.8.8"*/, 12123, "192.168.1.125", 1234,
 	                   IPPROTO_UDP, "test description", 0) < 0)
 		printf("add_redirect_rule2() #3 failed\n");
+	use_ext_ip_addr = NULL;
 	if(add_redirect_rule2("em0", NULL, 12123, "127.1.2.3", 1234,
 	                   IPPROTO_TCP, "test description tcp", 0) < 0)
 		printf("add_redirect_rule2() #4 failed\n");
@@ -118,11 +120,15 @@ main(int argc, char * * argv)
 		printf("get_redirect_rule() failed\n");
 	else
 	{
-		printf("\n%s:%d '%s' packets=%llu bytes=%llu\n", buf, (int)iport, desc,
+		printf("\n%s:%d '%s' packets=%" PRIu64 " bytes=%" PRIu64 "\n", buf, (int)iport, desc,
 		       packets, bytes);
 	}
 
+/*
 	if(delete_redirect_rule("ep0", 12123, IPPROTO_UDP) < 0)
+		printf("delete_redirect_rule() failed\n");
+*/
+	if(delete_redirect_and_filter_rules("ep0", 12123, IPPROTO_UDP) < 0)
 		printf("delete_redirect_rule() failed\n");
 
 	if(delete_redirect_rule("ep0", 12123, IPPROTO_UDP) < 0)
@@ -136,6 +142,7 @@ main(int argc, char * * argv)
 	if(clear) {
 		clear_redirect_rules();
 		clear_filter_rules();
+		clear_nat_rules();
 	}
 	/*list_rules();*/
 

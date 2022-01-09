@@ -16,6 +16,12 @@
 #include <errno.h>  //added for 'errno'
 
 
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include "shmkey.h"
+#include <shutils.h>
+#include <time.h>
+#include <sys/time.h>
 typedef struct StationsInfo
 {
 	char MACAddress[18];
@@ -66,6 +72,71 @@ static InterfaceBandSteerInfo interfaceBandSteerInfo[] =
 	{ NULL,    "\0", "\0", "\0" }
 };
 
+#define SLEEP_SEC 10
+
+static int block_sleep_unblock(void *data) {
+	char *indata = (char *)data;
+	char mac[36]={0};
+	char ifname[36]={0};
+	char block_cmd[128]={0};
+	char unblock_cmd[128]={0};
+
+	char ifname_wlan0[]="wlan0";
+	char ifname_wlan2[]="wlan2";
+
+	sscanf(indata,"%s %s",mac,ifname);	
+	printf("block_sleep_unblock ifname[%s] mac[%s]\n",ifname,mac);
+
+	/* block */
+	sprintf(block_cmd,"hostapd_cli -i%s deny_mac %s 0",ifname,mac);
+	printf("\n\n\n\n%s\n\n\n\n\n",block_cmd);
+	system(block_cmd);
+
+	/* allow the other interface first if block is not timeout yet */
+	if( !strcmp(ifname,ifname_wlan0) ){
+		sprintf(unblock_cmd,"hostapd_cli -i%s deny_mac %s 1",ifname_wlan2,mac);
+		printf("%s\n",unblock_cmd);
+		system(unblock_cmd);
+	} else if( !strcmp(ifname,ifname_wlan2) ){
+		sprintf(unblock_cmd,"hostapd_cli -i%s deny_mac %s 1",ifname_wlan0,mac);
+		printf("%s\n",unblock_cmd);
+		system(unblock_cmd);
+	}
+
+	sleep(SLEEP_SEC);
+
+	/* recover */
+	sprintf(unblock_cmd,"hostapd_cli -i%s deny_mac %s 1",ifname,mac);
+	printf("\n\n\n\n%s\n\n\n\n\n",unblock_cmd);
+	system(unblock_cmd);
+
+	free(data);
+
+	return 0;
+
+}
+static void block_sta_for_steering(char *mac, char *ifname){
+	pthread_attr_t attr;
+	pthread_t pt;
+	char *args = NULL;
+
+	if(!mac || !ifname)
+		return;
+
+	if(strlen(mac) == 0 || strlen(ifname) == 0)
+		return;
+
+	args = malloc(strlen(mac)+strlen(ifname)+2);
+	if(args == NULL)
+		return;
+	memset(args,0,strlen(mac)+strlen(ifname)+2);
+	sprintf(args,"%s %s",mac,ifname);
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	pthread_create(&pt,&attr,(void *)&block_sleep_unblock,(void *)args);
+	pthread_attr_destroy(&attr);
+}
 
 /*********************************************/
 /* static Functions for general internal use */
@@ -161,12 +232,57 @@ static int interfaceIndexGet(const char *ifname)
 	return -1;
 }
 
+static int is_dualband(char *staMac)
+{
+	int amas_shmid_all=-1;
+	char *amas_sha_all=NULL;
+
+	char *nv, *nvp, *b, *mac, *timestamp;
+	int ret = 0, lock = 0;
+
+	if (staMac == NULL)
+		return ret;
+
+	amas_shmid_all = shmget((key_t)SHMKEY_AMASDB_ALL, 0, 0);
+	if(amas_shmid_all == -1) {
+		printf("Get amasdb shmget_all failed\n");
+	} else
+		amas_sha_all = shmat(amas_shmid_all, (void*)0, 0);
+
+	if(amas_sha_all != -1)
+	{
+		nv = nvp = strdup(amas_sha_all);
+		if (nv) {
+			printf("amas_sha_all [%s]\n",nv);
+			while ((b = strsep(&nvp, "<")) != NULL) {
+				if ((vstrsep(b, ">", &mac, &timestamp) != 2))
+					continue;
+
+				if (strlen(mac) == 0)
+					continue;
+
+				if (strcasecmp(staMac, mac) == 0) {
+					ret = 1;
+					break;
+				}
+			}
+			free(nv);
+		}
+	}
+
+	/* detach shared memory */
+	if (amas_sha_all != -1 && shmdt(amas_sha_all) == -1)
+		printf("detach shared memory failed");
+
+	return ret;
+
+}
 
 static int fapiWlanCallBackBandSteeringFunc(char *opCode, const char *ifname, ObjList *wlObj, unsigned int flags, void *context)
 {
 	char           *field;
 	time_t         rawtime;
-	int            idx;
+	int            idx,need_update_and_interface_the_same;
 	StationsInfo_t *stationsInfo = NULL;
 
 	(void)flags;
@@ -176,6 +292,8 @@ static int fapiWlanCallBackBandSteeringFunc(char *opCode, const char *ifname, Ob
 
 	printf("\n%s; database BEFORE event process:\n", __FUNCTION__);
 	stationsInfoListPrint();
+
+	need_update_and_interface_the_same = 0;
 
 	if (wlObj != NULL)
 	{
@@ -230,23 +348,45 @@ static int fapiWlanCallBackBandSteeringFunc(char *opCode, const char *ifname, Ob
 				stationsInfo->is_5G_supported = 2;  /* NON_VALID */
 			}
 
+			/* Asus's check  */
+			if(  ((stationsInfo->is_2G_supported != 1) || (stationsInfo->is_5G_supported != 1)) && is_dualband(field)  )
+			{
+				stationsInfo->is_2G_supported = 1;
+				stationsInfo->is_5G_supported = 1;
+			}
+			/* Asus's check end */	
+
 			strcpy(stationsInfo->ifnameCheckIfConnected, "NONE");
 			stationsInfo->numOfTicks = 0;
 			if((stationsInfo->is_2G_supported == 1) && (stationsInfo->is_5G_supported == 1))
 				stationsInfo->isBandSteeringPossible = true;
+
 		}
 		else
 		{
 			printf("%s; MACAddress ('%s') found! ==> check if it is already set as connected\n", __FUNCTION__, field);
 			printf("%s; 'connectedTo' is '%s'\n", __FUNCTION__, stationsInfo->connectedTo);
+
 			if ( (stationsInfo->connectedTo != NULL) && (!strncmp(stationsInfo->connectedTo, ifname, 5)) )
 			{
-				printf("%s; Station ('%s') already connected to the same i/f ('%s') ==> do NOT update the data-base\n", __FUNCTION__, stationsInfo->MACAddress, ifname);
-				return UGW_SUCCESS;
+				/* Asus's check  */
+				if( ((stationsInfo->is_2G_supported != 1) || (stationsInfo->is_5G_supported != 1)) && is_dualband(field) )
+				{
+					printf("connection to the same interface but band steering possible status changes form [No] to [Yes]\n");
+					stationsInfo->is_2G_supported = 1;
+					stationsInfo->is_5G_supported = 1;
+					stationsInfo->isBandSteeringPossible = true;
+					need_update_and_interface_the_same = 1;				
+				} /* Asus's check end */	 
+				else { 
+					printf("%s; Station ('%s') already connected to the same i/f ('%s') ==> do NOT update the data-base\n", __FUNCTION__, stationsInfo->MACAddress, ifname);
+					return UGW_SUCCESS;
+				}
 			}
 
 			/* Getting here means that the station record is present, and it is NOT connected to the same ifname (or no connected at all) */
-			if ( strcmp(stationsInfo->connectedTo, "NONE") && strcmp(stationsInfo->connectedTo, "") )
+			if ( !need_update_and_interface_the_same && // connected to the same ifname do not go in.
+				 strcmp(stationsInfo->connectedTo, "NONE") && strcmp(stationsInfo->connectedTo, "") )
 			{  /* The station record is present, and it is NOT connected to the same ifname */
 				ObjList *wlObjLocal = HELP_CREATE_OBJ(SOPT_OBJVALUE);
 
@@ -293,6 +433,7 @@ static int fapiWlanCallBackBandSteeringFunc(char *opCode, const char *ifname, Ob
 				}
 			}
 		}
+
 
 		printf("%s; Update 'connectedTo' ('%s')\n", __FUNCTION__, (char *)ifname);
 		strncpy(stationsInfo->connectedTo, (char *)ifname, 6);
@@ -437,6 +578,7 @@ static void allBandsStationAllowSet(char *MACAddress)
 	}
 }
 
+//block_sta_for_steering(MACAddress,ifname);
 
 static void bandSteeringPerform(char *ifname, char *MACAddress, char *ifnameToSteerTo, char *BSSID_ToSteerTo, bool btm_supported)
 {
@@ -477,10 +619,14 @@ static void bandSteeringPerform(char *ifname, char *MACAddress, char *ifnameToSt
 		else
 			printf("%s; ChannelNumberToSteerTo= '%s'\n", __FUNCTION__, ChannelNumberToSteerTo);
 
-		sprintf(neighbor, "%s,0,0,%s,0,255", BSSID_ToSteerTo, ChannelNumberToSteerTo);
+		sprintf(neighbor, "%s,3,0,%s,0,255", BSSID_ToSteerTo, ChannelNumberToSteerTo);//need more tests
 		HELP_EDIT_NODE(wlObjSteer, "Device.WiFi.SSID.X_LANTIQ_COM_Vendor", "0_neighbor", neighbor, 0, 0);
 
 		printf("%s; send BSS_TM_REQ command; MACAddress= '%s', pref=1, disassoc_imminent=1, disassoc_timer=10, neighbor= '%s'\n", __FUNCTION__, MACAddress, neighbor);
+
+		//Todo: more tests
+		//printf("====================================================block sta %s %s %d sec\n",MACAddress,ifname,SLEEP_SEC);
+		//block_sta_for_steering(MACAddress,ifname);
 
 		if (fapi_wlan_bss_transition_management_req(ifname, wlObjSteer, 0) == UGW_FAILURE)
 		{
@@ -662,6 +808,8 @@ static int ap_manager_lite_band_steering_perform(int signalStrengthThreshold_2_4
 			printf("%s; Station (MACAddress= '%s') can NOT be steered, it failed to do so many times before ==> do NOT check for band-steering. cont...\n",
 				   __FUNCTION__, stationsInfo->MACAddress);
 
+			/* Todo: retry? */
+
 			stationsInfo = stationsInfo->nextStation;
 			continue;
 		}
@@ -842,7 +990,7 @@ static int ap_manager_lite_band_steering_perform(int signalStrengthThreshold_2_4
 
 							stationsInfo->numOfTicks = 0;
 							HELP_EDIT_SELF_NODE(tmpObj, "Device.WiFi.Radio.X_LANTIQ_COM_Vendor", "numOfTicks", "0", 0, 0);
-
+sdsf
 							idx = interfaceIndexGet(stationsInfo->connectedTo);
 							if (idx == (-1))
 							{
@@ -860,6 +1008,8 @@ static int ap_manager_lite_band_steering_perform(int signalStrengthThreshold_2_4
 							printf("%s; Reset station's connection time (rawtime= %ld)\n", __FUNCTION__, rawtime);
 							stationsInfo->connectionTime = rawtime;
 						}
+
+						stationsInfo->isBandSteeringPossible = false;//need more tests
 					}
 					else
 					{

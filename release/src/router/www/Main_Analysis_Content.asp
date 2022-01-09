@@ -63,6 +63,12 @@ function initial(){
 }
 
 function validForm(){
+
+	if(!validator.isValidHost(document.form.destIP.value)){
+		document.form.destIP.focus();
+		return false;
+	}
+
 	if(document.form.cmdMethod.value == "ping"){
 		if(!validator.range(document.form.pingCNT, 1, 99))
 			return false;
@@ -217,7 +223,7 @@ function pullLANIPList(obj){
 }
 </script>
 </head>
-<body onload="initial();">
+<body onload="initial();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>

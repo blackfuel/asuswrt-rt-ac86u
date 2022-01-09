@@ -26,6 +26,9 @@ function initial(){
 	show_menu();
 	updateClientList();
 	updateClientListBackground();
+	setInterval(function(){
+		updateClientListBackground();
+	}, 1000*60*3);
 }
 
 function updateClientList(){
@@ -44,19 +47,8 @@ function updateClientList(){
 }
 
 function updateClientListBackground() {
-	$.ajax({
-		url: '/update_networkmapd.asp',
-		dataType: 'script', 
-		error: function(xhr) {
-			setTimeout("updateClientListBackground();", 1000);
-		},
-		success: function(response) {
-			document.networkmapdRefresh.submit();
-			setTimeout("updateClientListBackground();", 180000);
-		}
-	});
+	document.networkmapdRefresh.submit();
 }
-
 
 function handleClientData(){
 	wlClient = [];
@@ -114,7 +106,7 @@ function generateClientTable(){
 		}
 		else{
 			var rssi = 0;
-			rssi = convertRSSI(wlClient[i][3]);
+			rssi = client_convRSSI(wlClient[i][3]);
 			code += '<div class="radioIcon radio_' + rssi + '"></div>';
 			code += '<div class="band_block">';
 			var bandClass = (navigator.userAgent.toUpperCase().match(/CHROME\/([\d.]+)/)) ? "band_txt_chrome" : "band_txt";
@@ -150,17 +142,6 @@ function generateClientTable(){
 
 	$("#client_table").html(code);
 }
-
-function convertRSSI(val){
-	if(val == "") return "wired";
-
-	val = parseInt(val);
-	if(val >= -50) return 4;
-	else if(val >= -80)	return Math.ceil((24 + ((val + 80) * 26)/10)/25);
-	else if(val >= -90)	return Math.ceil((((val + 90) * 26)/10)/25);
-	else return 1;
-}
-
 </script>
 </head>
 <body onload="initial();" onunload="unload_body();">

@@ -72,6 +72,7 @@ extern void dump_trace_irqs(void);
  *
  *	This function never returns.
  */
+
 void panic(const char *fmt, ...)
 {
 	static DEFINE_SPINLOCK(panic_lock);
@@ -80,6 +81,9 @@ void panic(const char *fmt, ...)
 	long i, i_next = 0;
 	int state = 0;
 
+#ifdef CONFIG_DUMP_PREV_OOPS_MSG
+	enable_oopsbuf(1);
+#endif
 #ifdef CATHY_TRACE
 	dump_trace_irqs();
 #endif /* CATHY_TRACE */
@@ -110,9 +114,6 @@ void panic(const char *fmt, ...)
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-#ifdef CONFIG_DUMP_PREV_OOPS_MSG
-	enable_oopsbuf(1);
-#endif
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
@@ -167,7 +168,9 @@ void panic(const char *fmt, ...)
 	 */
 	debug_locks_off();
 	console_flush_on_panic();
-
+#ifdef CONFIG_DUMP_PREV_OOPS_MSG
+	enable_oopsbuf(0);
+#endif
 	if (!panic_blink)
 		panic_blink = no_blink;
 

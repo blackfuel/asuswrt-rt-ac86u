@@ -16,7 +16,7 @@ body{
 	font-family: Arial;
 }
 .wrapper{
-	background:url(images/New_ui/login_bg.png) #283437 no-repeat;
+	background:url(images/New_ui/login_bg.png) #1F1F1F no-repeat;
 	background-size: 1280px 1076px;
 	background-position: center 0%;
 	margin: 0px; 
@@ -137,6 +137,9 @@ li{
 #tm_block{
 	margin: 0 20px;
 }
+a{
+	color: #FC0;
+}
 /*for mobile device*/
 @media screen and (max-width: 1000px){
 	.title_name {
@@ -213,6 +216,20 @@ li{
 }
 </style>	
 <script type="text/javascript">
+var isRouterMode = ('<% nvram_get("sw_mode"); %>' == '1') ? true : false;
+var header_info = [<% get_header_info(); %>][0];
+var ROUTERHOSTNAME = '<% nvram_get("local_domain"); %>';
+var domainNameUrl = header_info.protocol+"://"+ROUTERHOSTNAME+":"+header_info.port;
+var chdom = function(){window.location.href=domainNameUrl+"/blocking.asp"+window.location.search};
+
+(function(){
+	if(ROUTERHOSTNAME !== header_info.host && ROUTERHOSTNAME != "" && isRouterMode){
+		setTimeout(function(){
+			var s=document.createElement("script");s.type="text/javascript";s.src=domainNameUrl+"/chdom.json?hostname="+header_info.host;var h=document.getElementsByTagName("script")[0];h.parentNode.insertBefore(s,h);
+		}, 1);
+	}
+})();
+
 var bwdpi_support = ('<% nvram_get("rc_support"); %>'.search('bwdpi') == -1) ? false : true;
 var casenum = '<% get_parameter("cat_id"); %>';
 var flag = '<% get_parameter("flag"); %>';
@@ -220,7 +237,6 @@ var block_info = '<% bwdpi_redirect_info(); %>';
 if(block_info != "")
 	block_info = JSON.parse(block_info);
 var category_info = [	["Parental Controls", "1", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "<#block_cate_PC1#>"],
-			["Parental Controls", "2", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "<#block_cate_PC2#>"],
 			["Parental Controls", "3", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "<#block_cate_PC3#>"],
 			["Parental Controls", "4", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "<#block_cate_PC4#>"],
 			["Parental Controls", "5", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "<#block_cate_PC5#>"],
@@ -247,6 +263,7 @@ var category_info = [	["Parental Controls", "1", "<#AiProtection_filter_Adult#>"
 			["Parental Controls", "23", "<#AiProtection_filter_stream#>", "<#AiProtection_filter_stream3#>", "<#block_cate_PC23#>"],
 
 			 ["Home Protection", "91", "Anti-Trojan detecting and blocked", "", "<#block_cate_HP91#>"],
+			["Home Protection", "2", "Malicious site blocked", "", "<#block_cate_PC2#>"],
 			["Home Protection", "39", "Malicious site blocked", "", "<#block_cate_HP39#>"],
 			["Home Protection", "73", "Malicious site blocked", "", "<#block_cate_HP73#>"],
 			["Home Protection", "74", "Malicious site blocked", "", "<#block_cate_HP74#>"],
@@ -342,28 +359,30 @@ function show_information(){
 		document.getElementById('go_btn').style.display = "";
 	}
 	else if(target_info.category_type == "Home Protection"){
-		code_title = "<div class='er_title' style='height:auto;'>Warning! The website contains malware. Visiting this site may harm your computer</div>"//untranslated string
+		code_title = "<div class='er_title' style='height:auto;'><#block_HP_Title#></div>";
 		code_suggestion = "<ul>";
-		code_suggestion += "<li>If you are a manager and consider to disable this protection, please go to Home Protection page for configuration.</li>";//untranslated string
-		code_suggestion += '<li><#AiProtection_sites_report_desc#><a href="https://global.sitesafety.trendmicro.com/index.php" target="_blank"><#AiProtection_sites_report_tm#></a></li>';
+		//code_suggestion += "<li><#block_HP_suggest1#></li>";
+		//code_suggestion += '<li><#AiProtection_sites_report_desc#><a href="https://global.sitesafety.trendmicro.com/index.php" target="_blank"><#AiProtection_sites_report_tm#></a></li>';
+		code_suggestion += '<li>If you are not sure of this webiste, visit <a href="https://global.sitesafety.trendmicro.com/index.php" target="_blank">TrendMicro\'s Site Safety Center</a> for more information. You can check the safety level of a particular URL that might seem suspicious.</li>';
+		code_suggestion += "<li>If you trust this website, click <a id='goToSetup' style='text-decoration:underline;'>here</a> to unblock (administrator credential required)</li>";
 		code_suggestion += "</ul>";
 		document.getElementById('tm_block').style.display = "";
-		$("#go_btn").click(function(){
+		/*$("#go_btn").click(function(){
 			location.href = "AiProtection_HomeProtection.asp";
 		});
-		document.getElementById('go_btn').style.display = "";
+		document.getElementById('go_btn').style.display = "";*/
 	}
 	else if(flag != ""){
-		code_title = "<div class='er_title' style='height:auto;'>You failed to access to the web page that you want to view.</div>"//untranslated string
-		document.getElementById('main_reason').innerHTML = "Reason for failed connection";		
+		code_title = "<div class='er_title' style='height:auto;'><#web_redirect_message#></div>";
+		document.getElementById('main_reason').innerHTML = "<#web_redirect_fail_reason0#>";		
 		code = "";
-		code += "<div>The total traffic reaches limited. Internet connection was cut off temporarily.</div>";
+		code += "<div><#web_redirect_reason_limited#></div>";
 	
 		document.getElementById('detail_info').innerHTML = code;
 
 		code_suggestion = "<ul>";
-		code_suggestion += "<li><span>Disable cut-off Internet function in traffic limiter to restore Internet connection.</span></li>";//untranslated string
-		code_suggestion += "<li><span>Raise max value of cut-off Internet.</span></li>";		//untranslated string
+		code_suggestion += "<li><span><#web_redirect_reason_limited_1#></span></li>";
+		code_suggestion += "<li><span><#web_redirect_reason_limited_2#></span></li>";
 		code_suggestion += "</ul>";		
 		
 		$("#go_btn").click(function(){
@@ -391,6 +410,16 @@ function show_information(){
 
 	document.getElementById('page_title').innerHTML = code_title;
 	document.getElementById('suggestion').innerHTML = code_suggestion;
+
+	$("#goToSetup").click(function(){
+		function setValue(key, value, days) {
+			document.cookie = key + '=' + value + '; expires=' +
+			(new Date(new Date().getTime() + ((days ? days : 14) * 86400000))).toUTCString() + '; path=/';
+		}
+
+		setValue("malware", target_info.url)
+		location.href = "/AiProtection_MaliciousSitesBlocking.asp"
+	})
 }
 </script>
 </head>
@@ -420,8 +449,7 @@ function show_information(){
 				<div id="case_content"></div>
 				<div id="suggestion"></div>
 				<div id="tm_block" style="display:none">
-					<div>For more completed security protection for your endpoint sides, Trend Micro offers you a more advanced home security solution. Please click the <a href="http://bit.do/bcLqZ" target="_blank">download</a> link for the free trial or <a href="http://www.trendmicro.com" target="_blank">visit the site</a> online scan service.</div>
-					<!--untranslated string-->
+					<!--div><#block_HP_suggest2#></div-->
 					<div class="tm_logo"></div>
 				</div>
 			</div>

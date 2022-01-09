@@ -41,10 +41,15 @@
 
 #include <json.h>
 #include <rtconfig.h>
+#include <shared.h>
 
 #if defined(linux)
 /* Use SVID search */
+#if defined(__GLIBC__) || defined(__UCLIBC__)
 #define __USE_GNU
+#else
+#define _GNU_SOURCE	//musl
+#endif	/* ! (__GLIBC__ || __UCLIBC__) */
 #include <search.h>
 #elif defined(vxworks)
 /* Use vxsearch */
@@ -58,6 +63,7 @@ static struct hsearch_data htab;
 void
 unescape(char *s)
 {
+	char s_tmp[65535];
 	unsigned int c;
 
 	while ((s = strpbrk(s, "%+"))) {
@@ -65,7 +71,8 @@ unescape(char *s)
 		if (*s == '%') {
 			sscanf(s + 1, "%02x", &c);
 			*s++ = (char) c;
-			strncpy(s, s + 2, strlen(s) + 1);
+			strlcpy(s_tmp, s + 2, sizeof(s_tmp));
+			strncpy(s, s_tmp, strlen(s) + 1);
 		}
 		/* Space is special */
 		else if (*s == '+')
@@ -78,7 +85,11 @@ get_cgi(char *name)
 {
 	ENTRY e, *ep;
 
+#if !(defined(__GLIBC__) || defined(__UBLIBC__))
+	if (!htab.__tab)
+#else
 	if (!htab.table)
+#endif
 		return NULL;
 
 	e.key = name;
@@ -131,7 +142,11 @@ set_cgi(char *name, char *value)
 {
 	ENTRY e, *ep;
 
+#if !(defined(__GLIBC__) || defined(__UBLIBC__))
+	if (!htab.__tab)
+#else
 	if (!htab.table)
+#endif
 		return;
 
 	e.key = name;
@@ -186,7 +201,12 @@ char *webcgi_get(const char *name)
 {
        ENTRY e, *ep;
  
-       if (!htab.table) return NULL;
+#if !(defined(__GLIBC__) || defined(__UBLIBC__))
+	if (!htab.__tab)
+#else
+       if (!htab.table)
+#endif
+	       return NULL;
  
        e.key = (char *)name;
        hsearch_r(e, FIND, &ep, &htab);
@@ -200,7 +220,12 @@ void webcgi_set(char *name, char *value)
 {
        ENTRY e, *ep;
  
-       if (!htab.table) {
+#if !(defined(__GLIBC__) || defined(__UBLIBC__))
+	if (!htab.__tab)
+#else
+       if (!htab.table)
+#endif
+       {
                hcreate_r(16, &htab);
        }
  
@@ -220,7 +245,12 @@ void webcgi_init(char *query)
        int nel;
        char *q, *end, *name, *value;
  
-       if (htab.table) hdestroy_r(&htab);
+#if !(defined(__GLIBC__) || defined(__UBLIBC__))
+	if (!htab.__tab)
+#else
+       if (htab.table)
+#endif
+	       hdestroy_r(&htab);
        if (query == NULL) return;
  
 //    cprintf("query = %s\n", query);
@@ -243,7 +273,7 @@ void webcgi_init(char *query)
        }
 }
 
-FILE *connfp = NULL;
+static FILE *connfp = NULL;
 int web_read(void *buffer, int len)
 {
        int r;

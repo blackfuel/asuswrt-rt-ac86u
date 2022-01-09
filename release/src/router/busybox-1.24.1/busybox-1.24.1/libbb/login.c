@@ -91,6 +91,14 @@ void FAST_FUNC print_login_prompt(void)
 {
 	char *hostname = safe_gethostname();
 
+/* temporary */
+	char *e, *s = hostname + strlen(hostname) - 5;
+	if (s > hostname && *s == '-') {
+		strtoul(s + 1, &e, 16);
+		if (e > s + 1 && *e == '\0')
+			*s = '\0';
+	}
+
 	fputs(hostname, stdout);
 	fputs(LOGIN, stdout);
 	fflush_all();

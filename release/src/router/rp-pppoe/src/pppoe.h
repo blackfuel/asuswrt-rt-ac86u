@@ -139,7 +139,10 @@ typedef unsigned long UINT32_t;
 #include <linux/if_ether.h>
 #endif
 
+#if defined(RTCONFIG_HND_ROUTER_AX_6756)
+#else
 #include <netinet/in.h>
+#endif
 
 #ifdef HAVE_NETINET_IF_ETHER_H
 #include <sys/types.h>
@@ -148,7 +151,9 @@ typedef unsigned long UINT32_t;
 #include <sys/socket.h>
 #endif
 #ifndef HAVE_SYS_DLPI_H
+#if defined(__GLIBC__) || defined(__UCLIBC__) /* not musl */
 #include <netinet/if_ether.h>
+#endif
 #endif
 #endif
 

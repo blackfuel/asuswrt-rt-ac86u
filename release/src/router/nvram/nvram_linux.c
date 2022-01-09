@@ -16,7 +16,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#if (defined(__GLIBC__) || defined(__UCLIBC__))
 #include <error.h>
+#endif	/* (__GLIBC__ || __UCLIBC__) */
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -49,11 +51,14 @@ static char *nvram_buf = NULL;
 #ifdef RTCONFIG_REALTEK
 static char hw_mac[18];
 #endif
+static unsigned int nvram_space = 0;
+
 int
 nvram_init(void *unused)
 {
 	int ret;
-	unsigned int nvram_space = MAX_NVRAM_SPACE;
+
+	nvram_space = MAX_NVRAM_SPACE;
 
 	if (nvram_fd >= 0)
 		return 0;
@@ -79,7 +84,15 @@ err:
 	return errno;
 }
 
-#ifdef RTCONFIG_REALTEK
+unsigned int get_nvram_space(void)
+{
+	if (nvram_space == 0)
+		nvram_init(NULL);
+
+	return nvram_space;
+}
+
+#if defined(RTCONFIG_REALTEK) && !defined(RPAC92)
 int get_rtk_mac_offset(const char *name)
 {
 	int offset = HW_SETTING_OFFSET+sizeof(PARAM_HEADER_T);
@@ -137,7 +150,7 @@ char *nvram_get(const char *name)
 	char *value;
 	size_t count = strlen(name) + 1;
 	unsigned long *off = (unsigned long *)tmp;
-#ifdef RTCONFIG_REALTEK
+#if defined(RTCONFIG_REALTEK) && !defined(RPAC92)
 	if(strncmp(name,"rtk_mac",strlen("rtk_mac"))==0)
 	{
 		unsigned char tmpMac[6]={0};
@@ -231,7 +244,7 @@ static int _nvram_set(const char *name, const char *value)
 	char tmp[100];
 	char *buf = tmp;
 	int ret;
-#ifdef RTCONFIG_REALTEK
+#if defined(RTCONFIG_REALTEK) && !defined(RPAC92)
 	if(strncmp(name,"rtk_mac",strlen("rtk_mac"))==0)
 	{
 		int offset=get_rtk_mac_offset(name);
@@ -292,20 +305,31 @@ int nvram_commit(void)
 {
 	int r = 0;
 	FILE *fp;
+	pid_t pid = getpid();
+	int n;
 
 	if (nvram_get(ASUS_STOP_COMMIT) != NULL)
 	{
-		cprintf("# skip nvram commit #\n");
+		cprintf("# %s skip pid(%d %s) #\n", __func__, pid, get_process_name_by_pid(pid));
 		return r;
 	}
 
 	fp = fopen("/var/log/commit_ret", "w");
 
-	if (wait_action_idle(10)) {
-		if (nvram_fd < 0) {
-			if ((r = nvram_init(NULL)) != 0) goto finish;
-		}
+	if ((n = wait_action_idle(10))) {
 		set_action(ACT_NVRAM_COMMIT);
+		if (n != 10 && nvram_get(ASUS_STOP_COMMIT) != NULL)
+		{
+			set_action(ACT_IDLE);
+			cprintf("# %s SKIP pid(%d %s) #\n", __func__, pid, get_process_name_by_pid(pid));
+			return r;
+		}
+		if (nvram_fd < 0) {
+			if ((r = nvram_init(NULL)) != 0) {
+				set_action(ACT_IDLE);
+				goto finish;
+			}
+		}
 //		nvram_unset("dirty");
 		r = ioctl(nvram_fd, NVRAM_MAGIC, NULL);
 		set_action(ACT_IDLE);

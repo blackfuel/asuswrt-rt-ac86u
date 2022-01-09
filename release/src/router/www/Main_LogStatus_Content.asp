@@ -29,7 +29,7 @@ function showclock(){
 				  /*JS_timeObj.getFullYear() + " GMT" +
 				  timezone;*/ // Viz remove GMT timezone 2011.08
 				  JS_timeObj.getFullYear();
-	document.getElementById("system_time").value = JS_timeObj2;
+	document.getElementById("system_time").innerHTML = JS_timeObj2;
 	setTimeout("showclock()", 1000);
 	if(navigator.appName.indexOf("Microsoft") >= 0)
 		document.getElementById("textarea").style.width = "99%";
@@ -70,12 +70,58 @@ function initial(){
 	showbootTime();
 	showDST();
 	document.getElementById('textarea').scrollTop = 9999999;//make Scroll_y bottom
-	setTimeout("get_log_data();", 5000);
+	setTimeout("get_log_data();", 100);
 }
 
 function applySettings(){
-	document.config_form.submit();
+	var dot_array = document.config_form.log_ipaddr.value.split(".");
+	var valid_ipv4 = true;
+	var asIPv4_flag = 0;
+	if(dot_array.length==4){
+		for(var i=0;i<4;i++){
+			if(validator.integer(dot_array[i])){
+				asIPv4_flag++;
+			}
+		}
+	}
+
+	var alert_str1 = "";
+	if(asIPv4_flag==4){ //All four groups are numbers, see it as IPv4
+		valid_ipv4 = validator.validIPForm(document.config_form.log_ipaddr, 0);
+	}
+	else{
+		if(document.config_form.log_ipaddr.value != ""){
+			alert_str1 = validator.domainName(document.config_form.log_ipaddr);
+		}
+	}
+
+	if(!valid_ipv4){
+		document.getElementById("alert_msg1").style.display = "none";
+		document.config_form.log_ipaddr.focus();
+		document.config_form.log_ipaddr.select();
+		return;
+	}
+	else if(alert_str1!=""){
+		showtext(document.getElementById("alert_msg1"), alert_str1);
+		document.getElementById("alert_msg1").style.display = "";
+		document.config_form.log_ipaddr.focus();
+		document.config_form.log_ipaddr.select();
+		return;
+	}
+	else{
+		document.getElementById("alert_msg1").style.display = "none";
+		document.config_form.submit();
+	}
 }
+var filter = [
+    "already exist in UDB, can't add it", 
+    "not mesh client, can't update it's ip",
+    "not exist in UDB, can't update it"
+]
+
+$.getJSON("https://nw-dlcdnet.asus.com/plugin/js/logFilter.json", function(data){
+	filter = data.filter;
+})
 
 var height = 0;
 function get_log_data(){
@@ -88,8 +134,22 @@ function get_log_data(){
     	},
     	success: function(response){
     		h = $("#textarea").scrollTop();
+			var _log = '';
 			if(!(height > 0 && h < height)){
-				document.getElementById("textarea").innerHTML = logString;
+				var _string = logString.split('\n');
+				for(var i=0;i<_string.length;i++){
+
+					if((_string[i].indexOf(filter[0]) != -1)
+					|| (_string[i].indexOf(filter[1]) != -1)
+					|| (_string[i].indexOf(filter[2]) != -1)){
+						continue;						
+					}
+					else{
+						_log += _string[i] + '\n';
+					}
+				}
+
+				document.getElementById("textarea").innerHTML = htmlEnDeCode.htmlEncode(_log);
 				$("#textarea").animate({ scrollTop: 9999999 }, "slow");
 				setTimeout('height = $("#textarea").scrollTop();', 500);
 			}
@@ -100,7 +160,7 @@ function get_log_data(){
 </script>
 </head>
 
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 
@@ -137,35 +197,43 @@ function get_log_data(){
 									<div class="formfonttitle"><#System_Log#> - <#menu5_7_2#></div>
 									<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 									<div class="formfontdesc"><#GeneralLog_title#></div>
-									<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
-										<tr>
-											<th width="20%"><#General_x_SystemTime_itemname#></th>
-											<td>
-												<input type="text" id="system_time" name="system_time" size="40" class="devicepin" value="" readonly="1" style="font-size:12px;" autocorrect="off" autocapitalize="off">
-												<br><span id="dstzone" style="display:none;margin-left:5px;color:#FFFFFF;"></span>
-											</td>
-										</tr>
-										<tr>
-											<th><!--a class="hintstyle" href="javascript:void(0);" onClick="openHint(12, 1);"--><#General_x_SystemUpTime_itemname#></a></th>
-											<td><span id="boot_days"></span> <#Day#> <span id="boot_hours"></span> <#Hour#> <span id="boot_minutes"></span> <#Minute#> <span id="boot_seconds"></span> <#Second#></td>
-										</tr>
-										<tr>
-											<th><a class="hintstyle"  href="javascript:void(0);" onClick="openHint(11,1)"><#LANHostConfig_x_ServerLogEnable_itemname#></a></th>
-											<td>
-												<form method="post" name="config_form" action="start_apply.htm" target="hidden_frame">
-													<input type="hidden" name="current_page" value="Main_LogStatus_Content.asp">
-													<input type="hidden" name="next_page" value="Main_LogStatus_Content.asp">
-													<input type="hidden" name="action_mode" value="apply">
-													<input type="hidden" name="action_script" value="restart_logger">
-													<input type="hidden" name="action_wait" value="5">
-													<input type="text" maxlength="15" class="input_15_table" name="log_ipaddr" value="<% nvram_get("log_ipaddr"); %>" onKeyPress="return validator.isIPAddr(this, event)" autocorrect="off" autocapitalize="off">
-													<input class="button_gen" onclick="applySettings();" type="button" value="<#CTL_apply#>" />
-												</form>
-											</td>
-										</tr>
-									</table>
+									<form method="post" name="config_form" action="start_apply.htm" target="hidden_frame">
+										<input type="hidden" name="current_page" value="Main_LogStatus_Content.asp">
+										<input type="hidden" name="next_page" value="Main_LogStatus_Content.asp">
+										<input type="hidden" name="action_mode" value="apply">
+										<input type="hidden" name="action_script" value="restart_logger">
+										<input type="hidden" name="action_wait" value="5">
+										<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
+											<tr>
+												<th width="20%"><#General_x_SystemTime_itemname#></th>
+												<td>
+														<span id="system_time" class="devicepin" style="color:#FFFFFF;"></span>
+													<br><span id="dstzone" style="display:none;margin-left:5px;color:#FFFFFF;"></span>
+												</td>
+											</tr>
+											<tr>
+												<th><!--a class="hintstyle" href="javascript:void(0);" onClick="openHint(12, 1);"--><#General_x_SystemUpTime_itemname#></a></th>
+												<td><span id="boot_days"></span> <#Day#> <span id="boot_hours"></span> <#Hour#> <span id="boot_minutes"></span> <#Minute#> <span id="boot_seconds"></span> <#Second#></td>
+											</tr>
+											<tr>
+												<th><a class="hintstyle"  href="javascript:void(0);" onClick="openHint(11,1)"><#LANHostConfig_x_ServerLogEnable_itemname#></a></th>
+												<td>
+														<input type="text" maxlength="64" class="input_30_table" name="log_ipaddr" value="<% nvram_get("log_ipaddr"); %>" onKeyPress="return validator.isString(this, event)" autocorrect="off" autocapitalize="off">
+														<br/><span id="alert_msg1" class="hint-color"></span>
+													</td>
+												</tr>
+												<tr>
+													<th><#LANHostConfig_x_ServerLogPort_itemname#></th>
+													<td>
+														<input type="text" class="input_6_table" maxlength="5" name="log_port" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off" value='<% nvram_get("log_port"); %>'>
+														<div class="hint-color"><#LANHostConfig_x_ServerLogPort_itemhint#></div>
+												</td>
+											</tr>
+										</table>
+									</form>
+									<div style="margin-top: 5px; text-align: center;"><input class="button_gen" onclick="applySettings();" type="button" value="<#CTL_apply#>" /></div>
 									<div style="margin-top:8px">
-										<textarea cols="63" rows="27" wrap="off" readonly="readonly" id="textarea" class="textarea_ssh_table" style="width:99%; font-family:'Courier New', Courier, mono; font-size:11px;"><% nvram_dump("syslog.log",""); %></textarea>
+										<textarea cols="63" rows="27" wrap="off" readonly="readonly" id="textarea" class="textarea_ssh_table" style="width:99%; font-family:'Courier New', Courier, mono; font-size:11px;"></textarea>
 									</div>
 									<div>
 									<table class="apply_gen">

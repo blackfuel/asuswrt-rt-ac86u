@@ -1,5 +1,6 @@
 ﻿$('head').append('<link rel="stylesheet" href="css/asus_eula.css" type="text/css" />');
 $('head').append('<script type="text/javascript" src="/js/httpApi.js">');
+if(rog_support) $('head').append('<link rel="stylesheet" href="css/basic.css" type="text/css" />');
 
 var ASUS_EULA = {
 	"agree_eula_callback": function(){},
@@ -47,12 +48,19 @@ var ASUS_EULA = {
 		}
 	},
 
-	"check": function(eula_type){
+	"status": function(eula_type){
 		var eulaName = eula_type.toUpperCase() + "_EULA";
 		var eulaTime = eula_type.toUpperCase() + "_EULA_time";
 		var asusEula = httpApi.nvramGet([eulaName , eulaTime], true);
 
-		if(asusEula[eulaName] != "1" || asusEula[eulaTime] == ""){
+		if(asusEula[eulaName] != "1" || asusEula[eulaTime] == "")
+			return false;
+		else
+			return true;
+	},
+
+	"check": function(eula_type){
+		if(!ASUS_EULA.status(eula_type)){
 			ASUS_EULA.show(eula_type);
 			return false;
 		}
@@ -64,10 +72,7 @@ var ASUS_EULA = {
 	"close": function(eula_type){
 		$("#Loading").css({"visibility": "hidden"})
 		$("#loadingBlock").css({"visibility": ""})
-
-		$('#alert_' + eula_type + '_EULA').fadeOut(300, function(){
-			$(this).remove();
-		})
+		$('#alert_' + eula_type + '_EULA').remove();
 	},
 
 	"show": function(eula_type){
@@ -77,16 +82,11 @@ var ASUS_EULA = {
 		$("<div>")
 			.attr({
 				"id": "alert_" + eula_type + "_EULA",
-				"class": "eula_panel_container"
+				"class": "eula_panel_container border-container"
 			})
 			.css({
-				"margin-left": "210px",
 				"width": "600px",
-				"line-height": "18px",
-				"text-align": "left",
-				"font-size": "14px",
-				"border-radius": "6px",
-				"font-family": "monospace"
+				"position": "fixed"
 			})
 			.load(eula_type + "_eula.htm", function(data){
 				$("#cancelBtn").click(function(){

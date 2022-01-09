@@ -133,8 +133,12 @@ pc_s *get_all_pc_tmp_list(pc_s **pc_list){
 	if(pc_list == NULL)
 		return NULL;
 
-	nv = nvp = strdup(nvram_safe_get("MULTIFILTER_TMP"));
-	if(!nv || strlen(nv) <= 0){
+	nvp = nvram_safe_get("MULTIFILTER_TMP");
+	if (*nvp == '\0')
+		return NULL;
+
+	nv = nvp = strdup(nvp);
+	if (!nv) {
 		_dprintf("Can't duplicate the nvram: MULTIFILTER_TMP.\n");
 		return NULL;
 	}
@@ -144,6 +148,7 @@ pc_s *get_all_pc_tmp_list(pc_s **pc_list){
 	while((b = strsep(&nvp, "<")) != NULL){
 		if(initial_pc(follow_pc_list) == NULL){
 			_dprintf("No memory!!(follow_pc_list)\n");
+			free(nv);
 			return NULL;
 		}
 
@@ -186,6 +191,7 @@ pc_s *get_all_pc_tmp_list(pc_s **pc_list){
 		}
 	}
 
+	free(nv);
 	return *pc_list;
 }
 
@@ -211,6 +217,19 @@ int pc_tmp_main(int argc, char *argv[]){
 
 		free_pc_list(&enabled_list);
 	}
+#ifdef RTCONFIG_PC_SCHED_V3
+	else if(argc == 5 && !strcmp(argv[1], "daytime")
+			&& (atoi(argv[2]) >= MIN_DAY && atoi(argv[2]) <= MAX_DAY)
+			&& (atoi(argv[3]) >= MIN_HOUR && atoi(argv[3]) <= MAX_HOUR)
+			&& (atoi(argv[4]) >= MIN_MIN && atoi(argv[4]) <= MAX_MIN)
+			){
+		match_daytime_pc_list(pc_list, &daytime_list, atoi(argv[2]), atoi(argv[3]), atoi(argv[4]));
+
+		print_pc_list(daytime_list);
+
+		free_pc_list(&daytime_list);
+	}
+#else
 	else if(argc == 4 && !strcmp(argv[1], "daytime")
 			&& (atoi(argv[2]) >= MIN_DAY && atoi(argv[2]) <= MAX_DAY)
 			&& (atoi(argv[3]) >= MIN_HOUR && atoi(argv[3]) <= MAX_HOUR)
@@ -221,13 +240,9 @@ int pc_tmp_main(int argc, char *argv[]){
 
 		free_pc_list(&daytime_list);
 	}
+#endif
 	else if(argc == 2 && !strcmp(argv[1], "apply")){
-		char prefix[]="wanXXXXXX_", tmp[100];
 		int wan_unit = wan_primary_ifunit();
-		snprintf(prefix, sizeof(prefix), "wan%d_", wan_unit);
-
-		char *wan_if = get_wan_ifname(wan_unit);
-		char *wan_ip = nvram_safe_get(strcat_r(prefix, "ipaddr", tmp));
 		char *lan_if = nvram_safe_get("lan_ifname");
 		char *lan_ip = nvram_safe_get("lan_ipaddr");
 		char logaccept[32], logdrop[32];
@@ -243,7 +258,7 @@ int pc_tmp_main(int argc, char *argv[]){
 
 		match_enabled_pc_list(pc_list, &enabled_list, 1);
 
-		filter_setting(wan_if, wan_ip, lan_if, lan_ip, logaccept, logdrop);
+		filter_setting(wan_unit, lan_if, lan_ip, logaccept, logdrop);
 
 		free_pc_list(&enabled_list);
 	}

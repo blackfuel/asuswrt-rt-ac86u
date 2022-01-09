@@ -17,6 +17,7 @@
 #include <stddef.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <string.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>

@@ -14,8 +14,10 @@
 
 #ifndef _shutils_h_
 #define _shutils_h_
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>	//pid_t
 #include <rtconfig.h>
 
 #ifndef MAX_NVPARSE
@@ -82,13 +84,17 @@ extern int _eval(char *const argv[], const char *path, int timeout, pid_t *ppid)
  */
 #define CPU0	"0"
 #define CPU1	"1"
-#if defined(GTAC5300)
 #define CPU2	"2"
 #define CPU3	"3"
-#endif
 
 extern int _cpu_eval(int *ppid, char *cmds[]);
 
+/*
+ * Evaluate cmds: taskset [mask] arg0, arg1, ...
+ * @param	mask	CPU mask
+ * other params are same as _eval.
+ */
+extern int _cpu_mask_eval(char *const argv[], const char *path, int timeout, pid_t *ppid, unsigned int mask);
 /* 
  * Concatenates NULL-terminated list of arguments into a single
  * commmand and executes it
@@ -173,11 +179,7 @@ static inline char * strcat_r(const char *s1, const char *s2, char *buf)
 })
 
 /* skip the space ' ' in front of s (string) */
-#define skip_space(s) {						\
-	while(*s == ' ')					\
-		s++;						\
-}
-
+#define skip_space(p)	{if(p != NULL){ while(isspace(*p)) p++;}}
 
 /* Simple version of _eval() (no timeout and wait for child termination) */
 #if 1
@@ -198,6 +200,24 @@ static inline char * strcat_r(const char *s1, const char *s2, char *buf)
 	_cpu_eval(ppid, argv); \
 })
 
+/* CMWIFI */
+#ifndef foreach
+#define _FOREACH_MACRO_
+
+/* Copy each token in wordlist delimited by @sep into word */
+#define __foreach(word, wordlist, next, sep) \
+		for (next = &wordlist[strspn(wordlist, (sep))], \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, (sep))] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, *(sep)); \
+				strlen(word); \
+				next = next ? &next[strspn(next, (sep))] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, (sep))] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, *(sep)))
+
 /* Copy each token in wordlist delimited by space into word */
 #define foreach(word, wordlist, next) \
 		for (next = &wordlist[strspn(wordlist, " ")], \
@@ -211,6 +231,7 @@ static inline char * strcat_r(const char *s1, const char *s2, char *buf)
 				word[strcspn(word, " ")] = '\0', \
 				word[sizeof(word) - 1] = '\0', \
 				next = strchr(next, ' '))
+#endif // endif
 
 /* Copy each token in wordlist delimited by ascii_44 into word */
 #define foreach_44(word, wordlist, next) \
@@ -282,6 +303,132 @@ static inline char * strcat_r(const char *s1, const char *s2, char *buf)
 				word[sizeof(word) - 1] = '\0', \
 				next = strchr(next, '>'))
 
+/* Copy each token in wordlist delimited by ascii_124 into word */
+#define foreach_124(word, wordlist, next) \
+		for (next = &wordlist[strspn(wordlist, "|")], \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, "|")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, '|'); \
+				strlen(word); \
+				next = next ? &next[strspn(next, "|")] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, "|")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, '|'))
+
+/* Copy each token in wordlist delimited by space into word and keep empty string */
+#define foreach_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, ' '), \
+				next = strchr(wordlist, ' '), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, " ")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, ' ') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, " ")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, " ")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, ' '), \
+				count--)
+
+/* Copy each token in wordlist delimited by ascii_44 into word and keep empty string */
+#define foreach_44_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, ','), \
+				next = strchr(wordlist, ','), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, ",")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, ',') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, ",")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, ",")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, ','), \
+				count--)
+
+/* Copy each token in wordlist delimited by ascii_58 into word and keep empty string */
+#define foreach_58_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, ':'), \
+				next = strchr(wordlist, ':'), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, ":")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, ':') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, ":")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, ":")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, ':'), \
+				count--)
+
+/* Copy each token in wordlist delimited by ascii_59 into word and keep empty string */
+#define foreach_59_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, ';'), \
+				next = strchr(wordlist, ';'), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, ";")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, ';') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, ";")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, ";")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, ';'), \
+				count--)
+
+/* Copy each token in wordlist delimited by ascii_60 into word and keep empty string */
+#define foreach_60_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, '<'), \
+				next = strchr(wordlist, '<'), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, "<")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, '<') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, "<")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, "<")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, '<'), \
+				count--)
+
+/* Copy each token in wordlist delimited by ascii_62 into word and keep empty string */
+#define foreach_62_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, '>'), \
+				next = strchr(wordlist, '>'), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, ">")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, '>') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, ">")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, ">")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, '>'), \
+				count--)
+
+/* Copy each token in wordlist delimited by ascii_124 into word and keep empty string */
+#define foreach_124_keep_empty_string(count, word, wordlist, next) \
+		for (count = get_char_count(wordlist, '|'), \
+				next = strchr(wordlist, '|'), \
+				strncpy(word, wordlist, sizeof(word)), \
+				word[strcspn(word, "|")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = next ? strchr(next, '|') : ""; \
+				count >= 0; \
+				next = next ? &next[strcspn(next, "|")+1] : "", \
+				strncpy(word, next, sizeof(word)), \
+				word[strcspn(word, "|")] = '\0', \
+				word[sizeof(word) - 1] = '\0', \
+				next = strchr(next, '|'), \
+				count--)
+
 /* Return NUL instead of NULL if undefined */
 #define safe_getenv(s) (getenv(s) ? : "")
 
@@ -300,8 +447,6 @@ do {                                                            \
 //#define dbg(fmt, args...) do { FILE *fp = fopen("/dev/console", "w"); if (fp) { fprintf(fp, fmt, ## args); fclose(fp); } else fprintf(stderr, fmt, ## args); } while (0)
 extern void dbg(const char * format, ...);
 #define dbG(fmt, args...) dbg("%s(0x%04x): " fmt , __FUNCTION__ , __LINE__, ## args)
-extern void cprintf(const char *format, ...);
-
 
 /*
  * Parse the unit and subunit from an interface string such as wlXX or wlXX.YY
@@ -369,6 +514,7 @@ get_bridged_interfaces(char *bridge_name);
 
 		@return	error code
 */
+extern int _remove_from_list(const char *name, char *list, int listsize, char deli);
 extern int remove_from_list(const char *name, char *list, int listsize);
 
 /*
@@ -384,7 +530,21 @@ extern int remove_from_list(const char *name, char *list, int listsize);
 */
 extern int add_to_list(const char *name, char *list, int listsize);
 
+/* Compare two space-separated/null-terminated lists(str1 and str2)
+ * NOTE : The individual names in the list should not exceed NVRAM_MAX_VALUE_LEN
+ *
+ * @param      str1    space-separated/null-terminated list
+ * @param      str2    space-separated/null-terminated list
+ *
+ * @return     0 if both strings are same else return -1
+ */
+extern int compare_lists(char *str1, char *str2);
+
+extern char *_find_in_list(const char *haystack, const char *needle, char deli);
 extern char *find_in_list(const char *haystack, const char *needle);
+
+extern char *find_next_in_list(const char *haystack, const char *needle,
+        char *nextstr, int nextstrlen);
 
 extern char *remove_dups(char *inlist, int inlist_size);
 
@@ -417,7 +577,10 @@ extern int generate_wireless_key(unsigned char *key);
 
 extern int strArgs(int argc, char **argv, char *fmt, ...);
 extern char *trimNL(char *str);
+extern char *trimWS(char *str);
+extern int get_char_count(char *str, int ch);
 extern pid_t get_pid_by_name(char *name);
+extern pid_t get_pid_by_thrd_name(char *name);
 extern char *get_process_name_by_pid(const int pid);
 extern char *ether_etoa2(const unsigned char *e, char *a);
 extern char *ATE_FACTORY_MODE_STR();
@@ -425,5 +588,6 @@ extern char *ATE_UPGRADE_MODE_STR();
 extern int hex2str(unsigned char *hex, char *str, int hex_len);
 extern void reset_stacksize(int new_stacksize);
 extern int arpcache(char *tgmac, char *tgip);
+extern int ether_inc(unsigned char *e, const unsigned char n);
 
 #endif /* _shutils_h_ */

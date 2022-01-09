@@ -37,6 +37,27 @@ enum {
 };
 #endif
 
+#ifdef RTCONFIG_MULTISERVICE_WAN
+///design for WAN_UNIT_MAX < 10
+///extend additional 9 services for original wan unit
+#define WAN_MULTISRV_MAX             8
+enum {
+	WAN_UNIT_MULTISRV_BASE=100,
+	WAN_UNIT_FIRST_MULTISRV_BASE=100,
+	WAN_UNIT_FIRST_MULTISRV_START=101,
+	WAN_UNIT_FIRST_MULTISRV_END=107,
+#if defined(RTCONFIG_DUALWAN) || defined(RTCONFIG_USB_MODEM)
+	WAN_UNIT_SECOND_MULTISRV_BASE=110,
+	WAN_UNIT_SECOND_MULTISRV_START=111,
+	WAN_UNIT_SECOND_MULTISRV_END=117,
+	WAN_UNIT_TMP_MULTISRV_BASE=120,
+	WAN_UNIT_TMP_MULTISRV_START=121,
+	WAN_UNIT_TMP_MULTISRV_END=127,
+#endif
+	WAN_UNIT_MULTISRV_MAX
+};
+#endif
+
 enum {
 	WAN_STATE_INITIALIZING=0,
 	WAN_STATE_CONNECTING,
@@ -92,6 +113,14 @@ enum {
 	WAN6_STOPPED_REASON_NONE=0,
 	WAN6_STOPPED_REASON_DHCP_DECONFIG,
 };
+#ifdef RTCONFIG_SOFTWIRE46
+enum S46_HGW_CASE {
+	S46_CASE_INIT		= 0,
+	S46_CASE_MAP_HGW_ON	= 2,
+	S46_CASE_MAP_HGW_OFF	= 3,
+	S46_CASE_MAP_CE_ON	= 6
+};
+#endif
 #endif
 
 enum {
@@ -160,6 +189,15 @@ enum {
 	FW_WRITING_ERROR,
 	FW_WRITE_SUCCESS,
 	FW_TRX_CHECK_ERROR
+};
+
+enum {
+	_ATE_FW_NOT_ATE=0,
+	_ATE_FW_START,
+	_ATE_FW_WRITING,
+	_ATE_FW_UNEXPECT_ERROR,
+	_ATE_FW_FAILURE,
+	_ATE_FW_COMPLETE
 };
 
 #ifdef RTCONFIG_USB
@@ -284,6 +322,18 @@ enum {
 #define MAX_USB_PART_NUM 16
 #define MAX_USB_PRINTER_NUM 2
 #define MAX_USB_TTY_NUM 10
+#endif	// RTCONFIG_USB
+
+#ifdef RTCONFIG_ASUSCTRL
+enum {
+	ASUSCTRL_DFS_BAND2 = 1,
+	ASUSCTRL_DFS_BAND3,
+	ASUSCTRL_CHG_PWR,
+	ASUSCTRL_CHG_SKU,
+	ASUSCTRL_EG_MODE,
+	ASUSCTRL_SG_MODE,
+	ASUSCTRL_MAX
+};
 #endif
 
 // the following definition is for wans_cap
@@ -294,6 +344,8 @@ enum {
 #define WANSCAP_5G	0x10
 #define WANSCAP_USB	0x20
 #define WANSCAP_WAN2	0x40
+#define WANSCAP_SFPP	0x80	/* SFP+ */
+#define WANSCAP_6G	0x100
 
 // the following definition is for wans_dualwan
 #define WANS_DUALWAN_IF_NONE    0
@@ -305,9 +357,10 @@ enum {
 #define WANS_DUALWAN_IF_5G      6
 #define WANS_DUALWAN_IF_WAN2	7
 #define WANS_DUALWAN_IF_USB2    8
+#define WANS_DUALWAN_IF_SFPP	9
 
 // the following definition is for free_caches()
-#define FREE_MEM_NONE  "0"
+#define FREE_MEM_NONE  "0"	/* kernel < v2.6.39 */
 #define FREE_MEM_PAGE  "1"
 #define FREE_MEM_INODE "2"
 #define FREE_MEM_ALL   "3"
@@ -345,6 +398,7 @@ extern char *link_wan_nvname(int unit, char *buf, int size);
 extern int is_internet_connect(int unit);
 extern int is_wan_connect(int unit);
 extern int is_phy_connect(int unit);
+extern int is_phy_connect2(int unit);
 extern int is_ip_conflict(int unit);
 extern int get_wan_unit(char *ifname);
 extern char *get_wan_ifname(int unit);
@@ -353,20 +407,21 @@ extern char *get_wan6_ifname(int unit);
 #endif
 extern int get_ports_status(unsigned int port_status);
 extern int get_wanports_status(int wan_unit);
-extern char *get_usb_xhci_port(int port);
 extern char *get_usb_ehci_port(int port);
 extern char *get_usb_ohci_port(int port);
 extern int get_usb_port_number(const char *usb_port);
 extern int get_usb_port_host(const char *usb_port);
-#ifdef RTCONFIG_DUALWAN
 extern void set_wanscap_support(char *feature);
+#ifdef RTCONFIG_DUALWAN
 extern void add_wanscap_support(char *feature);
+extern int get_wans_cap(void);
+extern int get_wans_dualwan_str(char *wancaps, int size);
 extern int get_wans_dualwan(void);
 extern int get_dualwan_by_unit(int unit);
 extern int get_wanunit_by_type(int wan_type);
+extern char *get_wantype_str_by_unit(int unit);
 extern int get_dualwan_primary(void);
 extern int get_dualwan_secondary(void);
-extern int get_gate_num(void);
 #else
 static inline int get_wanunit_by_type(int wan_type){
 #ifdef RTCONFIG_USB_MODEM
@@ -385,5 +440,26 @@ extern int get_modemunit_by_type(int wan_type);
 extern int get_wantype_by_modemunit(int modem_unit);
 
 extern char *get_userdns_r(const char *prefix, char *buf, size_t buflen);
+
+extern int asus_ctrl_en(int cid);
+
+int is_bridged(const char *brif, const char *ifname);
+#ifdef RTCONFIG_BROOP
+int netlink_broop(char ctrl, int val);
+int detect_broop();
+#endif
+
+#ifdef RTCONFIG_MULTISERVICE_WAN
+int get_ms_base_unit(int wan_unit);
+int get_ms_wan_unit(int base_wan_unit, int idx);
+int get_ms_idx_by_wan_unit(int wan_unit);
+#endif
+
+#ifdef RTCONFIG_BROOP
+enum {
+	BROOP_IDLE,
+	BROOP_DETECT
+};
+#endif
 
 #endif	/* !__RTSTATE_H__ */

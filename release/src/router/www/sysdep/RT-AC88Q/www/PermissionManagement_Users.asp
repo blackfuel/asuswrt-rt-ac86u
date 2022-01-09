@@ -204,7 +204,7 @@ function add_account(flag, target){
 		return false;
 	}
 
-	var alert_str = validator.hostName(document.getElementById("account_name"));
+	var alert_str = validator.account_name(document.getElementById("account_name"));
 
 	if(alert_str != ""){
 		alert(alert_str);

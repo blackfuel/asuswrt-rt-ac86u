@@ -1,3 +1,0 @@
-ParChecker.o: ParChecker.cpp config.h
-
-config.h:

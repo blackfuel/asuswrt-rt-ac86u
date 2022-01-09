@@ -51,7 +51,7 @@ static uint64_t adjust_blocks(uint64_t blocks, uint64_t fromsize, uint64_t tosiz
  *
  * results are returned in *dfree and *dsize, in 512 byte units
 */
-_PUBLIC_ int sys_fsusage(const char *path, uint64_t *dfree, uint64_t *dsize)
+_PUBLIC_ int sys_fsusage(const char *path, uint64_t *dfree, uint64_t *dsize, uint64_t *bsize)
 {
 #ifdef STAT_STATFS3_OSF1
 #define CONVERT_BLOCKS(B) adjust_blocks ((uint64_t)(B), (uint64_t)fsd.f_fsize, (uint64_t)512)
@@ -131,7 +131,7 @@ _PUBLIC_ int sys_fsusage(const char *path, uint64_t *dfree, uint64_t *dsize)
 #if defined(STAT_STATVFS) || defined(STAT_STATVFS64)		/* SVR4 */
 #ifdef HAVE_FRSIZE
 # define CONVERT_BLOCKS(B) \
-	adjust_blocks ((uint64_t)(B), fsd.f_frsize ? (uint64_t)fsd.f_frsize : (uint64_t)fsd.f_bsize, (uint64_t)512)
+	adjust_blocks ((uint64_t)(B), fsd.f_frsize ? (uint64_t)fsd.f_frsize : (uint64_t)fsd.f_bsize, (uint64_t)fsd.f_bsize)
 #else
 # define CONVERT_BLOCKS(B) \
 	adjust_blocks ((uint64_t)(B), (uint64_t)fsd.f_bsize, (uint64_t)512)
@@ -155,6 +155,7 @@ _PUBLIC_ int sys_fsusage(const char *path, uint64_t *dfree, uint64_t *dsize)
 #else
 #if !defined(STAT_STATFS2_FS_DATA)
 	/* !Ultrix */
+	(*bsize) = fsd.f_bsize;
 	(*dsize) = CONVERT_BLOCKS (fsd.f_blocks);
 	(*dfree) = CONVERT_BLOCKS (fsd.f_bavail);
 #endif /* not STAT_STATFS2_FS_DATA */

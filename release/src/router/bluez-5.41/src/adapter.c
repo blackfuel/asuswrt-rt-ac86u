@@ -5669,9 +5669,6 @@ static void adapter_remove_connection(struct btd_adapter *adapter,
 						struct btd_device *device,
 						uint8_t bdaddr_type)
 {
-#if defined(RTCONFIG_LP5523)
-	int conn_len;
-#endif
 #if defined(MAPAC1750)
 	char buf[256];
 
@@ -5696,14 +5693,23 @@ static void adapter_remove_connection(struct btd_adapter *adapter,
 
 	adapter->connections = g_slist_remove(adapter->connections, device);
 
+	if ( 1
 #if defined(RTCONFIG_LP5523)
-	conn_len = g_slist_length(adapter->connections);
-	if(!conn_len)
-		lp55xx_leds_proc(LP55XX_WHITE_LEDS, LP55XX_ACT_NONE);
+		&& !g_slist_length(adapter->connections)
 #elif defined(MAPAC1750)
-	if (strstr(buf, "ble_qis_done") == NULL)
-		set_rgbled(RGBLED_WHITE);
+		&& (strstr(buf, "ble_qis_done") == NULL)
 #endif
+	) {
+#if defined(RTCONFIG_LP5523)
+		lp55xx_leds_proc(LP55XX_BTCOR_LEDS, LP55XX_ACT_NONE);
+#elif defined(RTCONFIG_FIXED_BRIGHTNESS_RGBLED)
+		set_rgbled(RGBLED_DEFAULT_STANDBY);
+#endif
+#if defined(RTCONFIG_PRELINK) 
+		nvram_set_int("ble_dut_con", 0);
+		notify_rc_and_wait("restart_ble_rename_ssid");
+#endif
+	}
 
 	if (device_is_temporary(device) && !device_is_retrying(device)) {
 		const char *path = device_get_path(device);
@@ -5714,6 +5720,21 @@ static void adapter_remove_connection(struct btd_adapter *adapter,
 
 #ifdef RTCONFIG_LANTIQ
 	notify_rc("restart_bluetooth_service");
+#endif
+#if defined(RTAX95Q) || defined(XT8PRO) || defined(RTAXE95Q) || defined(ET8PRO) || defined(RTAX56_XD4) || defined(XD4PRO) || defined(ET12) || defined(XT12)
+	/// enable advertising
+	if (bdaddr_type != BDADDR_BREDR) {
+		int dd = hci_open_dev(adapter->dev_id);
+		if (dd < 0) {
+			btd_warn(adapter->dev_id, "Open hci device failed");
+		}
+		else {
+			if (hci_le_set_advertise_enable(dd, 0x01, 1000) < 0) {
+				btd_warn(adapter->dev_id, "Enable advertise failed");
+			}
+			hci_close_dev(dd);
+		}
+	}
 #endif
 }
 
@@ -7604,14 +7625,17 @@ static void connected_callback(uint16_t index, uint16_t length,
 	else
 	{
 #if defined(RTCONFIG_LP5523)
-		lp55xx_leds_proc(LP55XX_WHITE_LEDS, LP55XX_ACT_SBLINK);
+		lp55xx_leds_proc(LP55XX_BTCOR_LEDS, LP55XX_ACT_SBLINK);
 #endif
 	}
 */
+#if defined(RTCONFIG_PRELINK) 
+	nvram_set_int("ble_dut_con", 1);
+#endif
 #if defined(RTCONFIG_LP5523)
-	lp55xx_leds_proc(LP55XX_WHITE_LEDS, LP55XX_ACT_SBLINK);
-#elif defined(MAPAC1750)
-	set_rgbled(RGBLED_WHITE_SBLINK);
+	lp55xx_leds_proc(LP55XX_BTCOR_LEDS, LP55XX_ACT_SBLINK);
+#elif defined(RTCONFIG_FIXED_BRIGHTNESS_RGBLED)
+	set_rgbled(RGBLED_BT_CONNECT);
 #endif
 
 	ba2str(&ev->addr.bdaddr, addr);
@@ -7949,8 +7973,10 @@ static void read_info_complete(uint8_t status, uint16_t length,
 		break;
 	}
 
+#if !defined(RTCONFIG_QCA) /* Disable SECURE_CONN setting */
 	if (missing_settings & MGMT_SETTING_SECURE_CONN)
 		set_mode(adapter, MGMT_OP_SET_SECURE_CONN, 0x01);
+#endif
 
 	if (main_opts.fast_conn &&
 			(missing_settings & MGMT_SETTING_FAST_CONNECTABLE))

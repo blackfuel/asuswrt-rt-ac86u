@@ -32,9 +32,15 @@ else
 	fapi_wlan_cli_ldflags := -L./ -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lrt
 	fapi_wlan_cli_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include -I./include -I../hostapd-2.6/src/common/ -I../hostapd-2.6/src/utils/  -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
 
+#	fapi_wlan_beerock_cli_sources := ../hostapd-2.6/src/common/wpa_ctrl.c ../hostapd-2.6/src/utils/os_unix.c fapi_wlan_beerock_cli.c fapi_wlan_band_steering.c
+#	fapi_wlan_beerock_cli_ldflags := -L./ -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lcurses -L$(STAGEDIR)/usr/lib -lreadline -lrt
+#	fapi_wlan_beerock_cli_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include -I$(STAGEDIR)/usr/include -I../hostapd-2.6/src/common/ -I../hostapd-2.6/src/utils/ -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
+
 	fapi_wlan_beerock_cli_sources := ../hostapd-2.6/src/common/wpa_ctrl.c ../hostapd-2.6/src/utils/os_unix.c fapi_wlan_beerock_cli.c fapi_wlan_band_steering.c
-	fapi_wlan_beerock_cli_ldflags := -L./ -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lcurses -L$(STAGEDIR)/usr/lib -lreadline -lrt
-	fapi_wlan_beerock_cli_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include -I$(STAGEDIR)/usr/include -I../hostapd-2.6/src/common/ -I../hostapd-2.6/src/utils/ -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX
+	fapi_wlan_beerock_cli_ldflags := -L./ -lfapiwlancommon -ldl -L$(TOP)/libhelper-1.4.0.2 -lhelper -lcurses -L$(STAGEDIR)/usr/lib -lreadline -lrt -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared -L$(TOP)/nvram$(BCMEX)${EX7} ${EXTRA_NV_LDFLAGS} -lnvram -lpthread
+	fapi_wlan_beerock_cli_cflags  := -I./include -I$(TOP)/libhelper-1.4.0.2/include -I$(STAGEDIR)/usr/include -I../hostapd-2.6/src/common/ -I../hostapd-2.6/src/utils/ -DCONFIG_CTRL_IFACE -DCONFIG_CTRL_IFACE_UNIX -I$(TOP)/shared -I$(SRCBASE)/include
+
+
 
 	fapi_wlan_dbXml_sources := fapi_wlan_dbXml.c fapi_wlan_ezxml.c
 	fapi_wlan_dbXml_ldflags := -L./  -lhelper -L$(TOP)/libhelper-1.4.0.2

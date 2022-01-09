@@ -8,11 +8,19 @@
 
 include $(SRCBASE)/router/.config
 
+ifeq ($(HND_ROUTER_AX_6756),y)
+CFLAGS	+= -I. -I$(TOP)/shared -I$(SRCBASE)/include -I$(SRCBASE)/common/include -Wall -Werror -Wno-format-truncation
+else
 CFLAGS	+= -I. -I$(TOP)/shared -I$(SRCBASE)/include -I$(SRCBASE)/common/include -Wall -Werror
+endif
+
 CFLAGS	+= $(if $(WLAN_ComponentIncPath),$(WLAN_ComponentIncPath),$(addprefix -I,$(wildcard $(SRCBASE)/shared/bcmwifi/include)))
+ifeq ($(HND_ROUTER_AX), y)
+CFLAGS  += -I$(SRCBASE)/../components/math/include -I$(SRCBASE)/../components/proto/include -I$(SRCBASE)/../components/wlioctl/include
+endif
 #CFLAGS	+= -g -DDEBUG
-CFLAGS	+= -s -O2
-LDFLAGS += -L$(TOP)/nvram$(BCMEX)${EX7} ${EXTRA_NV_LDFLAGS} -lnvram
+CFLAGS	+= -s -O2 $(EXTRACFLAGS)
+LDFLAGS += -L$(TOP_PLATFORM)/nvram$(BCMEX)${EX7} ${EXTRA_NV_LDFLAGS} -lnvram
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
 LDFLAGS += $(EXTRALDFLAGS)
 
@@ -57,6 +65,7 @@ ifeq ($(RTCONFIG_LIBASUSLOG),y)
 CFLAGS += -I$(TOP)/libasuslog
 LDFLAGS += -L$(TOP)/libasuslog -lasuslog
 endif
+
 
 vpath %.c $(SRCBASE)/shared $(WLAN_ComponentSrcDirs)
 

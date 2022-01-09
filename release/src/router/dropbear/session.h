@@ -26,7 +26,6 @@
 #define DROPBEAR_SESSION_H_
 
 #include "includes.h"
-#include "options.h"
 #include "buffer.h"
 #include "signkey.h"
 #include "kex.h"
@@ -39,12 +38,14 @@
 #include "chansession.h"
 #include "dbutil.h"
 #include "netio.h"
-
-extern int sessinitdone; /* Is set to 0 somewhere */
-extern int exitflag;
+#if DROPBEAR_PLUGIN
+#include "pubkeyapi.h"
+#endif
+#include "gcm.h"
+#include "chachapoly.h"
 
 void common_session_init(int sock_in, int sock_out);
-void session_loop(void(*loophandler)()) ATTRIB_NORETURN;
+void session_loop(void(*loophandler)(void)) ATTRIB_NORETURN;
 void session_cleanup(void);
 void send_session_identification(void);
 void send_msg_ignore(void);
@@ -63,6 +64,8 @@ void svr_dropbear_log(int priority, const char* format, va_list param);
 /* Client */
 void cli_session(int sock_in, int sock_out, struct dropbear_progress_connection *progress, pid_t proxy_cmd_pid) ATTRIB_NORETURN;
 void cli_connected(int result, int sock, void* userdata, const char *errstring);
+void cli_dropbear_exit(int exitcode, const char* format, va_list param) ATTRIB_NORETURN;
+void cli_dropbear_log(int priority, const char* format, va_list param);
 void cleantext(char* dirtytext);
 void kill_proxy_command(void);
 
@@ -78,9 +81,17 @@ struct key_context_directional {
 #endif
 	/* actual keys */
 	union {
+#if DROPBEAR_ENABLE_CBC_MODE
 		symmetric_CBC cbc;
+#endif
 #if DROPBEAR_ENABLE_CTR_MODE
 		symmetric_CTR ctr;
+#endif
+#if DROPBEAR_ENABLE_GCM_MODE
+		dropbear_gcm_state gcm;
+#endif
+#if DROPBEAR_CHACHA20POLY1305
+		dropbear_chachapoly_state chachapoly;
 #endif
 	} cipher_state;
 	unsigned char mackey[MAX_MAC_LEN];
@@ -93,7 +104,8 @@ struct key_context {
 	struct key_context_directional trans;
 
 	const struct dropbear_kex *algo_kex;
-	int algo_hostkey;
+	enum signkey_type algo_hostkey; /* server key type */
+	enum signature_type algo_signature; /* server signature type */
 
 	int allow_compress; /* whether compression has started (useful in 
 							zlib@openssh.com delayed compression case) */
@@ -157,6 +169,7 @@ struct sshsession {
 	
 	int signal_pipe[2]; /* stores endpoints of a self-pipe used for
 						   race-free signal handling */
+	int channel_signal_pending; /* Flag set when the signal pipe is triggered */
 
 	m_list conn_pending;
 						
@@ -184,6 +197,9 @@ struct sshsession {
 
 	/* Enables/disables compression */
 	algo_type *compress_algos;
+
+	/* Other side allows SSH_MSG_EXT_INFO. Currently only set for server */
+	int allow_ext_info;
 							
 	/* a list of queued replies that should be sent after a KEX has
 	   concluded (ie, while dataallowed was unset)*/
@@ -203,7 +219,6 @@ struct sshsession {
 	unsigned int chansize; /* the number of Channel*s allocated for channels */
 	unsigned int chancount; /* the number of Channel*s in use */
 	const struct ChanType **chantypes; /* The valid channel types */
-	int channel_signal_pending; /* Flag set by sigchld handler */
 
 	/* TCP priority level for the main "port 22" tcp socket */
 	enum dropbear_prio socket_prio;
@@ -216,6 +231,14 @@ struct sshsession {
 	 * really belong here, but nowhere else fits nicely */
 	int allowprivport;
 
+	/* this is set when we get SIGINT or SIGTERM, the handler is in main.c */
+	volatile int exitflag;
+	/* set once the ses structure (and cli_ses/svr_ses) have been populated to their initial state */
+	int init_done;
+
+#if DROPBEAR_PLUGIN
+        struct PluginSession * plugin_session;
+#endif
 };
 
 struct serversession {
@@ -246,6 +269,13 @@ struct serversession {
 	pid_t server_pid;
 #endif
 
+#if DROPBEAR_PLUGIN
+	/* The shared library handle */
+	void *plugin_handle;
+
+	/* The instance created by the plugin_new function */
+	struct PluginInstance *plugin_instance;
+#endif
 };
 
 typedef enum {
@@ -274,7 +304,6 @@ struct clientsession {
 
 	cli_kex_state kex_state; /* Used for progressing KEX */
 	cli_state state; /* Used to progress auth/channelsession etc */
-	unsigned donefirstkex : 1; /* Set when we set sentnewkeys, never reset */
 
 	int tty_raw_mode; /* Whether we're in raw mode (and have to clean up) */
 	struct termios saved_tio;
@@ -288,7 +317,7 @@ struct clientsession {
 	/* for escape char handling */
 	int last_char;
 
-	int winchange; /* Set to 1 when a windowchange signal happens */
+	volatile int winchange; /* Set to 1 when a windowchange signal happens */
 
 	int lastauthtype; /* either AUTH_TYPE_PUBKEY or AUTH_TYPE_PASSWORD,
 						 for the last type of auth we tried */
@@ -300,9 +329,9 @@ struct clientsession {
 									  info request from the server for
 									  interactive auth.*/
 #endif
-	int cipher_none_after_auth; /* Set to 1 if the user requested "none"
-								   auth */
 	sign_key *lastprivkey;
+
+	buffer *server_sig_algs;
 
 	int retval; /* What the command exit status was - we emulate it */
 #if 0

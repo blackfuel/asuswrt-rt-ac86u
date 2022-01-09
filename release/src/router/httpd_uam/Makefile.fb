@@ -2,7 +2,6 @@ include ../common.mak
 
 CFLAGS += -Os -Wall $(EXTRACFLAGS)
 CFLAGS += -I$(SRCBASE) -I$(SRCBASE)/include -I. -I$(TOP)/shared -I$(TOP)/zlib
-CFLAGS += -I$(TOP)/push_log
 CFLAGS += -DASUS_DDNS -DTRANSLATE_ON_FLY -DFLASH_EMULATOR -DLinux -DWSC 
 
 ifeq ($(RTCONFIG_RALINK),y)
@@ -81,7 +80,6 @@ LIBS += -L$(TOP)/openssl -lcrypto -lssl
 LIBS += -L$(TOP)/curl-7.21.7/lib/.libs -lcurl
 LIBS += -L$(TOP)/libxml2/.libs -lxml2
 LIBS += -L$(TOP)/wb -lws
-LIBS += -L$(TOP)/push_log -lpush_log
 endif
 
 ifeq ($(RTCONFIG_BCMARM),y)

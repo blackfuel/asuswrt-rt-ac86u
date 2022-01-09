@@ -21,6 +21,7 @@
 <script>
 
 var wans_mode ='<% nvram_get("wans_mode"); %>';
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=106";
 
 function applyRule(){
 	if(validForm()){
@@ -83,8 +84,7 @@ function done_validating(action){
 
 function initial(){
 	show_menu();
-	// https://www.asus.com/US/support/FAQ/1001253
-	httpApi.faqURL("1001253", function(url){document.getElementById("faq").href=url;});
+	document.getElementById("faq").href=faq_href;
 	dmz_enable_check();
 
 	//if(dualWAN_support && wans_mode == "lb")
@@ -137,7 +137,7 @@ function dmz_on_off(){
 }
 </script>
 </head>
-<body onload="initial();">
+<body onload="initial();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 

@@ -16,6 +16,7 @@
 <script type="text/javascript" src="/popup.js"></script>
 <script type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" src="/validator.js"></script>
+<script type="text/javascript" src="/js/jquery.js"></script>
 <style>
 .FormTable{
  	margin-top:10px;	
@@ -30,15 +31,23 @@ var dsl_pvc_enabled = ["0", "0", "0", "0", "0", "0", "0", "0"];
 
 var wans_dualwan = '<% nvram_get("wans_dualwan"); %>';
 <% wan_get_parameter(); %>
-var original_dnsenable = parseInt('<% nvram_get("dslx_dnsenable"); %>');
+var original_dnsenable = parseInt('<% nvram_get("dsl_dnsenable"); %>');
 var original_ppp_echo = parseInt('<% nvram_get("wan_ppp_echo"); %>');
 var default_ppp_echo = parseInt('<% nvram_default_get("wan_ppp_echo"); %>');
+var orig_mtu = '<% nvram_get("dsl_mtu"); %>';
+
+var chg_pvc_unit_flag = '<% get_parameter("chg_pvc"); %>';
+
+var load_wan_unit = '<% nvram_get("wan_unit"); %>';
+if(load_wan_unit.length == 3)
+	load_wan_unit=load_wan_unit.substring(1, 2);
 
 if(dualWAN_support){
-	var wan_type_name = wans_dualwan.split(" ")[<% nvram_get("wan_unit"); %>];
+	var wan_type_name = wans_dualwan.split(" ")[load_wan_unit];
 	wan_type_name = wan_type_name.toUpperCase();
 	switch(wan_type_name){
 		case "WAN":
+			location.href = "Advanced_WAN_Content.asp";
 			break;
 		case "LAN":
 			location.href = "Advanced_WAN_Content.asp";
@@ -78,7 +87,17 @@ var IE_Version = Check_IE_Version();
 // Index, VPI, VCI, Protocol
 var DSLWANList = [ <% get_DSL_WAN_list(); %> ];
 
+function chg_pvc_unit(pvc_to_chg) {
+	dr_advise();
+	document.getElementById("drword").innerHTML = "&nbsp;&nbsp;&nbsp;<#QIS_autoMAC_desc2#>...";
+	document.chgpvc.dsl_unit.value=pvc_to_chg.toString();
+	document.chgpvc.submit();
+
+}
+
 function chg_pvc(pvc_to_chg) {
+	document.form.add_pvc_flag.value = "0";
+
 	var iptv_row = 0;
 	for(var i = 1; i < DSLWANList.length; i++){
 		if (DSLWANList[i][0] != "0") {
@@ -88,23 +107,25 @@ function chg_pvc(pvc_to_chg) {
 	}
 
 	if (pvc_to_chg != "0") {
-		remove_item_from_select_bridge();
+		if(!mswan_support){
+			remove_item_from_select_bridge();
+		}
+		else{
+			renew_dsl_proto_options();
+		}
 	}
 	else
-	{	
+	{
+		iptv_row = 0;
 		remove_bridge();	//remove beidge while edit Internet PVC
 	}
 	disable_pvc_summary();
 	enable_all_ctrl();
-	change_dsl_unit_idx(pvc_to_chg,iptv_row);
-	if(pvc_to_chg == 0){
-		change_dsl_type("<% nvram_get("dsl0_proto"); %>");
-		fixed_change_dsl_type("<% nvram_get("dsl0_proto"); %>");
-	}
-	else{
-		change_dsl_type(document.form.dsl_proto.value);
-		fixed_change_dsl_type(document.form.dsl_proto.value);
-	}
+	
+	change_dsl_unit_idx(pvc_to_chg,pvc_to_chg);
+	
+	change_dsl_type(document.form.dsl_proto.value);
+	fixed_change_dsl_type(document.form.dsl_proto.value);
 }
 
 function remove_item_from_select_bridge() {
@@ -114,7 +135,7 @@ function remove_item_from_select_bridge() {
 }
 
 function remove_bridge(){
-	free_options(document.form.dsl_proto);			//remove beidge while edit Internet PVC
+	free_options(document.form.dsl_proto);			//remove beidge while edit Internet PVC if not mswan_support
 	var var_item0 = new Option("PPPoE", "pppoe");
 	var var_item1 = new Option("PPPoA", "pppoa");
 	var var_item2 = new Option("IPoA", "ipoa");
@@ -125,12 +146,27 @@ function remove_bridge(){
 	document.form.dsl_proto.options.add(var_item3);	
 }
 
+function renew_dsl_proto_options(){
+	free_options(document.form.dsl_proto);			//remove beidge while edit Internet PVC if not mswan_support
+	var var_item0 = new Option("PPPoE", "pppoe");
+	var var_item1 = new Option("PPPoA", "pppoa");
+	var var_item2 = new Option("IPoA", "ipoa");
+	var var_item3 = new Option("MER", "mer");
+	var var_item4 = new Option("Bridge", "bridge");
+	document.form.dsl_proto.options.add(var_item0);	
+	document.form.dsl_proto.options.add(var_item1);
+	document.form.dsl_proto.options.add(var_item2);	
+	document.form.dsl_proto.options.add(var_item3);	
+	document.form.dsl_proto.options.add(var_item4);	
+}
+
 function add_pvc() {
 
 	var iptv_row = 0;
 	for(var i = 1; i < DSLWANList.length; i++){
-		if (DSLWANList[i][0] != "0") {
-			iptv_row++;
+		if (DSLWANList[i][0] == "0") {
+			iptv_row = i;
+			break;
 		}
 	}
 	
@@ -169,7 +205,6 @@ function add_pvc() {
 	}
 
 	document.form.dsl_unit.value=avail_pvc.toString();
-	document.form.dsl_enable.value="1";
 	document.form.dsl_vpi.value="0";
 	document.form.dsl_vci.value=avail_vci.toString();
 	document.form.dsl_encap.value="0";
@@ -177,7 +212,8 @@ function add_pvc() {
 	document.form.dsl_pcr.value="0";
 	document.form.dsl_scr.value="0";
 	document.form.dsl_mbs.value="0";
-	if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {      //MODELDEP: DSL-AC68U,DSL-AC68R
+	document.form.add_pvc_flag.value="1";
+	if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {      //MODELDEP: DSL-AX82U,DSL-AC68U,DSL-AC68R
 		document.form.dsl_dot1q.value="0";
 		document.form.dsl_vid.value="";
 		document.form.dsl_dot1p.value="";
@@ -185,34 +221,42 @@ function add_pvc() {
 
 	if (avail_pvc == 0) {
 		document.form.dsl_proto.value="pppoe";
-		document.form.dslx_nat.value="1";
-		document.form.dslx_upnp_enable.value="1";
-		document.form.dslx_link_enable.value="1";
-		document.form.dslx_DHCPClient.value="1";
-		document.form.dslx_ipaddr.value="0.0.0.0";
-		document.form.dslx_netmask.value="0.0.0.0";
-		document.form.dslx_gateway.value="0.0.0.0";
-		document.form.dslx_pppoe_username.value="";
-		document.form.dslx_pppoe_passwd.value="";
-		document.form.dslx_pppoe_auth.value="";
-		document.form.dslx_pppoe_idletime.value="0";
-		document.form.dslx_pppoe_mtu.value="1492";
-		document.form.dslx_pppoe_service.value="";
-		document.form.dslx_pppoe_ac.value="";
-		document.form.dslx_pppoe_options.value="";
-		document.form.dslx_hwaddr.value="";
+		document.form.dsl_nat.value="1";
+		document.form.dsl_upnp_enable.value="1";
+		document.form.dsl_link_enable.value="1";
+		document.form.dsl_DHCPClient.value="1";
+		document.form.dsl_ipaddr.value="0.0.0.0";
+		document.form.dsl_netmask.value="0.0.0.0";
+		document.form.dsl_gateway.value="0.0.0.0";
+		document.form.dsl_pppoe_username.value="";
+		document.form.dsl_pppoe_passwd.value="";
+		document.form.dsl_pppoe_auth.value="";
+		document.form.dsl_pppoe_idletime.value="0";
+		document.form.dsl_pppoe_mtu.value="1492";
+		document.form.dsl_pppoe_service.value="";
+		document.form.dsl_pppoe_ac.value="";
+		document.form.dsl_pppoe_options.value="";
+		document.form.dsl_hwaddr.value="";
 		document.getElementById("pvc_sel").innerHTML = "Internet PVC";
 		
 		remove_bridge();	//remove beidge while edit Internet PVC
 			
 	}
 	else {
-		document.form.dsl_proto.value="bridge";
-		document.getElementById("pvc_sel").innerHTML = "IPTV PVC #"+(iptv_row+1).toString();
+		if(!mswan_support){
+			document.form.dsl_proto.value="bridge";
+		}
+		//document.getElementById("pvc_sel").innerHTML = "IPTV PVC #"+(iptv_row+1).toString();	//Viz tmp
+		document.getElementById("pvc_sel").innerHTML = "IPTV PVC #"+(iptv_row).toString();
 	}
 	
 	if (avail_pvc != 0) {
-		remove_item_from_select_bridge();
+		if(!mswan_support){
+			remove_item_from_select_bridge();
+		}
+		else{
+			renew_dsl_proto_options();
+		}
 	}
 	else
 	{	
@@ -246,6 +290,7 @@ function add_pvc() {
 
 	change_dsl_type(document.form.dsl_proto.value);
 	fixed_change_dsl_type(document.form.dsl_proto.value);
+	document.form.dsl_link_enable[0].checked = true;	//Add to enable it
 }
 
 function del_pvc(pvc_to_del) {
@@ -263,6 +308,10 @@ function del_pvc(pvc_to_del) {
 }
 
 function showDSLWANList(){
+	if(isSupport("is_ax5400_i1")){
+		document.getElementById('DSL_WAN_add_del').style.display = "none";
+	}
+
 	var addRow;
 	var cell = new Array(10);
 	var config_num = 0;
@@ -275,13 +324,15 @@ function showDSLWANList(){
 		addRow = document.getElementById('DSL_WAN_table').insertRow(2);
 		for (var i = 0; i <= 7; i++) {
 			cell[i] = addRow.insertCell(i);
-			if (i==3) cell[i].innerHTML = "no data";
+			if (i==3) cell[i].innerHTML = "<#IPConnection_VSList_Norule#>";
 			else cell[i].innerHTML = "&nbsp";
 			cell[i].style.color = "white";
 		}
-		cell[8] = addRow.insertCell(8);
-		cell[8].innerHTML = '<center><input class="add_btn" onclick="add_pvc();" value=""/></center>';
-		cell[8].style.color = "white";
+		if(!isSupport("is_ax5400_i1")){
+			cell[8] = addRow.insertCell(8);
+			cell[8].innerHTML = '<center><input class="add_btn" onclick="add_pvc();" value=""/></center>';
+			cell[8].style.color = "white";
+		}
 	}
 	else{
 		var row_count=0;
@@ -290,7 +341,7 @@ function showDSLWANList(){
 				addRow = document.getElementById('DSL_WAN_table').insertRow(row_count+2);
 				row_count++;
 				cell[0] = addRow.insertCell(0);
-				cell[0].innerHTML = row_count.toString();
+				cell[0].innerHTML = i;
 				cell[0].style.color = "white";
 				for (var j = 1; j <= 2; j++) {
 					cell[j] = addRow.insertCell(j);
@@ -330,58 +381,140 @@ function showDSLWANList(){
 				}
 				cell[6].style.color = "white";
 				cell[7] = addRow.insertCell(7);
-				cell[7].innerHTML = '<center><span style="cursor:pointer;" onclick="chg_pvc('+i.toString()+')"><input class="edit_btn"></span></center>';
+				cell[7].innerHTML = '<center><span style="cursor:pointer;" onclick="chg_pvc_unit('+i.toString()+')"><input class="edit_btn"></span></center>';
 				cell[7].style.color = "white";
-				cell[8] = addRow.insertCell(8);
-				cell[8].innerHTML = '<center><input class="remove_btn" onclick="del_pvc('+i.toString()+');" value=""/></center>';
-				cell[8].style.color = "white";
+				if(!isSupport("is_ax5400_i1")){
+					cell[8] = addRow.insertCell(8);
+					cell[8].innerHTML = '<center><input class="remove_btn" onclick="del_pvc('+i.toString()+');" value=""/></center>';
+					cell[8].style.color = "white";
+				}
 			}
 		}
 		if (row_count <= 7) {
-			addRow = document.getElementById('DSL_WAN_table').insertRow(row_count+2);
-			for (var i = 0; i <= 7; i++) {
-				cell[i] = addRow.insertCell(i);
-				cell[i].innerHTML = "&nbsp";
-				cell[i].style.color = "white";
+			if(!isSupport("is_ax5400_i1")){
+				addRow = document.getElementById('DSL_WAN_table').insertRow(row_count+2);
+				for (var i = 0; i <= 7; i++) {
+					cell[i] = addRow.insertCell(i);
+					cell[i].innerHTML = "&nbsp";
+					cell[i].style.color = "white";
+				}
+			
+				cell[8] = addRow.insertCell(8);
+				cell[8].innerHTML = '<center><input class="add_btn" onclick="add_pvc();" value=""/></center>';
+				cell[8].style.color = "white";
 			}
-			cell[8] = addRow.insertCell(8);
-			cell[8].innerHTML = '<center><input class="add_btn" onclick="add_pvc();" value=""/></center>';
-			cell[8].style.color = "white";
 		}
 	}
 }
 
 function initial(){
 	show_menu();
-	showDSLWANList();
-	// PVC init
-	for(var i = 0; i < DSLWANList.length; i++){
-		if (DSLWANList[i][0] != "0") dsl_pvc_enabled[i] = "1";
-		if (dsl_pvc_enabled[i] == "0") {
-			DSLWANList[i][1] = "0"
-			var vci_num = 35 + i;
-			DSLWANList[i][2] = vci_num.toString();
-			if (i==0) DSLWANList[i][3] = "pppoe";
-			else DSLWANList[i][3] = "bridge";
-			DSLWANList[i][4] = "0";
-			DSLWANList[i][5] = "0";
-			DSLWANList[i][6] = "0";
-			DSLWANList[i][7] = "0";
-			DSLWANList[i][8] = "0";
-		}
-	}
-	disable_all_ctrl();
+
+	document.form.dsl_dhcp_clientid.value = decodeURIComponent('<% nvram_char_to_ascii("", "dsl_dhcp_clientid"); %>');
 
 	// WAN port
 	genWANSoption();
-	change_wan_unit(document.form.wan_unit);	
+	change_wan_unit(document.form.wan_unit);
 		
 	if(!dualWAN_support && !vdsl_support) {
 		document.getElementById("WANscap").style.display = "none";
-	}else if (!vdsl_support){
+	}
+	else if (!vdsl_support){
 		free_options(document.form.dsltmp_transmode);
 		document.form.dsltmp_transmode.options[0] = new Option("ADSL WAN (ATM)", "atm");
-	}		
+	}
+
+	if(chg_pvc_unit_flag.length > 0 && chg_pvc_unit_flag >= 0 && chg_pvc_unit_flag <= 7){
+		chg_pvc(chg_pvc_unit_flag);
+	}
+	else{
+		showDSLWANList();
+		// PVC init
+		for(var i = 0; i < DSLWANList.length; i++){
+			if (DSLWANList[i][0] != "0") dsl_pvc_enabled[i] = "1";
+			if (dsl_pvc_enabled[i] == "0") {
+				DSLWANList[i][1] = "0"
+				var vci_num = 35 + i;
+				DSLWANList[i][2] = vci_num.toString();
+				if (i==0) 
+					DSLWANList[i][3] = "pppoe";
+				else if(!mswan_support)
+					DSLWANList[i][3] = "bridge";
+				DSLWANList[i][4] = "0";
+				DSLWANList[i][5] = "0";
+				DSLWANList[i][6] = "0";
+				DSLWANList[i][7] = "0";
+				DSLWANList[i][8] = "0";
+			}
+		}
+		disable_all_ctrl();
+
+		// WAN port
+		//genWANSoption();
+		//change_wan_unit(document.form.wan_unit);
+		
+		//if(!dualWAN_support && !vdsl_support) {
+		//	document.getElementById("WANscap").style.display = "none";
+		//}
+		//else if (!vdsl_support){
+		//	free_options(document.form.dsltmp_transmode);
+		//	document.form.dsltmp_transmode.options[0] = new Option("ADSL WAN (ATM)", "atm");
+		//}
+	}
+
+	$.getJSON("https://nw-dlcdnet.asus.com/plugin/js/dns_db.json",
+		function(data){
+			var dns_db_translation_mapping = [
+				{tag:"#ADGUARD_1",text:"<#IPConnection_x_DNS_DB_ADGUARD_1#>"},
+				{tag:"#ADGUARD_2",text:"<#IPConnection_x_DNS_DB_ADGUARD_2#>"},
+				{tag:"#CLOUDFLARE_1",text:"<#IPConnection_x_DNS_DB_CLOUDFLARE_1#>"},
+				{tag:"#CLOUDFLARE_2",text:"<#IPConnection_x_DNS_DB_CLOUDFLARE_2#>"},
+				{tag:"#CLOUDFLARE_3",text:"<#IPConnection_x_DNS_DB_CLOUDFLARE_3#>"}
+			];
+			Object.keys(data).forEach(function(dns_item) {
+				var dns_name = data[dns_item].name;
+				var dns_list = data[dns_item].server;
+				var dns_desc = data[dns_item].desc;
+				var dns_translation = data[dns_item].translation;
+				Object.keys(dns_list).forEach(function(idx) {
+					var dns_ip = dns_list[idx];
+					var $dns_item_bg = $("<a>");
+					$dns_item_bg.appendTo($("#dns_server_list1"));
+					if(dns_desc != "")
+						$dns_item_bg.attr("title", dns_desc);
+					if(dns_translation != "") {
+						var specific_translation = dns_db_translation_mapping.filter(function(item, index, _array){
+							return (item.tag == dns_translation);
+						})[0];
+						if(specific_translation != undefined)
+							$dns_item_bg.attr("title",  specific_translation.text);
+					}
+					var $dns_item = $("<div>");
+					$dns_item.appendTo($dns_item_bg);
+					$dns_item.unbind("click");
+					$dns_item.click(function(e) {
+						e = e || event;
+						e.stopPropagation();
+						var click_dns_ip = $(this).children("strong").attr("dns_ip");
+						var idx = $(this).closest(".dns_server_list_dropdown").attr("id").replace("dns_server_list", "");
+						$("input[name='dsl_dns" + idx + "']").val(click_dns_ip);
+						$(".dns_pull_arrow").attr("src","/images/arrow-down.gif");
+						$(".dns_server_list_dropdown").hide();
+					});
+					var $dns_text = $("<strong>");
+					$dns_text.appendTo($dns_item);
+					$dns_text.html("" + dns_name + " ( " + dns_ip +  " )");
+					$dns_text.attr("dns_ip", dns_ip);
+				});
+			});
+			$("#dns_server_list1").children().clone(true).appendTo($("#dns_server_list2"));
+			$(".dns_pull_arrow").show();
+		}
+	);
+	$("body").click(function() {
+		$(".dns_pull_arrow").attr("src","/images/arrow-down.gif");
+		$(".dns_server_list_dropdown").hide();
+	});
 }
 
 function show_is_active_dslx_transmode(){
@@ -452,13 +585,14 @@ function genWANSoption(){
 		if(wans_dualwan_NAME != "NONE")
 			document.form.wan_unit.options[i] = new Option(wans_dualwan_NAME, i);
 	}
-	document.form.wan_unit.selectedIndex = '<% nvram_get("wan_unit"); %>';
+	document.form.wan_unit.selectedIndex = load_wan_unit;
 }
 
 function change_dsl_unit_idx(idx,iptv_row){
 	// reset to old values
 	if (idx == "0") document.getElementById("pvc_sel").innerHTML = "Internet PVC";
 	else document.getElementById("pvc_sel").innerHTML = "IPTV PVC #"+iptv_row.toString();
+
 	document.form.dsl_unit.value=idx.toString();
 	document.form.dsl_enable.value="1";
 	document.form.dsl_vpi.value=DSLWANList[idx][1];
@@ -469,7 +603,7 @@ function change_dsl_unit_idx(idx,iptv_row){
 	document.form.dsl_pcr.value=DSLWANList[idx][6];
 	document.form.dsl_scr.value=DSLWANList[idx][7];
 	document.form.dsl_mbs.value=DSLWANList[idx][8];
-	if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {
+	if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {
 		document.form.dsl_dot1q.value=DSLWANList[idx][9];
 		document.form.dsl_vid.value=DSLWANList[idx][10];
 		document.form.dsl_dot1p.value=DSLWANList[idx][11];
@@ -502,8 +636,9 @@ function del_pvc_submit(){
 }
 
 function exit_to_main(){
-	enable_pvc_summary();
-	disable_all_ctrl();
+	//enable_pvc_summary();
+	//disable_all_ctrl();
+	location.href = "Advanced_DSL_Content.asp";
 }
 
 function applyRule(){
@@ -521,7 +656,7 @@ function applyRule(){
 		}
 	}
 
-	if(document.form.dslx_dnsenable[1].checked == true && document.form.dsl_proto.value != "mer" && document.form.dslx_dns1.value == "" && document.form.dslx_dns2.value == "") {
+	if(document.form.dsl_dnsenable[1].checked == true && document.form.dsl_proto.value != "mer" && document.form.dsl_dns1.value == "" && document.form.dsl_dns2.value == "") {
 		alert("<#dns_server_no_set#>");
 		return;
 	}
@@ -529,23 +664,23 @@ function applyRule(){
 	if(validForm()){
 		showLoading();
 
-		inputCtrl(document.form.dslx_DHCPClient[0], 1);
-		inputCtrl(document.form.dslx_DHCPClient[1], 1);
-		if(!document.form.dslx_DHCPClient[0].checked){
-			inputCtrl(document.form.dslx_ipaddr, 1);
-			inputCtrl(document.form.dslx_netmask, 1);
-			inputCtrl(document.form.dslx_gateway, 1);
+		inputCtrl(document.form.dsl_DHCPClient[0], 1);
+		inputCtrl(document.form.dsl_DHCPClient[1], 1);
+		if(!document.form.dsl_DHCPClient[0].checked){
+			inputCtrl(document.form.dsl_ipaddr, 1);
+			inputCtrl(document.form.dsl_netmask, 1);
+			inputCtrl(document.form.dsl_gateway, 1);
 		}
 
-		inputCtrl(document.form.dslx_dnsenable[0], 1);
-		inputCtrl(document.form.dslx_dnsenable[1], 1);
-		if(!document.form.dslx_dnsenable[0].checked){
-			inputCtrl(document.form.dslx_dns1, 1);
-			inputCtrl(document.form.dslx_dns1, 1);
+		inputCtrl(document.form.dsl_dnsenable[0], 1);
+		inputCtrl(document.form.dsl_dnsenable[1], 1);
+		if(!document.form.dsl_dnsenable[0].checked){
+			inputCtrl(document.form.dsl_dns1, 1);
+			inputCtrl(document.form.dsl_dns1, 1);
 		}
 
 		if (document.form.dsl_unit.value=='0' && document.form.dsl_enable.value=='1') {
-			document.form.wan_enable.value = document.form.dslx_link_enable.value;
+			document.form.wan_enable.value = document.form.dsl_link_enable.value;
 			document.form.wan_unit.value = '0';
 			document.form.wan_enable.disabled = false;
 			document.form.wan_unit.disabled = false;
@@ -557,14 +692,18 @@ function applyRule(){
 		inputCtrl(document.form.dsl_pcr, 1);
 		inputCtrl(document.form.dsl_scr, 1);
 		inputCtrl(document.form.dsl_mbs, 1);
-
-		if (document.form.dsl_proto.value == "bridge") {
+/*
+		if (document.form.dsl_unit.value != 0 && document.form.add_pvc_flag.value == "1" && 
+			(productid == "DSL-AC68U" || productid == "DSL-AC68R")	//Add PVC #1~#7 need "reboot" for DSL-AC68U
+		){
 			document.form.action_script.value = "reboot";		
 			document.form.action_wait.value = "<% get_default_reboot_time(); %>";				
 		}
-
+*/
+                document.form.dsl_enable.value = '1';
 		if(document.form.dslx_transmode.value != document.form.dsltmp_transmode.value) {
-			document.form.action_script.value = "restart_dsl_setting;".concat(document.form.action_script.value);
+			if (based_modelid == "DSL-AC68U")
+				document.form.action_script.value = "restart_dsl_setting;".concat(document.form.action_script.value);
 			document.form.dslx_transmode.value = document.form.dsltmp_transmode.value;
 		}
 		
@@ -615,11 +754,11 @@ function valid_IP(obj_name, obj_flag){
 }
 
 function validForm(){
-	if(!document.form.dslx_DHCPClient[0].checked){// Set IP address by userself
-		if(!valid_IP(document.form.dslx_ipaddr, "")) return false;  //WAN IP
-		if(!valid_IP(document.form.dslx_gateway, "GW"))return false;  //Gateway IP
+	if(!document.form.dsl_DHCPClient[0].checked){// Set IP address by userself
+		if(!valid_IP(document.form.dsl_ipaddr, "")) return false;  //WAN IP
+		if(!valid_IP(document.form.dsl_gateway, "GW"))return false;  //Gateway IP
 
-		if(document.form.dslx_gateway.value == document.form.dslx_ipaddr.value){
+		if(document.form.dsl_gateway.value == document.form.dsl_ipaddr.value){
 			alert("<#IPConnection_warning_WANIPEQUALGatewayIP#>");
 			return false;
 		}
@@ -627,7 +766,7 @@ function validForm(){
 		// test if netmask is valid.
 		var default_netmask = "";
 		var wrong_netmask = 0;
-		var netmask_obj = document.form.dslx_netmask;
+		var netmask_obj = document.form.dsl_netmask;
 		var netmask_num = inet_network(netmask_obj.value);
 
 		if(netmask_num==0){
@@ -656,62 +795,79 @@ function validForm(){
 		}
 	}
 
-	if(!document.form.dslx_dnsenable[0].checked){
-		if(!valid_IP(document.form.dslx_dns1, "DNS")) return false;  //DNS1
-		if(!valid_IP(document.form.dslx_dns2, "DNS")) return false;  //DNS2
+	if(!document.form.dsl_dnsenable[0].checked){
+		if(!valid_IP(document.form.dsl_dns1, "DNS")) return false;  //DNS1
+		if(!valid_IP(document.form.dsl_dns2, "DNS")) return false;  //DNS2
 	}
 
 	if(document.form.dsl_proto.value == "pppoe"
 			|| document.form.dsl_proto.value == "pppoa"
 			){
 				
-		if(document.form.dslx_pppoe_username.value.length <= 0){
+		if(document.form.dsl_pppoe_username.value.length <= 0){
 			alert("<#WANJS9Text#>");
-			document.form.dslx_pppoe_username.focus();
+			document.form.dsl_pppoe_username.focus();
 			return false;
 		}
-		if(!validator.string(document.form.dslx_pppoe_username)){
-			document.form.dslx_pppoe_username.focus();
+		if(!validator.string(document.form.dsl_pppoe_username)){
+			document.form.dsl_pppoe_username.focus();
 			return false;
 		}
-		if(document.form.dslx_pppoe_passwd.value.length <= 0){
+		if(document.form.dsl_pppoe_passwd.value.length <= 0){
 			alert("<#WANJS9Text#>");
-			document.form.dslx_pppoe_passwd.focus();
+			document.form.dsl_pppoe_passwd.focus();
 			return false;
 		}
-		if(!validator.string(document.form.dslx_pppoe_passwd)){
-			document.form.dslx_pppoe_passwd.focus();
+		if(!validator.string(document.form.dsl_pppoe_passwd)){
+			document.form.dsl_pppoe_passwd.focus();
 			return false;
 		}				
 
-		if(!validator.numberRange(document.form.dslx_pppoe_idletime, 0, 4294967295))
+		if(!validator.numberRange(document.form.dsl_pppoe_idletime, 0, 4294967295))
 			return false;
 	}
 
 	if(document.form.dsl_proto.value == "pppoe"){
-		if(!validator.numberRange(document.form.dslx_pppoe_mtu, 128, 1492))
+		if(!validator.numberRange(document.form.dsl_pppoe_mtu, 128, 1492)
+			|| !validator.numberRange(document.form.dsl_pppoe_mru, 128, 1492))
 			return false;
-//				|| !validator.numberRange(document.form.dslx_pppoe_mru, 576, 1492))
 
-		if(!validator.string(document.form.dslx_pppoe_service)
-				|| !validator.string(document.form.dslx_pppoe_ac))
+		if(document.form.dsl_mtu.value != "") {
+			if(document.form.dsl_pppoe_mtu.value + 8 > document.form.dsl_mtu.value) {
+				document.form.dsl_pppoe_mtu.value = document.form.dsl_mtu.value - 8;
+			}
+			if(document.form.dsl_pppoe_mru.value + 8 > document.form.dsl_mtu.value) {
+				document.form.dsl_pppoe_mru.value = document.form.dsl_mtu.value - 8;
+			}
+		}
+
+		if(!validator.string(document.form.dsl_pppoe_service)
+				|| !validator.string(document.form.dsl_pppoe_ac))
 			return false;
 
 		//pppoe hostuniq
-		if(!validator.hex(document.form.dslx_pppoe_hostuniq)) {
+		if(!validator.hex(document.form.dsl_pppoe_hostuniq)) {
 			alert("Host-uniq should be hexadecimal digits.");
-			document.form.dslx_pppoe_hostuniq.focus();
-			document.form.dslx_pppoe_hostuniq.select();
+			document.form.dsl_pppoe_hostuniq.focus();
+			document.form.dsl_pppoe_hostuniq.select();
 			return false;
 		}
 	}
 	
-	if(document.form.dslx_hwaddr.value.length > 0)
-		if(!check_macaddr(document.form.dslx_hwaddr, check_hwaddr_flag(document.form.dslx_hwaddr))){
-				document.form.dslx_hwaddr.select();
-				document.form.dslx_hwaddr.focus();
+	if(document.form.dsl_hwaddr.value.length > 0)
+		if(!check_macaddr(document.form.dsl_hwaddr, check_hwaddr_flag(document.form.dsl_hwaddr))){
+				document.form.dsl_hwaddr.select();
+				document.form.dsl_hwaddr.focus();
 				return false;
 		}
+
+	if(orig_mtu != "" || document.form.dsl_mtu.value.length > 0) {
+		if(!validator.numberRange(document.form.dsl_mtu, 1280, 1500)) {
+			document.form.dsl_mtu.focus();
+			document.form.dsl_mtu.select();
+			return false;
+		}
+	}
 
 	return true;
 }
@@ -735,6 +891,7 @@ function disable_all_ctrl() {
 	document.getElementById("PPPsetting").style.display = "none";
 	document.getElementById("DNSsetting").style.display = "none";
 	document.getElementById("IPsetting").style.display = "none";
+	document.getElementById("DHCP_option").style.display = "none";
 	document.getElementById("t2BC").style.display = "none";
 	document.getElementById("vpn_server").style.display = "none";
 	document.getElementById("btn_apply").style.display = "none";
@@ -748,10 +905,11 @@ function enable_all_ctrl() {
 	document.getElementById("PPPsetting").style.display = "";
 	document.getElementById("DNSsetting").style.display = "";
 	document.getElementById("IPsetting").style.display = "";
+	document.getElementById("DHCP_option").style.display = "";
 	document.getElementById("t2BC").style.display = "";
 	document.getElementById("vpn_server").style.display = "";
 	document.getElementById("btn_apply").style.display = "";
-	if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {	//MODELDEP: DSL-AC68U,DSL-AC68R
+	if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {	//MODELDEP: DSL-AX82U,DSL-AC68U,DSL-AC68R
 		document.getElementById("dot1q_setting").style.display = "";
 	}
 }
@@ -761,86 +919,103 @@ function change_dsl_type(dsl_type){
 	change_dsl_dns_enable(dsl_type);
 
 	if(dsl_type == "pppoe" || dsl_type == "pppoa"){
-		inputCtrl(document.form.dslx_dnsenable[0], 1);
-		inputCtrl(document.form.dslx_dnsenable[1], 1);
+		//inputCtrl(document.form.dsl_dnsenable[0], 1);
+		//inputCtrl(document.form.dsl_dnsenable[1], 1);
+		showhide("DHCP_option",0);
+		inputCtrl(document.form.dsl_dhcp_vendorid, 0);
+		inputCtrl(document.form.dsl_dhcp_clientid, 0);
+		document.form.dsl_dhcp_clientid_type.disabled = true;
 
-		inputCtrl(document.form.dslx_pppoe_username, 1);
-		inputCtrl(document.form.dslx_pppoe_passwd, 1);
-		inputCtrl(document.form.dslx_pppoe_auth, 1);
-		inputCtrl(document.form.dslx_pppoe_idletime, 1);
-		inputCtrl(document.form.dslx_pppoe_mtu, 1);
-//		inputCtrl(document.form.dslx_pppoe_mru, 1);
-		inputCtrl(document.form.dslx_pppoe_service, 1);
-		inputCtrl(document.form.dslx_pppoe_ac, 1);
+		inputCtrl(document.form.dsl_pppoe_username, 1);
+		inputCtrl(document.form.dsl_pppoe_passwd, 1);
+		inputCtrl(document.form.dsl_pppoe_auth, 1);
+		inputCtrl(document.form.dsl_pppoe_idletime, 1);
+		inputCtrl(document.form.dsl_pppoe_mtu, 1);
+		inputCtrl(document.form.dsl_pppoe_mru, 1);
+		inputCtrl(document.form.dsl_pppoe_service, 1);
+		inputCtrl(document.form.dsl_pppoe_ac, 1);
 
 		// 2008.03 James. patch for Oleg's patch. {
-		inputCtrl(document.form.dslx_pppoe_options, 1);
+		inputCtrl(document.form.dsl_pppoe_options, 1);
 		// 2008.03 James. patch for Oleg's patch. }
 		showhide("PPPsetting",1);
 		inputCtrl(document.form.wan_ppp_echo, 1);
 		ppp_echo_control();
-		inputCtrl(document.form.dhcpc_mode, 0);
+		inputCtrl(document.form.dsl_dhcp_qry, 0);
 	}
 	else if(dsl_type == "ipoa"){
-		inputCtrl(document.form.dslx_dnsenable[0], 0);
-		inputCtrl(document.form.dslx_dnsenable[1], 0);
+		//inputCtrl(document.form.dsl_dnsenable[0], 0);
+		//inputCtrl(document.form.dsl_dnsenable[1], 0);
+		showhide("DHCP_option",0);
+		inputCtrl(document.form.dsl_dhcp_vendorid, 0);
+		inputCtrl(document.form.dsl_dhcp_clientid, 0);
+		document.form.dsl_dhcp_clientid_type.disabled = true;
 
-		inputCtrl(document.form.dslx_pppoe_username, 0);
-		inputCtrl(document.form.dslx_pppoe_passwd, 0);
-		inputCtrl(document.form.dslx_pppoe_auth, 0);
-		inputCtrl(document.form.dslx_pppoe_idletime, 0);
-		inputCtrl(document.form.dslx_pppoe_mtu, 0);
-//		inputCtrl(document.form.dslx_pppoe_mru, 0);
-		inputCtrl(document.form.dslx_pppoe_service, 0);
-		inputCtrl(document.form.dslx_pppoe_ac, 0);
+		inputCtrl(document.form.dsl_pppoe_username, 0);
+		inputCtrl(document.form.dsl_pppoe_passwd, 0);
+		inputCtrl(document.form.dsl_pppoe_auth, 0);
+		inputCtrl(document.form.dsl_pppoe_idletime, 0);
+		inputCtrl(document.form.dsl_pppoe_mtu, 0);
+		inputCtrl(document.form.dsl_pppoe_mru, 0);
+		inputCtrl(document.form.dsl_pppoe_service, 0);
+		inputCtrl(document.form.dsl_pppoe_ac, 0);
 		// 2008.03 James. patch for Oleg's patch. {
-		inputCtrl(document.form.dslx_pppoe_options, 0);
+		inputCtrl(document.form.dsl_pppoe_options, 0);
 		// 2008.03 James. patch for Oleg's patch. }
 		showhide("PPPsetting",0);
 		inputCtrl(document.form.wan_ppp_echo, 0);
 		ppp_echo_control(0);
-		inputCtrl(document.form.dhcpc_mode, 0);
+		inputCtrl(document.form.dsl_dhcp_qry, 0);
 	}
 	else if(dsl_type == "mer"){
-		inputCtrl(document.form.dslx_dnsenable[0], 1);
-		inputCtrl(document.form.dslx_dnsenable[1], 1);
+		//inputCtrl(document.form.dsl_dnsenable[0], 1);
+		//inputCtrl(document.form.dsl_dnsenable[1], 1);
+		showhide("DHCP_option",1);
+		inputCtrl(document.form.dsl_dhcp_vendorid, 1);
+		inputCtrl(document.form.dsl_dhcp_clientid, 1);
+		document.form.dsl_dhcp_clientid_type.disabled = false;
+		showDiableDHCPclientID(document.form.tmp_dhcp_clientid_type);
 
-		inputCtrl(document.form.dslx_pppoe_username, 0);
-		inputCtrl(document.form.dslx_pppoe_passwd, 0);
-		inputCtrl(document.form.dslx_pppoe_auth, 0);
-		inputCtrl(document.form.dslx_pppoe_idletime, 0);
-		inputCtrl(document.form.dslx_pppoe_mtu, 0);
-//		inputCtrl(document.form.dslx_pppoe_mru, 0);
-		inputCtrl(document.form.dslx_pppoe_service, 0);
-		inputCtrl(document.form.dslx_pppoe_ac, 0);
+		inputCtrl(document.form.dsl_pppoe_username, 0);
+		inputCtrl(document.form.dsl_pppoe_passwd, 0);
+		inputCtrl(document.form.dsl_pppoe_auth, 0);
+		inputCtrl(document.form.dsl_pppoe_idletime, 0);
+		inputCtrl(document.form.dsl_pppoe_mtu, 0);
+		inputCtrl(document.form.dsl_pppoe_mru, 0);
+		inputCtrl(document.form.dsl_pppoe_service, 0);
+		inputCtrl(document.form.dsl_pppoe_ac, 0);
 
 		// 2008.03 James. patch for Oleg's patch. {
-		inputCtrl(document.form.dslx_pppoe_options, 0);
+		inputCtrl(document.form.dsl_pppoe_options, 0);
 		// 2008.03 James. patch for Oleg's patch. }
 		showhide("PPPsetting",0);
 		inputCtrl(document.form.wan_ppp_echo, 0);
 		ppp_echo_control(0);
-		inputCtrl(document.form.dhcpc_mode, 1);
+		inputCtrl(document.form.dsl_dhcp_qry, 1);
 	}
 	else if(dsl_type == "bridge") {
-		inputCtrl(document.form.dslx_dnsenable[0], 0);
-		inputCtrl(document.form.dslx_dnsenable[1], 0);
-		inputCtrl(document.form.dslx_pppoe_username, 0);
-		inputCtrl(document.form.dslx_pppoe_passwd, 0);
-		inputCtrl(document.form.dslx_pppoe_auth, 0);
-		inputCtrl(document.form.dslx_pppoe_idletime, 0);
-		inputCtrl(document.form.dslx_pppoe_mtu, 0);
-//		inputCtrl(document.form.dslx_pppoe_mru, 0);
-		inputCtrl(document.form.dslx_pppoe_service, 0);
-		inputCtrl(document.form.dslx_pppoe_ac, 0);
+		//inputCtrl(document.form.dsl_dnsenable[0], 0);
+		//inputCtrl(document.form.dsl_dnsenable[1], 0);
+		showhide("DHCP_option",0);
+		inputCtrl(document.form.dsl_dhcp_vendorid, 0);
+		inputCtrl(document.form.dsl_dhcp_clientid, 0);
+		document.form.dsl_dhcp_clientid_type.disabled = true;
+		inputCtrl(document.form.dsl_pppoe_username, 0);
+		inputCtrl(document.form.dsl_pppoe_passwd, 0);
+		inputCtrl(document.form.dsl_pppoe_auth, 0);
+		inputCtrl(document.form.dsl_pppoe_idletime, 0);
+		inputCtrl(document.form.dsl_pppoe_mtu, 0);
+		inputCtrl(document.form.dsl_pppoe_mru, 0);
+		inputCtrl(document.form.dsl_pppoe_service, 0);
+		inputCtrl(document.form.dsl_pppoe_ac, 0);
 
 		// 2008.03 James. patch for Oleg's patch. {
-		inputCtrl(document.form.dslx_pppoe_options, 0);
+		inputCtrl(document.form.dsl_pppoe_options, 0);
 		// 2008.03 James. patch for Oleg's patch. }
 		showhide("PPPsetting",0);
 		inputCtrl(document.form.wan_ppp_echo, 0);
 		ppp_echo_control(0);
-		inputCtrl(document.form.dhcpc_mode, 0);
+		inputCtrl(document.form.dsl_dhcp_qry, 0);
 	}
 	else {
 		alert("error");
@@ -849,33 +1024,33 @@ function change_dsl_type(dsl_type){
 
 
 function fixed_change_dsl_type(dsl_type){
-	if(!document.form.dslx_DHCPClient[0].checked){
-		if(document.form.dslx_ipaddr.value.length == 0)
-			document.form.dslx_ipaddr.focus();
-		else if(document.form.dslx_netmask.value.length == 0)
-			document.form.dslx_netmask.focus();
-		else if(document.form.dslx_gateway.value.length == 0)
-			document.form.dslx_gateway.focus();
+	if(!document.form.dsl_DHCPClient[0].checked){
+		if(document.form.dsl_ipaddr.value.length == 0)
+			document.form.dsl_ipaddr.focus();
+		else if(document.form.dsl_netmask.value.length == 0)
+			document.form.dsl_netmask.focus();
+		else if(document.form.dsl_gateway.value.length == 0)
+			document.form.dsl_gateway.focus();
 	}
 
 	if(dsl_type == "pppoe" || dsl_type == "pppoa"){
-		document.form.dslx_dnsenable[0].checked = original_dnsenable;
-		document.form.dslx_dnsenable[1].checked = !original_dnsenable;
-		change_common_radio(document.form.dslx_dnsenable, 'IPConnection', 'dslx_dnsenable', 0);
-		inputCtrl(document.form.dslx_dns1, !original_dnsenable);
-		inputCtrl(document.form.dslx_dns2, !original_dnsenable);
-		inputCtrl(document.form.dslx_hwaddr, 1);
-		inputCtrl(document.form.dslx_link_enable[0], 1);
-		inputCtrl(document.form.dslx_link_enable[1], 1);
-		inputCtrl(document.form.dslx_nat[0], 1);
-		inputCtrl(document.form.dslx_nat[1], 1);
-		inputCtrl(document.form.dslx_upnp_enable[0], 1);
-		inputCtrl(document.form.dslx_upnp_enable[1], 1);
+		document.form.dsl_dnsenable[0].checked = original_dnsenable;
+		document.form.dsl_dnsenable[1].checked = !original_dnsenable;
+		change_common_radio(document.form.dsl_dnsenable, 'IPConnection', 'dsl_dnsenable', 0);
+		inputCtrl(document.form.dsl_dns1, !original_dnsenable);
+		inputCtrl(document.form.dsl_dns2, !original_dnsenable);
+		inputCtrl(document.form.dsl_hwaddr, 1);
+		inputCtrl(document.form.dsl_link_enable[0], 1);
+		inputCtrl(document.form.dsl_link_enable[1], 1);
+		inputCtrl(document.form.dsl_nat[0], 1);
+		inputCtrl(document.form.dsl_nat[1], 1);
+		inputCtrl(document.form.dsl_upnp_enable[0], 1);
+		inputCtrl(document.form.dsl_upnp_enable[1], 1);
 		showhide("t2BC",1);
 		showhide("IPsetting",1);
 		showhide("DNSsetting",1);
 		showhide("vpn_server",1);
-		if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {	//MODELDEP: DSL-AC68U,DSL-AC68R
+		if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {	//MODELDEP: DSL-AX82U,DSL-AC68U,DSL-AC68R
 			if(dsl_type == "pppoe")
 				showhide("dot1q_setting",1);
 			else
@@ -885,61 +1060,61 @@ function fixed_change_dsl_type(dsl_type){
 		ppp_echo_control();
 	}
 	else if(dsl_type == "ipoa"){
-		document.form.dslx_dnsenable[0].checked = false;
-		document.form.dslx_dnsenable[1].checked = true;
-		change_common_radio(document.form.dslx_dnsenable, 'IPConnection', 'dslx_dnsenable', 0);
-		inputCtrl(document.form.dslx_hwaddr, 1);
-		inputCtrl(document.form.dslx_link_enable[0], 1);
-		inputCtrl(document.form.dslx_link_enable[1], 1);
-		inputCtrl(document.form.dslx_nat[0], 1);
-		inputCtrl(document.form.dslx_nat[1], 1);
-		inputCtrl(document.form.dslx_upnp_enable[0], 1);
-		inputCtrl(document.form.dslx_upnp_enable[1], 1);
+		document.form.dsl_dnsenable[0].checked = false;
+		document.form.dsl_dnsenable[1].checked = true;
+		change_common_radio(document.form.dsl_dnsenable, 'IPConnection', 'dsl_dnsenable', 0);
+		inputCtrl(document.form.dsl_hwaddr, 1);
+		inputCtrl(document.form.dsl_link_enable[0], 1);
+		inputCtrl(document.form.dsl_link_enable[1], 1);
+		inputCtrl(document.form.dsl_nat[0], 1);
+		inputCtrl(document.form.dsl_nat[1], 1);
+		inputCtrl(document.form.dsl_upnp_enable[0], 1);
+		inputCtrl(document.form.dsl_upnp_enable[1], 1);
 		showhide("t2BC",1);
 		showhide("IPsetting",1);
 		showhide("DNSsetting",1);
 		showhide("vpn_server",1);
-		if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {      //MODELDEP: DSL-AC68U,DSL-AC68R
+		if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {      //MODELDEP: DSL-AX82U,DSL-AC68U,DSL-AC68R
 			showhide("dot1q_setting",0);
 		}
 	}
 	else if(dsl_type == "mer"){
-		inputCtrl(document.form.dslx_DHCPClient[0], 1);
-		inputCtrl(document.form.dslx_DHCPClient[1], 1);
-		inputCtrl(document.form.dslx_hwaddr, 1);
-		inputCtrl(document.form.dslx_link_enable[0], 1);
-		inputCtrl(document.form.dslx_link_enable[1], 1);
-		inputCtrl(document.form.dslx_nat[0], 1);
-		inputCtrl(document.form.dslx_nat[1], 1);
-		inputCtrl(document.form.dslx_upnp_enable[0], 1);
-		inputCtrl(document.form.dslx_upnp_enable[1], 1);
+		inputCtrl(document.form.dsl_DHCPClient[0], 1);
+		inputCtrl(document.form.dsl_DHCPClient[1], 1);
+		inputCtrl(document.form.dsl_hwaddr, 1);
+		inputCtrl(document.form.dsl_link_enable[0], 1);
+		inputCtrl(document.form.dsl_link_enable[1], 1);
+		inputCtrl(document.form.dsl_nat[0], 1);
+		inputCtrl(document.form.dsl_nat[1], 1);
+		inputCtrl(document.form.dsl_upnp_enable[0], 1);
+		inputCtrl(document.form.dsl_upnp_enable[1], 1);
 		showhide("t2BC",1);
 		showhide("IPsetting",0);
 		showhide("DNSsetting",1);
 		showhide("vpn_server",1);
-		if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {      //MODELDEP: DSL-AC68U,DSL-AC68R
+		if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {      //MODELDEP: DSL-AX82U,DSL-AC68U,DSL-AC68R
 			showhide("dot1q_setting",1);
 		}
 	}
 	else if(dsl_type == "bridge"){
-		document.form.dslx_dnsenable[0].checked = true;
-		document.form.dslx_dnsenable[1].checked = false;
-		change_common_radio(document.form.dslx_dnsenable, 'IPConnection', 'dslx_dnsenable', 0);
+		document.form.dsl_dnsenable[0].checked = true;
+		document.form.dsl_dnsenable[1].checked = false;
+		change_common_radio(document.form.dsl_dnsenable, 'IPConnection', 'dsl_dnsenable', 0);
 
-		inputCtrl(document.form.dslx_dns1, 0);
-		inputCtrl(document.form.dslx_dns2, 0);
-		inputCtrl(document.form.dslx_hwaddr, 0);
-		inputCtrl(document.form.dslx_link_enable[0], 0);
-		inputCtrl(document.form.dslx_link_enable[1], 0);
-		inputCtrl(document.form.dslx_nat[0], 0);
-		inputCtrl(document.form.dslx_nat[1], 0);
-		inputCtrl(document.form.dslx_upnp_enable[0], 0);
-		inputCtrl(document.form.dslx_upnp_enable[1], 0);
+		inputCtrl(document.form.dsl_dns1, 0);
+		inputCtrl(document.form.dsl_dns2, 0);
+		inputCtrl(document.form.dsl_hwaddr, 0);
+		inputCtrl(document.form.dsl_link_enable[0], 0);
+		inputCtrl(document.form.dsl_link_enable[1], 0);
+		inputCtrl(document.form.dsl_nat[0], 0);
+		inputCtrl(document.form.dsl_nat[1], 0);
+		inputCtrl(document.form.dsl_upnp_enable[0], 0);
+		inputCtrl(document.form.dsl_upnp_enable[1], 0);
 		showhide("t2BC",0);
 		showhide("IPsetting",0);
 		showhide("DNSsetting",0);
 		showhide("vpn_server",0);
-		if(productid == "DSL-AC68U" || productid == "DSL-AC68R") {      //MODELDEP: DSL-AC68U,DSL-AC68R
+		if(based_modelid == "DSL-AX82U" || based_modelid == "DSL-AC68U") {      //MODELDEP: DSL-AX82U,DSL-AC68U,DSL-AC68R
 			showhide("dot1q_setting",1);
 		}
 	}
@@ -952,36 +1127,47 @@ function change_dsl_dns_enable(type){
 	var dsl_type = (type == undefined)?document.form.dsl_proto.value:type;
 
 	if(dsl_type == "pppoe" || dsl_type == "pppoa" || dsl_type == "mer"){
-		inputCtrl(document.form.dslx_dnsenable[0], 1);
-		inputCtrl(document.form.dslx_dnsenable[1], 1);
+		inputCtrl(document.form.dsl_dnsenable[0], 1);
+		inputCtrl(document.form.dsl_dnsenable[1], 1);
 
 		if(type != undefined){
-			var wan_dnsenable = ("<% nvram_get("dslx_dnsenable"); %>" == 0)?false:true;
-			document.form.dslx_dnsenable[0].checked = wan_dnsenable;
-			document.form.dslx_dnsenable[1].checked = !wan_dnsenable;
-			inputCtrl(document.form.dslx_dns1, !wan_dnsenable);
-			inputCtrl(document.form.dslx_dns2, !wan_dnsenable);
+			var wan_dnsenable = ("<% nvram_get("dsl_dnsenable"); %>" == 0)?false:true;
+			inputCtrl(document.form.dsl_dns1, !wan_dnsenable);
+			inputCtrl(document.form.dsl_dns2, !wan_dnsenable);
 		}
 		else{
-			var wan_dnsenable = document.form.dslx_dnsenable[0].checked;
-			inputCtrl(document.form.dslx_dns1, !wan_dnsenable);
-			inputCtrl(document.form.dslx_dns2, !wan_dnsenable);
+			var wan_dnsenable = document.form.dsl_dnsenable[0].checked;
+			inputCtrl(document.form.dsl_dns1, !wan_dnsenable);
+			inputCtrl(document.form.dsl_dns2, !wan_dnsenable);
 		}
 	}
 	else if(dsl_type == "ipoa"){
 	// value fix
-		inputCtrl(document.form.dslx_dnsenable[0], 0);
-		inputCtrl(document.form.dslx_dnsenable[1], 0);
+		inputCtrl(document.form.dsl_dnsenable[0], 0);
+		inputCtrl(document.form.dsl_dnsenable[1], 0);
 
-		inputCtrl(document.form.dslx_dns1, 1);
-		inputCtrl(document.form.dslx_dns2, 1);
+		inputCtrl(document.form.dsl_dns1, 1);
+		inputCtrl(document.form.dsl_dns2, 1);
 	}
 	else{	// dsl_type == bridge
-		inputCtrl(document.form.dslx_dnsenable[0], 0);
-		inputCtrl(document.form.dslx_dnsenable[1], 0);
+		inputCtrl(document.form.dsl_dnsenable[0], 0);
+		inputCtrl(document.form.dsl_dnsenable[1], 0);
 
-		inputCtrl(document.form.dslx_dns1, 0);
-		inputCtrl(document.form.dslx_dns2, 0);
+		inputCtrl(document.form.dsl_dns1, 0);
+		inputCtrl(document.form.dsl_dns2, 0);
+	}
+
+	if(document.form.dsl_DHCPClient[0].checked){
+		inputCtrl(document.form.dsl_dnsenable[0], 1);
+		inputCtrl(document.form.dsl_dnsenable[1], 1);
+	}
+	else{		// dhcp NO
+		document.form.dsl_dnsenable[0].checked = 0;
+		document.form.dsl_dnsenable[1].checked = 1;
+		change_common_radio(document.form.dsl_dnsenable, 'IPConnection', 'dsl_dnsenable', 0);
+
+		inputCtrl(document.form.dsl_dnsenable[0], 0);
+		inputCtrl(document.form.dsl_dnsenable[1], 0);
 	}
 
 }
@@ -990,60 +1176,60 @@ function change_dsl_dhcp_enable(type){
 	var dsl_type = (type == undefined)?document.form.dsl_proto.value:type;
 
 	if(dsl_type == "pppoe" || dsl_type == "pppoa" || dsl_type == "mer"){
-		inputCtrl(document.form.dslx_DHCPClient[0], 1);
-		inputCtrl(document.form.dslx_DHCPClient[1], 1);
+		inputCtrl(document.form.dsl_DHCPClient[0], 1);
+		inputCtrl(document.form.dsl_DHCPClient[1], 1);
 
 		if(type != undefined){
-			var wan_dhcpenable = ("<% nvram_get("dslx_DHCPClient"); %>" == 0)?false:true;
-			document.form.dslx_DHCPClient[0].checked = wan_dhcpenable;
-			document.form.dslx_DHCPClient[1].checked = !wan_dhcpenable;
-			inputCtrl(document.form.dslx_ipaddr, !wan_dhcpenable);
-			inputCtrl(document.form.dslx_netmask, !wan_dhcpenable);
-			inputCtrl(document.form.dslx_gateway, !wan_dhcpenable);
+			var wan_dhcpenable = ("<% nvram_get("dsl_DHCPClient"); %>" == 0)?false:true;
+			document.form.dsl_DHCPClient[0].checked = wan_dhcpenable;
+			document.form.dsl_DHCPClient[1].checked = !wan_dhcpenable;
+			inputCtrl(document.form.dsl_ipaddr, !wan_dhcpenable);
+			inputCtrl(document.form.dsl_netmask, !wan_dhcpenable);
+			inputCtrl(document.form.dsl_gateway, !wan_dhcpenable);
 		}
 		else{
-			var wan_dhcpenable = document.form.dslx_DHCPClient[0].checked;
-			inputCtrl(document.form.dslx_ipaddr, !wan_dhcpenable);
-			inputCtrl(document.form.dslx_netmask, !wan_dhcpenable);
-			inputCtrl(document.form.dslx_gateway, !wan_dhcpenable);
+			var wan_dhcpenable = document.form.dsl_DHCPClient[0].checked;
+			inputCtrl(document.form.dsl_ipaddr, !wan_dhcpenable);
+			inputCtrl(document.form.dsl_netmask, !wan_dhcpenable);
+			inputCtrl(document.form.dsl_gateway, !wan_dhcpenable);
 		}
 		
-		if(document.form.dslx_DHCPClient[1].checked)
+		if(document.form.dsl_DHCPClient[1].checked)
 		{
-			inputCtrl(document.form.dslx_dns1, 1);
-			inputCtrl(document.form.dslx_dns2, 1);
+			inputCtrl(document.form.dsl_dns1, 1);
+			inputCtrl(document.form.dsl_dns2, 1);
 		}
 	}
 	else if(dsl_type == "ipoa"){
-		document.form.dslx_DHCPClient[0].checked = 0;
-		document.form.dslx_DHCPClient[1].checked = 1;
-		inputCtrl(document.form.dslx_DHCPClient[0], 0);
-		inputCtrl(document.form.dslx_DHCPClient[1], 0);
-		inputCtrl(document.form.dslx_ipaddr, 1);
-		inputCtrl(document.form.dslx_netmask, 1);
-		inputCtrl(document.form.dslx_gateway, 1);
+		document.form.dsl_DHCPClient[0].checked = 0;
+		document.form.dsl_DHCPClient[1].checked = 1;
+		inputCtrl(document.form.dsl_DHCPClient[0], 0);
+		inputCtrl(document.form.dsl_DHCPClient[1], 0);
+		inputCtrl(document.form.dsl_ipaddr, 1);
+		inputCtrl(document.form.dsl_netmask, 1);
+		inputCtrl(document.form.dsl_gateway, 1);
 	}
 	else{	// dsl_type == bridge
-		document.form.dslx_DHCPClient[0].checked = 1;
-		document.form.dslx_DHCPClient[1].checked = 0;
-		inputCtrl(document.form.dslx_DHCPClient[0], 0);
-		inputCtrl(document.form.dslx_DHCPClient[1], 0);
-		inputCtrl(document.form.dslx_ipaddr, 0);
-		inputCtrl(document.form.dslx_netmask, 0);
-		inputCtrl(document.form.dslx_gateway, 0);
+		document.form.dsl_DHCPClient[0].checked = 1;
+		document.form.dsl_DHCPClient[1].checked = 0;
+		inputCtrl(document.form.dsl_DHCPClient[0], 0);
+		inputCtrl(document.form.dsl_DHCPClient[1], 0);
+		inputCtrl(document.form.dsl_ipaddr, 0);
+		inputCtrl(document.form.dsl_netmask, 0);
+		inputCtrl(document.form.dsl_gateway, 0);
 	}
 
-	if(document.form.dslx_DHCPClient[0].checked){
-		inputCtrl(document.form.dslx_dnsenable[0], 1);
-		inputCtrl(document.form.dslx_dnsenable[1], 1);
+	if(document.form.dsl_DHCPClient[0].checked){
+		inputCtrl(document.form.dsl_dnsenable[0], 1);
+		inputCtrl(document.form.dsl_dnsenable[1], 1);
 	}
 	else{		// dhcp NO
-		document.form.dslx_dnsenable[0].checked = 0;
-		document.form.dslx_dnsenable[1].checked = 1;
-		change_common_radio(document.form.dslx_dnsenable, 'IPConnection', 'dslx_dnsenable', 0);
+		document.form.dsl_dnsenable[0].checked = 0;
+		document.form.dsl_dnsenable[1].checked = 1;
+		change_common_radio(document.form.dsl_dnsenable, 'IPConnection', 'dsl_dnsenable', 0);
 
-		inputCtrl(document.form.dslx_dnsenable[0], 0);
-		inputCtrl(document.form.dslx_dnsenable[1], 0);
+		inputCtrl(document.form.dsl_dnsenable[0], 0);
+		inputCtrl(document.form.dsl_dnsenable[1], 0);
 	}
 }
 /*
@@ -1115,7 +1301,7 @@ function change_svc_cat_current(_value){
 
 function showMAC(){
 	var tempMAC = "";
-	document.form.dslx_hwaddr.value = login_mac_str();
+	document.form.dsl_hwaddr.value = login_mac_str();
 }
 
 function check_macaddr(obj,flag){ //control hint of input mac address
@@ -1155,12 +1341,51 @@ function ppp_echo_control(flag){
 	inputCtrl(document.form.dns_delay_round, enable);
 }
 
+function pullDNSList(_this) {
+	event.stopPropagation();
+	var idx = $(_this).attr("id").replace("dns_pull_arrow", "");
+	$(".dns_pull_arrow:not(#dns_pull_arrow" + idx + ")").attr("src","/images/arrow-down.gif");
+	$(".dns_server_list_dropdown:not(#dns_server_list" + idx + ")").hide();
+	var $element = $("#dns_server_list" + idx + "");
+	var isMenuopen = $element[0].offsetWidth > 0 || $element[0].offsetHeight > 0;
+	if(isMenuopen == 0) {
+		$(_this).attr("src","/images/arrow-top.gif");
+		$element.show();
+	}
+	else {
+		$(_this).attr("src","/images/arrow-down.gif");
+		$element.hide();
+	}
+}
+
+function showDiableDHCPclientID(clientid_enable){
+	if(clientid_enable.checked) {
+		document.form.dsl_dhcp_clientid_type.value = "1";
+		document.form.dsl_dhcp_clientid.value = "";
+		document.form.dsl_dhcp_clientid.style.display = "none";
+	}
+	else {
+		document.form.dsl_dhcp_clientid_type.value = "0";
+		document.form.dsl_dhcp_clientid.style.display = "";
+	}
+}
+
 </script>
 </head>
 
 <body onload="initial();" onunLoad="return unload_body();">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
+<div id="hiddenMask" class="popup_bg">
+	<table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center" style="height:100px;">
+		<tr>
+		<td>
+			<div class="drword" id="drword" style=""></div>
+		</td>
+		</tr>
+	</table>
+<!--[if lte IE 6.5]><iframe class="hackiframe"></iframe><![endif]-->
+</div>
 <iframe name="hidden_frame" id="hidden_frame" src="" width="0" height="0" frameborder="0"></iframe>
 <form method="post" name="form" id="ruleForm" action="/start_apply.htm" target="hidden_frame">
 <input type="hidden" name="productid" value="<% nvram_get("productid"); %>">
@@ -1169,7 +1394,7 @@ function ppp_echo_control(flag){
 <input type="hidden" name="group_id" value="">
 <input type="hidden" name="modified" value="0">
 <input type="hidden" name="action_mode" value="apply">
-<input type="hidden" name="action_script" value="restart_dslwan_if 0">
+<input type="hidden" name="action_script" value="restart_dslwan_if">
 <input type="hidden" name="action_wait" value="5">
 <input type="hidden" name="first_time" value="">
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
@@ -1180,7 +1405,8 @@ function ppp_echo_control(flag){
 <input type="hidden" name="dsl_enable" value="" />
 <input type="hidden" name="dslx_transmode" value="<% nvram_get("dslx_transmode"); %>">
 <input type="hidden" name="wan_enable" value="" disabled>
-<!--input type="hidden" name="wan_unit" value="" disabled-->
+<input type="hidden" name="add_pvc_flag" value="0">
+<input type="hidden" name="dsl_dhcp_clientid_type" value="">
 <span id="bridgePPPoE_relay"></span>
 <table class="content" align="center" cellpadding="0" cellspacing="0">
 	<tr>
@@ -1241,7 +1467,7 @@ function ppp_echo_control(flag){
 												<th style="width: 10%;"><center><#Internet#></center></th>
 												<th style="width: 10%;"><center><#menu_dsl_iptv#></center></th>
 												<th style="width: 15%;"><center><#PVC_edit#></center></th>
-												<th style="width: 15%;"><center><#list_add_delete#></center></th>
+												<th style="width: 15%;" id="DSL_WAN_add_del"><center><#list_add_delete#></center></th>
 											</tr>
 									</table>
 
@@ -1282,7 +1508,7 @@ function ppp_echo_control(flag){
 										<tr>
 											<th><#prtcl_JS_encmode#></th>
 											<td align="left">
-												<select id="" class="input_option" name="dsl_encap" onchange="">
+												<select class="input_option" name="dsl_encap" onchange="">
 													<option value="0" <% nvram_match("dsl_encap", "0", "selected"); %>>LLC</option>
 													<option value="1" <% nvram_match("dsl_encap", "1", "selected"); %>>VC-Mux</option>
 												</select>
@@ -1291,7 +1517,7 @@ function ppp_echo_control(flag){
 										<tr>
 											<th><#pvccfg_service#></th>
 											<td align="left">
-												<select id="" class="input_option" name="dsl_svc_cat" onchange="change_svc_cat(this.value);">
+												<select class="input_option" name="dsl_svc_cat" onchange="change_svc_cat(this.value);">
 													<option value="0" <% nvram_match("dsl_svc_cat", "0", "selected"); %>>UBR without PCR</option>
 													<option value="1" <% nvram_match("dsl_svc_cat", "1", "selected"); %>>UBR with PCR</option>
 													<option value="2" <% nvram_match("dsl_svc_cat", "2", "selected"); %>>CBR</option>
@@ -1330,22 +1556,22 @@ function ppp_echo_control(flag){
 										<tr>
 											<th><#Enable_WAN#></th>
 											<td>
-												<input type="radio" name="dslx_link_enable" class="input" value="1" <% nvram_match("dslx_link_enable", "1", "checked"); %>><#checkbox_Yes#>
-												<input type="radio" name="dslx_link_enable" class="input" value="0" <% nvram_match("dslx_link_enable", "0", "checked"); %>><#checkbox_No#>
+												<input type="radio" name="dsl_link_enable" class="input" value="1" <% nvram_match("dsl_link_enable", "1", "checked"); %>><#checkbox_Yes#>
+												<input type="radio" name="dsl_link_enable" class="input" value="0" <% nvram_match("dsl_link_enable", "0", "checked"); %>><#checkbox_No#>
 											</td>
 										</tr>
 										<tr>
 											<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,22);"><#Enable_NAT#></a></th>
 											<td>
-												<input type="radio" name="dslx_nat" class="input" value="1" <% nvram_match("dslx_nat", "1", "checked"); %>><#checkbox_Yes#>
-												<input type="radio" name="dslx_nat" class="input" value="0" <% nvram_match("dslx_nat", "0", "checked"); %>><#checkbox_No#>
+												<input type="radio" name="dsl_nat" class="input" value="1" <% nvram_match("dsl_nat", "1", "checked"); %>><#checkbox_Yes#>
+												<input type="radio" name="dsl_nat" class="input" value="0" <% nvram_match("dsl_nat", "0", "checked"); %>><#checkbox_No#>
 											</td>
 										</tr>
 										<tr>
 											<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,23);"><#BasicConfig_EnableMediaServer_itemname#></a></th>
 											<td>
-												<input type="radio" name="dslx_upnp_enable" class="input" value="1" onclick="return change_common_radio(this, 'LANHostConfig', 'dslx_upnp_enable', '1')" <% nvram_match("dslx_upnp_enable", "1", "checked"); %>><#checkbox_Yes#>
-												<input type="radio" name="dslx_upnp_enable" class="input" value="0" onclick="return change_common_radio(this, 'LANHostConfig', 'dslx_upnp_enable', '0')" <% nvram_match("dslx_upnp_enable", "0", "checked"); %>><#checkbox_No#>
+												<input type="radio" name="dsl_upnp_enable" class="input" value="1" onclick="return change_common_radio(this, 'LANHostConfig', 'dsl_upnp_enable', '1')" <% nvram_match("dsl_upnp_enable", "1", "checked"); %>><#checkbox_Yes#>
+												<input type="radio" name="dsl_upnp_enable" class="input" value="0" onclick="return change_common_radio(this, 'LANHostConfig', 'dsl_upnp_enable', '0')" <% nvram_match("dsl_upnp_enable", "0", "checked"); %>><#checkbox_No#>
 											</td>
 										</tr>
 									</table>
@@ -1387,8 +1613,8 @@ function ppp_echo_control(flag){
 										<tr>
 											<th><#Layer3Forwarding_x_DHCPClient_itemname#></th>
 											<td>
-												<input type="radio" name="dslx_DHCPClient" class="input" value="1" onclick="change_dsl_dhcp_enable();" <% nvram_match("dslx_DHCPClient", "1", "checked"); %>><#checkbox_Yes#>
-												<input type="radio" name="dslx_DHCPClient" class="input" value="0" onclick="change_dsl_dhcp_enable();" <% nvram_match("dslx_DHCPClient", "0", "checked"); %>><#checkbox_No#>
+												<input type="radio" name="dsl_DHCPClient" class="input" value="1" onclick="change_dsl_dhcp_enable();" <% nvram_match("dsl_DHCPClient", "1", "checked"); %>><#checkbox_Yes#>
+												<input type="radio" name="dsl_DHCPClient" class="input" value="0" onclick="change_dsl_dhcp_enable();" <% nvram_match("dsl_DHCPClient", "0", "checked"); %>><#checkbox_No#>
 											</td>
 										</tr>
 
@@ -1397,7 +1623,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,1);"><#IPConnection_ExternalIPAddress_itemname#></a>
 											</th>
 											<td>
-												<input type="text" name="dslx_ipaddr" maxlength="15" class="input_15_table" value="<% nvram_get("dslx_ipaddr"); %>" onKeyPress="return validator.isIPAddr(this,event);" autocorrect="off" autocapitalize="off">
+												<input type="text" name="dsl_ipaddr" maxlength="15" class="input_15_table" value="<% nvram_get("dsl_ipaddr"); %>" onKeyPress="return validator.isIPAddr(this,event);" autocorrect="off" autocapitalize="off">
 											</td>
 										</tr>
 
@@ -1406,7 +1632,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,2);"><#IPConnection_x_ExternalSubnetMask_itemname#></a>
 											</th>
 											<td>
-												<input type="text" name="dslx_netmask" maxlength="15" class="input_15_table" value="<% nvram_get("dslx_netmask"); %>" onKeyPress="return validator.isIPAddr(this,event);" autocorrect="off" autocapitalize="off">
+												<input type="text" name="dsl_netmask" maxlength="15" class="input_15_table" value="<% nvram_get("dsl_netmask"); %>" onKeyPress="return validator.isIPAddr(this,event);" autocorrect="off" autocapitalize="off">
 											</td>
 										</tr>
 
@@ -1415,7 +1641,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,3);"><#IPConnection_x_ExternalGateway_itemname#></a>
 											</th>
 											<td>
-												<input type="text" name="dslx_gateway" maxlength="15" class="input_15_table" value="<% nvram_get("dslx_gateway"); %>" onKeyPress="return validator.isIPAddr(this,event);" autocorrect="off" autocapitalize="off">
+												<input type="text" name="dsl_gateway" maxlength="15" class="input_15_table" value="<% nvram_get("dsl_gateway"); %>" onKeyPress="return validator.isIPAddr(this,event);" autocorrect="off" autocapitalize="off">
 											</td>
 										</tr>
 									</table>
@@ -1431,8 +1657,8 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,12);"><#IPConnection_x_DNSServerEnable_itemname#></a>
 											</th>
 											<td>
-												<input type="radio" name="dslx_dnsenable" class="input" value="1" onclick="change_dsl_dns_enable()" <% nvram_match("dslx_dnsenable", "1", "checked"); %> /><#checkbox_Yes#>
-												<input type="radio" name="dslx_dnsenable" class="input" value="0" onclick="change_dsl_dns_enable()" <% nvram_match("dslx_dnsenable", "0", "checked"); %> /><#checkbox_No#>
+												<input type="radio" name="dsl_dnsenable" class="input" value="1" onclick="change_dsl_dns_enable()" <% nvram_match("dsl_dnsenable", "1", "checked"); %> /><#checkbox_Yes#>
+												<input type="radio" name="dsl_dnsenable" class="input" value="0" onclick="change_dsl_dns_enable()" <% nvram_match("dsl_dnsenable", "0", "checked"); %> /><#checkbox_No#>
 											</td>
 										</tr>
 										<tr>
@@ -1440,7 +1666,9 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,13);"><#IPConnection_x_DNSServer1_itemname#></a>
 											</th>
 											<td>
-												<input type="text" maxlength="15" class="input_15_table" name="dslx_dns1" value="<% nvram_get("dslx_dns1"); %>" onkeypress="return validator.isIPAddr(this,event)" autocorrect="off" autocapitalize="off"/>
+												<input type="text" maxlength="15" class="input_15_table" name="dsl_dns1" value="<% nvram_get("dsl_dns1"); %>" onkeypress="return validator.isIPAddr(this,event)" autocorrect="off" autocapitalize="off"/>
+												<img id="dns_pull_arrow1" class="dns_pull_arrow" src="/images/arrow-down.gif" onclick="pullDNSList(this);">
+												<div id="dns_server_list1" class="dns_server_list_dropdown"></div>
 											</td>
 										</tr>
 										<tr>
@@ -1448,7 +1676,28 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,14);"><#IPConnection_x_DNSServer2_itemname#></a>
 											</th>
 											<td>
-												<input type="text" maxlength="15" class="input_15_table" name="dslx_dns2" value="<% nvram_get("dslx_dns2"); %>" onkeypress="return validator.isIPAddr(this,event)" autocorrect="off" autocapitalize="off"/>
+												<input type="text" maxlength="15" class="input_15_table" name="dsl_dns2" value="<% nvram_get("dsl_dns2"); %>" onkeypress="return validator.isIPAddr(this,event)" autocorrect="off" autocapitalize="off"/>
+												<img id="dns_pull_arrow2" class="dns_pull_arrow" src="/images/arrow-down.gif" onclick="pullDNSList(this);">
+												<div id="dns_server_list2" class="dns_server_list_dropdown"></div>
+											</td>
+										</tr>
+									</table>
+
+									<table id="DHCP_option" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
+										<thead>
+											<tr><td colspan="2"><#ipv6_6rd_dhcp_option#></td></tr>
+										</thead>
+										<tr>
+											<th width="40%">Class-identifier (option 60):</th>
+											<td>
+												<input type="text" name="dsl_dhcp_vendorid" class="input_25_table" value="<% nvram_get("dsl_dhcp_vendorid"); %>" maxlength="126" autocapitalization="off" autocomplete="off">
+											</td>
+										</tr>
+										<tr>
+											<th width="40%">Client-identifier (option 61):</th>
+											<td>
+												<input type="checkbox" id="tmp_dhcp_clientid_type" name="tmp_dhcp_clientid_type" onclick="showDiableDHCPclientID(this);" <% nvram_match("dsl_dhcp_clientid_type", "1", "checked"); %>>IAID/DUID<br>
+												<input type="text" name="dsl_dhcp_clientid" class="input_25_table" value="<% nvram_get("dsl_dhcp_clientid"); %>" maxlength="126" autocapitalization="off" autocomplete="off">
 											</td>
 										</tr>
 									</table>
@@ -1463,7 +1712,7 @@ function ppp_echo_control(flag){
 											<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,4);"><#Username#></a>
 										</th>
 										<td>
-											<input type="text" maxlength="64" class="input_32_table" name="dslx_pppoe_username" value="<% nvram_get("dslx_pppoe_username"); %>" onkeypress="return validator.isString(this, event)" onblur="" autocapitalize="off" autocomplete="off">
+											<input type="text" maxlength="64" class="input_32_table" name="dsl_pppoe_username" value="<% nvram_get("dsl_pppoe_username"); %>" onkeypress="return validator.isString(this, event)" onblur="" autocapitalize="off" autocomplete="off">
 										</td>
 							
 										<tr>
@@ -1471,17 +1720,17 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,5);"><#PPPConnection_Password_itemname#></a>
 											</th>
 											<td>
-												<div style="margin-top:2px;"><input type="password" maxlength="64" class="input_32_table" id="dslx_pppoe_passwd" name="dslx_pppoe_passwd" value="<% nvram_get("dslx_pppoe_passwd"); %>" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
-												<div style="margin-top:1px;"><input type="checkbox" name="show_pass_1" onclick="pass_checked(document.form.dslx_pppoe_passwd);"><#QIS_show_pass#></div>
+												<div style="margin-top:2px;"><input type="password" maxlength="64" class="input_32_table" id="dsl_pppoe_passwd" name="dsl_pppoe_passwd" value="<% nvram_get("dsl_pppoe_passwd"); %>" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
+												<div style="margin-top:1px;"><input type="checkbox" name="show_pass_1" onclick="pass_checked(document.form.dsl_pppoe_passwd);"><#QIS_show_pass#></div>
 											</td>
 										</tr>
 										<tr>
 											<th><#WAN_PPP_AuthText#></th>
 											<td align="left">
-												<select id="" class="input_option" name="dslx_pppoe_auth">
-													<option value="" <% nvram_match("dslx_pppoe_auth", "", "selected"); %>>AUTO</option>
-													<option value="pap" <% nvram_match("dslx_pppoe_auth", "pap", "selected"); %>>PAP</option>
-													<option value="chap" <% nvram_match("dslx_pppoe_auth", "chap", "selected"); %>>CHAP</option>
+												<select class="input_option" name="dsl_pppoe_auth">
+													<option value="" <% nvram_match("dsl_pppoe_auth", "", "selected"); %>>AUTO</option>
+													<option value="pap" <% nvram_match("dsl_pppoe_auth", "pap", "selected"); %>>PAP</option>
+													<option value="chap" <% nvram_match("dsl_pppoe_auth", "chap", "selected"); %>>CHAP</option>
 												</select>
 											</td>
 										</tr>
@@ -1490,29 +1739,31 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,6);"><#PPPConnection_IdleDisconnectTime_itemname#></a>
 											</th>
 											<td>
-												<input type="text" maxlength="10" class="input_12_table" name="dslx_pppoe_idletime" value="<% nvram_get("dslx_pppoe_idletime"); %>" onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>&nbsp<#Second#>
+												<input type="text" maxlength="10" class="input_12_table" name="dsl_pppoe_idletime" value="<% nvram_get("dsl_pppoe_idletime"); %>" onkeypress="return validator.isNumber(this,event)" autocorrect="off" autocapitalize="off"/>&nbsp<#Second#>
 											</td>
 										</tr>
 										<tr>
 											<th>
-												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,7);"><#PPPConnection_x_PPPoEMTU_itemname#></a>
+												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,7);">PPP <#PPPConnection_x_PPPoEMTU_itemname#></a>
 											</th>
 											<td>
-												<input type="text" maxlength="5" name="dslx_pppoe_mtu" class="input_6_table" value="<% nvram_get("dslx_pppoe_mtu"); %>" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off"/>&nbsp;128 - 1492
+												<input type="text" maxlength="5" name="dsl_pppoe_mtu" class="input_6_table" value="<% nvram_get("dsl_pppoe_mtu"); %>" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off"/>&nbsp;128 - 1492
 											</td>
 										</tr>
-						<!--
 										<tr>
-										<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,8);"><#PPPConnection_x_PPPoEMRU_itemname#></a></th>
-										<td><input type="text" maxlength="5" name="wan_pppoe_mru" class="input_6_table" value="<% nvram_get("wan_pppoe_mru"); %>" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off"/></td>
+											<th>
+												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,8);">PPP <#PPPConnection_x_PPPoEMRU_itemname#></a>
+											</th>
+											<td>
+												<input type="text" maxlength="5" name="dsl_pppoe_mru" class="input_6_table" value="<% nvram_get("dsl_pppoe_mru"); %>" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off"/>&nbsp;128 - 1492
+											</td>
 										</tr>
-						-->
 										<tr>
 											<th>
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,9);"><#PPPConnection_x_ServiceName_itemname#></a>
 											</th>
 											<td>
-												<input type="text" maxlength="32" class="input_32_table" name="dslx_pppoe_service" value="<% nvram_get("dslx_pppoe_service"); %>" onkeypress="return validator.isString(this, event)" onblur="" autocorrect="off" autocapitalize="off"/>
+												<input type="text" maxlength="32" class="input_32_table" name="dsl_pppoe_service" value="<% nvram_get("dsl_pppoe_service"); %>" onkeypress="return validator.isString(this, event)" onblur="" autocorrect="off" autocapitalize="off"/>
 											</td>
 										</tr>
 										<tr>
@@ -1520,7 +1771,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,10);"><#PPPConnection_x_AccessConcentrator_itemname#></a>
 											</th>
 											<td>
-												<input type="text" maxlength="32" class="input_32_table" name="dslx_pppoe_ac" value="<% nvram_get("dslx_pppoe_ac"); %>" onkeypress="return validator.isString(this, event)" autocorrect="off" autocapitalize="off"/>
+												<input type="text" maxlength="32" class="input_32_table" name="dsl_pppoe_ac" value="<% nvram_get("dsl_pppoe_ac"); %>" onkeypress="return validator.isString(this, event)" autocorrect="off" autocapitalize="off"/>
 											</td>
 										</tr>
 										<tr>
@@ -1528,7 +1779,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,18);">Host-Uniq (<#Hexadecimal#>)</a>
 											</th>
 											<td align="left">
-												<input type="text" maxlength="32" class="input_32_table" name="dslx_pppoe_hostuniq" value="<% nvram_get("dslx_pppoe_hostuniq"); %>" onkeypress="return validator.isString(this, event);" autocorrect="off" autocapitalize="off"/>
+												<input type="text" maxlength="32" class="input_32_table" name="dsl_pppoe_hostuniq" value="<% nvram_get("dsl_pppoe_hostuniq"); %>" onkeypress="return validator.isString(this, event);" autocorrect="off" autocapitalize="off"/>
 											</td>
 										</tr>
 										<tr>
@@ -1563,7 +1814,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,18);"><#PPPConnection_x_AdditionalOptions_itemname#></a>
 											</th>
 											<td>
-												<input type="text" name="dslx_pppoe_options" value="<% nvram_get("dslx_pppoe_options"); %>" class="input_32_table" maxlength="255" onKeyPress="return validator.isString(this, event)" onBlur="validator.string(this)" autocorrect="off" autocapitalize="off">
+												<input type="text" name="dsl_pppoe_options" value="<% nvram_get("dsl_pppoe_options"); %>" class="input_32_table" maxlength="255" onKeyPress="return validator.isString(this, event)" onBlur="validator.string(this)" autocorrect="off" autocapitalize="off">
 											</td>
 										</tr>
 										<!-- 2008.03 James. patch for Oleg's patch. } -->
@@ -1580,7 +1831,7 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,16);"><#PPPConnection_x_MacAddressForISP_itemname#></a>
 											</th>
 											<td>
-												<input type="text" name="dslx_hwaddr" class="input_20_table" maxlength="17" value="<% nvram_get("dslx_hwaddr"); %>" onKeyPress="return validator.isHWAddr(this,event)" autocorrect="off" autocapitalize="off">
+												<input type="text" name="dsl_hwaddr" class="input_20_table" maxlength="17" value="<% nvram_get("dsl_hwaddr"); %>" onKeyPress="return validator.isHWAddr(this,event)" autocorrect="off" autocapitalize="off">
 												<input type="button" class="button_gen" onclick="showMAC();" value="<#BOP_isp_MACclone#>">
 											</td>
 										</tr>
@@ -1589,10 +1840,19 @@ function ppp_echo_control(flag){
 												<a class="hintstyle" href="javascript:void(0);" onClick="openHint(7,30);"><#DHCP_query_freq#></a>
 											</th>
 											<td>
-												<select name="dhcpc_mode" class="input_option">
-													<option value="0" <% nvram_match(" dhcpc_mode", "0","selected"); %>><#DHCPnormal#></option>
-													<option value="1" <% nvram_match(" dhcpc_mode", "1","selected"); %>><#DHCPaggressive#></option>
+												<select name="dsl_dhcp_qry" class="input_option">
+													<option value="0" <% nvram_match(" dsl_dhcp_qry", "0","selected"); %>><#DHCPnormal#></option>
+													<option value="1" <% nvram_match(" dsl_dhcp_qry", "1","selected"); %>><#DHCPaggressive#></option>
+													<option value="2" <% nvram_match(" dsl_dhcp_qry", "2","selected"); %>><#Continuous_Mode#></option>
 												</select>
+											</td>
+										</tr>
+										<tr>
+											<th>
+												<#PPPConnection_x_PPPoEMTU_itemname#>
+											</th>
+											<td>
+												<input type="text" maxlength="5" name="dsl_mtu" class="input_6_table" value="<% nvram_get("dsl_mtu"); %>" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off"/>&nbsp;1280 - 1500
 											</td>
 										</tr>
 									</table>
@@ -1615,5 +1875,13 @@ function ppp_echo_control(flag){
 	</tr>
 </table>
 <div id="footer"></div>
+<form method="post" name="chgpvc" action="/start_apply.htm" target="hidden_frame">
+<input type="hidden" name="action_mode" value="apply">
+<input type="hidden" name="flag" value="chg_pvc">
+<input type="hidden" name="action_script" value="">
+<input type="hidden" name="action_wait" value="">
+<input type="hidden" name="current_page" value="Advanced_DSL_Content.asp">
+<input type="hidden" name="dsl_unit" value="">
+</form>
 </body>
 </html>

@@ -31,6 +31,7 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <sys/vfs.h>	/* get disk type */
 #include <sys/ioctl.h>
 #include <netinet/in.h>
@@ -47,6 +48,11 @@
 #include <asm/byteorder.h>
 
 char pdubuf_res[INFO_PDU_LENGTH];
+extern int getStorageStatus(STORAGE_INFO_T *st);
+#if defined(RTCONFIG_AMAS)
+extern int getStorageStatusFindCap(STORAGE_INFO_FINDCAP_T *st);
+#endif
+extern void sendInfo(int sockfd, char *pdubuf, unsigned short cli_port);
 
 #ifdef BTN_SETUP
 
@@ -98,22 +104,7 @@ int bs_put_setting(PKT_SET_INFO_GW_QUICK *setting)
 }
 #endif
 
-int
-kill_pidfile_s(char *pidfile, int sig)	// copy from rc/common_ex.c
-{
-	FILE *fp = fopen(pidfile, "r");
-	char buf[256];
-	extern errno;
-
-	if (fp && fgets(buf, sizeof(buf), fp)) {
-		pid_t pid = strtoul(buf, NULL, 0);
-		fclose(fp);
-		return kill(pid, sig);
-  	} else
-		return errno;
-}
-
-extern char ssid_g[];
+extern char ssid_g[32];
 extern char netmask_g[];
 extern char productid_g[];
 extern char firmver_g[];
@@ -123,7 +114,7 @@ int
 get_ftype(char *type)	/* get disk type */
 {
 	struct statfs fsbuf;
-	long f_type;
+	unsigned int f_type;
 	double free_size;
 	char *mass_path = nvram_safe_get("usb_mnt_first_path");
 	//if (!mass_path)
@@ -171,23 +162,19 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
     int fail = 0;
     pid_t pid;
     DIR *dir;
-    int fd, ret, bytes;
-    unsigned char tmp_buf[15];	// /proc/XXXXXX
+    int fd, ret, bytes=0;
+    char tmp_buf[15];	// /proc/XXXXXX
     WS_INFO_T *wsinfo;
 #endif
 //#ifdef WL700G
     STORAGE_INFO_T *st;
+#if defined(RTCONFIG_AMAS)
+    STORAGE_INFO_FINDCAP_T *st1;
+#endif
 //#endif
 //    int i;
     char ftype[8], prinfo[128];	/* get disk type */
     int free_space;
-#if defined(RTCONFIG_WIRELESSREPEATER) || defined(RTCONFIG_PROXYSTA)
-    char tmp[100], prefix[] = "wlXXXXXXXXXXXXXX";
-#endif
-#ifdef RTCONFIG_DPSTA
-    char word[80], *next;
-    int unit, connected;
-#endif
 
     unsigned short send_port = cli_port;
 
@@ -198,8 +185,12 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 
     if (phdr->ServiceID==NET_SERVICE_ID_IBOX_INFO &&
 	phdr->PacketType==NET_PACKET_TYPE_CMD)
-    {	    
-	if (realOPCode!=NET_CMD_ID_GETINFO && realOPCode!=NET_CMD_ID_GETINFO_MANU&&
+    {
+	if (realOPCode!=NET_CMD_ID_GETINFO && 
+#if defined(RTCONFIG_AMAS)
+		realOPCode!=NET_CMD_ID_FIND_CAP && 
+#endif
+		realOPCode!=NET_CMD_ID_GETINFO_MANU &&
 	    phdr_res->OpCode==phdr->OpCode &&
 	    phdr_res->Info==phdr->Info)
 	{	
@@ -211,7 +202,11 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 	phdr_res->PacketType=NET_PACKET_TYPE_RES;
 	phdr_res->OpCode=phdr->OpCode;
 
-	if (realOPCode!=NET_CMD_ID_GETINFO && realOPCode!=NET_CMD_ID_GETINFO_MANU)
+	if (realOPCode!=NET_CMD_ID_GETINFO && 
+#if defined(RTCONFIG_AMAS)
+		realOPCode!=NET_CMD_ID_FIND_CAP && 
+#endif
+		realOPCode!=NET_CMD_ID_GETINFO_MANU)
 	{
 		phdr_ex = (IBOX_COMM_PKT_HDR_EX *)pdubuf;	
 		
@@ -246,7 +241,7 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 //		case NET_CMD_ID_GETINFO:
 		     _dprintf("NET CMD GETINFO_MANU\n");	// tmp test
 		     ginfo=(PKT_GET_INFO *)(pdubuf_res+sizeof(IBOX_COMM_PKT_RES));
-		     memset(ginfo, 0, sizeof(ginfo));
+		     memset(ginfo, 0, sizeof(*ginfo));
 #if 0
 #ifdef PRNINFO
 		     readPrnID(ginfo->PrinterInfo);
@@ -262,73 +257,7 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 					sprintf(ginfo->PrinterInfo, "%s %s", nvram_safe_get("u2ec_mfg"), nvram_safe_get("u2ec_device"));
 			}
 #endif
-#ifdef RTCONFIG_WIRELESSREPEATER
-			if (sw_mode() == SW_MODE_REPEATER)
-			{
-#ifdef RTCONFIG_CONCURRENTREPEATER
-				if (nvram_get_int("wlc_band") < 0 || nvram_get_int("wlc_express") == 0)
-					snprintf(prefix, sizeof(prefix), "wl0.1_");
-				else if (nvram_get_int("wlc_express") == 1)
-					snprintf(prefix, sizeof(prefix), "wl1.1_");
-				else if (nvram_get_int("wlc_express") == 2)
-					snprintf(prefix, sizeof(prefix), "wl0.1_");
-				else
-
-#endif
-				snprintf(prefix, sizeof(prefix), "wl%d.1_", nvram_get_int("wlc_band"));
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-			}
-			else
-#ifdef RTCONFIG_REALTEK
-			if (sw_mode() == SW_MODE_AP && nvram_get_int("wlc_psta") == 1)
-			{
-#ifdef RTCONFIG_CONCURRENTREPEATER
-				snprintf(prefix, sizeof(prefix), "wl0_");
-#else
-				snprintf(prefix, sizeof(prefix), "wl%d.1_", nvram_get_int("wlc_band"));
-#endif
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);		
-			}
-			else
-#endif
-#endif
-#ifdef RTCONFIG_BCMWL6
-#ifdef RTCONFIG_PROXYSTA
-#ifdef RTCONFIG_DPSTA
-			if (dpsta_mode() && nvram_get_int("re_mode") == 0)
-			{
-				connected = 0;
-				foreach(word, nvram_safe_get("dpsta_ifnames"), next) {
-					wl_ioctl(word, WLC_GET_INSTANCE, &unit, sizeof(unit));
-					snprintf(prefix, sizeof(prefix), "wlc%d_", unit == 0 ? 0 : 1);
-					if (nvram_get_int(strcat_r(prefix, "state", tmp)) == 2) {
-						connected = 1;
-						snprintf(prefix, sizeof(prefix), "wl%d.1_", unit);
-						strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-						break;
-					}
-				}
-
-				if (!connected)
-					strncpy(ssid_g, nvram_safe_get("wl0.1_ssid"), 32);
-			}
-			else
-#endif
-			if (is_psta(nvram_get_int("wlc_band")))
-			{
-				snprintf(prefix, sizeof(prefix), "wl%d_", nvram_get_int("wlc_band"));
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-			}
-			else if (is_psr(nvram_get_int("wlc_band")))
-			{
-				snprintf(prefix, sizeof(prefix), "wl%d.1_", nvram_get_int("wlc_band"));
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-			}
-			else
-#endif
-#endif
-		     strncpy(ssid_g, nvram_safe_get("wl0_ssid"), 32);
-		     strcpy(ginfo->SSID, ssid_g);
+		     get_discovery_ssid(ssid_g, sizeof(ssid_g));
 		     strcpy(ginfo->NetMask, get_lan_netmask());
 		     strcpy(ginfo->ProductID, productid_g);	// disable for tmp
 		     strcpy(ginfo->FirmwareVersion, firmver_g);	// disable for tmp
@@ -361,9 +290,9 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 		     return pdubuf_res;
 
 		case NET_CMD_ID_GETINFO:
-			//_dprintf("NET CMD GETINFO\n");
+			 //_dprintf("NET CMD GETINFO\n");
 		     ginfo=(PKT_GET_INFO *)(pdubuf_res+sizeof(IBOX_COMM_PKT_RES));
-		     memset(ginfo, 0, sizeof(ginfo));
+		     memset(ginfo, 0, sizeof(*ginfo));
 #if 0
 #ifdef PRNINFO
     		     readPrnID(ginfo->PrinterInfo);
@@ -379,71 +308,7 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 					sprintf(ginfo->PrinterInfo, "%s %s", nvram_safe_get("u2ec_mfg"), nvram_safe_get("u2ec_device"));
 			}
 #endif
-#ifdef RTCONFIG_WIRELESSREPEATER
-			if (sw_mode() == SW_MODE_REPEATER)
-			{
-#ifdef RTCONFIG_CONCURRENTREPEATER
-				if (nvram_get_int("wlc_band") < 0 || nvram_get_int("wlc_express") == 0)
-					snprintf(prefix, sizeof(prefix), "wl0.1_");
-				else if (nvram_get_int("wlc_express") == 1)
-					snprintf(prefix, sizeof(prefix), "wl1.1_");
-				else if (nvram_get_int("wlc_express") == 2)
-					snprintf(prefix, sizeof(prefix), "wl0.1_");
-				else
-#endif
-				snprintf(prefix, sizeof(prefix), "wl%d.1_", nvram_get_int("wlc_band"));
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-			}
-			else
-#ifdef RTCONFIG_REALTEK
-			if (sw_mode() == SW_MODE_AP && nvram_get_int("wlc_psta") == 1)
-			{
-#ifdef RTCONFIG_CONCURRENTREPEATER
-				snprintf(prefix, sizeof(prefix), "wl0_");
-#else
-				snprintf(prefix, sizeof(prefix), "wl%d.1_", nvram_get_int("wlc_band"));
-#endif
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);		
-			}
-			else
-#endif
-#endif
-#ifdef RTCONFIG_BCMWL6
-#ifdef RTCONFIG_PROXYSTA
-#ifdef RTCONFIG_DPSTA
-			if (dpsta_mode() && nvram_get_int("re_mode") == 0)
-			{
-				connected = 0;
-				foreach(word, nvram_safe_get("dpsta_ifnames"), next) {
-					wl_ioctl(word, WLC_GET_INSTANCE, &unit, sizeof(unit));
-					snprintf(prefix, sizeof(prefix), "wlc%d_", unit == 0 ? 0 : 1);
-					if (nvram_get_int(strcat_r(prefix, "state", tmp)) == 2) {
-						connected = 1;
-						snprintf(prefix, sizeof(prefix), "wl%d.1_", unit);
-						strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-						break;
-					}
-				}
-
-				if (!connected)
-					strncpy(ssid_g, nvram_safe_get("wl0.1_ssid"), 32);
-			}
-			else
-#endif
-			if (is_psta(nvram_get_int("wlc_band")))
-			{
-				snprintf(prefix, sizeof(prefix), "wl%d_", nvram_get_int("wlc_band"));
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-			}
-			else if (is_psr(nvram_get_int("wlc_band")))
-			{
-				snprintf(prefix, sizeof(prefix), "wl%d.1_", nvram_get_int("wlc_band"));
-				strncpy(ssid_g, nvram_safe_get(strcat_r(prefix, "ssid", tmp)), 32);
-			}
-			else
-#endif
-#endif
-		     strncpy(ssid_g, nvram_safe_get("wl0_ssid"), 32);
+		     get_discovery_ssid(ssid_g, sizeof(ssid_g));
    		     strcpy(ginfo->SSID, ssid_g);
 		     strcpy(ginfo->NetMask, get_lan_netmask());
 		     strcpy(ginfo->ProductID, productid_g);	// disable for tmp
@@ -497,7 +362,7 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 		case NET_CMD_ID_GETINFO_EX2:
 		     _dprintf("\n we got case GETINFO_EX2\n");	// tmp test
 		     ginfo=(PKT_GET_INFO *)(pdubuf_res+sizeof(IBOX_COMM_PKT_RES));
-		     memset(ginfo, 0, sizeof(ginfo));
+		     memset(ginfo, 0, sizeof(*ginfo));
 		     memset(ginfo->PrinterInfo, 0, sizeof(ginfo->PrinterInfo));
 
 		     /* get disk type */
@@ -510,10 +375,9 @@ char *processPacket(int sockfd, char *pdubuf, unsigned short cli_port)
 
 		     sendInfo(sockfd, pdubuf_res, send_port);
 		     return pdubuf_res;
-
+#if 0
 		case NET_CMD_ID_MANU_CMD:
 		{
-		     if (!nvram_match("ateCommand_flag", "1")) return NULL;
 		     #define MAXSYSCMD 256
 		     char cmdstr[MAXSYSCMD];
 		     PKT_SYSCMD *syscmd;
@@ -629,6 +493,7 @@ fprintf(stderr, "3. NET_CMD_ID_MANU_CMD:\n");
 		     }
 	 	     return pdubuf_res;
 		}
+#endif
 #ifdef BTN_SETUP // This option can not co-exist with WCLIENT
 		case NET_CMD_ID_SETKEY_EX:
 		{
@@ -656,7 +521,7 @@ fprintf(stderr, "3. NET_CMD_ID_MANU_CMD:\n");
 				(unsigned char)phdr_ex->MacAddress[5]
 				);
 		     nvram_set("bs_mac", cmdstr);
-		     sprintf(cmdstr, "Set MAC %s", cmdstr);
+		     sprintf(cmdstr, "Set MAC %s", nvram_safe_get("bs_mac"));
 		     syslog(LOG_NOTICE, cmdstr);
 		     sendInfo(sockfd, pdubuf_res, send_port);
 		     return pdubuf_res;
@@ -695,6 +560,14 @@ fprintf(stderr, "3. NET_CMD_ID_MANU_CMD:\n");
 		     sendInfo(sockfd, pdubuf_res, send_port);
 		     return pdubuf_res;
 		}
+#endif
+#if defined(RTCONFIG_AMAS)
+		case NET_CMD_ID_FIND_CAP:
+			//_dprintf("***NET CMD FIND_CAP\n");
+			st1 = (STORAGE_INFO_FINDCAP_T *) (pdubuf_res + sizeof (IBOX_COMM_PKT_RES));
+			getStorageStatusFindCap(st1);
+			sendInfo(sockfd, pdubuf_res,send_port);
+			return pdubuf_res;
 #endif
 		default:
 			return NULL;	

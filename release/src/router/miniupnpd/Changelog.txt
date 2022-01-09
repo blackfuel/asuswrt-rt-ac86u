@@ -1,10 +1,251 @@
-$Id: Changelog.txt,v 1.398 2015/04/26 14:43:27 nanard Exp $
+$Id: Changelog.txt,v 1.472 2020/10/31 09:16:14 nanard Exp $
+
+VERSION 2.2.0 : released on 2020/10/31
+
+2020/10/30:
+  OpenBSD: portinuse.c compatible with OpenBSD 5.5+
+
+2020/10/26:
+  Improve AddAnyPortMapping port selection
+
+2020/10/22:
+  netfilter_nft: fix rule-cache update when using the same chain name in
+    both tables.
+
+2020/06/20:
+  -v/-vv to output more log (LOG_INFO / LOG_DEBUG)
+  AddAnyPortMapping() tries all possible ports
+
+2020/06/10:
+  improvements and bug fixes in netfilter_nft/nftnlrdr_misc.c
+
+2020/06/05:
+  fix handling of ipv4 M-SEARCH received on ipv6 sockets
+  numerous fixes in linux/nftables implementation
+
+2020/06/03:
+  configure --disable-fork to disable going to background
+  improve upnp_get_portmapping_number_of_entries()
+
+2020/05/30:
+  "IGD2 Port Triggering" pf implementation (adding a nat rule)
+
+2020/05/07:
+  Linux: use libcap or libcap-ng to drop unnecessary capabilities
+
+2020/05/04:
+  Move configuration detection from Makefiles to configure (was genconfig.sh)
+  update linux Makefiles
+
+2020/04/29:
+  fix for bridges
+
+2020/04/21:
+  Remove FW API detecting code from Makefile (BSD). generate bsdmake.inc
+  netfilter: addmasqueraderule() even if internal/external ports are the same
+  improve error and debug log in upnpstun.c
+
+2020/04/20:
+  Fix "IGD2 Port Triggering" in update_portmapping()
+
+2020/04/12:
+  pf: disabled setting dst address in rule by default
+
+2020/04/09:
+  Option to disable IPv6 at runtime : -4 / ipv6_disable=yes
+
+2020/03/29:
+  Fix FreeBSD build
+
+2019/12/18:
+  Fix PCPSendUnsolicitedAnnounce() when IPv6 is not available
+
+2019/10/05:
+  Use OpenSSL TLS_server_method() instead of TLSv1_server_method()
+  Add --version commandline option
+
+2019/10/03:
+  Use OpenBSD pledge()
+
+2019/10/02:
+  Working NFTables implementation thanks to Paul Chambers
+
+2019/09/24:
+  Distinguish between iptables and nftables in genconfig.sh
+
+2019/09/01:
+  fix of nftables scripts : https://github.com/miniupnp/miniupnp/pull/395
+
+2019/08/24:
+  Small fixes in netfilter code
+
+2019/06/25:
+  Update netfilter nftables code
+
+2019/05/21:
+  Allow to use two different network interfaces for IPv4 and IPv6 internet
+
+2019/05/02:
+  Fix ssdp notify on unrelated interfaces
+
+2019/04/09:
+  Fix buffer over-read in upnpevents.c with urls in the form http://ip:port
+
+2019/04/05:
+  Fix memory leak in upnpreplyparse.c with NewPortListing element
+
+2019/03/22:
+  netfilter: miniupnpd_functions.sh parsing fix.
+    fix postrouting chain init.
+    use iptables -I instead of -A to add rules
+
+2019/03/09:
+  check NULL protocol arg in AddAnyPortMapping
+
+2019/03/07:
+  Update portinuse code to reflect changes made in FreeBSD 12.0
+
+2019/02/12:
+  linux/getifstats.c: use custom strtoul() implementation to roll over
+    after 2^32-1
+
+2019/02/03:
+  netfilter: fix build with linux kernel 5.0
+
+2018/12/18:
+  upnp_redirect(): accept NULL desc argument (avoid DOS in AddPortMapping)
+  upnp_event_prepare(): check the return value of snprintf()
+
+2018/09/07:
+  Fix PCP Public address announcement
+
+2018/07/06:
+  STUN support
+
+VERSION 2.1 : released on 2018/05/08
 
 2018/05/02:
   option to store remaining time in leasefile
 
+2018/04/12:
+  pf: set dst address in rule if use_ext_ip_addr is set
+
+2018/04/06:
+  Add options for netfilter scripts
+
 2018/03/13:
   Use monotonic clock for timeouts, etc.
+
+2018/02/22:
+  Add option force_igd_desc_v1 to force devices and services versions
+    to 1 in IGD v2 mode
+
+2017/12/12:
+  Fix a few buffer overrun in SSDP and SOAP parsing
+
+2017/11/02:
+  PCP : reset epoch after address change
+
+2017/05/26:
+  merge https://github.com/miniupnp/miniupnp/tree/randomize_url branch
+
+2017/05/24:
+  get SSDP packet receiving interface index and use it to check if the
+    packet is from a LAN
+
+2017/03/13:
+  default to client address for AddPortMapping when <NewInternalClient>
+    is empty
+  pass ext_if_name to add_pinhole()
+
+2016/12/23:
+  Fix UDA-1.2.10 Man header empty or invalid
+
+2016/12/16:
+  Do not try to open IPv6 sockets once it is disabled
+
+2016/12/01:
+  Fix "AddPinhole Twice" test
+
+2016/11/11:
+  fixes build for Solaris/SunOS
+
+2016/07/23:
+  fixes build error on DragonFly BSD
+
+VERSION 2.0 : released on 2016/04/19
+
+2016/04/18:
+  linux/netfilter: fix compile time detection of iptables version >= 1.4.3
+
+2016/03/08:
+  linux/netfilter: do not add MASQUERADE rule if ports are equals
+
+2016/02/19:
+  set IPv6 Hop limit to 10
+  fix HOST: header of event notifications in IPv6
+  be more compliant on 64bit machines : ui4 in [0;2^32-1]
+
+2016/02/16:
+  minor changes to follow UDA 1.1 more closely.
+  more argument checking in Soap methods.
+
+2016/02/12:
+  return error 729 - ConflictWithOtherMechanisms if IGD v2 is enabled.
+  add iptc_init() check in iptcrdr.c/init_redirect()
+  add update_portmapping() / update_portmapping_desc_timestamp() functions
+
+2016/02/11:
+  use Linux libuuid uuid_generate() / BSD uuid_create() API
+
+2016/01/28:
+  renamed iptables chain MINIUPNPD-PCP-PEER to MINIUPNPD-POSTROUTING
+  implemented "IGD2 Port Triggering" with netfilter/iptables
+
+2016/01/18:
+  fix pcpserver.c CreatePCPMap_FW() : check pinhole before adding
+
+2015/12/16:
+  improve syslog message for incoming HTTP requests
+
+2015/12/13:
+  --disable-pppconn to disable WanPPPConnection
+  more fixes in DeviceProtection service
+
+2015/12/12:
+  add commandline option to genconfig.sh to set UPnP (UDA) version
+  advertise correct service and device versions when IGDv2 is enabled
+  fix action arguments for DeviceProtection service
+  fix event subscription renewal (include SID in response)
+
+2015/11/16:
+  Fix bsd/getroute.c get_src_for_route_to() when args are NULL
+
+2015/11/02:
+  use LOG_INFO instead of LOG_ERR for PCP PEER and MAP success
+
+2015/10/30:
+  fix : properly call find_ipv6_addr() with the 1st LAN interface
+  use name server from query in SOAP responses (continued)
+
+2015/10/24:
+  move SSDP_PACKET_MAX_LEN definition to config.h. also set default to 1024.
+
+2015/09/22:
+  cleanup UPNP_VERSION macro / add UPNP_VERSION_MAJOR, UPNP_VERSION_MINOR
+  Don't use packed structs anymore to read/write PCP messages
+
+2015/09/15:
+  use name server from query in SOAP responses
+
+2015/09/14:
+  Randomize URLs to avoid http://www.filet-o-firewall.com/
+    https://github.com/filetofirewall/fof
+    (specific branch, merged later, see above)
+
+2015/08/25:
+  better bind socket to right interface(s),
+    using struct ip_mreqn, SO_BINDTODEVICE
 
 2015/04/30:
   Adding linux/nftables support
@@ -215,7 +456,7 @@ VERSION 1.8 : released on 2013/02/06
 
 2013/02/06:
   Check source address of incomining HTTP connections and SSDP
-    packets in order to filter out WAN SSDP and HTTP trafic.
+    packets in order to filter out WAN SSDP and HTTP traffic.
   Implement get_src_for_route_to() for *BSD
   fix 2 potential memory leaks in GetListOfPortMappings()
 
@@ -500,7 +741,7 @@ VERSION 1.6 : released the 2011/07/25
   GET /DP.xml is now available. The description has to be completed.
 
 2011/05/19:
-  Add getconnstatus.c/.h. Dont always have ConnectionStatus to "Connected"
+  Add getconnstatus.c/.h. Don't always have ConnectionStatus to "Connected"
   Events for WANIPv6FirewallControll
 
 2011/05/16:

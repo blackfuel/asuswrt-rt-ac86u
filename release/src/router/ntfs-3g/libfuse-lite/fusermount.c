@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <sys/utsname.h>
 #include <grp.h>
+#include <paths.h>
 
 #define FUSE_DEV_NEW "/dev/fuse"
 

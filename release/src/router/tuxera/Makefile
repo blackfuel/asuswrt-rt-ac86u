@@ -14,9 +14,27 @@ ifeq ($(RTCONFIG_SOC_QCA9557),y)
 SRCFILE = $(if $(RT4GAC55U),qca_4gac55u,qca)
 else ifeq ($(RTCONFIG_SOC_IPQ8064),y)
 SRCFILE = qca_ipq806x
-TNSA_SMBD = $(SRCFILE)/tnsa/smbd
+TNSA_SMBD = $(if $(RTCONFIG_SAMBA36X),,$(SRCFILE)/tnsa/smbd)
+else ifeq ($(RTCONFIG_SOC_IPQ8074),y)
+ifneq ($(findstring $(_BUILD_NAME_),$(SPF8_MODEL_LIST)),)
+SRCFILE = qca_ipq807x.spf8
+else ifneq ($(findstring $(_BUILD_NAME_),$(SPF11.0_MODEL_LIST)),)
+SRCFILE = qca_ipq807x.spf11.0
+else ifneq ($(findstring $(_BUILD_NAME_),$(SPF11.1_MODEL_LIST)),)
+SRCFILE = qca_ipq807x.spf11.1
+else ifneq ($(findstring $(_BUILD_NAME_),$(IPQ807X_MODEL_LIST)),)
+SRCFILE = $(if $(RTCONFIG_MUSL_LIBC),qca_ipq807x.musl64,qca_ipq807x)
+endif
 else ifeq ($(RTCONFIG_SOC_IPQ40XX),y)
+ifeq ($(RTCONFIG_QSDK6PLUS),y)
+SRCFILE = qca_ipq40xx_ILQ6101CS
+else ifeq ($(QSDK_VER),SPF10CS)
+SRCFILE = qca_ipq40xx_SPF10CS
+else # IPQ40XX
 SRCFILE = qca_ipq40xx
+endif # IPQ40XX
+else ifeq ($(RTCONFIG_SOC_IPQ60XX),y)
+SRCFILE = qca_ipq60xx
 else
 $(error Tuxera driver is not available)
 endif
@@ -52,7 +70,20 @@ endif # ARMCPUSMP
 endif # RTCONFIG_BCM_7114
 endif # RTCONFIG_BCM7
 
-ifeq ($(RTCONFIG_HND_ROUTER),y)
+ifeq ($(RTCONFIG_HND_ROUTER_AX),y)
+ifeq ($(RTCONFIG_HND_ROUTER_AX_675X)$(RTCONFIG_HND_ROUTER_AX_6756),y)
+ifneq ($(BCM_CHIP),)
+SRCFILE = broadcom_arm_ax_$(BCM_CHIP)
+endif
+else
+SRCFILE = broadcom_arm_ax
+endif
+ifeq ($(RTCONFIG_HND_ROUTER_AX_675X)$(RTCONFIG_HND_ROUTER_AX_6756),y)
+DSTDIR = $(INSTALLDIR)/lib/modules/$(LINUX_KERNEL)/kernel/fs
+else
+DSTDIR = $(INSTALLDIR)/lib/modules/4.1.51/kernel/fs
+endif
+else ifeq ($(RTCONFIG_HND_ROUTER),y)
 SRCFILE = broadcom_arm_hnd
 DSTDIR = $(INSTALLDIR)/lib/modules/4.1.27/kernel/fs
 else
@@ -114,13 +145,17 @@ endif
 endif
 ifeq ($(or $(RTCONFIG_TFAT),$(RTCONFIG_TUXERA_NTFS),$(RTCONFIG_TUXERA_HFS)),y)
 	install  -m 0644 -D $(SRCFILE)/VERSION-INFO $(INSTALLDIR)/rom/Tuxera-VERSION-INFO
-ifeq ($(and $(RTCONFIG_BCMARM),$(RTCONFIG_SAMBA3)),y)
+#ifeq ($(and $(RTCONFIG_BCMARM),$(RTCONFIG_SAMBA3)),y)
 #	install -D $(SRCFILE)/samba/lib/libstdc++.so.6.0.14 $(INSTALLDIR)/usr/lib/libstdc++.so.6.0.14
 #	cd $(INSTALLDIR)/usr/lib && ln -sf libstdc++.so.6.0.14 libstdc++.so.6 && ln -sf libstdc++.so.6.0.14 libstdc++.so
-ifeq ($(RTCONFIG_BCM_7114),y)
-	install -D $(SRCFILE)/samba/smbd $(INSTALLDIR)/usr/bin/smbd
+#ifeq ($(RTCONFIG_BCM_7114),y)
+#	install -D $(SRCFILE)/samba/smbd $(INSTALLDIR)/usr/bin/smbd
+#endif
+#endif
 endif
-endif
+ifeq ($(RTCONFIG_TUXERA_APFS),y)
+	@cp -f $(SRCFILE)/tapfs/fuse/tapfs-u $(INSTALLDIR)/usr/sbin/tapfs-u
+	install -D $(SRCFILE)/tapfs/tools/apfsinfo $(INSTALLDIR)/usr/sbin/apfsinfo
 endif
 ifneq ($(TNSA_SMBD),)
 	# NOTE: Destination path of smbd is different from Broadcom platform!

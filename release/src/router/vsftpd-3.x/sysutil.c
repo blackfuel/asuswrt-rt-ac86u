@@ -1087,11 +1087,6 @@ vsf_sysutil_next_dirent(const char* session_user, const char *base_dir, struct v
 			free(share_name);
 			return DENIED_DIR;
 		}
-		if(test_if_System_folder(share_name)){
-			free(mount_path);
-			free(share_name);
-			return DENIED_DIR;
-		}
 	}
 
 	if(layer > SHARE_LAYER){
@@ -2552,7 +2547,7 @@ vsf_sysutil_getpwnam(const char* p_user)
 				char dec_passwd[64];
 
 				memset(dec_passwd, 0, sizeof(dec_passwd));
-				pw_dec(tmp_passwd, dec_passwd);
+				pw_dec(tmp_passwd, dec_passwd, sizeof(dec_passwd));
 				tmp_passwd = dec_passwd;
 #endif
 

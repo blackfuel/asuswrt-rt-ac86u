@@ -23,6 +23,9 @@
 <script type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <style>
+*{
+	box-sizing: content-box;
+}	
 .transition_style{
 	-webkit-transition: all 0.2s ease-in-out;
 	-moz-transition: all 0.2s ease-in-out;
@@ -31,16 +34,21 @@
 }
 </style>
 <script>
+
 function initial(){
 	show_menu();
 	if(document.form.bwdpi_wh_enable.value == 1){
 		document.getElementById("log_field").style.display = "";
 		getWebHistory("all", "1");
-		genClientListOption();
+		getWebHistoryList();
 	}
 	else{
 		document.getElementById("log_field").style.display = "none";
 	}
+
+	if(!ASUS_EULA.status("tm")){
+		ASUS_EULA.config(eula_confirm, cancel);
+	}	
 }
 
 var htmlEnDeCode = (function() {
@@ -103,7 +111,7 @@ var htmlEnDeCode = (function() {
 
 var data_array = new Array();
 function parsingAjaxResult(rawData){
-	var match = 0;;
+	var match = 0;
 	for(i=0;i<rawData.length;i++){
 		var thisRawData = rawData[i];
 		thisRawData[2] = htmlEnDeCode.htmlEncode(rawData[i][2]);
@@ -184,7 +192,7 @@ function getWebHistory(mac, page){
 		url: '/getWebHistory.asp' + client,
 		dataType: 'script',
 		error: function(xhr){
-			setTimeout("getWebHistory();", 1000);
+			setTimeout("getWebHistory(mac, page);", 1000);
 		},
 		success: function(response){
 			history_array = array_temp;
@@ -215,21 +223,39 @@ function getWebHistory(mac, page){
 	});
 }
 
+function getWebHistoryList(){
+	$.ajax({
+		url: '/getDBList.asp?type=WebHistory',
+		dataType: 'script',
+		error: function(xhr){
+			setTimeout("getWebHistoryList();", 1000);
+		},
+		success: function(response){
+			genClientListOption();
+		}
+	});
+}
+
 function genClientListOption(){
-	if(clientList.length == 0){
-		setTimeout("genClientListOption();", 500);
+	var _list = dbList[0];
+
+	if(_list == undefined || _list.length == 0){
+		setTimeout("genClientListOption();", 1000);
 		return false;
 	}
 
 	document.getElementById("clientListOption").options.length = 1;
-	for(var i=0; i<clientList.length; i++){
-		var clientObj = clientList[clientList[i]];
-
-		if(clientObj.isGateway || !clientObj.isOnline)
-			continue;
-
-		var clientName = (clientObj.nickName == "") ? clientObj.name : clientObj.nickName;
-		var newItem = new Option(clientName, clientObj.mac);
+	for(var i=0; i<_list.length; i++){
+		var mac = _list[i];
+		if(clientList[_list[i]]){
+			var clientObj = clientList[_list[i]];
+			var clientName = (clientObj.nickName == "") ? clientObj.name : clientObj.nickName;
+			var newItem = new Option(clientName, clientObj.mac);
+		}
+		else{
+			var newItem = new Option(mac, mac);
+		}
+				
 		document.getElementById("clientListOption").options.add(newItem);
 	}
 }
@@ -249,17 +275,45 @@ function change_page(flag, target){
 		getWebHistory(target, page);
 	}
 }
+function applyRule(){
+	if(reset_wan_to_fo.change_status)
+		reset_wan_to_fo.change_wan_mode(document.form);
+
+	if(document.form.bwdpi_wh_enable.value == 1) {
+		var t = new Date();
+		var timestamp = t.getTime().toString().substring(0,10);
+		document.form.bwdpi_wh_stamp.value = timestamp;
+	}
+	document.form.submit();
+}
 function eula_confirm(){
 	document.form.TM_EULA.value = 1;
 	document.form.bwdpi_wh_enable.value = 1;
-	document.form.action_wait.value = "15";
-	document.form.submit();
+	document.form.action_wait.value = "30";
+	applyRule();
 }
 
 function cancel(){
 	curState = 0;
-	document.form.bwdpi_wh_enable.value = 1;
 	$('#iphone_switch').animate({backgroundPosition: -37}, "slow", function() {});
+	document.form.action_wait.value = "30";
+	document.form.action_script.value = "restart_qos;restart_firewall";
+}
+function switch_control(_status){
+	if(_status) {
+		if(reset_wan_to_fo.check_status()) {
+			if(ASUS_EULA.check("tm")){
+				document.form.bwdpi_wh_enable.value = 1;
+				applyRule();
+			}
+		}
+		else
+			cancel();
+	}
+	else {
+		document.form.bwdpi_wh_enable.value = 0;
+		applyRule();
+	}
 }
 function cal_panel_block(obj){
 	var blockmarginLeft;
@@ -288,12 +342,12 @@ function cal_panel_block(obj){
 }
 function updateWebHistory() {
 	setTimeout(function() {
-		getWebHistory(document.form.clientList.value);
+		getWebHistory(document.form.clientList.value, '1');
 	}, 200);
 }
 </script>
 </head>
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
@@ -308,7 +362,7 @@ function updateWebHistory() {
 <input type="hidden" name="next_page" value="/AdaptiveQoS_WebHistory.asp">
 <input type="hidden" name="action_mode" value="apply">
 <input type="hidden" name="action_script" value="restart_qos;restart_firewall">
-<input type="hidden" name="action_wait" value="3">
+<input type="hidden" name="action_wait" value="30">
 <input type="hidden" name="flag" value="">
 <input type="hidden" name="bwdpi_wh_enable" value="<% nvram_get("bwdpi_wh_enable"); %>">
 <input type="hidden" name="bwdpi_wh_stamp" value="<% nvram_get("bwdpi_wh_stamp"); %>">
@@ -342,22 +396,10 @@ function updateWebHistory() {
 															<script type="text/javascript">
 																$('#bwdpi_wh_enable').iphoneSwitch('<% nvram_get("bwdpi_wh_enable"); %>',
 																	function(){
-																		if(reset_wan_to_fo(document.form, document.form.bwdpi_wh_enable.value)) {
-																			ASUS_EULA.config(eula_confirm, cancel);
-
-																			if(ASUS_EULA.check("tm")){
-																				var t = new Date();
-																				var timestamp = t.getTime().toString().substring(0,10);
-
-																				document.form.bwdpi_wh_stamp.value = timestamp;
-																				document.form.bwdpi_wh_enable.value = 1;
-																				document.form.submit();
-																			}
-																		}
+																		switch_control(1);
 																	},
 																	function(){
-																		document.form.bwdpi_wh_enable.value = 0;
-																		document.form.submit();
+																		switch_control(0);
 																	}
 																);
 															</script>
@@ -378,7 +420,7 @@ function updateWebHistory() {
 										</div>
 										<div class="apply_gen">
 											<input class="button_gen" onClick="httpApi.cleanLog('web_history', updateWebHistory);" type="button" value="<#CTL_clear#>" >
-											<input class="button_gen" onClick="getWebHistory(document.form.clientList.value)" type="button" value="<#CTL_refresh#>">
+											<input class="button_gen" onClick="getWebHistory(document.form.clientList.value, '1')" type="button" value="<#CTL_refresh#>">
 										</div>
 									</div>
 								</td>

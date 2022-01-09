@@ -33,6 +33,8 @@
 #include <errno.h>
 #include "pppd.h"
 #include "pppcrypt.h"
+#include <stdlib.h>	//setkey()
+#include <unistd.h>	//encrypt()
 
 static u_char
 Get7Bits(input, startBit)
@@ -119,7 +121,10 @@ u_char *key;
 	MakeKey(key, des_key);
 	Expand(des_key, crypt_key);
 	errno = 0;
+#if defined(RTCONFIG_HND_ROUTER_AX_6756)
+#else
 	setkey((const char *)crypt_key);
+#endif
 	if (errno != 0)
 		return (0);
 	return (1);
@@ -134,7 +139,10 @@ u_char *cipher;	/* OUT 8 octets */
 
 	Expand(clear, des_input);
 	errno = 0;
+#if defined(RTCONFIG_HND_ROUTER_AX_6756)
+#else
 	encrypt((char *)des_input, 0);
+#endif
 	if (errno != 0)
 		return (0);
 	Collapse(des_input, cipher);
@@ -150,7 +158,10 @@ u_char *clear;	/* OUT 8 octets */
 
 	Expand(cipher, des_input);
 	errno = 0;
+#if defined(RTCONFIG_HND_ROUTER_AX_6756)
+#else
 	encrypt((char *)des_input, 1);
+#endif
 	if (errno != 0)
 		return (0);
 	Collapse(des_input, clear);

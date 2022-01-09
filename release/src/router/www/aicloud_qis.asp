@@ -94,7 +94,7 @@ function onProcessTimer(){
 		setTimeout("onProcessTimer();", 1000);
 	}
 	else
-		window.location.reload();
+		window.location.href = location.href;
 }
 
 function checkDDNSReturnCode(){
@@ -109,7 +109,7 @@ function checkDDNSReturnCode(){
       	if(ddns_return_code == 'ddns_query')
         	setTimeout("checkDDNSReturnCode();", 500);
         else 
-        	window.location.reload();
+					window.location.href = location.href;
       }
    });
 }
@@ -186,7 +186,7 @@ function restart_needed_time(second){
 }
 </script>
 </head>
-<body onload="initial();" onunload="return unload_body();">
+<body onload="initial();" onunload="return unload_body();" class="bg">
 
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
 	<table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center">

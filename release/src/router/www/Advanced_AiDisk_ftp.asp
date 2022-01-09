@@ -20,6 +20,7 @@
 <script type="text/javascript" src="/disk_functions.js"></script>
 <script type="text/javascript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <script type="text/javascript">
 <% get_AiDisk_status(); %>
 <% get_permissions_of_account(); %>
@@ -30,8 +31,10 @@ var PROTOCOL = "ftp";
 
 var NN_status = get_cifs_status();  // Network-Neighborhood
 var FTP_status = get_ftp_status(); // FTP
+var FTP_WAN_status = <% nvram_get("ftp_wanac"); %>;
 var AM_to_cifs = get_share_management_status("cifs");  // Account Management for Network-Neighborhood
 var AM_to_ftp = get_share_management_status("ftp");  // Account Management for FTP
+var ftp_tls_orig = httpApi.nvramGet(["ftp_tls"]).ftp_tls;
 
 var accounts = [<% get_all_accounts(); %>][0];
 var groups = [<% get_all_groups(); %>];
@@ -47,14 +50,32 @@ var changedPermissions = new Array();
 var folderlist = new Array();
 
 var ddns_enable = '<% nvram_get("ddns_enable_x"); %>';
-
+var usb_port_conflict_faq = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=134";
 function initial(){
-	show_menu();
+	if(re_mode == "1"){
+		$("#apply_btn").addClass("perNode_apply_gen");
+		show_loading_obj();
+	}
+	else{
+		$("#content_table").addClass("content");
+		$("#FormTitle").addClass("FormTitle content_bg");
+		$("#apply_btn").addClass("apply_gen");
+		show_menu();
+	}
+
+	$("#FormTitle").css("display", "");
+
 	document.aidiskForm.protocol.value = PROTOCOL;
 	
 	if(is_KR_sku){
 		document.getElementById("radio_anonymous_enable_tr").style.display = "none";
 	}
+
+	if(!isSupport("ftp_ssl"))
+		document.getElementById("radio_ftp_tls_enable_tr").style.display = "none";
+
+	// ftp_tls
+	secure_check(ftp_tls_orig);
 	
 	// show accounts
 	showAccountGroupMenu(select_flag);
@@ -63,9 +84,6 @@ function initial(){
 	showPermissionTitle();
 	if("<% nvram_get("ddns_enable_x"); %>" == 1)
 		document.getElementById("machine_name").innerHTML = "<% nvram_get("ddns_hostname_x"); %>";
-	else
-		document.getElementById("machine_name").innerHTML = "<#Web_Title2#>";
-		
 
 	// show mask
 	if(get_manage_type(PROTOCOL)){
@@ -97,6 +115,18 @@ function initial(){
 		$("#trPMGroup").css("display", "block");
 	else
 		$("#trAccount").css("display", "block");
+
+	if(FTP_status && httpApi.ftp_port_conflict_check.conflict()){
+		$("#ftpPortConflict").show();
+		var text = httpApi.ftp_port_conflict_check.usb_ftp.hint;
+		text += "<br>";
+		text += "<a id='ftp_port_conflict_faq' href='' target='_blank' style='text-decoration:underline;color:#FC0;'><#FAQ_Find#></a>";
+		$("#ftpPortConflict").html(text);
+	}
+
+	if($("#ftpPortConflict").find("#ftp_port_conflict_faq").length){
+		$("#ftpPortConflict").find("#ftp_port_conflict_faq").attr("href", usb_port_conflict_faq);
+	}
 }
 
 function get_disk_tree(){
@@ -163,6 +193,13 @@ function switchAppStatus(protocol){  // turn on/off the share
 
 		confirm_str_off = "<#confirm_disableftp#>";
 		confirm_str_on = "<#confirm_enableftp#>";
+		if(httpApi.ftp_port_conflict_check.port_forwarding.enabled() && httpApi.ftp_port_conflict_check.port_forwarding.use_usb_ftp_port()){
+			confirm_str_on += "\n";
+			confirm_str_on += httpApi.ftp_port_conflict_check.usb_ftp.hint;
+			confirm_str_on += "\n";
+			confirm_str_on += "<#FAQ_Find#> : ";
+			confirm_str_on += usb_port_conflict_faq;
+		}
 	}
 
 	switch(status){
@@ -240,12 +277,12 @@ function showPermissionTitle(){
 	if(PROTOCOL == "cifs"){
 		code += '<td width="34%" align="center">R/W</td>';
 		code += '<td width="28%" align="center">R</td>';
-		code += '<td width="38%" align="center">No</td>';
+		code += '<td width="38%" align="center"><#checkbox_No#></td>';
 	}else if(PROTOCOL == "ftp"){
 		code += '<td width="28%" align="center">R/W</td>';
 		code += '<td width="22%" align="center">W</td>';
 		code += '<td width="22%" align="center">R</td>';
-		code += '<td width="28%" align="center">No</td>';
+		code += '<td width="28%" align="center"><#checkbox_No#></td>';
 	}
 	
 	code += '</tr></table>';
@@ -469,16 +506,33 @@ function resultOfCreateAccount(){
 	refreshpage();
 }
 
+function switchWanStatus(state){
+
+	showLoading();
+	document.form.ftp_wanac.value = state;
+	document.form.action_script.value = "restart_firewall";
+	document.form.action_wait.value = "5";
+	document.form.flag.value = "nodetect";
+	document.form.action_mode.value = "apply";
+	document.form.submit();
+}
+
+function resultOfSwitchWanStatus(){
+        refreshpage(1);
+}
+
+
 function onEvent(){
 	// account action buttons
-	//if(get_manage_type(PROTOCOL) == 1 && accounts.length < 6){
+	//if(get_manage_type(PROTOCOL) == 1 && accounts.length < 11){
 		if(1){
 		changeActionButton(document.getElementById("createAccountBtn"), 'User', 'Add', 0);
 
 		var accounts_length = this.accounts.length;
+		var maximum_account = httpApi.nvramGet(["st_max_user"]).st_max_user;
 		document.getElementById("createAccountBtn").onclick = function(){
-				if(accounts_length >= 6) {
-					alert("<#JS_itemlimit1#> 6 <#JS_itemlimit2#>");
+				if(accounts_length >= maximum_account) {
+					alert("<#JS_itemlimit1#> " + maximum_account + " <#JS_itemlimit2#>");
 					return false;
 				}
 				else
@@ -497,7 +551,7 @@ function onEvent(){
 		document.getElementById("createAccountBtn").onclick = function(){};
 		document.getElementById("createAccountBtn").onmouseover = function(){};
 		document.getElementById("createAccountBtn").onmouseout = function(){};
-		document.getElementById("createAccountBtn").title = (accounts.length < 6)?"<#AddAccountTitle#>":"<#account_overflow#>";
+		document.getElementById("createAccountBtn").title = (accounts.length < 11)?"<#AddAccountTitle#>":"<#account_overflow#>";
 	}
 	
 	if(this.accounts.length > 0 && this.selectedAccount != null && this.selectedAccount.length > 0 && this.accounts[0] != this.selectedAccount){
@@ -675,7 +729,7 @@ function applyRule(){
 }
 
 function validForm(){
-	if(!validator.range(document.form.st_max_user, 1, 10)){
+	if(!validator.range(document.form.st_max_user, 1, 99)){
 		document.form.st_max_user.focus();
 		document.form.st_max_user.select();
 		return false;
@@ -697,10 +751,21 @@ function switchUserType(flag){
 	lastClickedObj = 0;
 	setTimeout('get_disk_tree();', 1000);
 }
+
+function secure_check(flag){
+	
+	document.getElementById("TLS_disabled").innerHTML = (flag==1)? "":"<#usb_tls_disabled_hint#>";
+
+	if(flag==1 && !get_manage_type(PROTOCOL)){
+		alert("<#usb_tls_conflict#>");
+		document.form.ftp_tls[1].checked = true;
+		return;
+	}
+}
 </script>
 </head>
 
-<body onLoad="initial();" onunload="unload_body();">
+<body onLoad="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 
 <div id="Loading" class="popup_bg"></div>
@@ -727,8 +792,10 @@ function switchUserType(flag){
 <input type="hidden" name="action_wait" value="5">
 <input type="hidden" name="modified" value="0">
 <input type="hidden" name="current_page" value="Advanced_AiDisk_ftp.asp">
+<input type="hidden" name="ftp_wanac" value="<% nvram_get("ftp_wanac"); %>">
+<input type="hidden" name="flag" value="">
 
-<table width="983" border="0" align="center" cellpadding="0" cellspacing="0" class="content">
+<table id="content_table" border="0" align="center" cellpadding="0" cellspacing="0">
   <tr>
 	<td width="17">&nbsp;</td>				
 	
@@ -740,32 +807,24 @@ function switchUserType(flag){
 	<td valign="top">
 	  <div id="tabMenu" class="submenuBlock"></div>
 	  <!--=====Beginning of Main Content=====-->
-<table width="98%" border="0" align="left" cellpadding="0" cellspacing="0">
-	<tr>
-		<td valign="top">
-
-	  <table width="760px" border="0" cellpadding="5" cellspacing="0" class="FormTitle" id="FormTitle">
-
-<tbody>
-	<tr>
-		  <td bgcolor="#4D595D">
-		  <div>&nbsp;</div>
-			<div style="width:730px">
-				<table width="730px">
-					<tr>
-						<td align="left">
-							<span class="formfonttitle"><#menu5_4#> - <#menu5_4_2#></span>
-						</td>
-						<td align="right">
-							<img id='back_app_installation' onclick="go_setting('/APP_Installation.asp')" align="right" style="cursor:pointer;position:absolute;margin-left:-20px;margin-top:-30px;" title="<#Menu_usb_application#>" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'">
-						</td>
-					</tr>
-				</table>
+<div id="FormTitle" align="left" border="0" cellpadding="0" cellspacing="0" style="width: 760px; display: none;">
+<table border="0" cellpadding="5" cellspacing="0">
+	<tbody>
+		<tr>
+		  <td>
+			<div style="width: 99%; margin-top: 30px; margin-bottom: 5px;">
+				<span class="formfonttitle"><#menu5_4#> - <#menu5_4_2#></span>
+				<span id="returnBtn" class="returnBtn">
+					<img onclick="go_setting('/APP_Installation.asp')" align="right" title="<#Menu_usb_application#>" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'">
+				</span>
 			</div>
-			<div style="margin:5px;" class="splitLine"></div>
-			<div class="formfontdesc"><#FTP_desc#></div>
-
-			<table width="740px" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
+			<div id="splitLine" class="splitLine"></div>
+			<div class="formfontdesc" style="margin-top: 10px;"><#FTP_desc#></div>
+		  </td>
+		</tr>
+		<tr>
+		<td>
+			<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
 				<tr>
 				<th><#enableFTP#></th>
 					<td>
@@ -780,10 +839,32 @@ function switchUserType(flag){
 										switchAppStatus(PROTOCOL);
 									}
 								);
-							</script>			
-						</div>	
+							</script>
+						</div>
+						<span id="ftpPortConflict"></span>
 					</td>
 				</tr>										
+				<tr>
+				<th>Enable WAN access</th>
+					<td>
+						<div class="left" style="width:94px; float:left; cursor:pointer;" id="radio_wan_ftp_enable"></div>
+						<div class="iphone_switch_container" style="height:32px; width:74px; position: relative; overflow: hidden">
+							<script type="text/javascript">
+								$('#radio_wan_ftp_enable').iphoneSwitch(FTP_WAN_status,
+									function() {
+										switchWanStatus(1);
+									},
+									function() {
+										switchWanStatus(0);
+									},
+									{
+										switch_on_container_path: '/switcherplugin/iphone_switch_container_off.png'
+									}
+								);
+							</script>
+						</div>
+					</td>
+				</tr>
 
 				<tr id="radio_anonymous_enable_tr" style="height: 60px;">
 				<th><#AiDisk_Anonymous_Login#></th>
@@ -793,7 +874,14 @@ function switchUserType(flag){
 							<script type="text/javascript">
 								$('#radio_anonymous_enable').iphoneSwitch(!get_manage_type(PROTOCOL), 
 									function() {
-										switchAccount(PROTOCOL);
+										if(!document.form.ftp_tls[0].checked){
+											switchAccount(PROTOCOL);
+										}
+										else{
+											alert("Allow anonymous login is in conflict with TLS settings.");       /* Untranslated */
+											refreshpage();
+										}
+
 									},
 									function() {
 										switchAccount(PROTOCOL);
@@ -804,12 +892,20 @@ function switchUserType(flag){
 						</div>	
 					</td>
 				</tr>
+				<tr id="radio_ftp_tls_enable_tr">
+					<th><#AiDisk_Enable_TLS#></th>
+					<td>
+						<input type="radio" name="ftp_tls" class="input" value="1" <% nvram_match_x("", "ftp_tls", "1", "checked"); %> onChange="secure_check(1);"><#checkbox_Yes#>
+						<input type="radio" name="ftp_tls" class="input" value="0" <% nvram_match_x("", "ftp_tls", "0", "checked"); %> onChange="secure_check(0);"><#checkbox_No#>
+						<span id="TLS_disabled" style="color:#FC0;margin-left:10px;"></span>
+					</td>
+				</tr>
 				<tr>
 					<th>
 						<a class="hintstyle" href="javascript:void(0);" onClick="openHint(17,1);"><#ShareNode_MaximumLoginUser_itemname#></a>
 					</th>
 					<td>
-						<input type="text" name="st_max_user" class="input_3_table" maxlength="1" value="<% nvram_get("st_max_user"); %>" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off">
+						<input type="text" name="st_max_user" class="input_3_table" maxlength="2" value="<% nvram_get("st_max_user"); %>" onKeyPress="return validator.isNumber(this, event);" autocorrect="off" autocapitalize="off">
 					</td>
 				</tr>
 				<tr>
@@ -829,10 +925,9 @@ function switchUserType(flag){
 				</tr>				
 			</table>
 			
-			<div class="apply_gen">
+			<div id="apply_btn">
 					<input type="button" class="button_gen" value="<#CTL_apply#>" onclick="applyRule();">
 			</div>
-			
 
 			<!-- The table of share. -->
 			<div id="shareStatus">
@@ -873,10 +968,9 @@ function switchUserType(flag){
 					</table>
 		  		</td>
   			</tr>
-	  	</table>
-	  	<!-- The action buttons of accounts and folders.  END  The action buttons of accounts and folders.-->
-	  	
-	</div>
+			</table>
+			<!-- The action buttons of accounts and folders.  END  The action buttons of accounts and folders.-->
+			</div>
 	<!-- The table of share. END-------------------------------------------------------------------------------->
 	
 		 <!--The table of accounts and folders.       start    The table of accounts and folders. -->
@@ -892,7 +986,7 @@ function switchUserType(flag){
 			  		<table width="480"  border="0" cellspacing="0" cellpadding="0" class="FileStatusTitle">
 		  	    		<tr>
 		    	  			<td width="290" height="20" align="left">
-				    			<div id="machine_name" class="machineName"></div>
+				    			<div id="machine_name" class="machineName"><#Web_Title2#></div>
 				    		</td>
 				  		<td>
 				    			<div id="permissionTitle"></div>
@@ -908,25 +1002,20 @@ function switchUserType(flag){
 		    		<!-- The right side table of folders.    End -->
           		</tr>
 	    	</table>
-	    	<!-- The table of accounts and folders.       END    The table of accounts and folders.  -->
-	    	
-	</td>
-
-
-</tr>
-</tbody>
-
+			<!-- The table of accounts and folders.       END    The table of accounts and folders.  -->
+		</td>
+		</tr>
+	</tbody>
 </table>
-	  <!-- The table of DDNS. -->
-    </td>
-  <td width="10"></td>
-  </tr>
-</table>
+</div>
+
 			</td>
     <td width="10" align="center" valign="top">&nbsp;</td>
-	</tr>
+</tr>
 </table>
-</form><div id="footer"></div>
+</form>
+
+<div id="footer"></div>
 
 <!-- mask for disabling AiDisk -->
 <div id="OverlayMask" class="popup_bg">

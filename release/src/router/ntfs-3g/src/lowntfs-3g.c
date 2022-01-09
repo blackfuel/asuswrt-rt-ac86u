@@ -88,6 +88,8 @@
 #include <sys/dirent.h>
 #endif /* defined(__APPLE__) || defined(__DARWIN__) */
 
+#include <sys/sysmacros.h>
+
 #include "compat.h"
 #include "attrib.h"
 #include "inode.h"

@@ -47,6 +47,7 @@
 #include <stdio.h>	    // for printf, etc.
 #include <sys/time.h>
 #include <time.h>
+#include <sys/types.h>		// unit
 
 /* define TIMER_PROFILE to enable code which guages how accurate the timer functions are.
  * For each expiring timer the code will print the expected time interval and the actual time
@@ -478,9 +479,9 @@ static void print_event_queue()
 	int i = 0;
 
 	for (event = event_queue; event; event = event->next) {
-		printf("#%d (0x%x)->0x%x: \t%d sec %d usec\t%p\n",
-		       i++, (unsigned int) event, (unsigned int) event->next, (int)
-		       event->it_value.tv_sec,
+		printf("#%d (%p)->%p: \t%d sec %d usec\t%p\n",
+		       i++, event, event->next, 
+		       (int) event->it_value.tv_sec,
 		       (int) event->it_value.tv_usec, event->func);
 		if (i > g_maxevents) {
 			printf("...(giving up)\n");

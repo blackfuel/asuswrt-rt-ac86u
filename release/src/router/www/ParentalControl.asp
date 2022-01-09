@@ -24,6 +24,7 @@
 <script type="text/javascript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/calendar/jquery-ui.js"></script> 
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <style>
   #selectable .ui-selecting { background: #FECA40; }
   #selectable .ui-selected { background: #F39814; color: white; }
@@ -198,17 +199,18 @@ function register_event(){
 
 function initial(){
 	show_menu();
-	if(based_modelid == "GT-AC5300" || based_modelid == "GT-AC9600" || based_modelid == "RT-AC1200" || based_modelid == "RT-AC1200GU"){
+	if(hnd_support || based_modelid == "RT-AC1200" || based_modelid == "RT-AC1200_V2" || based_modelid == "RT-AC1200GU" || based_modelid == "RT-N19"){
 		$("#nat_desc").hide();
 	}
 
 	if(bwdpi_support){
 		document.getElementById('guest_image').style.background = "url(images/New_ui/TimeLimits.png)";
-		document.getElementById('content_title').innerHTML = "<#AiProtection_title#> - <#Time_Scheduling#>";
+		document.getElementById('content_title').innerHTML = "<#Parental_Control#> - <#Time_Scheduling#>";
 		document.getElementById('desc_title').innerHTML = "<#ParentalCtrl_Desc_TS#>";
 		document.getElementById('web_title').innerHTML = "<#Web_Title#> - <#Time_Scheduling#>";
 		document.getElementById('PC_enable').innerHTML = "<#ParentalCtrl_Enable_TS#>";
-		document.getElementById('switch_menu').style.display = "";
+		//if(isSupport("webs_filter") && isSupport("apps_filter"))
+		//	document.getElementById('switch_menu').style.display = "";
 	}
 	document.getElementById('disable_NAT').href = "Advanced_SwitchCtrl_Content.asp?af=ctf_disable_force";	//this id is include in string : #ParentalCtrl_disable_NAT#
 
@@ -238,10 +240,14 @@ function initial(){
 	var mac = cookie.get("time_scheduling_mac");
 	if(mac != "" && mac != null) {
 		var idx = MULTIFILTER_MAC_row.indexOf(mac);
-		gen_lantowanTable(idx);
-		window.location.hash = "edit_time_anchor";                   
+		if(idx != -1){
+			gen_lantowanTable(idx);
+			window.location.hash = "edit_time_anchor";
+		}
 		cookie.unset("time_scheduling_mac");
 	}
+	if(isSupport("PC_SCHED_V3") == "2")
+		$("#block_all_device").show();
 }
 
 /*------------ Mouse event of fake LAN IP select menu {-----------------*/
@@ -530,13 +536,13 @@ function gen_lantowanTable(client){
 	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0 10px"><#ParentalCtrl_allow#></div></td>';
 	code_temp += '<td><div style="width:90px;height:20px;background:#9CB2BA;"></div></td>';
 	code_temp += '<td><div align="left" style="font-family:Arial,sans-serif,Helvetica;font-size:18px;margin:0px 5px 0 10px"><#ParentalCtrl_deny#></div></td>';
-	code_temp += '<td><div style="width:90px;height:20px;border:solid 1px #000"></div></td>';
+	code_temp += '<td><div style="width:90px;height:20px;border: 1px solid #000000;background:#475A5F;"></div></td>';
 	code_temp += '</tr></table>';
 	document.getElementById('hintBlock').innerHTML = code_temp;
 	document.getElementById('hintBlock').style.marginTop = "10px";
 	document.getElementById('hintBlock').style.display = "";
-	document.getElementById("ctrlBtn").innerHTML = '<input class="button_gen" type="button" onClick="cancel_lantowan('+client+');" value="<#CTL_Cancel#>">';
-	document.getElementById("ctrlBtn").innerHTML += '<input class="button_gen" type="button" onClick="saveto_lantowan('+client+');applyRule();" value="<#CTL_ok#>">';  
+	document.getElementById("ctrlBtn").innerHTML = '<input class="button_gen" type="button" onClick="cancel_lantowan('+client+');" value="<#CTL_Cancel#>" style="margin:0 10px;">';
+	document.getElementById("ctrlBtn").innerHTML += '<input class="button_gen" type="button" onClick="saveto_lantowan('+client+');applyRule();" value="<#CTL_ok#>" style="margin:0 10px;">';  
 	document.getElementById('clock_type_select')[clock_type].selected = true;		// set clock type by cookie
 	
 	document.getElementById("mainTable").style.display = "";
@@ -768,7 +774,7 @@ function addRow_main(upper){
 		return false;
 	}
 	
-	if(!check_macaddr(document.form.PC_mac, check_hwaddr_flag(document.form.PC_mac))){
+	if(!check_macaddr(document.form.PC_mac, check_hwaddr_flag(document.form.PC_mac, 'inner'))){
 		document.form.PC_mac.focus();
 		document.form.PC_mac.select();
 		return false;	
@@ -943,7 +949,7 @@ function show_inner_tab(){
 }
 </script></head>
 
-<body onload="initial();" onunload="unload_body();" onselectstart="return false;">
+<body onload="initial();" onunload="unload_body();" onselectstart="return false;" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 
@@ -988,17 +994,17 @@ function show_inner_tab(){
 		<div style="margin-top:-5px;">
 			<table width="730px">
 				<tr>
-					<td align="left" >
+					<td align="left">
 						<div id="content_title" class="formfonttitle" style="width:400px"><#Parental_Control#></div>
 					</td>				
-					<td style="width:300px">
-						<div id="switch_menu" style="margin:-20px 0px 0px -20px;;display:none;">
+					<td>
+						<div id="switch_menu" style="margin:-20px 0px 0px -5px;display:none;">
 							<a href="AiProtection_WebProtector.asp">
-								<div style="width:173px;height:30px;border-top-left-radius:8px;border-bottom-left-radius:8px;" class="block_filter">
+								<div style="width:168px;height:30px;border-top-left-radius:8px;border-bottom-left-radius:8px;" class="block_filter">
 									<table class="block_filter_name_table"><tr><td style="line-height:13px;"><#AiProtection_filter#></td></tr></table>
 								</div>
 							</a>
-							<div style="width:172px;height:30px;margin:-32px 0px 0px 173px;border-top-right-radius:8px;border-bottom-right-radius:8px;" class="block_filter_pressed">
+							<div style="width:160px;height:30px;margin:-32px 0px 0px 168px;border-top-right-radius:8px;border-bottom-right-radius:8px;" class="block_filter_pressed">
 								<table class="block_filter_name_table_pressed"><tr><td style="line-height:13px;"><#Time_Scheduling#></td></tr></table>
 							</div>
 						</div>
@@ -1006,6 +1012,41 @@ function show_inner_tab(){
 				</tr>
 			</table>
 			<div style="margin:0 0 10px 5px;" class="splitLine"></div>
+			<div id="block_all_device" style="margin-bottom:6px;display:none;">
+				<div style="font-size:14px;margin-left:6px;margin-bottom:6px;">By enabling Block All Devices, all of the connected devices will be blocked from Internet access.</div>
+				<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
+					<tr>
+						<th>Enable block all device</th>
+						<td>
+							<div align="center" class="left" style="width:94px; float:left; cursor:pointer;" id="radio_block_all"></div>
+							<div class="iphone_switch_container" style="height:32px; width:74px; position: relative; overflow: hidden">
+								<script type="text/javascript">
+									$('#radio_block_all').iphoneSwitch('<% nvram_get("MULTIFILTER_BLOCK_ALL"); %>',
+										function(){
+											httpApi.nvramSet({
+												"action_mode": "apply",
+												"rc_service": "restart_firewall",
+												"MULTIFILTER_BLOCK_ALL": "1"
+											}, function(){
+												showLoading(3);
+											});
+										},
+										function(){
+											httpApi.nvramSet({
+												"action_mode": "apply",
+												"rc_service": "restart_firewall",
+												"MULTIFILTER_BLOCK_ALL": "0"
+											}, function(){
+												showLoading(3);
+											});
+										}
+									);
+								</script>
+							</div>
+						</td>
+					</tr>
+				</table>
+			</div>
 		</div>
 		<div id="PC_desc">
 			<table width="700px" style="margin-left:25px;">
@@ -1014,7 +1055,7 @@ function show_inner_tab(){
 						<div id="guest_image" style="background: url(images/New_ui/parental-control.png);width: 130px;height: 87px;"></div>
 					</td>
 					<td>&nbsp;&nbsp;</td>
-					<td style="font-style: italic;font-size: 14px;">
+					<td style="font-size: 14px;">
 						<span id="desc_title"><#ParentalCtrl_Desc#></span>
 						<ol>	
 							<li><#ParentalCtrl_Desc1#></li>

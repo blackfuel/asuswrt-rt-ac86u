@@ -7,6 +7,7 @@
 <meta HTTP-EQUIV="Pragma" CONTENT="no-cache">
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
 <title><#Web_Title#> - Home Security</title>
+<link rel="stylesheet" type="text/css" href="css/basic.css">
 <link rel="stylesheet" type="text/css" href="index_style.css">
 <link rel="stylesheet" type="text/css" href="form_style.css">
 <script type="text/javascript" src="/state.js"></script>
@@ -19,6 +20,9 @@
 <script type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <style>
+*{
+  box-sizing: content-box;
+}
 .weakness{
 	width:650px;
 	height:590px;
@@ -84,9 +88,9 @@
 
 .alertpreference{
 	width:650px;
-	height:290px;
+	height:350px;
 	position:absolute;
-	background: rgba(0,0,0,0.8);
+	background: rgba(0,0,0,0.9);
 	z-index:10;
 	margin-left:260px;
 	border-radius:10px;
@@ -97,16 +101,17 @@
 <script>
 if(usb_support) addNewScript("/disk_functions.js");
 window.onresize = function() {
-	if(document.getElementById("weakness_div").style.display == "block") {
-		cal_panel_block("weakness_div", 0.25);
+	if(document.getElementById("weakness_div") != null){
+		if(document.getElementById("weakness_div").style.display == "block") {
+			cal_panel_block("weakness_div", 0.25);
+		}
 	}
-	if(document.getElementById("alert_preference").style.display == "block") {
-		cal_panel_block("alert_preference", 0.25);
+	if(document.getElementById("alert_preference") != null){
+		if(document.getElementById("alert_preference").style.display == "block") {
+			cal_panel_block("alert_preference", 0.25);
+		}
 	}
 }
-<% get_AiDisk_status(); %>
-var AM_to_cifs = get_share_management_status("cifs");  // Account Management for Network-Neighborhood
-var AM_to_ftp = get_share_management_status("ftp");  // Account Management for FTP
 
 var ctf_disable = '<% nvram_get("ctf_disable"); %>';
 var ctf_fa_mode = '<% nvram_get("ctf_fa_mode"); %>';
@@ -116,6 +121,9 @@ var safe_count = 0;
 
 function initial(){
 	show_menu();
+	var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=139";
+	$("#faq").attr("href", faq_href);	
+
 	if(document.form.wrs_protect_enable.value == '1'){
 		shadeHandle('1');
 	}
@@ -127,6 +135,9 @@ function initial(){
 	getEventData();
 	check_weakness();
 	$("#all_security_btn").hide();
+
+	if(!ASUS_EULA.status("tm"))
+		ASUS_EULA.config(eula_confirm, cancel);
 }
 
 function getEventTime(){
@@ -215,6 +226,9 @@ function applyRule(){
 			document.form.action_wait.value = "<% nvram_get("reboot_time"); %>";
 		}
 	}
+
+	if(reset_wan_to_fo.change_status)
+		reset_wan_to_fo.change_wan_mode(document.form);
 
 	showLoading();
 	document.form.submit();
@@ -516,8 +530,25 @@ function check_upnp(){
 			document.getElementById('upnp_service').className = "status_yes";
 		}
 		else{
-			risk_count++
-			document.getElementById('upnp_service').innerHTML = "<a href='Advanced_WAN_Content.asp' target='_blank'><#checkbox_No#></a>";
+			risk_count++;
+
+			document.getElementById('upnp_service').onclick = function(){
+				function change_wan_unit(unit){
+					FormActions("apply.cgi", "change_wan_unit", "", "");
+					document.form.wan_unit.value = unit;
+					document.form.wan_unit.disabled = false;
+					document.form.current_page.value="Advanced_WAN_Content.asp";
+					document.form.target = "";
+					document.form.submit();
+				}
+
+				if(wan0_upnp_enable == "1")
+					change_wan_unit(0);
+				else
+					change_wan_unit(1);
+			}
+
+			document.getElementById('upnp_service').innerHTML = "<a><#checkbox_No#></a>";
 			document.getElementById('upnp_service').className = "status_no_risk";
 			document.getElementById('upnp_service').onmouseover = function(){overHint(13);}
 			document.getElementById('upnp_service').onmouseout = function(){nd();}
@@ -713,6 +744,24 @@ function eula_confirm(){
 	document.form.action_wait.value = "15";
 	applyRule();
 }
+function switch_control(_status){
+	if(_status) {
+		if(reset_wan_to_fo.check_status()) {
+			if(ASUS_EULA.check("tm")){
+				document.form.wrs_protect_enable.value = "1";
+				shadeHandle("1");
+				applyRule();
+			}
+		}
+		else
+			cancel();
+	}
+	else {
+		document.form.wrs_protect_enable.value = "0";
+		shadeHandle("0");
+		applyRule();
+	}
+}
 
 function show_alert_preference(){
 	cal_panel_block("alert_preference", 0.25);
@@ -834,7 +883,7 @@ function shadeHandle(flag){
 </script>
 </head>
 
-<body onload="initial();" onunload="unload_body();">
+<body onload="initial();" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
@@ -964,74 +1013,96 @@ function shadeHandle(flag){
 
 </div>
 
-<div id="alert_preference" class="alertpreference">
-	<table style="width:99%">
-		<tr>
-			<th>
-				<div style="font-size:16px;"><#AiProtection_alert_pref#></div>
-			</th>
-		</tr>
-			<td>
-				<div class="formfontdesc" style="font-style: italic;font-size: 14px;"><#AiProtection_HomeDesc1#></div>
-			</td>
-		<tr>
-			<td>
-				<table class="FormTable" width="99%" border="1" align="center" cellpadding="4" cellspacing="0">
-					<tr>
-						<th><#Provider#></th>
-						<td>
+
+<div id="alert_preference" class="eula_panel_container border-container" style="width: 600px; position: fixed; display: block;background:rgba(0,0,0,0.9);display:none;">
+	<div class="border-corner border-corner-top-left"></div>
+	<div class="border-corner border-corner-bottom-left"></div>
+	<div class="flexbox title-container">
+		<div class="title-symbol"></div>
+		<div class="title-content"><#AiProtection_alert_pref#></div>
+	</div>
+	<div id="tm_eula_content">
+		<div style="margin-bottom: 6px;"><#AiProtection_HomeDesc1#></div>
+		<div class="flexbox flex-a-center" style="margin: 12px 0;">
+			<div style="width: 150px;margin-right: 18px;font-size: 14px;font-family: Xolonium;color: #848C98"><#Provider#></div>
+			<div class="select-container">
+					<select name="" id="mail_provider">
+						<option value="0">Google</option>
+						<option value="1">AOL</option>
+						<option value="2">QQ</option>
+						<option value="3">163</option>
+					</select>
+					<div class="select-arrow">
+							<div></div>
+					</div>
+			</div>
+		</div>
+		<div class="flexbox flex-a-center" style="margin: 12px 0;">
+			<div style="width: 150px;margin-right: 18px;font-size: 14px;font-family: Xolonium;color: #848C98">Email</div>
+			<div>
+				<input type="type" class="input-container" id="mail_address">
+			</div>
+		</div>
+		<div class="flexbox flex-a-center" style="margin: 12px 0;">
+			<div style="width: 150px;margin-right: 18px;font-size: 14px;font-family: Xolonium;color: #848C98"><#HSDPAConfig_Password_itemname#></div>
+			<div>
+				<input type="password" class="input-container" id="mail_password" maxlength="50" autocorrect="off" autocapitalize="off">
+			</div>
+		</div>
+		<div class="flexbox flex-a-center" style="margin: 12px 0;">
+			<div style="width: 150px;margin-right: 18px;font-size: 14px;font-family: Xolonium;color: #848C98"><#Notification_Item#></div>
+			<div>
+					<div class="flexbox checkbox-container">
 							<div>
-								<select class="input_option" id="mail_provider">
-									<option value="0">Google</option>
-									<option value="1">AOL</option>
-									<option value="2">QQ</option>
-									<option value="3">163</option>
-								</select>
+									<input id="mal_website_item" type="checkbox">
+									<label for="mal_website_item">
+											<div></div>
+									</label>
 							</div>
-						</td>
-					</tr>
-					<tr>
-						<th>Email</th>
-						<td>
+							<div class="checkbox-desc"><#AiProtection_sites_blocking#></div>
+					</div>
+					<div class="flexbox checkbox-container">
 							<div>
-								<input type="type" class="input_30_table" id="mail_address" value="">
+									<input id="vp_item" type="checkbox">
+									<label for="vp_item">
+											<div></div>
+									</label>
 							</div>
-						</td>
-					</tr>
-					<tr>
-						<th><#HSDPAConfig_Password_itemname#></th>
-						<td>
+							<div class="checkbox-desc"><#AiProtection_two-way_IPS#></div>
+					</div>
+					<div class="flexbox checkbox-container">
 							<div>
-								<input type="password" class="input_30_table" id="mail_password" maxlength="100" value="" autocorrect="off" autocapitalize="off">
+								<div>
+									<input type="checkbox" id="mal_website_item">
+									<span style="color: #FFF;"><#AiProtection_sites_blocking#></span>
+								</div>
+								<div>
+									<input type="checkbox" id="vp_item">
+									<span style="color: #FFF;"><#AiProtection_two-way_IPS#></span>
+								</div>
+								<div>
+									<input type="checkbox" id="cc_item">
+									<span style="color: #FFF;"><#AiProtection_detection_blocking#></span>
+								</div>								
 							</div>
-						</td>
-					</tr>
-					<tr>
-						<th><#Notification_Item#></th>
-						<td>
-							<div>
-								<input type="checkbox" class="" id="mal_website_item" value="">
-								<label><#AiProtection_sites_blocking#></label>
-								<input type="checkbox" class="" id="vp_item" value="">
-								<label><#AiProtection_two-way_IPS#></label>
-								<input type="checkbox" class="" id="cc_item" value="">
-								<label><#AiProtection_detection_blocking#></label>
-							</div>
-						</td>
-					</tr>
-				</table>
-			</td>
-		</tr>
-		<tr>
-			<td>
-				<div style="text-align:center;margin-top:20px;">
-					<input class="button_gen" type="button" onclick="close_alert_preference();" value="<#CTL_close#>">
-					<input class="button_gen" type="button" onclick="apply_alert_preference();" value="<#CTL_apply#>">
-				</div>
-			</td>
-		</tr>
-	</table>
+							<div class="checkbox-desc"><#AiProtection_detection_blocking#></div>
+					</div>
+			</div>
+		</div>
+	</div>	
+	<div class="divide-line"></div>
+	<div class="control-field">
+		<div class="button-container button-container-sm" onclick="close_alert_preference();">
+			<div class="button-icon icon-cancel"></div>
+			<div class="button-text"><#CTL_close#></div>
+		</div>
+		<div class="button-container button-container-sm" onclick="apply_alert_preference();">
+			<div class="button-icon button-icon-check"></div>
+			<div class="button-text"><#CTL_apply#></div>
+		</div>
+	</div>
 </div>
+
 <iframe name="hidden_frame" id="hidden_frame" width="0" height="0" frameborder="0"></iframe>
 <form method="post" name="form" action="/start_apply.htm" target="hidden_frame">
 <input type="hidden" name="productid" value="<% nvram_get("productid"); %>">
@@ -1048,6 +1119,7 @@ function shadeHandle(flag){
 <input type="hidden" name="wrs_vp_enable" value="<% nvram_get("wrs_vp_enable"); %>">
 <input type="hidden" name="wan0_upnp_enable" value="<% nvram_get("wan0_upnp_enable"); %>" disabled>
 <input type="hidden" name="wan1_upnp_enable" value="<% nvram_get("wan1_upnp_enable"); %>" disabled>
+<input type="hidden" name="wan_unit" value="<% nvram_get("wan_unit"); %>" disabled>
 <input type="hidden" name="misc_http_x" value="<% nvram_get("misc_http_x"); %>" disabled>
 <input type="hidden" name="misc_ping_x" value="<% nvram_get("misc_ping_x"); %>" disabled>
 <input type="hidden" name="dmz_ip" value="<% nvram_get("dmz_ip"); %>" disabled>
@@ -1106,12 +1178,12 @@ function shadeHandle(flag){
 													<img id="guest_image" src="/images/New_ui/HomeProtection.png">
 												</td>
 												<td>&nbsp;&nbsp;</td>
-												<td style="font-style:italic;font-size:14px;">
+												<td style="font-size:14px;">
 													<table>
 														<tr>
 															<td>
 																<div style="width:430px"><#AiProtection_HomeDesc2#></div>
-																<div style="width:430px"><a style="text-decoration:underline;" href="http://www.asus.com/support/FAQ/1008719/" target="_blank"><#AiProtection_title#> FAQ</a></div>
+																<div style="width:430px"><a id="faq" style="text-decoration:underline;" href="" target="_blank"><#AiProtection_title#> FAQ</a></div>
 															</td>
 															<td>
 																<div style="width:100px;height:48px;margin-left:-40px;background-image:url('images/New_ui/tm_logo.png');"></div>
@@ -1139,18 +1211,10 @@ function shadeHandle(flag){
 														<script type="text/javascript">
 															$('#radio_protection_enable').iphoneSwitch('<% nvram_get("wrs_protect_enable"); %>',
 																function(){
-																	ASUS_EULA.config(eula_confirm, cancel);
-
-																	if(ASUS_EULA.check("tm")){
-																		document.form.wrs_protect_enable.value = "1";
-																		shadeHandle("1");
-																		applyRule();
-																	}
+																	switch_control(1);
 																},
 																function(){
-																	document.form.wrs_protect_enable.value = "0";
-																	shadeHandle("0");
-																	applyRule();
+																	switch_control(0);
 																}
 															);
 														</script>
@@ -1171,7 +1235,7 @@ function shadeHandle(flag){
 												</td>
 												<td style="padding:10px;">
 													<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_scan#></div>
-													<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_scan_desc#></div>
+													<div style="font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_scan_desc#></div>
 												</td>
 												 <td width="6px">
 													<div class="line_vertical"></div>
@@ -1202,11 +1266,11 @@ function shadeHandle(flag){
 												<td style="padding:10px;cursor:pointer;" onclick="location.href='AiProtection_MaliciousSitesBlocking.asp'">
 													<div>
 														<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_sites_blocking#></div>
-														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_sites_block_desc#></div>
+														<div style="font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_sites_block_desc#></div>
 													</div>
 												</td>
 												 <td width="6px">
-													v<div class="line_vertical"></div>
+													<div class="line_vertical"></div>
 												</td>
 												<td style="width:20%;">
 													<div style="position:relative;">
@@ -1255,7 +1319,7 @@ function shadeHandle(flag){
 												<td style="padding:10px;cursor:pointer;" onclick="location.href='AiProtection_IntrusionPreventionSystem.asp'">
 													<div>
 														<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_two-way_IPS#></div>
-														<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_two-way_IPS_desc#></div>
+														<div style="font-size: 14px;color:#FC0;height:auto;padding-top:5px;"><#AiProtection_two-way_IPS_desc#></div>
 													</div>
 												</td>
 												 <td width="6px">
@@ -1306,7 +1370,7 @@ function shadeHandle(flag){
 												</td>
 												<td style="padding:10px;cursor:pointer" onclick="location.href='AiProtection_InfectedDevicePreventBlock.asp'">
 													<div style="font-size:18px;text-shadow:1px 1px 0px black;"><#AiProtection_detection_blocking#></div>
-													<div style="font-style: italic;font-size: 14px;color:#FC0;height:auto;;padding-top:5px;"><#AiProtection_detection_block_desc#></div>
+													<div style="font-size: 14px;color:#FC0;height:auto;;padding-top:5px;"><#AiProtection_detection_block_desc#></div>
 												</td>
 												 <td>
 													<div class="line_vertical"></div>
@@ -1352,7 +1416,7 @@ function shadeHandle(flag){
 											<input class="button_gen" type="button" onclick="show_alert_preference();" value="<#AiProtection_alert_pref#>">
 										</div>
 									</div>
-									<div style="width:135px;height:55px;margin: -10px 0 0 600px;background-image:url('images/New_ui/tm_logo_power.png');"></div>
+									<div style="width:96px;height:44px;margin: 10px 0 0 600px;background-image:url('images/New_ui/TrendMirco_logo.svg');background-size: 100%;"></div>
 								</td>
 							</tr>
 							</tbody>

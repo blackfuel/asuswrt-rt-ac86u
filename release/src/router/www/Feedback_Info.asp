@@ -18,20 +18,23 @@
 <script type="text/javascript" src="/general.js"></script>
 <script type="text/javascript" src="/popup.js"></script>
 <script type="text/javascript" src="/help.js"></script>
+<script type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <script>
-var fb_state = "<% nvram_get("fb_state"); %>";
+var fb_state = httpApi.nvramGet(["fb_state"], true).fb_state;
+var dblog_enable = httpApi.nvramGet(["dblog_enable"], true).dblog_enable;
+var dblog_service = httpApi.nvramGet(["dblog_service"], true).dblog_service;
 
-var firmver = '<% nvram_get("firmver"); %>';
-var buildno = '<% nvram_get("buildno"); %>';
-//var rcno = '<% nvram_get("rcno"); %>';
-var extendno = '<% nvram_get("extendno"); %>';
+var firmver = httpApi.nvramGet(["firmver"], true).firmver;
+var buildno = httpApi.nvramGet(["buildno"], true).buildno;
+var extendno = httpApi.nvramGet(["extendno"], true).extendno;
+var fb_split_files = Number(httpApi.nvramGet(["fb_split_files"], true).fb_split_files);
+
 var FWString = '';
-
 FWString = firmver+"."+buildno;
-//if(rcno.length > 0)
-//	FWString += "rc"+rcno;
 FWString += "_"+extendno;
 
+const DHD_Service = 16;
 
 function initial(){
 	show_menu();
@@ -42,7 +45,7 @@ function check_info(){
 	//0:initial  1:Success  2.Failed  3.Limit?  4.dla
 	if(wan_diag_state == "4"){	
 		document.getElementById("fb_send_debug_log").style.display = "";
-		document.getElementById("Email_subject").href = "mailto:xdsl_feedback@asus.com?Subject="+based_modelid;
+		document.getElementById("Email_subject").href = "mailto:broadband_feedback@asus.com?Subject="+based_modelid;
 		get_debug_log_info();
 	}
 	else{
@@ -54,15 +57,78 @@ function check_info(){
 			document.getElementById("fb_success_router_0").style.display = "";
 			document.getElementById("fb_success_router_1").style.display = "";
 		}
+
+		if(dhdlog_support && dblog_enable=="1" && (dblog_service & DHD_Service)){	//dhd
+				setTimeout("rebootnow();", 5000);
+		}
 	} 	
 
 	if(dsl_support && fb_state == "2"){
 		document.getElementById("fb_fail_dsl").style.display = "";
 		document.getElementById("fb_fail_textarea").style.display = "";
+		show_dbg_files(fb_split_files, "dsl");
 	}
 	else if(fb_state == "2"){
 		document.getElementById("fb_fail_router").style.display = "";
 		document.getElementById("fb_fail_textarea").style.display = "";
+		show_dbg_files(fb_split_files, "rt");
+	}
+}
+
+function show_dbg_files(seg, type){
+	if(type == "dsl"){
+
+		switch(seg){
+
+			case 1:
+				document.getElementById("dbg_dsl_file").style.display = "";
+				break;
+			case 2:
+				document.getElementById("dbg_dsl_seg_a").style.display = "";
+				document.getElementById("dbg_dsl_seg_b").style.display = "";
+				break;
+			case 3:
+				document.getElementById("dbg_dsl_seg_a").style.display = "";
+				document.getElementById("dbg_dsl_seg_b").style.display = "";
+				document.getElementById("dbg_dsl_seg_c").style.display = "";
+				break;
+			case 4:
+				document.getElementById("dbg_dsl_seg_a").style.display = "";
+				document.getElementById("dbg_dsl_seg_b").style.display = "";
+				document.getElementById("dbg_dsl_seg_c").style.display = "";
+				document.getElementById("dbg_dsl_seg_d").style.display = "";
+				break;
+			default:
+				document.getElementById("dbg_dsl_file").style.display = "";
+				break;
+		}
+	}
+	else{
+
+		switch(seg){
+
+			case 1:
+				document.getElementById("dbg_rt_file").style.display = "";
+				break;
+			case 2:
+				document.getElementById("dbg_rt_seg_a").style.display = "";
+				document.getElementById("dbg_rt_seg_b").style.display = "";
+				break;
+			case 3:
+				document.getElementById("dbg_rt_seg_a").style.display = "";
+				document.getElementById("dbg_rt_seg_b").style.display = "";
+				document.getElementById("dbg_rt_seg_c").style.display = "";
+				break;
+			case 4:
+				document.getElementById("dbg_rt_seg_a").style.display = "";
+				document.getElementById("dbg_rt_seg_b").style.display = "";
+				document.getElementById("dbg_rt_seg_c").style.display = "";
+				document.getElementById("dbg_rt_seg_d").style.display = "";
+				break;
+			default:
+				document.getElementById("dbg_rt_file").style.display = "";
+				break;
+		}
 	}
 }
 
@@ -101,6 +167,29 @@ function get_feedback_tarball(){
 	setTimeout("location.href='fb_data.tgz.gz';", 300);
 }
 
+function get_split_feedback(seg){
+	switch(seg) {
+		case 1:
+			setTimeout("location.href='fb_data.tgz.gz';", 300);
+			break;
+		case "a":
+	setTimeout("location.href='fb_data.tgz.gz.part.a';", 300);
+			break;
+		case "b":
+	setTimeout("location.href='fb_data.tgz.gz.part.b';", 300);
+			break;
+		case "c":
+	setTimeout("location.href='fb_data.tgz.gz.part.c';", 300);
+			break;
+		case "d":
+	setTimeout("location.href='fb_data.tgz.gz.part.d';", 300);
+			break;
+		default:
+			setTimeout("location.href='fb_data.tgz.gz';", 300);
+			break;
+	}
+}
+
 </script>
 <style>
 .feedback_info_0{
@@ -119,7 +208,7 @@ function get_feedback_tarball(){
 </style>	
 </head>
 
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="TopBanner"></div>
 
 <div id="Loading" class="popup_bg"></div>
@@ -168,19 +257,34 @@ function get_feedback_tarball(){
 
 <div id="fb_fail_dsl" style="display:none;" class="feedback_info_1">
 	<#feedback_fail0#>
+	<br><br>
+	<#feedback_fail1#> : ( <a href="mailto:broadband_feedback@asus.com?Subject=<%nvram_get("productid");%>" target="_top" style="color:#FFCC00;">broadband_feedback@asus.com </a>) <#feedback_fail2#>
 	<br>
-	<#feedback_fail1#> : ( <a href="mailto:xdsl_feedback@asus.com?Subject=<%nvram_get("productid");%>" target="_top" style="color:#FFCC00;">xdsl_feedback@asus.com </a>) <#feedback_fail2#>
-	And download <span onClick="get_feedback_tarball();" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">this debug file</span> and add as email attachment.
+	<#feedback_fail3#> :
 	<br>
+	<ul>
+		<li id="dbg_dsl_file" style="display:none;"><span onClick="get_split_feedback(1);" style="text-decoration: underline; color:#FFCC00; cursor:pointer;"><#feedback_debug_file#></span></li>
+		<li id="dbg_dsl_seg_a" style="display:none;"><span onClick="get_split_feedback('a');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_a</span></li>
+		<li id="dbg_dsl_seg_b" style="display:none;"><span onClick="get_split_feedback('b');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_b</span></li>
+		<li id="dbg_dsl_seg_c" style="display:none;"><span onClick="get_split_feedback('c');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_c</span></li>
+		<li id="dbg_dsl_seg_d" style="display:none;"><span onClick="get_split_feedback('d');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_d</span></li>
+	</ul>
 </div>
 
 <div id="fb_fail_router" style="display:none;" class="feedback_info_1">
 	<#feedback_fail0#>
-	<br>
+	<br><br>
 	<#feedback_fail1#> : ( <a href="mailto:router_feedback@asus.com?Subject=<%nvram_get("productid");%>" target="_top" style="color:#FFCC00;">router_feedback@asus.com </a>) <#feedback_fail2#>
-	And download <span onClick="get_feedback_tarball();" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">this debug file</span> and add as email attachment.
 	<br>
-	OR you can try to <a href="Advanced_Feedback.asp?provider=google&reload=1" target="_self" style="text-decoration:underline;color:#FFCC00;">bind your Google account</a> to send feedback mail.
+	<#feedback_fail3#> :
+	<br>
+	<ul>
+		<li id="dbg_rt_file" style="display:none;"><span onClick="get_split_feedback(1);" style="text-decoration: underline; color:#FFCC00; cursor:pointer;"><#feedback_debug_file#></span></li>
+		<li id="dbg_rt_seg_a" style="display:none;"><span onClick="get_split_feedback('a');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_a</span></li>
+		<li id="dbg_rt_seg_b" style="display:none;"><span onClick="get_split_feedback('b');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_b</span></li>
+		<li id="dbg_rt_seg_c" style="display:none;"><span onClick="get_split_feedback('c');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_c</span></li>
+		<li id="dbg_rt_seg_d" style="display:none;"><span onClick="get_split_feedback('d');" style="text-decoration: underline; color:#FFCC00; cursor:pointer;">get_split_feedback_d</span></li>
+	</ul>
 </div>
 
 <div id="fb_fail_textarea" style="display:none;">
@@ -209,7 +313,7 @@ function get_feedback_tarball(){
 	<div class="feedback_info_0">The debug log of diagnostic DSL captured.</div>
 	<br>
 	<br>
-	<div class="feedback_info_1">Please send us an email directly ( <a id="Email_subject" href="" target="_top" style="color:#FFCC00;">xdsl_feedback@asus.com</a> ). Simply copy from following text area and paste as mail content. <br><div onClick="reset_diag_state();" style="text-decoration: underline; font-family:Lucida Console; cursor:pointer;">Click here to download the debug log and add as mail attachment.</div></div>
+	<div class="feedback_info_1">Please send us an email directly ( <a id="Email_subject" href="" target="_top" style="color:#FFCC00;">broadband_feedback@asus.com</a> ). Simply copy from following text area and paste as mail content. <br><div onClick="reset_diag_state();" style="text-decoration: underline; font-family:Lucida Console; cursor:pointer;">Click here to download the debug log and add as mail attachment.</div></div>
 	<br>
 	<textarea name="fb_send_debug_log_content" cols="70" rows="15" style="width:90%; margin-left:25px; font-family:'Courier New', Courier, mono; font-size:13px;background:#475A5F;color:#FFFFFF;" readonly></textarea>
 	<br>	
@@ -225,6 +329,27 @@ function get_feedback_tarball(){
 </table>
 </td>
 </form>
+<script>
+	function rebootnow(){
+		var win_time = window.setTimeout(function() {}, 0);
+        while (win_time--)
+			window.clearTimeout(win_time);
+		var win_inter = window.setInterval(function() {}, 0);
+		while (win_inter--)
+			window.clearInterval(win_inter);
+		var iframe_len = frames.length;
+		for(var i = 0; i < iframe_len; i += 1) {
+			var ifr_time = frames[i].window.setTimeout(function() {}, 0);
+			while (ifr_time--)
+			frames[i].window.clearTimeout(ifr_time);
+			var ifr_inter = frames[i].window.setInterval(function() {}, 0);
+			while (ifr_inter--)
+			frames[i].window.clearInterval(ifr_inter);
+		}
+
+		document.rebootForm.submit();
+	}
+</script>
 </tr>
 </table>
 </td>

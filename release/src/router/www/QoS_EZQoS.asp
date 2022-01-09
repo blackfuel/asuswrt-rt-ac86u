@@ -27,6 +27,9 @@
 <script type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
 <style>
+*{
+	box-sizing: content-box;
+}
 .QISform_wireless{
 	width:600px;
 	font-size:12px;
@@ -69,8 +72,8 @@
 }
 
 #category_list {
-	width:99%;
-	height:520px;
+	width: 99%;
+	height: 590px;
 }
 
 #category_list div{
@@ -107,35 +110,51 @@
 }
 
 .priority_lowest{
-	margin:-10px 0px 20px 0px;
+	margin-bottom: 10px;
 }
 
 .Quick_Setup_title{
-	font-family: Arial, Helvetica, sans-serif;
-	font-size:16px;
-	font-weight:bold;
+	font-size: 16px;
+	font-weight: bold;
+	text-align: center;
 }
 
-.quick_setup{
-	width:96px;
-	height:96px;
-	margin-left:2px;
-	cursor:pointer;
+#Game_act, #Game:hover,
+#Media_act, #Media:hover,
+#Web_act, #Web:hover,
+#eLearning_act, #eLearning:hover,
+#videoConference_act, #videoConference:hover,
+#Customize_act, #Customize:hover{
+	width: 96px;
+	height: 96px;
+}
+
+#Game,
+#Media,
+#Web,
+#eLearning,
+#videoConference,
+#Customize{
+	width: 84px;
+	height: 84px;	
+}
+
+#Game, #Game_act, #Game:hover,
+#Media, #Media_act, #Media:hover,
+#Web, #Web_act, #Web:hover,
+#eLearning, #eLearning_act, #eLearning:hover,
+#videoConference, #videoConference_act, #videoConference:hover,
+#Customize, #Customize_act, #Customize:hover{
+	background-size: 100%;
+	background-repeat: no-repeat;
+	margin: auto;
 }
 
 #Game{
 	background-image:url('images/New_ui/QoS_quick/game.svg');
 }
 
-#Game:hover{
-	width:118px;
-	height:118px;
-	background-image:url('images/New_ui/QoS_quick/game_act.svg');
-}
-
-#Game_act{
-	width:118px;
-	height:118px;
+#Game_act, #Game:hover{
 	background-image:url('images/New_ui/QoS_quick/game_act.svg');
 }
 
@@ -143,15 +162,7 @@
 	background-image:url('images/New_ui/QoS_quick/media.svg');
 }
 
-#Media:hover{
-	width:118px;
-	height:118px;
-	background-image:url('images/New_ui/QoS_quick/media_act.svg');
-}
-
-#Media_act{
-	width:118px;
-	height:118px;
+#Media_act, #Media:hover{
 	background-image:url('images/New_ui/QoS_quick/media_act.svg');
 }
 
@@ -159,33 +170,34 @@
 	background-image:url('images/New_ui/QoS_quick/web.svg');
 }
 
-#Web:hover{
-	width:118px;
-	height:118px;
+#Web_act, #Web:hover{
 	background-image:url('images/New_ui/QoS_quick/web_act.svg');
 }
 
-#Web_act{
-	width:118px;
-	height:118px;
-	background-image:url('images/New_ui/QoS_quick/web_act.svg');
+#eLearning{
+	background-image:url('images/New_ui/QoS_quick/elearning.svg');
+}
+
+#eLearning_act, #eLearning:hover{
+	background-image:url('images/New_ui/QoS_quick/elearning_act.svg');	
+}
+
+#videoConference{
+	background-image:url('images/New_ui/QoS_quick/video_conference.svg');
+}
+
+#videoConference_act, #videoConference:hover{
+	background-image:url('images/New_ui/QoS_quick/video_conference_act.svg');
 }
 
 #Customize{
 	background-image:url('images/New_ui/QoS_quick/customize.svg');
 }
 
-#Customize:hover{
-	width:118px;
-	height:118px;
+#Customize_act, #Customize:hover{;
 	background-image:url('images/New_ui/QoS_quick/customize_act.svg');
 }
 
-#Customize_act{
-	width:118px;
-	height:118px;
-	background-image:url('images/New_ui/QoS_quick/customize_act.svg');
-}
 
 .bandwidth_setting{
 	display:inline-block;
@@ -246,31 +258,52 @@
 // WAN
 <% wanlink(); %>
 <% first_wanlink(); %>
-var wans_dualwan_orig = '<% nvram_get("wans_dualwan"); %>';
-var wans_flag = (wans_dualwan_orig.search("none") != -1 || !parent.dualWAN_support) ? 0 : 1;
-var dsllink_statusstr = "";
-if(wans_flag == 1)	//dual_wan enabled
-	dsllink_statusstr = first_wanlink_statusstr();
-else
-	dsllink_statusstr = wanlink_statusstr();
-var dsl_DataRateDown = parseInt("<% nvram_get("dsllog_dataratedown"); %>");
-var dsl_DataRateUp = parseInt("<% nvram_get("dsllog_datarateup"); %>");
+<% secondary_wanlink(); %>
+
+	var wans_dualwan_orig = '<% nvram_get("wans_dualwan"); %>';
+	var dualwan_type = wans_dualwan_orig.split(" ");
+	var wans_flag = (wans_dualwan_orig.search("none") != -1 || !parent.dualWAN_support) ? 0 : 1;
+if(dualwan_type.length == 2){	
+	var dualwan_primary = dualwan_type[0].toUpperCase();
+	var dualwan_primary_display = (dualwan_primary=="LAN") ? "Ethernet LAN":dualwan_primary;	
+	var dualwan_secondary = dualwan_type[1].toUpperCase();
+	var dualwan_secondary_display = (dualwan_secondary=="LAN") ? "Ethernet LAN":dualwan_secondary;
+	var dw_primary = dualwan_type[0].toLowerCase();
+	var dw_secondary = dualwan_type[1].toLowerCase();
+}
+	var wans_lanport_orig = httpApi.nvramGet(["wans_lanport"]).wans_lanport;
+	var dsllink_statusstr = "";
+	var dsllink_statusstr_secondary = "";
+	if(wans_flag == 1){	//dual_wan enabled
+		dsllink_statusstr = first_wanlink_statusstr();
+		dsllink_statusstr_secondary = secondary_wanlink_statusstr();
+	}
+	else
+		dsllink_statusstr = wanlink_statusstr();
+
+var dsl_DataRateUp = parseInt("<% nvram_get("dsllog_datarateup"); %>");			//connection UL speed
+var dsl_DataRateDown = parseInt("<% nvram_get("dsllog_dataratedown"); %>");		//connection DL speed
 
 //HND_ROUTER HW NAT (fc_disable/runner_disable) ON: 0/0 ; OFF: 1/1
 var fc_disable_orig = '<% nvram_get("fc_disable"); %>';
 var runner_disable_orig = '<% nvram_get("runner_disable"); %>';
 
+var qos_xobw_orig = parseInt(httpApi.nvramGet(["qos_xobw"], true).qos_xobw);	//shapping UL speed /PrimaryWAN
+var qos_xobw1_orig = parseInt(httpApi.nvramGet(["qos_xobw1"], true).qos_xobw1);	//shapping UL speed /SecondaryWAN
 
 var bwdpi_app_rulelist = "<% nvram_get("bwdpi_app_rulelist"); %>".replace(/&#60/g, "<");
-var category_title = ["", "<#Adaptive_Game#>", "<#Adaptive_Stream#>","<#Adaptive_Message#>", "<#Adaptive_WebSurf#>","<#Adaptive_FileTransfer#>", "<#Adaptive_Others#>"];
-var cat_id_array = [[9,20], [8], [4], [0,5,6,15,17], [13,24], [1,3,14], [7,10,11,21,23]];
+var category_title = ["", "<#Adaptive_Game#>", "<#Adaptive_Stream#>", "<#Adaptive_Message#>", "<#Adaptive_WebSurf#>","<#Adaptive_FileTransfer#>", "<#Adaptive_Others#>", "<#Adaptive_eLearning#>"];
+var cat_id_array = [[9,20], [8], [4], [0,5,6,15,17], [13,24], [1,3,14], [7,10,11,21,23], [4,13]];
 var ctf_disable = '<% nvram_get("ctf_disable"); %>';
+var ctf_disable_force  = '<% nvram_get("ctf_disable_force "); %>';
 var ctf_fa_mode = '<% nvram_get("ctf_fa_mode"); %>';
 var qos_bw_rulelist = "<% nvram_get("qos_bw_rulelist"); %>".replace(/&#62/g, ">").replace(/&#60/g, "<");
 var select_all_checked = 0;
 
-if(based_modelid == "RT-AC68A" || based_modelid == "MAP-AC1750"){	//MODELDEP : Spec special fine tune
-	bwdpi_support = false;
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=110";
+
+if(geforceNow_support){
+	var orig_nvgfn_enable = httpApi.nvramGet(["nvgfn_enable"], true).nvgfn_enable;
 }
 
 function show_up_down(value){
@@ -279,9 +312,27 @@ function show_up_down(value){
 		document.getElementById('download_tr').style.display = "";
 		if(mtwancfg_support){
 			document.getElementById('wan_1_tr').style.display = "";
-			document.getElementById('wan_2_tr').style.display = "";
-			document.getElementById('upload2_tr').style.display = "";
-			document.getElementById('download2_tr').style.display = "";
+			if(dualwan_primary_display=="Ethernet LAN"){
+				$("#dualwan_primary_title").html("<#dualwan_primary#> - "+dualwan_primary_display+" (LAN Port "+wans_lanport_orig+")");
+			}
+			else{
+				$("#dualwan_primary_title").html("<#dualwan_primary#> - "+dualwan_primary_display);
+			}
+			if(dw_secondary == "none"){
+				document.getElementById('wan_2_tr').style.display = "none";
+				document.getElementById('upload2_tr').style.display = "none";
+				document.getElementById('download2_tr').style.display = "none";
+			}else{
+				document.getElementById('wan_2_tr').style.display = "";
+				if(dualwan_secondary_display=="Ethernet LAN"){
+					$("#dualwan_secondary_title").html("<#dualwan_secondary#> - "+dualwan_secondary_display+" (LAN Port "+wans_lanport_orig+")");
+				}
+				else{
+					$("#dualwan_secondary_title").html("<#dualwan_secondary#> - "+dualwan_secondary_display);
+				}
+				document.getElementById('upload2_tr').style.display = "";
+				document.getElementById('download2_tr').style.display = "";
+			}
 		}
 	}
 	else {
@@ -313,7 +364,7 @@ if(wl_info.band5g_support != '-1'){
 		}
 	}
 }
-if(wl_info.band5g_2_support != '-1'){
+if(wl_info.band5g_2_support != '-1' || wl_info.band6g_support != '-1'){
 	var gn_array_5g_2_length = gn_array_5g_2.length;
 	for(var k=0;k<gn_array_5g_2_length;k++){
 		if(gn_array_5g_2[k][18] == "1"){	//GN with Bandwidth Limiter
@@ -321,6 +372,7 @@ if(wl_info.band5g_2_support != '-1'){
 		}
 	}
 }
+var GN_with_Amazon_WSS_enabled = (amazon_wss_support && ((httpApi.amazon_wss.getStatue(0, 2) == "1") ? true : false));
 
 if(pm_support) {
 	var device_list = [<% pms_device_info(); %>][0];
@@ -348,8 +400,7 @@ if(pm_support) {
 
 function initial(){
 	show_menu();
-	// http://www.asus.com/support/FAQ/1008718/
-	httpApi.faqURL("1008718", function(url){document.getElementById("faq").href=url;});
+	document.getElementById("faq").href=faq_href;
 
 	if(downsize_4m_support || downsize_8m_support)
 		document.getElementById("guest_image").parentNode.style.display = "none";
@@ -362,11 +413,11 @@ function initial(){
 	}
 
 	var qos_type = document.form.qos_type.value;
-	if(document.form.qos_enable_orig.value == 1){
+	if(document.form.qos_enable_orig.value == "1"){
 		change_qos_type(qos_type);
 
 		document.getElementById('qos_type_tr').style.display = "";
-		if(bwdpi_support){
+		if(adaptiveqos_support){
 			document.getElementById('int_type').style.display = "";
 			document.getElementById('int_type_link').style.display = "";
 			change_qos_type(document.form.qos_type_orig.value);
@@ -378,7 +429,7 @@ function initial(){
 		document.getElementById('settingSelection').style.display = "none";
 		show_up_down(0);
 		document.getElementById('qos_type_tr').style.display = "none";
-		if(bwdpi_support){
+		if(adaptiveqos_support){
 			document.getElementById('int_type').style.display = "";
 			document.getElementById('int_type_link').style.display = "";
 			document.getElementById('bandwidth_setting_tr').style.display = "none";
@@ -386,9 +437,9 @@ function initial(){
 		}
 	}
 
-	if(bwdpi_support){
+	if(adaptiveqos_support){
 		document.getElementById('content_title').innerHTML = "<#menu5_3_2#> - <#Adaptive_QoS_Conf#>";
-		if(document.form.qos_enable.value == 1){
+		if(document.form.qos_enable.value == "1"){
 			if(qos_type == 0){              //Traditional Type
 				add_option(document.getElementById("settingSelection"), '<#qos_user_rules#>', 3, 0);
 				add_option(document.getElementById("settingSelection"), '<#qos_user_prio#>', 4, 0);
@@ -433,8 +484,19 @@ function initial(){
 	}
 	init_changeScale();
 
+	if(geforceNow_support){
+		document.getElementById("GeForce_upnp").style.display = "";
+		document.getElementById("GeForceNow_item").style.display = "";
+	}
+
 	if((isFirefox || isOpera) && document.getElementById("FormTitle"))
 		document.getElementById("FormTitle").className = "FormTitle";
+
+	if(!adaptiveqos_support){
+		$('#qos_desc').html('<#EzQoS_desc_QoS#>');
+		$('label[for="trad_type"]').html('<#EzQoS_type_QoS#>')
+		$('#bandwidth_setting_tr').hide();
+	}
 }
 
 function device_object(name, mac, type, type_name, description, group_array){
@@ -492,22 +554,57 @@ function init_changeScale(){
 	var upload = document.form.qos_obw.value;
 	var download = document.form.qos_ibw.value;
 
-	if(based_modelid == "DSL-AC68U"		//MODELDEP: DSL-AC68U
-	&& wans_dualwan_orig.search("dsl") >= 0 && dsllink_statusstr == "Connected"
-	&& ((upload == "" || upload == "0") && (download == "" || download == "0"))){
+	if(mtwancfg_support){
+		if(dw_primary == "dsl"
+		&& ((upload == "" || upload == "0") && (download == "" || download == "0"))
+		&& qos_xobw_orig > 0
+		){
+			document.form.obw.value = (qos_xobw_orig/1024).toFixed(2);
+			document.form.ibw.value = (dsl_DataRateDown/1024).toFixed(2);
+		}
+		else if(dw_primary == "dsl" && dsllink_statusstr == "Connected"
+		&& ((upload == "" || upload == "0") && (download == "" || download == "0"))
+		&& dsl_DataRateUp > 0
+		){
 
-		document.form.obw.value = dsl_DataRateUp/1024;
-		document.form.ibw.value = dsl_DataRateDown/1024;
+			document.form.obw.value = (dsl_DataRateUp/1024).toFixed(2);
+			document.form.ibw.value = (dsl_DataRateDown/1024).toFixed(2);
+		}
+		else{
+	
+			document.form.obw.value = (upload/1024).toFixed(2);
+			document.form.ibw.value = (download/1024).toFixed(2);
+		}
 	}
 	else{
-		document.form.obw.value = upload/1024;
-		document.form.ibw.value = download/1024;
+
+		document.form.obw.value = (upload/1024).toFixed(2);
+		document.form.ibw.value = (download/1024).toFixed(2);
 	}
-	if(mtwancfg_support) {
+
+	if(mtwancfg_support &&  wans_flag == "1") {
 		var upload1 = document.form.qos_obw1.value;
 		var download1 = document.form.qos_ibw1.value;
-		document.form.obw1.value = upload1/1024;
-		document.form.ibw1.value = download1/1024;
+
+		if(dw_secondary == "dsl"
+		&& ((upload1 == "" || upload1 == "0") && (download1 == "" || download1 == "0"))
+		&& qos_xobw1_orig > 0
+		){
+			document.form.obw1.value = (qos_xobw1_orig/1024).toFixed(2);
+			document.form.ibw1.value = (dsl_DataRateDown/1024).toFixed(2);
+		}
+		else if(dw_secondary == "dsl" && dsllink_statusstr_secondary == "Connected"
+		&& ((upload1 == "" || upload1 == "0") && (download1 == "" || download1 == "0"))
+		&& dsl_DataRateUp > 0
+		){
+
+			document.form.obw1.value = (dsl_DataRateUp/1024).toFixed(2);
+			document.form.ibw1.value = (dsl_DataRateDown/1024).toFixed(2);
+		}
+		else{
+			document.form.obw1.value = (upload1/1024).toFixed(2);
+			document.form.ibw1.value = (download1/1024).toFixed(2);
+		}
 	}
 }
 
@@ -525,61 +622,108 @@ function switchPage(page){
 }
 
 function validForm(){
-
+	var error_obw=0;
+	var error_obw1=0;
+	var error_ibw=0;
+	var error_ibw1=0;
 	if(document.form.qos_enable.value == 0 && document.form.qos_enable_orig.value == 0){
-		return false;
-	}
-
-	if(document.form.qos_enable.value == 1){
-		var qos_type = document.form.qos_type.value;
-		if(qos_type == 1) {
-			if(!reset_wan_to_fo(document.form, 1)) {
+		if(geforceNow_support){
+			if(document.form.nvgfn_enable.value == orig_nvgfn_enable){
 				return false;
 			}
 		}
+		else{
+			return false;
+		}
+	}
+
+	if(document.form.qos_enable.value == "1"){
+		var qos_type = document.form.qos_type.value;
+		if(qos_type == 1) {
+			if(!reset_wan_to_fo.check_status())
+				return false;
+		}
+
 		if(qos_type != 2){	//not Bandwidth Limiter
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && document.form.obw.value.length == 0){	//To check field is empty
-				alert("<#JS_fieldblank#>");
+
+			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && (document.form.obw.value.length == 0 || document.form.obw.value == 0)){		// To check field is 0 && Traditional QoS
+				alert("<#QoS_invalid_zero#>");
 				document.form.obw.focus();
 				document.form.obw.select();
-				return false;
-			}
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && document.form.obw.value == 0){		// To check field is 0 && Traditional QoS
-				alert("Upload Bandwidth can not be 0");	/* untranslated */
-				document.form.obw.focus();
-				document.form.obw.select();
-				return false;
+				error_obw++;
 
 			}
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && document.form.obw.value.split(".").length > 2){		//To check more than two point symbol
+			else if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && !validator.rangeFloat(document.form.obw, 0, 9999999999, "")){
+				error_obw++;
+			}
+
+			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && document.form.obw.value.split(".").length > 2){		//To check more than two point symbol
 				alert("The format of field of upload bandwidth is invalid"); /* untranslated */
 				document.form.obw.focus();
 				document.form.obw.select();
-				return false;
-			}
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && !validator.rangeFloat(document.form.obw, 0, 9999999999, "")){
+				error_obw++;
+			}			
+
+			if(error_obw > 0){
+				if(mtwancfg_support){
+					if(qos_xobw_orig > 0){
+						document.form.obw.value = (qos_xobw_orig/1024).toFixed(2);
+					}
+					else if(dw_primary == "dsl" && dsllink_statusstr == "Connected" && dsl_DataRateUp > 0){
+						document.form.obw.value = (dsl_DataRateUp/1024).toFixed(2);
+					}
+					else if(dw_primary == "dsl"){
+						document.form.obw.value = "100";
+					}
+					else{
+						document.form.obw.value = "1000";	
+					}
+				}
+				else{
+
+					if(qos_xobw_orig > 0){
+						document.form.obw.value = (qos_xobw_orig/1024).toFixed(2);
+					}
+					else{
+						document.form.obw.value = "1000";       
+					}
+				}
 				return false;
 			}
 
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && document.form.ibw.value.length == 0){
-				alert("<#JS_fieldblank#>");
+			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && (document.form.ibw.value.length == 0 || document.form.ibw.value == 0)){		// To check field is 0 && Traditional QoS
+				alert("<#QoS_invalid_zero#>");
 				document.form.ibw.focus();
 				document.form.ibw.select();
-				return false;
+				error_ibw++;
 			}
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && document.form.ibw.value == 0){		// To check field is 0 && Traditional QoS
-				alert("Download Bandwidth can not be 0");	/* untranslated */
-				document.form.ibw.focus();
-				document.form.ibw.select();
-				return false;
+			else if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && !validator.rangeFloat(document.form.ibw, 0, 9999999999, "")){
+				error_ibw++;
 			}
-			if(((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && document.form.ibw.value.split(".").length > 2){
+
+			if(((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && document.form.ibw.value.split(".").length > 2){
 				alert("The format of field of download bandwidth is invalid");	/* untranslated */
 				document.form.ibw.focus();
 				document.form.ibw.select();
-				return false;
+				error_ibw++;
 			}
-			if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0) && !validator.rangeFloat(document.form.ibw, 0, 9999999999, "")){
+
+			if(error_ibw > 0){
+				if(mtwancfg_support){
+					if(dw_primary == "dsl"  && dsllink_statusstr == "Connected" && dsl_DataRateDown > 0){
+						document.form.ibw.value = (dsl_DataRateDown/1024).toFixed(2);
+					}
+					else if(dw_primary == "dsl"){
+						document.form.ibw.value = "300";
+					}
+					else{
+						document.form.ibw.value = "1000";
+					}
+				}
+				else{
+
+					document.form.ibw.value = "1000";
+				}
 				return false;
 			}
 
@@ -588,11 +732,104 @@ function validForm(){
 				document.form.ibw.value = 0;
 			}
 
+			if(qos_xobw_orig > 0){
+				if((qos_xobw_orig/1024).toFixed(2) < parseFloat(document.form.obw.value)){
+					alert("<#value_lower_than#> "+ (qos_xobw_orig/1024).toFixed(2));
+					document.form.obw.focus();
+					document.form.obw.select();
+					return false;
+				}
+			}
 			document.form.qos_obw.disabled = false;
 			document.form.qos_ibw.disabled = false;
 			document.form.qos_obw.value = document.form.obw.value*1024;
 			document.form.qos_ibw.value = document.form.ibw.value*1024;
-			if(mtwancfg_support) {
+
+
+
+			if(mtwancfg_support && wans_flag == "1") {
+
+				if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && (document.form.obw1.value.length == 0 || document.form.obw1.value == 0)){		// To check field is 0 && Traditional QoS
+					alert("Download/Upload Bandwidth cannot be 0.");	/* untranslated */
+					document.form.obw1.focus();
+					document.form.obw1.select();
+					error_obw1++;
+
+				}
+				else if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && !validator.rangeFloat(document.form.obw1, 0, 9999999999, "")){
+					error_obw1++;
+				}
+
+				if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && document.form.obw1.value.split(".").length > 2){		//To check more than two point symbol
+					alert("The format of field of upload bandwidth is invalid"); /* untranslated */
+					document.form.obw1.focus();
+					document.form.obw1.select();
+					error_obw1++;
+				}
+
+				if(error_obw1 > 0){
+				
+					if(qos_xobw1_orig > 0){
+						document.form.obw1.value = (qos_xobw1_orig/1024).toFixed(2);
+					}
+					else if(dw_secondary == "dsl" && dsllink_statusstr_secondary == "Connected" && dsl_DataRateUp > 0){
+						document.form.obw1.value = (dsl_DataRateUp/1024).toFixed(2);
+					}
+					else if(dw_secondary == "dsl"){
+						document.form.obw1.value = "100";
+					}
+					else{
+						document.form.obw1.value = "1000";	
+					}
+					
+					return false;
+				}
+
+				if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && (document.form.ibw1.value.length == 0 || document.form.ibw1.value == 0)){		// To check field is 0 && Traditional QoS
+					alert("Download/Upload Bandwidth cannot be 0.");	/* untranslated */
+					document.form.ibw1.focus();
+					document.form.ibw1.select();
+					error_ibw1++;
+				}
+				else if( ((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && !validator.rangeFloat(document.form.ibw1, 0, 9999999999, "")){
+					error_ibw1++;
+				}
+
+				if(((qos_type == 1 && document.form.bw_setting_name[1].checked == true ) || qos_type == 0 || qos_type == 3) && document.form.ibw1.value.split(".").length > 2){
+					alert("The format of field of download bandwidth is invalid");	/* untranslated */
+					document.form.ibw1.focus();
+					document.form.ibw1.select();
+					error_ibw1++;
+				}
+
+				if(error_ibw1 > 0){
+					if(dw_secondary == "dsl"  && dsllink_statusstr_secondary == "Connected" && dsl_DataRateDown > 0){
+						document.form.ibw1.value = (dsl_DataRateDown/1024).toFixed(2);
+					}
+					else if(dw_secondary == "dsl"){
+						document.form.ibw1.value = "300";
+					}
+					else{
+						document.form.ibw1.value = "1000";	
+					}
+					
+					return false;
+				}
+
+				if(qos_type == 1 && document.getElementById('auto').checked){
+					document.form.obw1.value = 0;
+					document.form.ibw1.value = 0;
+				}
+
+				if(qos_xobw1_orig > 0){
+					if((qos_xobw1_orig/1024).toFixed(2) < parseFloat(document.form.obw1.value)){
+						alert("<#value_lower_than#> "+(qos_xobw1_orig/1024).toFixed(2));
+						document.form.obw1.focus();
+						document.form.obw1.select();
+						return false;
+					}
+				}
+
 				document.form.qos_obw1.disabled = false;
 				document.form.qos_ibw1.disabled = false;
 				document.form.qos_obw1.value = document.form.obw1.value*1024;
@@ -600,16 +837,31 @@ function validForm(){
 			}
 
 			if(qos_type == 1){	//Adaptive QoS
-				if(document.getElementById("Game_act") || document.getElementById("Media_act") || document.getElementById("Web_act") || document.getElementById("Customize_act")){
+				if(document.getElementById("Game_act")
+				|| document.getElementById("Media_act")
+				|| document.getElementById("Web_act")
+				|| document.getElementById("eLearning_act")
+				|| document.getElementById("videoConference_act")
+				|| document.getElementById("Customize_act")){
 					document.form.bwdpi_app_rulelist.disabled = "";
-					if(document.getElementById("Game_act"))
-						document.form.bwdpi_app_rulelist.value = "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<game";
-					else if(document.getElementById("Media_act"))
-						document.form.bwdpi_app_rulelist.value = "9,20<4<0,5,6,15,17<8<13,24<1,3,14<7,10,11,21,23<<media";
-					else if(document.getElementById("Web_act"))
-						document.form.bwdpi_app_rulelist.value = "9,20<13,24<4<0,5,6,15,17<8<1,3,14<7,10,11,21,23<<web";
-					else
+					if(document.getElementById("Game_act")){
+						document.form.bwdpi_app_rulelist.value = "9,20<8<4<0,5,6,15,17<4,13<13,24<1,3,14<7,10,11,21,23<game";
+					}						
+					else if(document.getElementById("Media_act")){
+						document.form.bwdpi_app_rulelist.value = "9,20<4<0,5,6,15,17<4,13<8<13,24<1,3,14<7,10,11,21,23<media";
+					}						
+					else if(document.getElementById("Web_act")){
+						document.form.bwdpi_app_rulelist.value = "9,20<13,24<4<0,5,6,15,17<4,13<8<1,3,14<7,10,11,21,23<web";
+					}
+					else if(document.getElementById("eLearning_act")){
+						document.form.bwdpi_app_rulelist.value = "9,20<4,13<4<0,5,6,15,17<13,24<8<1,3,14<7,10,11,21,23<eLearning";
+					}
+					else if(document.getElementById("videoConference_act")){
+						document.form.bwdpi_app_rulelist.value = "9,20<0,5,6,15,17<4<4,13<13,24<8<1,3,14<7,10,11,21,23<videoConference";
+					}						
+					else{
 						document.form.bwdpi_app_rulelist.value = bwdpi_app_rulelist;
+					}				
 				}
 				else{
 					alert("You have not selected QoS priority mode.");		//untranslated
@@ -619,10 +871,11 @@ function validForm(){
 		}
 		else{		//Bandwidth Limiter
 			if(document.form.PC_devicename.value != ""){
-				alert("You must press add icon to add a new rule first.");	//untranslated
+				alert("<#JS_add_rule#>");
 				return false;
 			}
 
+			document.form.qos_bw_rulelist.disabled = false;
 			document.form.qos_bw_rulelist.value = qos_bw_rulelist;
 		}
 	}
@@ -630,38 +883,81 @@ function validForm(){
 	return true;
 }
 
+function determineActionScript(){
+	if(geforceNow_support && document.form.qos_enable.value == "0" && document.form.qos_enable_orig.value == "0" &&
+		(document.form.nvgfn_enable.value != orig_nvgfn_enable)){
+		document.form.action_script.value = "restart_upnp;";
+	}
+	else if( lantiq_support || Rawifi_support || (ctf_disable == "1" || ctf_disable_force == "1") ||  //BULECAVE; MTK Models; HW NAT OFF
+			 (document.form.qos_enable_orig.value == "1" && document.form.qos_enable.value == "0") ||   //qos enable => disable
+			 ((document.form.qos_enable_orig.value == document.form.qos_enable.value) && 				//qos_enable and qos_type no change
+		 	  (document.form.qos_type_orig.value == document.form.qos_type.value)) ){
+		document.form.action_script.value = "restart_qos;restart_firewall;";
+		document.form.action_wait.value = "15";
+	}
+	else if(document.form.qos_enable.value == "1" && document.form.qos_type.value == "1" && (ctf_fa_mode != "2" || qca_support)){
+		//BCM: Support FA but disable FA ,or not support FA. QCA Models
+		document.form.action_script.value = "restart_qos;restart_firewall;";
+		document.form.action_wait.value = "15";
+	}
+	else if(document.form.qos_enable.value == "1" && document.form.qos_type.value == "1" && (fc_disable  != "" && runner_disable != "")){ //HND Router
+		document.form.action_script.value = "restart_qos;restart_firewall;";
+		document.form.action_wait.value = "15";
+	}
+	else{
+		document.form.action_script.value = "reboot";
+		document.form.action_wait.value = "<% get_default_reboot_time(); %>";
+	}
+
+	if((document.form.qos_type_orig.value != document.form.qos_type.value) && document.form.qos_type.value == "0")
+		document.form.next_page.value = "Advanced_QOSUserRules_Content.asp";
+}
+
 function submitQoS(){
-
 	if(validForm()){
-
-		if(document.form.qos_enable.value == 1 && document.form.qos_type.value == 1 && document.form.TM_EULA.value == 0){
+		if(document.form.qos_enable.value == "1" && document.form.qos_type.value == "1" && document.form.TM_EULA.value == "0"){
 			ASUS_EULA
 				.config(eula_confirm, cancel)
 				.show("tm")
 		}
 		else{
-			if(ctf_disable == 1 || (fc_disable_orig != '' && runner_disable_orig != '')){	//HW NAT [OFF] or HND ROUTER
-				document.form.action_script.value = "restart_qos;restart_firewall";
-			}
-			else{
-				if(ctf_fa_mode == "2"){
-					FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
-				}
-				else{
-					if(document.form.qos_type.value == 0 && !lantiq_support){
-						FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
-					}
-					else{
-						if(document.form.qos_type.value == 0 && lantiq_support){
-							var hwnatPrompt = "NAT traffic will be processed by CPU if traditional QoS is enabled. Are you sure want to enable?";
-							if(!confirm(hwnatPrompt)) return false;
-						}
-
-						document.form.action_script.value = "restart_qos;restart_firewall";
-					}
-				}
+			if(	document.form.qos_enable.value == "1" && document.form.qos_type_orig.value != document.form.qos_type.value &&
+				document.form.qos_type.value == 0 && lantiq_support){
+				var hwnatPrompt = "NAT traffic will be processed by CPU if traditional QoS is enabled. Are you sure want to enable?";
+				if(!confirm(hwnatPrompt)) return false;
 			}
 
+			if(reset_wan_to_fo.change_status){
+				reset_wan_to_fo.change_wan_mode(document.form);
+			}	
+
+			if(GN_with_Amazon_WSS_enabled && 
+				((document.form.qos_enable_orig.value == "1" && document.form.qos_enable.value == "0") || //Qos enable to disable
+				(document.form.qos_type_orig.value == "2" && document.form.qos_type.value != "2"))){ // Qos type is change from Bandwidth Limiter to other.
+					document.form.action_script.value = "restart_wireless;" + document.form.action_script.value;
+					if (lantiq_support)
+						document.form.action_wait.value = "60"; // for extend the time to let Amazon WSS ebtable rule ready, or it will block all clients
+					var postData = {
+						"do_rc": "0",
+						"wss_enable": "0"
+					};
+					var parmData = {
+						"wl_unit": "0",
+						"wl_subunit": "2",
+						"async": false
+					};
+					httpApi.amazon_wss.set(postData, parmData);
+					var append_hidden_item = function(_item, _value){
+						var NewInput = document.createElement("input");
+						NewInput.type = "hidden";
+						NewInput.name =  _item;
+						NewInput.value = _value;
+						document.form.appendChild(NewInput);
+					};
+					append_hidden_item("wl0.2_bss_enabled", "0");
+			}
+
+			determineActionScript();
 			showLoading();
 			document.form.submit();
 		}
@@ -679,17 +975,11 @@ function change_qos_type(value){
 		document.getElementById('int_type').checked = false;
 		document.getElementById('trad_type').checked = true;
 		document.getElementById('bw_limit_type').checked = false;
+		if(geforceNow_support)
+			document.getElementById('GeForce_type').checked = false;
 		document.getElementById('bandwidth_setting_tr').style.display = "none";
 		show_up_down(1);
 		document.getElementById('list_table').style.display = "none";
-		document.form.qos_bw_rulelist.disabled = true;
-		if(document.form.qos_type_orig.value == 0 && document.form.qos_enable_orig.value != 0){
-			document.form.action_script.value = "restart_qos;restart_firewall";
-		}
-		else{
-			document.form.action_script.value = "reboot";
-			document.form.next_page.value = "Advanced_QOSUserRules_Content.asp";
-		}
 		show_settings("NonAdaptive");
 	}
 	else if(value == 1){		//Adaptive QoS
@@ -697,8 +987,9 @@ function change_qos_type(value){
 		document.getElementById('trad_type').checked = false;
 		document.getElementById('bw_limit_type').checked = false;
 		document.getElementById('bandwidth_setting_tr').style.display = "";
+		if(geforceNow_support)
+			document.getElementById('GeForce_type').checked = false;
 		document.getElementById('list_table').style.display = "none";
-		document.form.qos_bw_rulelist.disabled = true;
 		if(document.getElementById("auto").checked){
 			show_up_down(0);
 		}
@@ -706,44 +997,54 @@ function change_qos_type(value){
 			show_up_down(1);
 		}
 
-		if(document.form.qos_type_orig.value == 1 && document.form.qos_enable_orig.value != 0)
-			document.form.action_script.value = "restart_qos;restart_firewall";
-		else{
-			document.form.action_script.value = "reboot";
-			document.form.next_page.value = "QoS_EZQoS.asp";
-		}
-
 		show_settings("Adaptive_quick");
 	}
-	else{		// Bandwidth Limiter
+	else if(value == 2){		// Bandwidth Limiter
 		document.getElementById('int_type').checked = false;
 		document.getElementById('trad_type').checked = false;
 		document.getElementById('bw_limit_type').checked = true;
+		if(geforceNow_support)
+			document.getElementById('GeForce_type').checked = false;
 		document.getElementById('bandwidth_setting_tr').style.display = "none";
 		show_up_down(0);
 		document.getElementById('list_table').style.display = "block";
-		document.form.qos_bw_rulelist.disabled = false;
-		if(document.form.qos_type_orig.value == 2 && document.form.qos_enable_orig.value != 0)
-			document.form.action_script.value = "restart_qos;restart_firewall";
-		else{
-			document.form.action_script.value = "reboot";
-		}
-
 		show_settings("NonAdaptive");
 		genMain_table();
 		if(!pm_support)
 			showDropdownClientList('setClientIP', 'name>mac', 'all', 'ClientList_Block_PC', 'pull_arrow', 'all');
 	}
+	else if(value == 3) {		// GeforceNow QoS
+		document.getElementById('int_type').checked = false;
+		document.getElementById('trad_type').checked = false;
+		document.getElementById('bw_limit_type').checked = false;
+		document.getElementById('GeForce_type').checked = true;
+		document.getElementById('bandwidth_setting_tr').style.display = "none";
+		show_up_down(1);
+		document.getElementById('list_table').style.display = "none";
+		show_settings("NonAdaptive");
+	}
+	else {
+		alert("no such qos");
+	}
 
 	document.form.qos_type.value = value;
 
-	if(value != 2 && GN_with_BandwidthLimeter){
-		alert("Guest Network > Bandwidth Limiter will be Disabled.");		/* Untranslated */
+	if(value != 2){
+		var alert_hint = "";
+		if(GN_with_BandwidthLimeter)
+			alert_hint += "The Bandwidth Limiter of Guest Network will be disabled."/* Untranslated */
+		if(GN_with_Amazon_WSS_enabled){
+			if(alert_hint != "")
+				alert_hint += "\n";
+			alert_hint += "Amazon WiFi Simple Setup will be disabled. "/* Untranslated */
+		}
+		if(alert_hint != "")
+			alert(alert_hint);
 	}
 }
 
 function show_settings(flag){
-	if(!bwdpi_support){
+	if(!adaptiveqos_support){
 		document.getElementById("quick_setup_desc").style.display = "none";
 		document.getElementById("quick_setup_table").style.display = "none";
 	}
@@ -768,23 +1069,45 @@ function check_actived(){
 	if(document.getElementById("Game_act")) document.getElementById("Game_act").id = "Game";
 	if(document.getElementById("Media_act")) document.getElementById("Media_act").id = "Media";
 	if(document.getElementById("Web_act")) document.getElementById("Web_act").id = "Web";
+	if(document.getElementById("eLearning_act")) document.getElementById("eLearning_act").id = "eLearning";
+	if(document.getElementById("videoConference_act")) document.getElementById("videoConference_act").id = "videoConference";
 	if(document.getElementById("Customize_act")) document.getElementById("Customize_act").id = "Customize";
 
-	if(bwdpi_app_rulelist == "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<"){	//default APP priority of QoS
+	//default APP priority of QoS
+	if(bwdpi_app_rulelist == "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<"		// old version
+	|| bwdpi_app_rulelist == "9,20<8<4<0,5,6,15,17<4,13<13,24<1,3,14<7,10,11,21,23<"){	// new version
 		return;
 	}
 
-	if(bwdpi_app_rulelist == "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<game"){
-		if(document.getElementById("Game"))		document.getElementById("Game").id = "Game_act";
+	if(bwdpi_app_rulelist.indexOf('game') != -1){
+		if(document.getElementById("Game")){
+			document.getElementById("Game").id = "Game_act";
+		}
 	}
-	else if(bwdpi_app_rulelist == "9,20<4<0,5,6,15,17<8<13,24<1,3,14<7,10,11,21,23<<media"){
-		if(document.getElementById("Media"))	document.getElementById("Media").id = "Media_act";
+	else if(bwdpi_app_rulelist.indexOf('media') != -1){
+		if(document.getElementById("Media")){
+			document.getElementById("Media").id = "Media_act";
+		}	
 	}
-	else if(bwdpi_app_rulelist == "9,20<13,24<4<0,5,6,15,17<8<1,3,14<7,10,11,21,23<<web"){
-		if(document.getElementById("Web"))		document.getElementById("Web").id = "Web_act";
+	else if(bwdpi_app_rulelist.indexOf('web') != -1){
+		if(document.getElementById("Web")){
+			document.getElementById("Web").id = "Web_act";
+		}
+	}
+	else if(bwdpi_app_rulelist.indexOf('eLearning') != -1){
+		if(document.getElementById("eLearning")){
+			document.getElementById("eLearning").id = "eLearning_act";
+		}
+	}
+	else if(bwdpi_app_rulelist.indexOf('videoConference') != -1){
+		if(document.getElementById("videoConference")){
+			document.getElementById("videoConference").id = "videoConference_act";
+		}
 	}
 	else{
-		if(document.getElementById("Customize"))	document.getElementById("Customize").id = "Customize_act";
+		if(document.getElementById("Customize")){
+			document.getElementById("Customize").id = "Customize_act";
+		}
 	}
 }
 
@@ -794,23 +1117,28 @@ function clickEvent(obj){
 	if(document.getElementById("Game_act")) document.getElementById("Game_act").id = "Game";
 	if(document.getElementById("Media_act")) document.getElementById("Media_act").id = "Media";
 	if(document.getElementById("Web_act")) document.getElementById("Web_act").id = "Web";
+	if(document.getElementById("eLearning_act")) document.getElementById("eLearning_act").id = "eLearning";
+	if(document.getElementById("videoConference_act")) document.getElementById("videoConference_act").id = "videoConference";
 	if(document.getElementById("Customize_act")) document.getElementById("Customize_act").id = "Customize";
+
 	if(obj.id.indexOf("Game") >= 0){
 		document.getElementById("Game").id = "Game_act";
-		stitle = "Game";
 	}
 	else if(obj.id.indexOf("Media") >= 0){
 		obj.id = "Media_act";
-		stitle = "Media";
 	}
 	else if(obj.id.indexOf("Web") >= 0){
 		obj.id = "Web_act";
-		stitle = "Web";
+	}
+	else if(obj.id.indexOf("eLearning") >= 0){
+		obj.id = "eLearning_act";
+	}
+	else if(obj.id.indexOf("videoConference") >= 0){
+		obj.id = "videoConference_act";
 	}
 	else if(obj.id.indexOf("Customize") >= 0){
 		obj.id = "Customize_act";
 		show_settings("NonAdaptive");
-		stitle = "Customize";
 	}
 	else
 		alert("mouse over on wrong place!");
@@ -832,7 +1160,6 @@ function regen_priority(obj){
 		rule_temp += cat_id_array[priority_array[i].id] + "<";
 	}
 
-	rule_temp += "<";
 	bwdpi_app_rulelist = rule_temp+"customize";
 }
 
@@ -840,14 +1167,33 @@ function gen_category_block(){
 	bwdpi_app_rulelist = bwdpi_app_rulelist.replace(/&#60/g, "<");
 	var bwdpi_app_rulelist_row = bwdpi_app_rulelist.split("<");
 	if(bwdpi_app_rulelist == "" || bwdpi_app_rulelist_row.length != 9){	//Avoid customized app list cannot show out
-		//customize default "bwdpi_app_rulelist", "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<"
-		bwdpi_app_rulelist = "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<";
+		bwdpi_app_rulelist = "9,20<8<4<0,5,6,15,17<4,13<13,24<1,3,14<7,10,11,21,23<";
 		bwdpi_app_rulelist_row = bwdpi_app_rulelist.split("<");
 	}
+	else{
+		if(bwdpi_app_rulelist.indexOf('4,13') == -1){		// old version transforms to new version
+			if(bwdpi_app_rulelist.indexOf('game') != -1){
+				bwdpi_app_rulelist = '9,20<8<4<0,5,6,15,17<4,13<13,24<1,3,14<7,10,11,21,23<game';
+			}
+			else if(bwdpi_app_rulelist.indexOf('media') != -1){
+				bwdpi_app_rulelist = '9,20<4<0,5,6,15,17<4,13<8<13,24<1,3,14<7,10,11,21,23<media';
+			}
+			else if(bwdpi_app_rulelist.indexOf('web') != -1){
+				bwdpi_app_rulelist = '9,20<13,24<4<0,5,6,15,17<4,13<8<1,3,14<7,10,11,21,23<web';
+			}
+			else{	// default state, transform default value
+				bwdpi_app_rulelist = "9,20<8<4<0,5,6,15,17<4,13<13,24<1,3,14<7,10,11,21,23<";
+			}
+
+			bwdpi_app_rulelist_row = bwdpi_app_rulelist.split("<");
+		}
+	}
+
+
 	var index = 0;
 	var code = "";
-
-	for(i=1;i<bwdpi_app_rulelist_row.length-2;i++){
+	
+	for(i=1;i<bwdpi_app_rulelist_row.length-1;i++){
 		for(j=1;j<cat_id_array.length;j++){
 			if(cat_id_array[j] == bwdpi_app_rulelist_row[i]){
 				index = j;
@@ -881,6 +1227,7 @@ function register_event1(){
 				regen_priority(this);
 			}
 		});
+
 		$("#category_list").disableSelection();
 	});
 }
@@ -898,6 +1245,10 @@ function register_overHint(){
 	document.getElementById('5').onmouseout = function(){nd();}
 	document.getElementById('6').onmouseover = function(){overHint(96);}
 	document.getElementById('6').onmouseout = function(){nd();}
+	if(document.getElementById('7')){
+		document.getElementById('7').onmouseover = function(){overHint(97);}
+		document.getElementById('7').onmouseout = function(){nd();}
+	}
 }
 
 function bandwidth_setting(){
@@ -1313,7 +1664,7 @@ function setGroup(name){
 }
 </script>
 </head>
-<body onload="initial();" id="body_id" onunload="unload_body();" onClick="">
+<body onload="initial();" id="body_id" onunload="unload_body();" class="bg">
 <div id="TopBanner"></div>
 <div id="Loading" class="popup_bg"></div>
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
@@ -1383,7 +1734,7 @@ function setGroup(name){
 								</tr>
 								</tbody>
 							</table>
-							<div style="margin-top:5px;width:100%;text-align:center;">
+							<div style="margin-bottom:10px;width:100%;text-align:center;">
 								<input class="button_gen" id="btn_cancel_priority" type="button" onclick="cancel_priority_panel();" value="<#CTL_Cancel#>">
 								<input class="button_gen" type="button" onclick="save_priority();" value="<#CTL_onlysave#>">
 							</div>
@@ -1400,8 +1751,8 @@ function setGroup(name){
 			<input type="hidden" name="next_page" value="QoS_EZQoS.asp">
 			<input type="hidden" name="group_id" value="">
 			<input type="hidden" name="action_mode" value="apply">
-			<input type="hidden" name="action_script" value="">
-			<input type="hidden" name="action_wait" value="15">
+			<input type="hidden" name="action_script" value="reboot">
+			<input type="hidden" name="action_wait" value="<% get_default_reboot_time(); %>">
 			<input type="hidden" name="flag" value="">
 			<input type="hidden" name="TM_EULA" value="<% nvram_get("TM_EULA"); %>">
 			<input type="hidden" name="qos_enable" value="<% nvram_get("qos_enable"); %>">
@@ -1413,7 +1764,7 @@ function setGroup(name){
 			<input type="hidden" name="qos_obw1" value="<% nvram_get("qos_obw1"); %>" disabled>
 			<input type="hidden" name="qos_ibw1" value="<% nvram_get("qos_ibw1"); %>" disabled>
 			<input type="hidden" name="bwdpi_app_rulelist" value="<% nvram_get("bwdpi_app_rulelist"); %>" disabled>
-			<input type="hidden" name="qos_bw_rulelist" value="">
+			<input type="hidden" name="qos_bw_rulelist" value="" disabled>
 
 			<table width="95%" border="0" align="left" cellpadding="0" cellspacing="0" class="FormTitle" id="FormTitle" style="height:820px;">
 				<tr>
@@ -1456,7 +1807,7 @@ function setGroup(name){
 														<#EzQoS_desc#>
 														<ul>
 															<li id="function_int_desc"><#EzQoS_desc_Adaptive#></li>
-															<li><#EzQoS_desc_Traditional#></li>
+															<li id="qos_desc"><#EzQoS_desc_Traditional#></li>
 															<li><#EzQoS_desc_Bandwidth_Limiter#></li>
 														</ul>
 														<#EzQoS_desc_note#>
@@ -1473,6 +1824,13 @@ function setGroup(name){
 							<tr>
 								<td valign="top">
 									<table style="margin-left:3px;" width="95%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
+										<tr id="GeForce_upnp" style="display: none;">
+											<th><#GeForce_NOW_itemname#></th>
+											<td colspan="2">
+												<input type="radio" name="nvgfn_enable" class="input" value="1" <% nvram_match("nvgfn_enable", "1", "checked"); %>><#checkbox_Yes#>
+												<input type="radio" name="nvgfn_enable" class="input" value="0" <% nvram_match("nvgfn_enable", "0", "checked"); %>><#checkbox_No#>
+											</td>
+										</tr>
 										<tr>
 											<th><#Enable_QoS#></th>
 											<td colspan="2">
@@ -1480,9 +1838,9 @@ function setGroup(name){
 													<script type="text/javascript">
 														$('#radio_qos_enable').iphoneSwitch('<% nvram_get("qos_enable"); %>',
 															 function() {
-																document.form.qos_enable.value = 1;
-																if(document.form.qos_enable_orig.value != 1){
-																	if(document.getElementById('int_type').checked == true && bwdpi_support)
+																document.form.qos_enable.value = "1";
+																if(document.form.qos_enable_orig.value != "1"){
+																	if(document.getElementById('int_type').checked == true && adaptiveqos_support)
 																		document.form.next_page.value = "QoS_EZQoS.asp";
 																	else if(document.getElementById('trad_type').checked)		//Traditional QoS
 																		document.form.next_page.value = "Advanced_QOSUserRules_Content.asp";
@@ -1496,23 +1854,30 @@ function setGroup(name){
 																}
 
 																document.getElementById('qos_type_tr').style.display = "";
-																if(bwdpi_support){
+																if(adaptiveqos_support){
 																	document.getElementById('qos_enable_hint').style.display = "";
-																	change_qos_type(document.form.qos_type_orig.value);
 																}
+																change_qos_type(document.form.qos_type_orig.value);
 															 },
 															 function() {
-																document.form.qos_enable.value = 0;
+																document.form.qos_enable.value = "0";
 																show_up_down(0);
 																document.getElementById('qos_type_tr').style.display = "none";
 																document.getElementById('bandwidth_setting_tr').style.display = "none";
 																document.getElementById('list_table').style.display = "none";
 
-																if(GN_with_BandwidthLimeter){
-																	alert("Guest Network > Bandwidth Limiter will be Disabled.");		/* Untranslated */
+																var alert_hint = "";
+																if(GN_with_BandwidthLimeter)
+																	alert_hint += "The Bandwidth Limiter of Guest Network will be disabled."/* Untranslated */
+																if(GN_with_Amazon_WSS_enabled){
+																	if(alert_hint != "")
+																	alert_hint += "\n";
+																	alert_hint += "Amazon WiFi Simple Setup will be disabled. "/* Untranslated */
 																}
+																if(alert_hint != "")
+																	alert(alert_hint);
 
-																if(bwdpi_support){
+																if(adaptiveqos_support){
 
 																	document.getElementById('qos_enable_hint').style.display = "none";
 																	show_settings("NonAdaptive");
@@ -1525,10 +1890,11 @@ function setGroup(name){
 										</tr>
 										<tr id="qos_type_tr" style="display:none">
 											<th><#QoS_Type#></th>
-											<td colspan="2">
+											<td colspan="3">
 												<input id="int_type" name="qos_type_radio" value="1" onClick="change_qos_type(this.value);" style="display:none;" type="radio" <% nvram_match("qos_type", "1","checked"); %>><a id="int_type_link" class="hintstyle" style="display:none;" href="javascript:void(0);" onClick="openHint(20, 5);"><label for="int_type"><#Adaptive_QoS#></label></a>
 												<input id="trad_type" name="qos_type_radio" value="0" onClick="change_qos_type(this.value);" type="radio" <% nvram_match("qos_type", "0","checked"); %>><a class="hintstyle" href="javascript:void(0);" onClick="openHint(20, 6);"><label for="trad_type"><#EzQoS_type_traditional#></label></a>
 												<input id="bw_limit_type" name="qos_type_radio" value="2" onClick="change_qos_type(this.value);" type="radio" <% nvram_match("qos_type", "2","checked"); %>><a class="hintstyle" href="javascript:void(0);" onClick="openHint(20, 7)"><label for="bw_limit_type"><#Bandwidth_Limiter#></label></a>
+												<span id="GeForceNow_item" style="display: none;"><input id="GeForce_type" name="qos_type_radio" value="3" onClick="change_qos_type(this.value);" type="radio" <% nvram_match("qos_type", "3","checked"); %>><a class="hintstyle" href="javascript:void(0);"><label for="GeForce_type">GeForce NOW QoS</label></a></span>
 											</td>
 										</tr>
 										<tr id="bandwidth_setting_tr" style="display:none">
@@ -1539,7 +1905,7 @@ function setGroup(name){
 											</td>
 										</tr>
 										<tr id="wan_1_tr" style="display:none">
-											<th colspan=3><#dualwan_primary#></th>
+											<th colspan=3 id="dualwan_primary_title"></th>
 										</tr>
 										<tr id="upload_tr">
 											<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(20, 2);"><#upload_bandwidth#></a></th>
@@ -1564,7 +1930,7 @@ function setGroup(name){
 											</td>
 										</tr>
 										<tr id="wan_2_tr" style="display:none">
-											<th colspan=3><#dualwan_secondary#></th>
+											<th colspan=3 id="dualwan_secondary_title"></th>
 										</tr>
 										<tr id="upload2_tr" style="display:none">
 											<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(20, 2);"><#upload_bandwidth#></a></th>
@@ -1600,40 +1966,46 @@ function setGroup(name){
 							</tr>
 						</table>
 
-						<table id="quick_setup_table" width="100%" border="0" align="center" style="display:none;">
-							<tr height="130px">
-								<td width="10px"></td>
-								<td width="130px" align="center">
-									<div id="Game" class="quick_setup" onclick="clickEvent(this);" onmouseover="overHint(86);" onmouseout="nd();"><a href=""></a></div>
-								</td>
-								<td width="50px"></td>
-								<td width="130px" align="center">
-									<div id="Media" class="quick_setup" onclick="clickEvent(this);" onmouseover="overHint(87);" onmouseout="nd();"><a href=""></a></div>
-								</td>
-								<td width="50px"></td>
-								<td width="130px" align="center">
-									<div id="Web" class="quick_setup" onclick="clickEvent(this);" onmouseover="overHint(88);" onmouseout="nd();"><a href=""></a></div>
-								</td>
-								<td width="50px"></td>
-								<td width="130px" align="center">
-									<div id="Customize" class="quick_setup" onclick="clickEvent(this);set_priority('on');" onmouseover="overHint(85);" onmouseout="nd();"><a href=""></a></div>
-								</td>
-								<td width="20px"></td>
-							</tr>
-							<tr height="40px" align="center">
-								<td width="10px"></td>
-								<td class="Quick_Setup_title" align="center"><#AiProtection_filter_stream1#></td><!--Games-->
-								<td width="50px"></td>
-								<td class="Quick_Setup_title" align="center"><#AiProtection_filter_stream2#></td><!--Media Streaming-->
-								<td width="50px"></td>
-								<td class="Quick_Setup_title" align="center"><#Adaptive_WebSurf#></td><!--Web Surfing-->
-								<td width="50px"></td>
-								<td class="Quick_Setup_title" align="center"><#Customize#></td>
-								<td width="20px"></td>
-							</tr>
-							<tr height="40">
-							</tr>
-						</table>
+						<div id="quick_setup_table" style="display:none;">
+							<div style="display:flex;align-items: center;justify-content: center;">
+								<div style="width: 120px;height:174px;">
+									<div style="display:flex;height:132px;">
+										<div id="Game" onclick="clickEvent(this);" onmouseover="overHint(86);" onmouseout="nd();"></div>
+									</div>				
+									<div class="Quick_Setup_title"><#AiProtection_filter_stream1#></div>
+								</div>
+								<div style="width: 120px;height:174px;">
+									<div style="display:flex;height:132px;">
+										<div id="Media" onclick="clickEvent(this);" onmouseover="overHint(87);" onmouseout="nd();"></div>
+									</div>		
+									<div class="Quick_Setup_title"><#AiProtection_filter_stream2#></div>
+								</div>
+								<div style="width: 120px;height:174px;">
+									<div style="display:flex;height:132px;">
+										<div id="Web" onclick="clickEvent(this);" onmouseover="overHint(88);" onmouseout="nd();"></div>
+									</div>					
+									<div class="Quick_Setup_title"><#Adaptive_WebSurf#></div>
+								</div>
+								<div style="width: 120px;height:174px;">
+									<div style="display:flex;height:132px;">
+										<div id="eLearning" onclick="clickEvent(this);" onmouseover="overHint(104);" onmouseout="nd();"></div>
+									</div>								
+									<div class="Quick_Setup_title"><#Adaptive_eLearning#></div>
+								</div>
+								<div style="width: 120px;height:174px;">
+									<div style="display:flex;height:132px;">
+										<div id="videoConference" onclick="clickEvent(this);" onmouseover="overHint(103);" onmouseout="nd();"></div>
+									</div>		
+									<div class="Quick_Setup_title"><#Adaptive_Message#></div>
+								</div>
+								<div style="width: 120px;height:174px;">
+									<div style="display:flex;height:132px;">
+										<div id="Customize" onclick="clickEvent(this);set_priority('on');" onmouseover="overHint(85);" onmouseout="nd();"></div>
+									</div>
+									<div class="Quick_Setup_title"><#Customize#></div>
+								</div>
+							</div>
+						</div>
 
 						<table id="list_table" width="94%" border="0" cellpadding="0" cellspacing="0" style="padding-left:8px;">
 							<tr>

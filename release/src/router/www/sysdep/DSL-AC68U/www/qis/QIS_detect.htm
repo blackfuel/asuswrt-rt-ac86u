@@ -23,10 +23,10 @@ var extend_autodet = 1;
 var linkup_autodet = 0;
 var AnnexSwitch_count = 0;
 var AnnexSwitch_enable = 1;
-var dslx_annex_state = '<% nvram_get("dslx_annex"); %>';
-var wan_type = '<% nvram_get("dsltmp_autodet_wan_type"); %>';
-var dsl_autodet_state = '<% nvram_get("dsltmp_autodet_state"); %>';
-var dsl_line_state = '<% nvram_get("dsltmp_adslsyncsts"); %>';
+var dslx_annex_state = '';
+var wan_type = '';
+var dsl_autodet_state = '';
+var dsl_line_state = '';
 var w_Setting = "<% nvram_get("w_Setting"); %>";
 
 function QKDetect_load_body(){
@@ -38,7 +38,7 @@ function QKDetect_load_body(){
 
 function getWANStatus(){
 	$.ajax({
-		url: '/result_of_get_changed_status_QIS.asp',
+		url: '/result_of_get_changed_status_QIS.asp?hash=' + Math.random().toString(),
 		dataType: 'script',
 
 		error: function(xhr){
@@ -133,7 +133,8 @@ function getWANStatus(){
 				}
 
 				++AnnexSwitch_count;
-				if(AnnexSwitch_count >= 18){	//18*5 = 90 sec = 1.5 min
+				if( parent.based_modelid == "DSL-AC68U"
+				 && AnnexSwitch_count >= 18 ){	//18*5 = 90 sec = 1.5 min
 					AnnexSwitch_count = 0;
 					++parent.autodet_annex_counter;
 					if(parent.autodet_annex_counter <= 3){

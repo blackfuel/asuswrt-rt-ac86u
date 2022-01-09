@@ -2,6 +2,7 @@
  * MiniUPnP project
  * http://miniupnp.free.fr/ or http://miniupnp.tuxfamily.org/
  * (c) 2015 Tomofumi Hayashi
+ * (c) 2019 Paul Chambers
  * 
  * This software is subject to the conditions detailed
  * in the LICENCE file provided within the distribution.
@@ -11,6 +12,7 @@
 #define NFTNLRDR_H_INCLUDED
 
 #include "../commonrdr.h"
+
 int init_redirect(void);
 void shutdown_redirect(void);
 
@@ -35,6 +37,9 @@ add_filter_rule2(const char * ifname,
 
 int
 delete_redirect_and_filter_rules(unsigned short eport, int proto);
+
+int
+delete_filter_rule(const char * ifname, unsigned short port, int proto);
 
 int
 add_peer_dscp_rule2(const char * ifname,
@@ -76,9 +81,4 @@ get_portmappings_in_range(unsigned short startport, unsigned short endport,
 int get_nat_ext_addr(struct sockaddr* src, struct sockaddr *dst, uint8_t proto,
 		     struct sockaddr* ret_ext);
 
-/* for debug */
-int
-list_redirect_rule(const char * ifname);
-
 #endif
-

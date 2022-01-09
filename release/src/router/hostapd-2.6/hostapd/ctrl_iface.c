@@ -6400,11 +6400,20 @@ static int hostapd_ctrl_iface_receive_process(struct hostapd_data *hapd,
 	} else if (os_strcmp(buf, "STA-FIRST") == 0) {
 		reply_len = hostapd_ctrl_iface_sta_first(hapd, reply,
 							 reply_size);
+	} else if (os_strcmp(buf, "STA_EXT-FIRST") == 0) {
+		reply_len = hostapd_ctrl_iface_sta_ext_first(hapd, reply,
+							 reply_size);
 	} else if (os_strncmp(buf, "STA ", 4) == 0) {
 		reply_len = hostapd_ctrl_iface_sta(hapd, buf + 4, reply,
 						   reply_size);
+	} else if (os_strncmp(buf, "STA_EXT ", 8) == 0) {
+		reply_len = hostapd_ctrl_iface_sta_ext(hapd, buf + 8, reply,
+						   reply_size);
 	} else if (os_strncmp(buf, "STA-NEXT ", 9) == 0) {
 		reply_len = hostapd_ctrl_iface_sta_next(hapd, buf + 9, reply,
+							reply_size);
+	} else if (os_strncmp(buf, "STA_EXT-NEXT ", 13) == 0) {
+		reply_len = hostapd_ctrl_iface_sta_ext_next(hapd, buf + 13, reply,
 							reply_size);
 	} else if (os_strcmp(buf, "ATTACH") == 0) {
 		if (hostapd_ctrl_iface_attach(hapd, from, fromlen))

@@ -2853,7 +2853,7 @@ static WERROR print_job_checks(const struct auth_serversupplied_info *server_inf
 			       int snum, int *njobs)
 {
 	const char *sharename = lp_const_servicename(snum);
-	uint64_t dspace, dsize;
+	uint64_t dspace, dsize, bsize;
 	uint64_t minspace;
 	int ret;
 
@@ -2873,7 +2873,7 @@ static WERROR print_job_checks(const struct auth_serversupplied_info *server_inf
 	/* see if we have sufficient disk space */
 	if (lp_minprintspace(snum)) {
 		minspace = lp_minprintspace(snum);
-		ret = sys_fsusage(lp_pathname(snum), &dspace, &dsize);
+		ret = sys_fsusage(lp_pathname(snum), &dspace, &dsize, &bsize);
 		if (ret == 0 && dspace < 2*minspace) {
 			DEBUG(3, ("print_job_checks: "
 				  "disk space check failed.\n"));

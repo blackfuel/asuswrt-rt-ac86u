@@ -18,7 +18,7 @@
 
 #ifdef WITH_TLS
 /*
- * $Id: b5281053cb9552708104fdd966b3787b632e0a4c $
+ * $Id: be4a74a7e3732e28a5a4775293f17c9becc978ef $
  *
  * @file tls.h
  * @brief Structures and prototypes for TLS wrappers
@@ -26,7 +26,7 @@
  * @copyright 2010 Network RADIUS SARL <info@networkradius.com>
  */
 
-RCSIDH(tls_h, "$Id: b5281053cb9552708104fdd966b3787b632e0a4c $")
+RCSIDH(tls_h, "$Id: be4a74a7e3732e28a5a4775293f17c9becc978ef $")
 
 #include <freeradius-devel/conffile.h>
 
@@ -104,6 +104,12 @@ typedef struct _tls_info_t {
 	char		initialized;
 } tls_info_t;
 
+#if OPENSSL_VERSION_NUMBER < 0x10001000L
+#define ssl_session ssl->session
+#else
+#define ssl_session session
+#endif
+
 /*
  * tls_session_t Structure gets stored as opaque in eap_handler_t
  * This contains EAP-REQUEST specific data
@@ -122,6 +128,9 @@ typedef struct _tls_info_t {
 typedef struct _tls_session_t {
 	SSL_CTX		*ctx;
 	SSL 		*ssl;
+#if OPENSSL_VERSION_NUMBER >= 0x10001000L
+	SSL_SESSION	*session;
+#endif
 	tls_info_t	info;
 
 	BIO 		*into_ssl;

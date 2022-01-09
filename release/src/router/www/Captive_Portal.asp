@@ -8,7 +8,7 @@
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="icon" href="images/favicon.png">
-<title><#Web_Title#> - Free Wi-Fi<!--untranslated--></title>
+<title><#Web_Title#> - Free WiFi<!--untranslated--></title>
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
 <link rel="stylesheet" type="text/css" href="other.css">
@@ -23,6 +23,7 @@
 <script type="text/javascript" src="disk_functions.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
 <script type="text/javascript" src="/Captive_Portal_template.js"></script>
+<script type="text/javascript" src="/js/httpApi.js"></script>
 <script>
 var disk_flag = true;
 var splash_image_base64 = "";
@@ -31,9 +32,14 @@ var captive_portal = decodeURIComponent('<% nvram_char_to_ascii("","captive_port
 var captive_portal_array = new Array();
 var captive_portal_wl_idx = "off";
 var captive_portal_enable = '<% nvram_get("captive_portal_enable"); %>';
+
+var faq_href = "https://nw-dlcdnet.asus.com/support/forward.html?model=&type=Faq&lang="+ui_lang+"&kw=&num=144";
+
 window.onresize = function() {
-	if(document.getElementById("guestnetwork_wl").style.display == "block") {
-		cal_panel_block("guestnetwork_wl", 0.25);
+	if(document.getElementById("guestnetwork_wl") != null){
+		if(document.getElementById("guestnetwork_wl").style.display == "block") {
+			cal_panel_block("guestnetwork_wl", 0.25);
+		}
 	}
 }
 
@@ -82,6 +88,12 @@ function initial(){
 		captivePortalShowAndHide(0);
 		$("#apply_button").val('<#CTL_Apply_Enable#>');
 	}
+
+	var series = productid.split("-")[0].toUpperCase();
+	if(series == "BRT")
+		document.getElementById("faq").href=faq_href;
+	else
+		$(".brt_series").remove();
 }
 function captivePortalShowAndHide(_flag) {
 	if(_flag == 1) {
@@ -523,7 +535,7 @@ function gen_splash_page() {
 			code += "<input type='checkbox' name='cb_terms_service' id='cb_terms_service' onchange='update_terms_service();' checked>";
 			code += "<#FreeWiFi_OptionHint#>";
 			code += "<textarea name='terms_service' id='terms_service' class='splash_textarea' rows='9' cols='40' maxlength='2048'>";
-			code += "By using Free Wi-Fi internet service, you hereby expressly acknowledge and agree that there are significant security, privacy and confidentiality risks inherent in accessing or transmitting information through the internet, whether the connection is facilitated through wired or wireless technology. Security issues include, without limitation, interception of transmissions, loss of data, and the introduction or viruses and other programs that can corrupt or damage your computer.\n\nAccordingly, you agree that the owner and/or provider of this network is NOT liable for any interception or transmissions, computer worms or viruses, loss of data, file corruption, hacking or damage to your computer or other devices that result from the transmission or download of information or materials through the internet service provided.\n\nUse of the wireless network is subject to the general restrictions outlined below. If abnormal, illegal, or unauthorized behavior is detected, including heavy consumption of bandwidth, the network provider reserves the right to permanently disconnect the offending device from the wireless network.";
+			code += "By using Free WiFi internet service, you hereby expressly acknowledge and agree that there are significant security, privacy and confidentiality risks inherent in accessing or transmitting information through the internet, whether the connection is facilitated through wired or wireless technology. Security issues include, without limitation, interception of transmissions, loss of data, and the introduction or viruses and other programs that can corrupt or damage your computer.\n\nAccordingly, you agree that the owner and/or provider of this network is NOT liable for any interception or transmissions, computer worms or viruses, loss of data, file corruption, hacking or damage to your computer or other devices that result from the transmission or download of information or materials through the internet service provided.\n\nUse of the wireless network is subject to the general restrictions outlined below. If abnormal, illegal, or unauthorized behavior is detected, including heavy consumption of bandwidth, the network provider reserves the right to permanently disconnect the offending device from the wireless network.";
 			code += "</textarea>";
 		code += "</div>";
 
@@ -1181,7 +1193,7 @@ function save_splash_page_content() {
 			html_landing += "code += '<div style=\"display:table;width:100%;height:100%;border-collapse:collapse;\">';\n";
 			html_landing += "code += '<div style=\"display:table-row;\">';\n";
 			html_landing += "code += '<div id=\"term_service_title\" class=\"term_service_title\" style=\"display:table-cell;vertical-align:middle;font-size:13px;\" >';\n";
-			html_landing += "code += 'Free Wi-Fi TERMS OF SERVICE';\n";
+			html_landing += "code += 'Free WiFi TERMS OF SERVICE';\n";
 			html_landing += "code += '</div>';\n";
 			html_landing += "code += '</div>';\n";
 			html_landing += "code += '<div style=\"display:table-row;height:90%;\">';\n";
@@ -1405,7 +1417,7 @@ function save_splash_page_content() {
 		html_landing_error += "<path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'/>\n";
 		html_landing_error += "</svg>\n";
 		html_landing_error += "</div>\n";
-		html_landing_error += "<div id='splash_template_error_desc' class='splash_template_error_desc'>Unable to connect to the Internet. Please check your Wi-Fi service administrator.</div>\n";
+		html_landing_error += "<div id='splash_template_error_desc' class='splash_template_error_desc'>Unable to connect to the Internet. Please check your WiFi service administrator.</div>\n";
 		//html_landing_error += "<div id='splash_template_error_close' class='splash_template_error_close' onclick='close_action();'>Close this window</div>\n";
 		html_landing_error += "</div>\n";
 		html_landing_error += "</body></html>\n";
@@ -1714,7 +1726,7 @@ var third_party_wl_used = new Array();
 function create_third_party_wl_used() {
 	var _enable_flag = "";
 	var _third_party_wl_used = new Array();
-	for(var i = 1; i <= multissid_support; i += 1) {
+	for(var i = 1; i <= multissid_count; i += 1) {
 		_third_party_wl_used[i] = "not_used";
 	}
 
@@ -1743,17 +1755,17 @@ function create_third_party_wl_used() {
 		var _fbwifi_2g_index = '<% nvram_get("fbwifi_2g"); %>';
 		if(_fbwifi_2g_index != "off") {
 			_fb_wl_group = _fbwifi_2g_index.split(".")[1];
-			_third_party_wl_used[_fb_wl_group] = "Facebook Wi-Fi";
+			_third_party_wl_used[_fb_wl_group] = "Facebook WiFi";
 		}
 		if(wl_info.band5g_support) {
 			var _fbwifi_5g_index = '<% nvram_get("fbwifi_5g"); %>';
 			_fb_wl_group = _fbwifi_5g_index.split(".")[1];
-			_third_party_wl_used[_fb_wl_group] = "Facebook Wi-Fi";
+			_third_party_wl_used[_fb_wl_group] = "Facebook WiFi";
 		}
 		if(wl_info.band5g_2_support) {
 			var _fbwifi_5g_2_index = '<% nvram_get("fbwifi_5g_2"); %>';
 			_fb_wl_group = _fbwifi_5g_2_index.split(".")[1];
-			_third_party_wl_used[_fb_wl_group] = "Facebook Wi-Fi";
+			_third_party_wl_used[_fb_wl_group] = "Facebook WiFi";
 		}
 	}
 	return _third_party_wl_used;
@@ -1773,7 +1785,7 @@ function change_wl_input_status(_idx) {
 function find_empty_gn_group() {
 	var _empty_wl_idx = "";
 	var _empty_flag = false;
-	var _gn_count = multissid_support;
+	var _gn_count = multissid_count;
 	for(_gn_count; _gn_count > 0; _gn_count -= 1) {
 		_empty_flag = (gn_array_2g[(_gn_count - 1)][0] == "0") ? true : false;
 		if(!_empty_flag)
@@ -1823,7 +1835,7 @@ function check_gn_if_status(_subunit, _gn_array) {
 
 </head>
 
-<body onload="initial();" onunLoad="return unload_body();">
+<body onload="initial();" onunLoad="return unload_body();" class="bg">
 <div id="full_screen_bg" class="full_screen_bg" onselectstart="return false;"></div>
 <div id="guestnetwork_wl" class="guestnetwork_wl"></div>
 <div id='folderTree_panel' class='landing_folder_content'>
@@ -1880,12 +1892,15 @@ function check_gn_if_status(_subunit, _gn_array) {
 							<tr>
 								<td bgcolor="#4D595D" valign="top">
 									<div>&nbsp;</div>
-									<div class="formfonttitle"><#Guest_Network#> - Free Wi-Fi<!--untranslated--></div>
+									<div class="formfonttitle"><#Guest_Network#> - Free WiFi<!--untranslated--></div>
 									<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
 									<div class="cp_page_intro_icon"></div>
 									<div style='float:left;width:80%;'>
 									<div class="cp_page_intro_txt" style="color:#FC0;"><#FreeWiFi_desc1#></div>
 									<div class="cp_page_intro_txt"><#FreeWiFi_desc2#></div>
+									<div class="cp_page_intro_txt brt_series">
+										<#FAQ_Find#> : <a id="faq" href="" target="_blank" style="font-weight:bolder;text-decoration:underline;" href="" target="_blank">GO</a>
+									</div>
 									<div align="center" class="left" style="float:left;margin-left:20px;margin-top:10px;cursor:pointer;" id="radio_captive_portal_enable"></div>
 									<div class="iphone_switch_container" style="height:32px; width:74px; position: relative; overflow: hidden;"></div>
 									<script type="text/javascript">

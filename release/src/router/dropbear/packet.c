@@ -35,6 +35,7 @@
 #include "auth.h"
 #include "channel.h"
 #include "netio.h"
+#include "runopts.h"
 
 static int read_packet_init(void);
 static void make_mac(unsigned int seqno, const struct key_context_directional * key_state,
@@ -49,7 +50,7 @@ static int checkmac(void);
 #define ZLIB_COMPRESS_EXPANSION (((RECV_MAX_PAYLOAD_LEN/16384)+1)*5 + 6)
 #define ZLIB_DECOMPRESS_INCR 1024
 #ifndef DISABLE_ZLIB
-static buffer* buf_decompress(buffer* buf, unsigned int len);
+static buffer* buf_decompress(const buffer* buf, unsigned int len);
 static void buf_compress(buffer * dest, buffer * src, unsigned int len);
 #endif
 
@@ -57,14 +58,13 @@ static void buf_compress(buffer * dest, buffer * src, unsigned int len);
 void write_packet() {
 
 	ssize_t written;
-#ifdef HAVE_WRITEV
+#if defined(HAVE_WRITEV) && (defined(IOV_MAX) || defined(UIO_MAXIOV))
 	/* 50 is somewhat arbitrary */
 	unsigned int iov_count = 50;
 	struct iovec iov[50];
 #else
 	int len;
 	buffer* writebuf;
-	int packet_type;
 #endif
 	
 	TRACE2(("enter write_packet"))
@@ -76,6 +76,15 @@ void write_packet() {
 	/* This may return EAGAIN. The main loop sometimes
 	calls write_packet() without bothering to test with select() since
 	it's likely to be necessary */
+#if DROPBEAR_FUZZ
+	if (fuzz.fuzzing) {
+		/* pretend to write one packet at a time */
+		/* TODO(fuzz): randomise amount written based on the fuzz input */
+		written = iov[0].iov_len;
+	}
+	else
+#endif
+	{
 	written = writev(ses.sock_out, iov, iov_count);
 	if (written < 0) {
 		if (errno == EINTR || errno == EAGAIN) {
@@ -84,6 +93,7 @@ void write_packet() {
 		} else {
 			dropbear_exit("Error writing: %s", strerror(errno));
 		}
+	}
 	}
 
 	packet_queue_consume(&ses.writequeue, written);
@@ -94,15 +104,13 @@ void write_packet() {
 	}
 
 #else /* No writev () */
+#if DROPBEAR_FUZZ
+	_Static_assert(0, "No fuzzing code for no-writev writes");
+#endif
 	/* Get the next buffer in the queue of encrypted packets to write*/
 	writebuf = (buffer*)examine(&ses.writequeue);
 
-	/* The last byte of the buffer is not to be transmitted, but is 
-	 * a cleartext packet_type indicator */
-	packet_type = writebuf->data[writebuf->len-1];
-	len = writebuf->len - 1 - writebuf->pos;
-	TRACE2(("write_packet type %d len %d/%d", packet_type,
-			len, writebuf->len-1))
+	len = writebuf->len - writebuf->pos;
 	dropbear_assert(len > 0);
 	/* Try to write as much as possible */
 	written = write(ses.sock_out, buf_getptr(writebuf, len), len);
@@ -207,7 +215,7 @@ static int read_packet_init() {
 
 	unsigned int maxlen;
 	int slen;
-	unsigned int len;
+	unsigned int len, plen;
 	unsigned int blocksize;
 	unsigned int macsize;
 
@@ -246,21 +254,35 @@ static int read_packet_init() {
 	/* now we have the first block, need to get packet length, so we decrypt
 	 * the first block (only need first 4 bytes) */
 	buf_setpos(ses.readbuf, 0);
-	if (ses.keys->recv.crypt_mode->decrypt(buf_getptr(ses.readbuf, blocksize), 
-				buf_getwriteptr(ses.readbuf, blocksize),
-				blocksize,
-				&ses.keys->recv.cipher_state) != CRYPT_OK) {
-		dropbear_exit("Error decrypting");
+#if DROPBEAR_AEAD_MODE
+	if (ses.keys->recv.crypt_mode->aead_crypt) {
+		if (ses.keys->recv.crypt_mode->aead_getlength(ses.recvseq,
+					buf_getptr(ses.readbuf, blocksize), &plen,
+					blocksize,
+					&ses.keys->recv.cipher_state) != CRYPT_OK) {
+			dropbear_exit("Error decrypting");
+		}
+		len = plen + 4 + macsize;
+	} else
+#endif
+	{
+		if (ses.keys->recv.crypt_mode->decrypt(buf_getptr(ses.readbuf, blocksize), 
+					buf_getwriteptr(ses.readbuf, blocksize),
+					blocksize,
+					&ses.keys->recv.cipher_state) != CRYPT_OK) {
+			dropbear_exit("Error decrypting");
+		}
+		plen = buf_getint(ses.readbuf) + 4;
+		len = plen + macsize;
 	}
-	len = buf_getint(ses.readbuf) + 4 + macsize;
 
 	TRACE2(("packet size is %u, block %u mac %u", len, blocksize, macsize))
 
 
 	/* check packet length */
 	if ((len > RECV_MAX_PACKET_LEN) ||
-		(len < MIN_PACKET_LEN + macsize) ||
-		((len - macsize) % blocksize != 0)) {
+		(plen < blocksize) ||
+		(plen % blocksize != 0)) {
 		dropbear_exit("Integrity error (bad packet size %u)", len);
 	}
 
@@ -286,24 +308,48 @@ void decrypt_packet() {
 
 	ses.kexstate.datarecv += ses.readbuf->len;
 
-	/* we've already decrypted the first blocksize in read_packet_init */
-	buf_setpos(ses.readbuf, blocksize);
+#if DROPBEAR_AEAD_MODE
+	if (ses.keys->recv.crypt_mode->aead_crypt) {
+		/* first blocksize is not decrypted yet */
+		buf_setpos(ses.readbuf, 0);
 
-	/* decrypt it in-place */
-	len = ses.readbuf->len - macsize - ses.readbuf->pos;
-	if (ses.keys->recv.crypt_mode->decrypt(
-				buf_getptr(ses.readbuf, len), 
-				buf_getwriteptr(ses.readbuf, len),
-				len,
-				&ses.keys->recv.cipher_state) != CRYPT_OK) {
-		dropbear_exit("Error decrypting");
-	}
-	buf_incrpos(ses.readbuf, len);
+		/* decrypt it in-place */
+		len = ses.readbuf->len - macsize - ses.readbuf->pos;
+		if (ses.keys->recv.crypt_mode->aead_crypt(ses.recvseq,
+					buf_getptr(ses.readbuf, len + macsize),
+					buf_getwriteptr(ses.readbuf, len),
+					len, macsize,
+					&ses.keys->recv.cipher_state, LTC_DECRYPT) != CRYPT_OK) {
+			dropbear_exit("Error decrypting");
+		}
+		buf_incrpos(ses.readbuf, len);
+	} else
+#endif
+	{
+		/* we've already decrypted the first blocksize in read_packet_init */
+		buf_setpos(ses.readbuf, blocksize);
 
-	/* check the hmac */
-	if (checkmac() != DROPBEAR_SUCCESS) {
-		dropbear_exit("Integrity error");
+		/* decrypt it in-place */
+		len = ses.readbuf->len - macsize - ses.readbuf->pos;
+		if (ses.keys->recv.crypt_mode->decrypt(
+					buf_getptr(ses.readbuf, len), 
+					buf_getwriteptr(ses.readbuf, len),
+					len,
+					&ses.keys->recv.cipher_state) != CRYPT_OK) {
+			dropbear_exit("Error decrypting");
+		}
+		buf_incrpos(ses.readbuf, len);
+
+		/* check the hmac */
+		if (checkmac() != DROPBEAR_SUCCESS) {
+			dropbear_exit("Integrity error");
+		}
+
 	}
+	
+#if DROPBEAR_FUZZ
+	fuzz_dump(ses.readbuf->data, ses.readbuf->len);
+#endif
 
 	/* get padding length */
 	buf_setpos(ses.readbuf, PACKET_PADDING_OFF);
@@ -331,10 +377,6 @@ void decrypt_packet() {
 		ses.payload = ses.readbuf;
 		ses.payload_beginning = ses.payload->pos;
 		buf_setlen(ses.payload, ses.payload->pos + len);
-		/* copy payload */
-		//ses.payload = buf_new(len);
-		//memcpy(ses.payload->data, buf_getptr(ses.readbuf, len), len);
-		//buf_incrlen(ses.payload, len);
 	}
 	ses.readbuf = NULL;
 
@@ -356,6 +398,20 @@ static int checkmac() {
 	buf_setpos(ses.readbuf, 0);
 	make_mac(ses.recvseq, &ses.keys->recv, ses.readbuf, contents_len, mac_bytes);
 
+#if DROPBEAR_FUZZ
+	if (fuzz.fuzzing) {
+	 	/* fail 1 in 2000 times to test error path. */
+		unsigned int value = 0;
+		if (mac_size > sizeof(value)) {
+			memcpy(&value, mac_bytes, sizeof(value));
+		}
+		if (value % 2000 == 99) {
+			return DROPBEAR_FAILURE;
+		}
+		return DROPBEAR_SUCCESS;
+	}
+#endif
+
 	/* compare the hash */
 	buf_setpos(ses.readbuf, contents_len);
 	if (constant_time_memcmp(mac_bytes, buf_getptr(ses.readbuf, mac_size), mac_size) != 0) {
@@ -367,7 +423,7 @@ static int checkmac() {
 
 #ifndef DISABLE_ZLIB
 /* returns a pointer to a newly created buffer */
-static buffer* buf_decompress(buffer* buf, unsigned int len) {
+static buffer* buf_decompress(const buffer* buf, unsigned int len) {
 
 	int result;
 	buffer * ret;
@@ -539,9 +595,16 @@ void encrypt_packet() {
 	buf_setpos(ses.writepayload, 0);
 	buf_setlen(ses.writepayload, 0);
 
-	/* length of padding - packet length must be a multiple of blocksize,
-	 * with a minimum of 4 bytes of padding */
-	padlen = blocksize - (writebuf->len) % blocksize;
+	/* length of padding - packet length excluding the packetlength uint32
+	 * field in aead mode must be a multiple of blocksize, with a minimum of
+	 * 4 bytes of padding */
+	len = writebuf->len;
+#if DROPBEAR_AEAD_MODE
+	if (ses.keys->trans.crypt_mode->aead_crypt) {
+		len -= 4;
+	}
+#endif
+	padlen = blocksize - len % blocksize;
 	if (padlen < 4) {
 		padlen += blocksize;
 	}
@@ -561,28 +624,47 @@ void encrypt_packet() {
 	buf_incrlen(writebuf, padlen);
 	genrandom(buf_getptr(writebuf, padlen), padlen);
 
-	make_mac(ses.transseq, &ses.keys->trans, writebuf, writebuf->len, mac_bytes);
+#if DROPBEAR_AEAD_MODE
+	if (ses.keys->trans.crypt_mode->aead_crypt) {
+		/* do the actual encryption, in-place */
+		buf_setpos(writebuf, 0);
+		/* encrypt it in-place*/
+		len = writebuf->len;
+		buf_incrlen(writebuf, mac_size);
+		if (ses.keys->trans.crypt_mode->aead_crypt(ses.transseq,
+					buf_getptr(writebuf, len),
+					buf_getwriteptr(writebuf, len + mac_size),
+					len, mac_size,
+					&ses.keys->trans.cipher_state, LTC_ENCRYPT) != CRYPT_OK) {
+			dropbear_exit("Error encrypting");
+		}
+		buf_incrpos(writebuf, len + mac_size);
+	} else
+#endif
+	{
+		make_mac(ses.transseq, &ses.keys->trans, writebuf, writebuf->len, mac_bytes);
 
-	/* do the actual encryption, in-place */
-	buf_setpos(writebuf, 0);
-	/* encrypt it in-place*/
-	len = writebuf->len;
-	if (ses.keys->trans.crypt_mode->encrypt(
-				buf_getptr(writebuf, len),
-				buf_getwriteptr(writebuf, len),
-				len,
-				&ses.keys->trans.cipher_state) != CRYPT_OK) {
-		dropbear_exit("Error encrypting");
+		/* do the actual encryption, in-place */
+		buf_setpos(writebuf, 0);
+		/* encrypt it in-place*/
+		len = writebuf->len;
+		if (ses.keys->trans.crypt_mode->encrypt(
+					buf_getptr(writebuf, len),
+					buf_getwriteptr(writebuf, len),
+					len,
+					&ses.keys->trans.cipher_state) != CRYPT_OK) {
+			dropbear_exit("Error encrypting");
+		}
+		buf_incrpos(writebuf, len);
+
+		/* stick the MAC on it */
+		buf_putbytes(writebuf, mac_bytes, mac_size);
 	}
-	buf_incrpos(writebuf, len);
-
-	/* stick the MAC on it */
-	buf_putbytes(writebuf, mac_bytes, mac_size);
 
 	/* Update counts */
 	ses.kexstate.datatrans += writebuf->len;
 
-	writebuf_enqueue(writebuf, packet_type);
+	writebuf_enqueue(writebuf);
 
 	/* Update counts */
 	ses.transseq++;
@@ -602,14 +684,11 @@ void encrypt_packet() {
 	TRACE2(("leave encrypt_packet()"))
 }
 
-void writebuf_enqueue(buffer * writebuf, unsigned char packet_type) {
-	/* The last byte of the buffer stores the cleartext packet_type. It is not
-	 * transmitted but is used for transmit timeout purposes */
-	buf_putbyte(writebuf, packet_type);
+void writebuf_enqueue(buffer * writebuf) {
 	/* enqueue the packet for sending. It will get freed after transmission. */
 	buf_setpos(writebuf, 0);
 	enqueue(&ses.writequeue, (void*)writebuf);
-	ses.writequeue_len += writebuf->len-1;
+	ses.writequeue_len += writebuf->len;
 }
 
 

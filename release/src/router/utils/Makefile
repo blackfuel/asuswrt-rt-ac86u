@@ -43,7 +43,7 @@ endif
 
 CFLAGS += -s -I$(SRCBASE)/include
 ifneq ($(RTCONFIG_BCMWL6),y)
-CFLAGS += -I$(TOP)/shared -I$(TOP)/nvram
+CFLAGS += -I$(TOP)/shared -I$(TOP_PLATFORM)/nvram
 endif
 CFLAGS += $(if $(WLAN_ComponentIncPath),$(WLAN_ComponentIncPath),$(addprefix -I,$(wildcard $(SRCBASE)/shared/bcmwifi/src)))
 #ifeq ($(CONFIG_RTR_OPTIMIZE_SIZE),y)
@@ -56,7 +56,7 @@ CFLAGS  += -O2
 endif
 CFLAGS += -DBCMINTERNAL -DBCMDBG
 ifneq ($(RTCONFIG_BCMWL6),y)
-LDFLAGS += -L$(TOP)/nvram -L$(INSTALLDIR)/nvram/usr/lib -lnvram
+LDFLAGS += -L$(TOP_PLATFORM)/nvram -L$(INSTALLDIR)/nvram/usr/lib -lnvram
 LDFLAGS += -L$(TOP)/shared -L$(INSTALLDIR)/shared/usr/lib -lshared
 ifeq ($(RTCONFIG_AMAS),y)
 LDFLAGS += -L$(TOP)/json-c/.libs -ljson-c
@@ -167,10 +167,8 @@ ttcp: epi_ttcp.c
 clean:
 	rm -f *.o *~ $(UTILS)
 	rm -rf socket wifi epi_ttcp
-	rm -f $(INSTALLDIR)/usr/sbin/WlGetDriverCfg.sh
 
 install: all
 	install -d $(INSTALLDIR)/usr/sbin
 	install $(UTILS) $(INSTALLDIR)/usr/sbin
-	install -D -m 755 WlGetDriverCfg.sh $(INSTALLDIR)/usr/sbin/WlGetDriverCfg.sh
 	$(STRIP) $(foreach file,$(UTILS),$(INSTALLDIR)/usr/sbin/$(file))

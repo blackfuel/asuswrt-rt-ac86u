@@ -38,13 +38,15 @@
 #include "gensignkey.h"
 
 static void send_msg_kexdh_reply(mp_int *dh_e, buffer *ecdh_qs);
+#if DROPBEAR_EXT_INFO
+static void send_msg_ext_info(void);
+#endif
 
 /* Handle a diffie-hellman key exchange initialisation. This involves
  * calculating a session key reply value, and corresponding hash. These
  * are carried out by send_msg_kexdh_reply(). recv_msg_kexdh_init() calls
  * that function, then brings the new keys into use */
 void recv_msg_kexdh_init() {
-
 	DEF_MP_INT(dh_e);
 	buffer *ecdh_qs = NULL;
 
@@ -86,6 +88,14 @@ void recv_msg_kexdh_init() {
 	}
 
 	send_msg_newkeys();
+
+#if DROPBEAR_EXT_INFO
+	/* Only send it following the first newkeys */
+	if (!ses.kexstate.donesecondkex && ses.allow_ext_info) {
+		send_msg_ext_info();
+	}
+#endif
+
 	ses.requirenext = SSH_MSG_NEWKEYS;
 	TRACE(("leave recv_msg_kexdh_init"))
 }
@@ -93,29 +103,9 @@ void recv_msg_kexdh_init() {
 
 #if DROPBEAR_DELAY_HOSTKEY
 
-static void fsync_parent_dir(const char* fn) {
-#ifdef HAVE_LIBGEN_H
-	char *fn_dir = m_strdup(fn);
-	char *dir = dirname(fn_dir);
-	int dirfd = open(dir, O_RDONLY);
-
-	if (dirfd != -1) {
-		if (fsync(dirfd) != 0) {
-			TRACE(("fsync of directory %s failed: %s", dir, strerror(errno)))
-		}
-		m_close(dirfd);
-	} else {
-		TRACE(("error opening directory %s for fsync: %s", dir, strerror(errno)))
-	}
-
-	free(fn_dir);
-#endif
-}
-
 static void svr_ensure_hostkey() {
 
 	const char* fn = NULL;
-	char *fn_temp = NULL;
 	enum signkey_type type = ses.newkeys->algo_hostkey;
 	void **hostkey = signkey_key_ptr(svr_opts.hostkey, type);
 	int ret = DROPBEAR_FAILURE;
@@ -143,6 +133,11 @@ static void svr_ensure_hostkey() {
 			fn = ECDSA_PRIV_FILENAME;
 			break;
 #endif
+#if DROPBEAR_ED25519
+		case DROPBEAR_SIGNKEY_ED25519:
+			fn = ED25519_PRIV_FILENAME;
+			break;
+#endif
 		default:
 			dropbear_assert(0);
 	}
@@ -151,28 +146,10 @@ static void svr_ensure_hostkey() {
 		return;
 	}
 
-	fn_temp = m_malloc(strlen(fn) + 20);
-	snprintf(fn_temp, strlen(fn)+20, "%s.tmp%d", fn, getpid());
-
-	if (signkey_generate(type, 0, fn_temp) == DROPBEAR_FAILURE) {
+	if (signkey_generate(type, 0, fn, 1) == DROPBEAR_FAILURE) {
 		goto out;
 	}
-
-	if (link(fn_temp, fn) < 0) {
-		/* It's OK to get EEXIST - we probably just lost a race
-		with another connection to generate the key */
-		if (errno != EEXIST) {
-			dropbear_log(LOG_ERR, "Failed moving key file to %s: %s", fn,
-				strerror(errno));
-			/* XXX fallback to non-atomic copy for some filesystems? */
-			goto out;
-		}
-	}
-
-	/* ensure directory update is flushed to disk, otherwise we can end up
-	with zero-byte hostkey files if the power goes off */
-	fsync_parent_dir(fn);
-
+	
 	ret = readhostkey(fn, svr_opts.hostkey, &type);
 
 	if (ret == DROPBEAR_SUCCESS) {
@@ -190,11 +167,6 @@ static void svr_ensure_hostkey() {
 	}
 
 out:
-	if (fn_temp) {
-		unlink(fn_temp);
-		m_free(fn_temp);
-	}
-
 	if (ret == DROPBEAR_FAILURE)
 	{
 		dropbear_exit("Couldn't read or generate hostkey %s", fn);
@@ -219,6 +191,13 @@ static void send_msg_kexdh_reply(mp_int *dh_e, buffer *ecdh_qs) {
 	if (svr_opts.delay_hostkey)
 	{
 		svr_ensure_hostkey();
+	}
+#endif
+
+#if DROPBEAR_FUZZ
+	if (fuzz.fuzzing && fuzz.skip_kexmaths) {
+		fuzz_fake_send_kexdh_reply();
+		return;
 	}
 #endif
 
@@ -255,7 +234,8 @@ static void send_msg_kexdh_reply(mp_int *dh_e, buffer *ecdh_qs) {
 			{
 			struct kex_curve25519_param *param = gen_kexcurve25519_param();
 			kexcurve25519_comb_key(param, ecdh_qs, svr_opts.hostkey);
-			buf_putstring(ses.writepayload, (const char*)param->pub, CURVE25519_LEN);
+
+			buf_putstring(ses.writepayload, param->pub, CURVE25519_LEN);
 			free_kexcurve25519_param(param);
 			}
 			break;
@@ -264,7 +244,7 @@ static void send_msg_kexdh_reply(mp_int *dh_e, buffer *ecdh_qs) {
 
 	/* calc the signature */
 	buf_put_sign(ses.writepayload, svr_opts.hostkey, 
-			ses.newkeys->algo_hostkey, ses.hash);
+			ses.newkeys->algo_signature, ses.hash);
 
 	/* the SSH_MSG_KEXDH_REPLY is done */
 	encrypt_packet();
@@ -272,3 +252,20 @@ static void send_msg_kexdh_reply(mp_int *dh_e, buffer *ecdh_qs) {
 	TRACE(("leave send_msg_kexdh_reply"))
 }
 
+#if DROPBEAR_EXT_INFO
+/* Only used for server-sig-algs on the server side */
+static void send_msg_ext_info(void) {
+	TRACE(("enter send_msg_ext_info"))
+
+	buf_putbyte(ses.writepayload, SSH_MSG_EXT_INFO);
+	/* nr-extensions */
+	buf_putint(ses.writepayload, 1);
+
+	buf_putstring(ses.writepayload, SSH_SERVER_SIG_ALGS, strlen(SSH_SERVER_SIG_ALGS));
+	buf_put_algolist_all(ses.writepayload, sigalgs, 1);
+	
+	encrypt_packet();
+
+	TRACE(("leave send_msg_ext_info"))
+}
+#endif

@@ -113,7 +113,7 @@ static const uint8_t len_of_option_as_string[] = {
 	[OPTION_IP              ] = sizeof("255.255.255.255 "),
 	[OPTION_IP_PAIR         ] = sizeof("255.255.255.255 ") * 2,
 	[OPTION_STATIC_ROUTES   ] = sizeof("255.255.255.255/32 255.255.255.255 "),
-	[OPTION_6RD             ] = sizeof("32 128 ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff 255.255.255.255 "),
+	[OPTION_6RD             ] = sizeof("132 128 ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff 255.255.255.255 "),
 	[OPTION_STRING          ] = 1,
 	[OPTION_STRING_HOST     ] = 1,
 #if ENABLE_FEATURE_UDHCP_RFC3397
@@ -220,7 +220,7 @@ static NOINLINE char *xmalloc_optname_optval(uint8_t *option, const struct dhcp_
 	type = optflag->flags & OPTION_TYPE_MASK;
 	optlen = dhcp_option_lengths[type];
 	upper_length = len_of_option_as_string[type]
-		* ((unsigned)(len + optlen - 1) / (unsigned)optlen);
+		* ((unsigned)(len + optlen) / (unsigned)optlen);
 
 	dest = ret = xmalloc(upper_length + strlen(opt_name) + 2);
 	dest += sprintf(ret, "%s=", opt_name);
@@ -513,7 +513,7 @@ static char **fill_envp(struct dhcp_packet *packet)
 		temp = udhcp_get_option(packet, code);
 		*curr = xmalloc_optname_optval(temp, &dhcp_optflags[i], opt_name);
 		putenv(*curr++);
-		if (code == DHCP_SUBNET) {
+		if (code == DHCP_SUBNET && temp[-OPT_DATA + OPT_LEN] == 4) {
 			/* Subnet option: make things like "$ip/$mask" possible */
 			uint32_t subnet;
 			move_from_unaligned32(subnet, temp);
@@ -1683,7 +1683,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
  * They say ISC DHCP client supports this case.
  */
 				server_addr = 0;
-				temp = udhcp_get_option(&packet, DHCP_SERVER_ID);
+				temp = udhcp_get_option32(&packet, DHCP_SERVER_ID);
 				if (!temp) {
 					bb_error_msg("no server ID, using 0.0.0.0");
 				} else {
@@ -1710,7 +1710,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 				struct in_addr temp_addr;
 				uint8_t *temp;
 
-				temp = udhcp_get_option(&packet, DHCP_LEASE_TIME);
+				temp = udhcp_get_option32(&packet, DHCP_LEASE_TIME);
 				if (!temp) {
 					bb_error_msg("no lease time with ACK, using 1 hour lease");
 					lease_seconds = 60 * 60;
@@ -1802,7 +1802,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
 					uint32_t svid;
 					uint8_t *temp;
 
-					temp = udhcp_get_option(&packet, DHCP_SERVER_ID);
+					temp = udhcp_get_option32(&packet, DHCP_SERVER_ID);
 					if (!temp) {
  non_matching_svid:
 						log1("%s with wrong server ID, ignoring packet",

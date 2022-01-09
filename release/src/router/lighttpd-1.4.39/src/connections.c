@@ -24,6 +24,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <ctype.h>
 
 #ifdef USE_OPENSSL
 # include <openssl/ssl.h>
@@ -35,12 +36,24 @@
 #endif
 
 #if EMBEDDED_EANBLE
+#include "nvram_control.h"
 #include <dirent.h>
 #endif
 
 #include "sys-socket.h"
 
 #include <dlinklist.h>
+
+/* smb_auth.c */
+extern buffer* smbc_wrapper_physical_url_path(server *srv, connection *con);
+extern void free_share_link_info(share_link_info_t *smb_sharelink_info);
+extern const char *get_filename_ext(const char *filename);
+extern int open_close_streaming_port(server* srv, int toOpen);
+extern int smbc_wrapper_open(connection* con, const char *furl, int flags, mode_t mode);
+extern int smbc_wrapper_stat(connection* con, const char *url, struct stat *st);
+extern int smbc_wrapper_close(connection* con, int fd);
+extern int smbc_wrapper_unlink(connection* con, const char *furl);
+
 #define DBE 1
 
 typedef struct {
@@ -204,7 +217,7 @@ static void dump_packet(const unsigned char *data, size_t len) {
 
 static int connection_handle_read_ssl(server *srv, connection *con) {
 #ifdef USE_OPENSSL
-	int r, ssl_err, len, count = 0;
+	int r, ssl_err, len;
 	char *mem = NULL;
 	size_t mem_len = 0;
 
@@ -219,20 +232,19 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 #endif
 
 		len = SSL_read(con->ssl, mem, mem_len);
-		chunkqueue_use_memory(con->read_queue, len > 0 ? len : 0);
+		if (len > 0) {
+			chunkqueue_use_memory(con->read_queue, len);
+			con->bytes_read += len;
+		} else {
+			chunkqueue_use_memory(con->read_queue, 0);
+		}
 
 		if (con->renegotiations > 1 && con->conf.ssl_disable_client_renegotiation) {
 			log_error_write(srv, __FILE__, __LINE__, "s", "SSL: renegotiation initiated by client, killing connection");
 			connection_set_state(srv, con, CON_STATE_ERROR);
 			return -1;
 		}
-
-		if (len > 0) {
-			con->bytes_read += len;
-			count += len;
-		}
-	} while (len == (ssize_t) mem_len && count < MAX_READ_LIMIT);
-
+	} while (len > 0);
 
 	if (len < 0) {
 		int oerrno = errno;
@@ -286,9 +298,15 @@ static int connection_handle_read_ssl(server *srv, connection *con) {
 			while((ssl_err = ERR_get_error())) {
 				switch (ERR_GET_REASON(ssl_err)) {
 				case SSL_R_SSL_HANDSHAKE_FAILURE:
+			      #ifdef SSL_R_TLSV1_ALERT_UNKNOWN_CA
 				case SSL_R_TLSV1_ALERT_UNKNOWN_CA:
+			      #endif
+			      #ifdef SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN
 				case SSL_R_SSLV3_ALERT_CERTIFICATE_UNKNOWN:
+			      #endif
+			      #ifdef SSL_R_SSLV3_ALERT_BAD_CERTIFICATE
 				case SSL_R_SSLV3_ALERT_BAD_CERTIFICATE:
+			      #endif
 					if (!con->conf.log_ssl_noise) continue;
 					break;
 				default:
@@ -677,7 +695,11 @@ static int parser_share_link(server *srv, connection *con){
 		buffer_copy_string_len(filename, con->request.uri->ptr+y+1, con->request.uri->used-y);
 		buffer_urldecode_path(filename);
 		Cdbg(DBE, "filename=%s", filename->ptr);
-				
+
+		if(strstr(filename->ptr, "..") != NULL) {                      
+			return -1;
+		}
+	
 		buffer* sharepath = buffer_init();
 		buffer_copy_string_len(sharepath, con->request.uri->ptr+1, y-1);
 		Cdbg(DBE, "sharepath=%s", sharepath->ptr );

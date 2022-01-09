@@ -1,15 +1,3 @@
-# Helper makefile for building Broadcom wps libaries
-# This file maps wps feature flags (import) to WPSFLAGS and WPSFILES (export).
-#
-# Broadcom Proprietary and Confidential. Copyright (C) 2016,
-# All Rights Reserved.
-# 
-# This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom;
-# the contents of this file may not be disclosed to third parties, copied
-# or duplicated in any form, in whole or in part, without the prior
-# written permission of Broadcom.
-# $Id: $
-
 WPSFILES :=
 
 ifeq ($(BLDTYPE), debug)

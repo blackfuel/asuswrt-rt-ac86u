@@ -280,6 +280,16 @@ int klogd_main(int argc UNUSED_PARAM, char **argv)
 				if (*start == '>')
 					start++;
 			}
+#if defined(BWDPI_LOGWAR)
+			/* Ignore annoying BWDPI messages */
+			opt_c = start;
+			while (*opt_c == '[')
+				opt_c++;
+			if (strncmp(opt_c, "tdts_shell_ioctl", sizeof("tdts_shell_ioctl") - 1) == 0 ||
+			    strncmp(opt_c, "udb_ioctl", sizeof("udb_ioctl") - 1) == 0)
+				;
+			else
+#endif
 			/* Log (only non-empty lines) */
 			if (*start)
 				syslog(priority, "%s", start);

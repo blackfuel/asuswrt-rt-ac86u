@@ -9,18 +9,65 @@
 #include <sys/types.h>
 #include "rc.h"
 
-static inline int check_host_key(const char *ktype, const char *nvname, const char *hkfn)
+static void check_host_keys()
 {
-	unlink(hkfn);
+	int nvram_change = 0;
 
-	if (!nvram_get_file(nvname, hkfn, 2048)) {
-		eval("dropbearkey", "-t", (char *)ktype, "-f", (char *)hkfn);
-		if (nvram_set_file(nvname, hkfn, 2048)) {
-			return 1;
+	if (!f_exists("/jffs/.ssh/dropbear_rsa_host_key") ||
+	    !f_exists("/jffs/.ssh/dropbear_rsa_host_key") ||
+	    !f_exists("/jffs/.ssh/dropbear_ecdsa_host_key") ||
+	    !f_exists("/jffs/.ssh/dropbear_ed25519_host_key")) {
+		mkdir("/jffs/.ssh", 0700);
+
+		if (nvram_get_file("sshd_hostkey", "/jffs/.ssh/dropbear_rsa_host_key", 2048)) {
+			nvram_unset("sshd_hostkey");
+			nvram_change = 1;
+		} else
+			eval("dropbearkey", "-t", "rsa", "-f", "/jffs/.ssh/dropbear_rsa_host_key");
+
+		if (nvram_get_file("sshd_dsskey", "/jffs/.ssh/dropbear_dss_host_key", 2048)) {
+			nvram_unset("sshd_dsskey");
+			nvram_change = 1;
+		} else
+			eval("dropbearkey", "-t", "dss", "-f", "/jffs/.ssh/dropbear_dss_host_key");
+
+		if (nvram_get_file("sshd_ecdsakey", "/jffs/.ssh/dropbear_ecdsa_host_key", 2048)) {
+			nvram_unset("sshd_ecdsakey");
+			nvram_change = 1;
+		} else
+			eval("dropbearkey", "-t", "ecdsa", "-f", "/jffs/.ssh/dropbear_ecdsa_host_key");
+
+		if (nvram_get_file("sshd_ed25519key", "/jffs/.ssh/dropbear_ed25519_host_key", 2048)) {
+			nvram_unset("sshd_ed25519key");
+			nvram_change = 1;
+		} else
+			eval("dropbearkey", "-t", "ed25519", "-f", "/jffs/.ssh/dropbear_ed25519_host_key");
+	} else {
+		if (nvram_get("sshd_hostkey")) {
+			nvram_unset("sshd_hostkey");
+			nvram_change = 1;
+		}
+		if (nvram_get("sshd_dsskey")) {
+			nvram_unset("sshd_dsskey");
+			nvram_change = 1;
+		}
+		if (nvram_get("sshd_ecdsakey")) {
+			nvram_unset("sshd_ecdsakey");
+			nvram_change = 1;
+		}
+		if (nvram_get("sshd_ed25519key")) {
+			nvram_unset("sshd_ed25519key");
+			nvram_change = 1;
 		}
 	}
 
-	return 0;
+	if (nvram_change)
+		nvram_commit();
+
+	eval("ln", "-s", "/jffs/.ssh/dropbear_rsa_host_key", "/etc/dropbear/dropbear_rsa_host_key");
+	eval("ln", "-s", "/jffs/.ssh/dropbear_dss_host_key", "/etc/dropbear/dropbear_dss_host_key");
+	eval("ln", "-s", "/jffs/.ssh/dropbear_ecdsa_host_key", "/etc/dropbear/dropbear_ecdsa_host_key");
+	eval("ln", "-s", "/jffs/.ssh/dropbear_ed25519_host_key", "/etc/dropbear/dropbear_ed25519_host_key");
 }
 
 int start_sshd(void)
@@ -47,10 +94,7 @@ int start_sshd(void)
 
 	f_write_string("/root/.ssh/authorized_keys", nvram_safe_get("sshd_authkeys"), 0, 0700);
 
-	if (check_host_key("rsa", "sshd_hostkey", "/etc/dropbear/dropbear_rsa_host_key") |
-	    check_host_key("dss", "sshd_dsskey",  "/etc/dropbear/dropbear_dss_host_key") |
-	    check_host_key("ecdsa", "sshd_ecdsakey",  "/etc/dropbear/dropbear_ecdsa_host_key"))
-		nvram_commit_x();
+	check_host_keys();
 
 	port = buf;
 	if (is_routing_enabled() && nvram_get_int("sshd_enable") != 1)

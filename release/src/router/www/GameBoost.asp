@@ -11,6 +11,7 @@
 <link rel="stylesheet" type="text/css" href="index_style.css">
 <link rel="stylesheet" type="text/css" href="form_style.css">
 <link rel="stylesheet" type="text/css" href="usp_style.css">
+<link rel="stylesheet" type="text/css" href="device-map/device-map.css">
 <script type="text/javascript" src="/state.js"></script>
 <script type="text/javascript" src="/popup.js"></script>
 <script type="text/javascript" src="/help.js"></script>
@@ -18,7 +19,13 @@
 <script type="text/javascript" src="/form.js"></script>
 <script type="text/javascript" src="/js/httpApi.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/asus_eula.js"></script>
+<script type="text/javascript" src="/client_function.js"></script>
+<script type="text/javascript" src="/form.js"></script>
+<script type="text/javascript" src="/validator.js"></script>
 <style>
+*{
+	box-sizing: content-box;
+}
 body{
 	margin: 0;
 	color:#FFF;
@@ -85,74 +92,398 @@ body{
 	background-color: #D30606;
 	color: #FFF;
 }
+
+#gameList_block{
+	position: absolute;
+	width: 700px;
+	height: 600px;
+	background-color: #444f53;
+	z-index: 199;
+	padding: 12px 18px;
+	overflow-y: auto;
+	margin-top: -40px;
+}
+
+.qr_code{
+	margin: 8px auto;
+	background-image: url('images/New_ui/asus_router_android_qr.png');
+	width: 124px;
+	height: 124px;
+	background-size: 100%;
+}
+.qr_android{
+	background-image: url('images/New_ui/asus_router_android_qr.png');
+}
+.qr_android_cn{
+	background-image: url('images/New_ui/asus_router_android_qr_cn.png');
+}
 </style>
 
 <script>
+window.onresize = function() {
+	cal_panel_block("gameList_block", 0.23);
+}
+var fc_disable_orig = '<% nvram_get("fc_disable"); %>';
+var runner_disable_orig = '<% nvram_get("runner_disable"); %>';
 var ctf_disable = '<% nvram_get("ctf_disable"); %>';
 var ctf_fa_mode = '<% nvram_get("ctf_fa_mode"); %>';
-var bwdpi_app_rulelist = "<% nvram_get("bwdpi_app_rulelist"); %>".replace(/&#60/g, "<");
+var outfox_code = httpApi.nvramGet(["outfox_code"], true).outfox_code;
+var outfox_site = 'https://getoutfox.com/asus?code='+ outfox_code +'&utm_source=asus&utm_medium=affiliate&utm_campaign=' + support_site_modelid + '&utm_content=router_cta';
+
 function initial(){
 	show_menu();
-	if((document.form.qos_enable.value == '1') && (document.form.qos_type.value == '1') && (bwdpi_app_rulelist.indexOf('game') != -1)){
-		document.getElementById("game_boost_enable").checked = true;
-	}
-	else{
-		document.getElementById("game_boost_enable").checked = false;
-	}
 
-}
-
-function sign_eula(){
-	ASUS_EULA.config(eula_confirm, cancel);
-
-	if(ASUS_EULA.check("tm")){
-		check_game_boost();
-	}
-}
-
-function check_game_boost(){
-	if(document.getElementById("game_boost_enable").checked){
-		if(!reset_wan_to_fo(document.form, 1)) {
-			document.getElementById("game_boost_enable").checked = false;
-			return false;
-		}
-		document.form.qos_enable.value = '1';
-		document.form.qos_type.value = '1';
-		document.form.bwdpi_app_rulelist.disabled = false;
-		document.form.bwdpi_app_rulelist.value = "9,20<8<4<0,5,6,15,17<13,24<1,3,14<7,10,11,21,23<<game";
-	}
-	else{
-		document.form.qos_enable.value = '0';
-		document.form.bwdpi_app_rulelist.disabled = true;
-	}
-
-	if(ctf_disable == 1){
-		document.form.action_script.value = "restart_qos;restart_firewall";
-	}
-	else{
-		if(ctf_fa_mode == "2"){
-			FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+	if(adaptiveqos_support){
+		if(document.form.qos_enable.value == '1' && document.form.qos_type.value == '1'){
+			document.getElementById("game_priority_enable").checked = true;
 		}
 		else{
-			if(document.form.qos_type.value == 0)
-				FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
-			else{
-				document.form.action_script.value = "restart_qos;restart_firewall";
-			}
+			document.getElementById("game_priority_enable").checked = false;
+		}
+	}
+	else{
+		if(document.form.rog_enable.value == '1' && document.form.qos_type.value == '0'){
+			document.getElementById("game_priority_enable").checked = true;
+		}
+		else{
+			document.getElementById("game_priority_enable").checked = false;
 		}
 	}
 
-	document.form.submit();
+	if(is_CN || document.form.preferred_lang.value == 'CN'){
+		$('#android_qr').removeClass('qr_android').addClass('qr_android_cn');
+		$('#android_link').hide();
+		$('#android_cn_link').show();
+	}
+
+	if(wtfast_support){
+		$('#wtfast_1').show();
+		$('#wtfast_2').show();
+		$('#wtfast_3').show();
+	}
+
+	if(tencent_qmacc_support){
+		$('#qmacc_1').show();
+		$('#qmacc_2').show();
+		$('#qmacc_3').show();
+	}
+
+	if(outfox_support){
+		$('#outfox_1').show();
+		$('#outfox_2').show();
+		$('#outfox_3').show();
+	}
+
+	if(!ASUS_EULA.status("tm"))
+		ASUS_EULA.config(eula_confirm, cancel);
+
+	setTimeout("showDropdownClientList('setClientIP', 'mac', 'all', 'ClientList_Block_PC', 'pull_arrow', 'all');", 500);
+	genGameList();
 }
 
 function eula_confirm(){
 	document.form.TM_EULA.value = 1;
 	document.form.action_wait.value = "15";
-	check_game_boost();
+	enableGamePriority();
 }
 
 function cancel(){
 	refreshpage();
+}
+
+function setClientIP(macaddr){
+	document.getElementById('client').value = macaddr;
+	hideClients_Block();
+}
+
+function hideClients_Block(){
+	document.getElementById("pull_arrow").src = "/images/arrow-down.gif";
+	document.getElementById('ClientList_Block_PC').style.display='none';
+}
+
+function pullLANIPList(obj){
+	var element = document.getElementById('ClientList_Block_PC');
+	var isMenuopen = element.offsetWidth > 0 || element.offsetHeight > 0;
+
+	if(isMenuopen == 0){		
+		obj.src = "/images/arrow-top.gif"
+		element.style.display = 'block';		
+		document.getElementById('client').focus();		
+	}
+	else
+		hideClients_Block();
+}
+
+if(adaptiveqos_support){
+	var gameList = '<% nvram_get("bwdpi_game_list"); %>'.replace(/&#60/g, "<");;
+}
+else{
+	var gameList = '<% nvram_get("rog_clientlist"); %>'.replace(/&#60/g, "<");
+}
+
+function genGameList(){
+	var list_array = gameList.split('<');
+	var code = '';
+	code += '<thead><tr><td colspan="4"><#Gear_Accelerator_List#>&nbsp;(<#List_limit#>&nbsp;64)</td></tr></thead>';
+	code += '<tr>';
+	code += '<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(5,10);"><#Client_Name#> (<#PPPConnection_x_MacAddressForISP_itemname#>)</a></th>';
+	code += '<th><#list_add_delete#></th>';
+	code += '</tr>';
+	code += '<tr>';
+	code += '<td width="40%">';
+	code += '<input type="text" class="input_20_table" maxlength="17" id="client" style="margin-left:-12px;width:255px;" onKeyPress="return validator.isHWAddr(this,event)" onClick="hideClients_Block();" autocorrect="off" autocapitalize="off" placeholder="ex: <% nvram_get("lan_hwaddr"); %>">';
+	code += '<img id="pull_arrow" height="14px;" src="/images/arrow-down.gif" style="position:absolute;*margin-left:-3px;*margin-top:1px;" onclick="pullLANIPList(this);" title="<#select_MAC#>">';
+	code += '<div id="ClientList_Block_PC" class="clientlist_dropdown" style="margin-left:138px;"></div>';
+	code += '</td>';
+	code += '<td width="10%">';
+	code += '<div><input type="button" class="add_btn" onClick="addGameList(64);"></div>';
+	code += '</td>';
+	code += '</tr>';
+		
+	if(list_array.length == '0'){
+		code += '<tr><td colspan="2" style="color:#FFCC00;">No data in table.</td></tr>';
+	}
+	else{
+		for(i=1; i<list_array.length; i++){
+			code += '<tr>';
+			code += '<td>';
+			code += '<div style="display:flex;align-items: center;justify-content: center;padding-left:30px;">';
+			code += '<div style="width:20%;"><div id="clientIcon_3497F683C346" class="clientIcon type34" ></div></div>';
+			code += '<div style="text-align: left;line-height: 18px;width:50%;">';
+			var mac = list_array[i];
+			var name = (clientList[mac] != undefined) ? clientList[mac].name : '';
+			var ip = (clientList[mac] != undefined) ? clientList[mac].ip : '';
+			code += '<div>'+ name +'</div>';		// NAME
+			code += '<div>'+ mac +'</div>';		// MAC
+			code += '<div>'+ ip +'</div>';		// IP
+			code += '</div>';
+			code += '</div>';
+			code += '</td>';
+			code += '<td width="10%">';
+			code += '<div><input type="button" class="remove_btn" onClick="delGameList(\''+ mac +'\')"></div>';
+			code += '</td>';
+			code += '</tr>';
+		}
+	}
+	
+	$('#game_list').html(code);
+}
+
+function addGameList(){
+	var mac = $('#client').val();
+	var list_array = gameList.split('<');
+	var maximum = '64';
+	if(mac == ''){
+		alert("<#JS_fieldblank#>");
+		return false;
+	}
+
+	if(list_array.length > maximum){
+		alert("<#JS_itemlimit1#> " + maximum + " <#JS_itemlimit2#>");
+		return false;
+	}
+
+	// check mac is whether in the list
+	for(i=1; i<list_array.length; i++){
+		if(list_array[i] == mac){
+			alert("<#JS_duplicate#>");
+			return false;
+		}
+	}
+
+	gameList = '<' + mac + gameList;
+	if(adaptiveqos_support){
+		genGameList();
+	}
+	else{
+		$.ajax({
+			url: '/rog_first_qos.cgi',
+			dataType: 'json',
+			data: {
+				rog_mac: mac,
+				action: 'add'
+			},
+			error: function(){},
+			success: function(response){
+				genGameList();
+			}
+		});
+	}
+
+	setTimeout("showDropdownClientList('setClientIP', 'mac', 'all', 'ClientList_Block_PC', 'pull_arrow', 'all');", 500);
+}
+
+function delGameList(target){
+	var mac = target;
+	var list_array = gameList.split('<');
+	var temp = '';
+	for(i=1; i<list_array.length; i++){
+		if(list_array[i] != mac){
+			temp += '<' + list_array[i];
+		}	
+	}
+
+	gameList = temp;
+	if(adaptiveqos_support){
+		genGameList();
+	}
+	else{
+		$.ajax({
+			url: '/rog_first_qos.cgi',
+			dataType: 'json',
+			data: {
+				rog_mac: mac,
+				action: 'delete'
+			},
+			error: function(){},
+			success: function(response){
+				genGameList();
+			}
+		});
+	}
+	
+	setTimeout("showDropdownClientList('setClientIP', 'mac', 'all', 'ClientList_Block_PC', 'pull_arrow', 'all');", 500);
+}
+
+function showGameListField(){
+	$('#gameList_block').show();
+	cal_panel_block("gameList_block", 0.23);
+}
+
+function hideGameListField(){
+	$('#gameList_block').hide();
+}
+
+function enableGamePriority(){
+	if(adaptiveqos_support){
+		if(document.form.qos_enable.value == "0" && document.form.TM_EULA.value == "0"){
+			ASUS_EULA
+				.config(eula_confirm, cancel)
+				.show("tm");
+		}
+		else{
+			if(document.getElementById("game_priority_enable").checked){
+				document.form.qos_enable.value = '1';
+				document.form.qos_type.value = '1';
+			}
+			else{
+				document.form.qos_enable.value = '0';
+			}
+
+			if(ctf_disable == 1 || (fc_disable_orig != '' && runner_disable_orig != '')){
+				document.form.action_script.value = "restart_qos;restart_firewall";
+			}
+			else{
+				if(ctf_fa_mode == "2"){
+					FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+				}
+				else{
+					document.form.action_script.value = "restart_qos;restart_firewall";
+				}
+			}
+
+			if(reset_wan_to_fo.change_status)
+				reset_wan_to_fo.change_wan_mode(document.form);
+
+			document.form.bwdpi_game_list.disabled = false;
+			document.form.bwdpi_game_list.value = gameList;
+			document.form.submit();
+		}
+	}
+	else{
+		if(document.form.rog_enable.value == '0'){		// OFF -> ON
+			if(isSupport("is_ax5400_i1")) {
+				if(document.form.qos_obw.value == '0' || document.form.qos_obw.value == ''){
+					document.form.qos_obw.disabled = false;
+					document.form.qos_obw.value = '51200';
+				}
+				if(document.form.qos_obw1.value == '0' || document.form.qos_obw1.value == ''){
+					document.form.qos_obw1.disabled = false;
+					document.form.qos_obw1.value = '51200';
+				}
+			}
+
+			if(document.form.qos_obw.value == '0' || document.form.qos_obw.value == ''){
+				document.form.qos_obw.disabled = false;
+				document.form.qos_obw.value = '2048000';
+			}
+
+			if(document.form.qos_ibw.value == '0' || document.form.qos_ibw.value == ''){
+				document.form.qos_ibw.disabled = false;
+				document.form.qos_ibw.value = '1024000';
+			}
+
+			if(mtwancfg_support) {
+				if(document.form.qos_obw1.value == '0' || document.form.qos_obw1.value == ''){
+					document.form.qos_obw1.disabled = false;
+					document.form.qos_obw1.value = '1048576';
+				}
+
+				if(document.form.qos_ibw1.value == '0' || document.form.qos_ibw1.value == ''){
+					document.form.qos_ibw1.disabled = false;
+					document.form.qos_ibw1.value = '1048576';
+				}
+			}
+		}
+	
+		if(document.getElementById("game_priority_enable").checked){
+			document.form.rog_enable.value = '1';
+//			document.form.qos_enable.value = '0';
+			document.form.qos_type.value = '0';
+			document.form.action_script.value = 'reboot';
+
+			if(document.form.qos_type.value == 0 && !lantiq_support){
+				FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+			}
+		}
+		else{
+			document.form.rog_enable.value = '0';
+		}
+			
+		if(ctf_disable == 1 || (fc_disable_orig != '' && runner_disable_orig != '')){
+			document.form.action_script.value = "restart_qos;restart_firewall";
+		}
+		else{
+			if(ctf_fa_mode == "2"){
+				FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+			}
+			else{
+				if(document.form.qos_type.value == 0 && !lantiq_support){
+					FormActions("start_apply.htm", "apply", "reboot", "<% get_default_reboot_time(); %>");
+				}	
+				else{
+					document.form.action_script.value = "restart_qos;restart_firewall";
+				}
+			}
+		}
+
+		if(reset_wan_to_fo.change_status)
+			reset_wan_to_fo.change_wan_mode(document.form);
+
+		document.form.submit();
+	}
+}
+
+function eula_confirm(){
+	document.form.TM_EULA.value = 1;
+	enableGamePriority();
+}
+
+function cancel(){
+	refreshpage();
+}
+
+function applyRule(){
+	if(adaptiveqos_support){
+		document.form.bwdpi_game_list.disabled = false;
+		document.form.bwdpi_game_list.value = gameList;
+	}
+
+	document.form.submit();
+}
+
+function redirectSite(url){
+	window.open(url, '_blank');
 }
 </script>
 </head>
@@ -162,6 +493,16 @@ function cancel(){
 <div id="hiddenMask" class="popup_bg" style="z-index:999;">
 	<table cellpadding="5" cellspacing="0" id="dr_sweet_advise" class="dr_sweet_advise" align="center"></table>
 	<!--[if lte IE 6.5.]><script>alert("<#ALERT_TO_CHANGE_BROWSER#>");</script><![endif]-->
+</div>
+<div id="gameList_block" style="display:none">
+	<div style="display:flex;justify-content: space-between;align-items: center;">
+		<div>
+			<input type="button" class="button_gen" value="<#CTL_apply#>" onclick="applyRule();">
+		</div>
+		<div style="width:28px;height:28px;background-image:url('images/New_ui/cancel.svg');cursor:pointer" onclick="hideGameListField();"></div>
+	</div>
+	
+	<table id="game_list" width="100%" border="1" align="center" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin-top:8px;"></table> 
 </div>
 <iframe name="hidden_frame" id="hidden_frame" width="0" height="0" frameborder="0" scrolling="no"></iframe>
 <form method="post" name="form" action="/start_apply.htm" target="hidden_frame">
@@ -174,9 +515,13 @@ function cancel(){
 <input type="hidden" name="action_wait" value="5">
 <input type="hidden" name="qos_enable" value="<% nvram_get("qos_enable"); %>">
 <input type="hidden" name="qos_type" value="<% nvram_get("qos_type"); %>">
-<input type="hidden" name="qos_type_ori" value="<% nvram_get("qos_type"); %>">
-<input type="hidden" name="bwdpi_app_rulelist" value="<% nvram_get("bwdpi_app_rulelist"); %>">
 <input type="hidden" name="TM_EULA" value="<% nvram_get("TM_EULA"); %>">
+<input type="hidden" name="qos_obw" value="<% nvram_get("qos_obw"); %>" disabled>
+<input type="hidden" name="qos_ibw" value="<% nvram_get("qos_ibw"); %>" disabled>
+<input type="hidden" name="qos_obw1" value="<% nvram_get("qos_obw1"); %>" disabled>
+<input type="hidden" name="qos_ibw1" value="<% nvram_get("qos_ibw1"); %>" disabled>
+<input type="hidden" name="bwdpi_game_list" value="<% nvram_get("bwdpi_game_list"); %>" disabled>
+<input type="hidden" name="rog_enable" value="<% nvram_get("rog_enable"); %>">
 </form>
 <div>
 	<table class="content" align="center" cellspacing="0" style="margin:auto;">
@@ -191,7 +536,7 @@ function cancel(){
 				<div id="tabMenu" style="*margin-top: -160px;"></div>
 				<br>
 		<!--=====Beginning of Main Content=====-->
-				<div id="FormTitle" style="background:url('images/New_ui/mainimage_img_Game.jpg');background-repeat: no-repeat;margin-top:-15px;border-radius:3px;">
+				<div id="FormTitle" style="background:url('images/New_ui/mainimage_img_Game.jpg');background-repeat: no-repeat;margin-top:-15px;border-radius:3px;background-size: cover;">
 					<table style="padding-left:10px;">
 						<tr>
 							<td class="formfonttitle">
@@ -200,8 +545,8 @@ function cancel(){
 										<tr>
 											<td align="left">
 
-												<div style="display:table-cell;background:url('/images/New_ui/game.svg');width:77px;height:77px;"></div>
-												<div class="formfonttitle" style="display:table-cell;font-size:26px;font-weight:bold;color:#EBE8E8;vertical-align:middle"><#Game_Boost#></div>
+												<div style="display:table-cell;background:url('/images/New_ui/game.svg');width:77px;height:77px;background-size: 100%;"></div>
+												<div class="formfonttitle" style="display:table-cell;font-size:26px;font-weight:bold;color:#EBE8E8;vertical-align:middle">Game</div>
 											</td>
 										</tr>
 									</table>
@@ -214,7 +559,118 @@ function cancel(){
 								<div>
 									<table style="border-collapse:collapse;width:100%">
 										<tbody>
+											<!-- Gear Accelerator -->
 											<tr>
+												<td style="width:200px">
+													<div style="padding: 5px 0;font-size:20px;"><#Gear_Accelerator#></div>
+												</td>
+												<td colspan="2">
+													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66"><#Gear_Accelerator_desc#></div>
+												</td>
+											</tr>
+											<tr>
+												<td colspan="3">
+													<div style="width:100%;height:1px;background-color:#D30606"></div>
+												</td>
+											</tr>
+											<tr>
+												<td align="center">
+													<div style="width:85px;height: 85px;background-image: url('images/New_ui/GameBoost_gamePriority.svg');background-size: 100%;"></div>													
+												</td>
+												<td style="width:400px;height:120px;">
+													<div style="font-size:16px;color:#949393;padding-left:10px;"><#Gear_Accelerator_desc1#></div>
+													<div onclick="showGameListField();" class="btn" style="margin: 12px 0;width:100px;height:40px;line-height: 40px;text-align: center;border-radius: 5px;font-size:18px;"><#CTL_add#></div>
+												</td>
+												<td>
+													<div class="switch" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px">
+														<input id="game_priority_enable" type="checkbox" onclick="enableGamePriority();">
+														<div class="container" style="display:table;border-radius:5px;">
+															<div style="display:table-cell;width:50%;">
+																<div>ON</div>
+															</div>
+															<div style="display:table-cell">
+																<div>OFF</div>
+															</div>
+														</div>
+													</div>
+												</td>
+											</tr>
+											<!-- Mobile Game Mode -->
+											<tr style="height:50px;"></tr>
+											<tr>
+												<td style="width:200px">
+													<div style="padding: 5px 0;font-size:20px;"><#GB_mobile#></div>
+												</td>
+												<td colspan="2">
+													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66"><#GB_mobile_desc#></div>
+												</td>
+											</tr>
+											<tr>
+												<td colspan="3">
+													<div style="width:100%;height:1px;background-color:#D30606"></div>
+												</td>
+											</tr>
+											<tr>
+												<td align="center">
+													<div style="width:85px;height: 85px;background-image: url('images/New_ui/GameBoost_mobileGame.svg');background-size: 100%;"></div>
+													<!-- <img style="padding-right:10px;;" src="/images/New_ui/GameBoost_WTFast.png" > -->
+												</td>
+												<td style="width:400px;height:120px;">
+													<div style="font-size:16px;color:#949393;padding-left:10px;"><#GB_mobile_desc1#></div>
+												</td>
+												<td>
+													<div style="display:flex;align-items: center;">
+														<div style="margin: 0 12px">
+															<div id="android_qr" class="qr_code qr_android"></div>	
+															<a id="android_link" href="https://play.google.com/store/apps/details?id=com.asus.aihome" target="_blank">
+																<div style="width:124px;height:36px;background:url('images/googleplay.png') no-repeat;;background-size:100%;"></div>
+															</a>
+															<a id="android_cn_link" style="display:none" href="https://dlcdnets.asus.com/pub/ASUS/LiveUpdate/Release/Wireless/ASUSRouter_Android_Release.apk" target="_blank">
+																<div style="width:124px;height:36px;border:1px solid #BDBDBD;border-radius: 6px;text-align: center;line-height: 36px;font-size:20px;">Android</div>
+															</a>
+														</div>
+														<div style="margin: 0 12px">
+															<div class="qr_code" style="background-image: url('images/New_ui/asus_router_ios_qr.png');">
+															</div>
+															<a href="https://itunes.apple.com/tw/app/asus-router/id1033794044" target="_blank">
+																<div style="width:124px;height:36px;background:url('images/AppStore.png') no-repeat;background-size:100%;"></div>
+															</a>				
+														</div>		
+													</div>
+												</td>
+											</tr>
+											
+
+											<!-- OPEN NAT -->
+											<tr style="height:50px;"></tr>
+											<tr>
+												<td style="width:200px">
+													<div style="padding: 5px 0;font-size:20px;">Open NAT</div>
+												</td>
+												<td colspan="2">
+													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66"><#GB_OpenNAT_desc#></div>
+												</td>
+											</tr>
+											<tr>
+												<td colspan="3">
+													<div style="width:100%;height:1px;background-color:#D30606"></div>
+												</td>
+											</tr>
+											<tr>
+												<td align="center">
+													<div style="width:85px;height: 85px;background-image: url('images/New_ui/GameBoost_openNAT.svg');background-size: 100%;"></div>
+												</td>
+												<td style="width:400px;height:120px;">
+													<div style="font-size:16px;color:#949393;padding-left:10px;"><#GB_OpenNAT_desc1#></div>
+												</td>
+												<td>
+													<div class="btn" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px;cursor:pointer;border-radius:5px;" onclick="location.href='GameProfile.asp';"><#btn_go#></div>
+												</td>
+											</tr>
+
+											<!-- WTFast -->
+											<tr style="height:50px;"></tr>
+											<tr id='wtfast_1' style="display:none">
 												<td style="width:200px">
 													<div style="padding: 5px 0;font-size:20px;"><#Game_Boost_internet#></div>
 												</td>
@@ -222,89 +678,70 @@ function cancel(){
 													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66">WTFast GPN</div>
 												</td>
 											</tr>
-											<tr>
+											<tr id='wtfast_2' style="display:none">
 												<td colspan="3">
 													<div style="width:100%;height:1px;background-color:#D30606"></div>
 												</td>
 											</tr>
-											<tr>
+											<tr id='wtfast_3' style="display:none">
 												<td align="center" style="width:85px">
 													<img style="padding-right:10px;;" src="/images/New_ui/GameBoost_WTFast.png" >
 												</td>
 												<td style="width:400px;height:120px;">
-													<div style="font-size:16px;color:#949393;padding-left:10px;">
-														<#Game_Boost_desc#>
-													</div>
+													<div style="font-size:16px;color:#949393;padding-left:10px;"><#Game_Boost_desc#></div>
 												</td>
 												<td>
 													<div class="btn" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px;cursor:pointer;border-radius:5px;" onclick="location.href='Advanced_WTFast_Content.asp';"><#btn_go#></div>
 												</td>
 											</tr>
-											<tr style="height:50px;"></tr>
-											<tr>
-												<td>
-													<div style="padding: 5px 0;font-size:20px;"><#Game_Boost_lan#></div>
+											<!-- Tencent -->
+											<tr id="qmacc_1" style="margin-top: 50px; display: none;">
+												<td style="width:200px">
+													<div style="padding: 5px 0;font-size:20px;"><#Game_Boost_internet#></div>
 												</td>
 												<td colspan="2">
-													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66;"><#Game_Boost_lan_title#></div>
+													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66">腾讯网游加速器</div>
 												</td>
 											</tr>
-											<tr>
+											<tr id="qmacc_2" style="display: none;">
 												<td colspan="3">
 													<div style="width:100%;height:1px;background-color:#D30606"></div>
 												</td>
 											</tr>
-											<tr>
-												<td align="center" style="width:85px;">
-													<div style="width:97px;height:71px;background:url('images/New_ui/GameBoost_QoS.png');no-repeat"></div>
+											<tr id="qmacc_3" style="display: none;">
+												<td align="center">
+													<div style="height: 85px;background-image: url('images/tencent/logo_tencent-2_line.png');background-size: 90%;background-repeat: no-repeat; background-position: center;"></div>
 												</td>
 												<td style="width:400px;height:120px;">
-													<div style="height:60px;font-size:16px;color:#A0A0A0;padding-left:10px;">
-														<#Game_Boost_lan_desc#>
-													</div>
+													<div style="font-size:16px;color:#949393;padding-left:10px; padding-top: 5px; padding-bottom: 10px;">腾讯网游加速器——腾讯官方出品的海外网络加速工具。一机畅玩全平台游戏（PC、手游和主机），独享金融级专线，节点全球覆盖，有效解决游戏中出现的延迟、卡顿、丢包等问题，全方位满足用户在各种网络情况下的游戏体验。让你随时开黑，游戏快人一步。</div>
 												</td>
 												<td>
-													<div class="switch" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px">
-														<input id="game_boost_enable" type="checkbox" onclick="sign_eula();">
-														<div class="container" style="display:table;border-radius:5px;">
-															<div style="display:table-cell;width:50%;">
-																<!--div style="background:url('check.svg') no-repeat;width:40px;height:40px;margin: auto"></div-->
-																<div>ON</div>
-															</div>
-															<div style="display:table-cell">
-																<!--div style="background:url('x.svg') no-repeat;width:40px;height:40px;margin: auto"></div-->
-																<div>OFF</div>
-															</div>
-														</div>
-													</div>
+													<div class="btn" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px;cursor:pointer;border-radius:5px;" onclick="location.href='GameBoost_Tencent.asp';"><#btn_go#></div>
 												</td>
 											</tr>
-
-											<tr style="height:50px;"></tr>
-											<tr>
-												<td>
-													<div style="padding: 5px 0;font-size:20px;"><#Game_Boost_AiProtection#></div>
+											<!-- Outfox -->
+											<tr id="outfox_1" style="margin-top: 50px; display: none;">
+												<td style="width:200px">
+													<div style="padding: 5px 0;font-size:20px;"><#Game_Boost_internet#></div>
 												</td>
 												<td colspan="2">
-													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66;"><#AiProtection_title#></div>
+													<div style="padding: 5px 10px;font-size:20px;color:#FFCC66">Outfox</div>
 												</td>
 											</tr>
-											<tr>
+											<tr id="outfox_2" style="display: none;">
 												<td colspan="3">
 													<div style="width:100%;height:1px;background-color:#D30606"></div>
 												</td>
 											</tr>
-											<tr>
-												<td align="center" style="width:85px;">
-													<div style="background:url('/images/New_ui/GameBoost_AiProtection.png')no-repeat;width:97px;height:71px;"></div>
+											<tr id="outfox_3" style="display: none;">
+												<td align="center">
+													<div style="height: 85px;background-image: url('images/outfox_dark.png');background-size: 90%;background-repeat: no-repeat; background-position: center;"></div>
 												</td>
-												<td style="width:400px;height:120px;vertical-align:initial">
-													<div style="height:60px;margin-top:15px;font-size:16px;color:#949393;padding-left:10px;">
-														<#Game_Boost_AiProtection_desc#>
-													</div>
+												<td style="width:400px;height:120px;">
+													<div style="font-size:16px;color:#949393;padding-left:10px; padding-top: 5px; padding-bottom: 10px;">An optimized gaming network that improves performance by routing your traffic to provide a faster, more stable path to your game’s server. To get an exclusive, free 90-day trial simply register for Outfox and download the application to your PC.</div>
 												</td>
 												<td>
-													<div class="btn" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px;cursor:pointer;border-radius:5px;" onclick="location.href='AiProtection_HomeProtection.asp';"><#btn_go#></div>
+													<div class="btn" style="margin:auto;width:100px;height:40px;text-align:center;line-height:40px;font-size:18px;cursor:pointer;border-radius:5px;" onclick="redirectSite(outfox_site)"><#btn_go#></div>
 												</td>
 											</tr>
 										</tbody>
